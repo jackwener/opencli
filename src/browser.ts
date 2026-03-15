@@ -1,6 +1,6 @@
 /**
- * Browser interaction via Playwright MCP Bridge extension.
- * Connects to an existing Chrome browser through the extension's stdio JSON-RPC.
+ * Browser interaction via Chrome DevTools Protocol.
+ * Connects to an existing Chrome browser through CDP auto-discovery or extension bridge.
  */
 
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
@@ -9,6 +9,54 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { formatSnapshot } from './snapshotFormatter.js';
+
+/**
+ * Chrome 144+ auto-discovery: read DevToolsActivePort file to get CDP endpoint.
+ *
+ * Starting with Chrome 144, users can enable remote debugging from
+ * chrome://inspect#remote-debugging without any command-line flags.
+ * Chrome writes the active port and browser GUID to a DevToolsActivePort file
+ * in the user data directory, which we read to construct the WebSocket endpoint.
+ *
+ * Priority: OPENCLI_CDP_ENDPOINT env > DevToolsActivePort auto-discovery > --extension fallback
+ */
+function discoverChromeEndpoint(): string | null {
+  const candidates: string[] = [];
+
+  // User-specified Chrome data dir takes highest priority
+  if (process.env.CHROME_USER_DATA_DIR) {
+    candidates.push(path.join(process.env.CHROME_USER_DATA_DIR, 'DevToolsActivePort'));
+  }
+
+  // Standard Chrome/Edge user data dirs per platform
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local');
+    candidates.push(path.join(localAppData, 'Google', 'Chrome', 'User Data', 'DevToolsActivePort'));
+    candidates.push(path.join(localAppData, 'Microsoft', 'Edge', 'User Data', 'DevToolsActivePort'));
+  } else if (process.platform === 'darwin') {
+    candidates.push(path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'DevToolsActivePort'));
+    candidates.push(path.join(os.homedir(), 'Library', 'Application Support', 'Microsoft Edge', 'DevToolsActivePort'));
+  } else {
+    candidates.push(path.join(os.homedir(), '.config', 'google-chrome', 'DevToolsActivePort'));
+    candidates.push(path.join(os.homedir(), '.config', 'chromium', 'DevToolsActivePort'));
+    candidates.push(path.join(os.homedir(), '.config', 'microsoft-edge', 'DevToolsActivePort'));
+  }
+
+  for (const filePath of candidates) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8').trim();
+      const lines = content.split('\n');
+      if (lines.length >= 2) {
+        const port = parseInt(lines[0], 10);
+        const browserPath = lines[1]; // e.g. /devtools/browser/<GUID>
+        if (port > 0 && browserPath.startsWith('/devtools/browser/')) {
+          return `ws://127.0.0.1:${port}${browserPath}`;
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
 
 // Read version from package.json (single source of truth)
 const __browser_dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -248,14 +296,22 @@ export class PlaywrightMCP {
     return new Promise<Page>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`Timed out connecting to browser (${timeout}s)`)), timeout * 1000);
 
-      const mcpArgs = [mcpPath, '--extension'];
+      // Chrome 144+ auto-discovery via DevToolsActivePort file.
+      // Falls back to --extension mode if no running Chrome is detected.
+      const cdpEndpoint = process.env.OPENCLI_CDP_ENDPOINT ?? discoverChromeEndpoint();
+      const mcpArgs: string[] = [mcpPath];
+      if (cdpEndpoint) {
+        mcpArgs.push('--cdp-endpoint', cdpEndpoint);
+      } else {
+        mcpArgs.push('--extension');
+      }
     if (process.env.OPENCLI_BROWSER_EXECUTABLE_PATH) {
       mcpArgs.push('--executablePath', process.env.OPENCLI_BROWSER_EXECUTABLE_PATH);
     }
 
     this._proc = spawn('node', mcpArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, ...(process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN ? { PLAYWRIGHT_MCP_EXTENSION_TOKEN: process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN } : {}) },
+      env: { ...process.env },
     });
 
       // Increase max listeners to avoid warnings
