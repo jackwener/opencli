@@ -184,6 +184,8 @@ function scoreEndpoint(ep: { contentType: string; responseAnalysis: any; pattern
   if (ep.hasPaginationParam) s += 2;
   if (ep.hasLimitParam) s += 2;
   if (ep.status === 200) s += 2;
+  // Anti-Bot Empty Value Detection: penalize JSON endpoints returning empty data
+  if (ep.responseAnalysis && ep.responseAnalysis.itemCount === 0 && ep.contentType.includes('json')) s -= 3;
   return s;
 }
 
@@ -327,12 +329,25 @@ export async function exploreUrl(
       // Step 2.5: Interactive Fuzzing (if requested)
       if (opts.auto) {
          try {
-           console.log("🤖 [Explore] Auto-fuzzing interactions enabled. Simulating clicks...");
+           // First: targeted clicks by label (e.g. "字幕", "CC", "评论")
+           if (opts.clickLabels?.length) {
+             for (const label of opts.clickLabels) {
+               const safeLabel = label.replace(/'/g, "\\'");
+               await page.evaluate(`
+                 (() => {
+                   const el = [...document.querySelectorAll('button, [role="button"], [role="tab"], a, span')]
+                     .find(e => e.textContent && e.textContent.trim().includes('${safeLabel}'));
+                   if (el) el.click();
+                 })()
+               `);
+               await page.wait(1);
+             }
+           }
+           // Then: blind fuzzing on generic interactive elements
            const clicks = await page.evaluate(INTERACT_FUZZ_JS);
-           console.log(`🤖 [Explore] Performed ${clicks} simulated clicks.`);
            await page.wait(2); // wait for XHRs to settle
          } catch (e) {
-           console.error("🤖 [Explore] Fuzzing failed:", e);
+           // fuzzing is best-effort, don't fail the whole explore
          }
       }
 
@@ -418,11 +433,6 @@ export async function exploreUrl(
         if (ep.hasSearchParam) args.push({ name: 'keyword', type: 'str', required: true });
         args.push({ name: 'limit', type: 'int', required: false, default: 20 });
         if (ep.hasPaginationParam) args.push({ name: 'page', type: 'int', required: false, default: 1 });
-
-        // Improve scoring for JSON endpoints that return empty arrays/objects (Anti-Bot Empty Value Detection)
-        if (ep.score >= 5 && ep.responseAnalysis?.itemCount === 0 && ep.contentType.includes('json')) {
-            ep.score -= 2; // Penalize empty drops 
-        }
 
         // Link store actions to capabilities when store-action strategy is recommended
         const epStrategy = inferStrategy(ep.authIndicators);

@@ -9,6 +9,7 @@ cli({
   strategy: Strategy.COOKIE,
   args: [
     { name: 'bvid', required: true },
+    { name: 'lang', required: false, help: '字幕语言代码 (如 zh-CN, en-US, ai-zh)，默认取第一个' },
   ],
   columns: ['index', 'from', 'to', 'content'],
   func: async (page: IPage | null, kwargs: any) => {
@@ -42,18 +43,23 @@ cli({
       throw new Error('此视频没有发现外挂或智能字幕。');
     }
 
-    const firstSubUrl = subtitles[0].subtitle_url;
-    if (!firstSubUrl || firstSubUrl === '') {
+    // 4. 选择目标字幕语言
+    const target = kwargs.lang
+      ? subtitles.find((s: any) => s.lan === kwargs.lang) || subtitles[0]
+      : subtitles[0];
+
+    const targetSubUrl = target.subtitle_url;
+    if (!targetSubUrl || targetSubUrl === '') {
       throw new Error('[风控拦截/未登录] 获取到的 subtitle_url 为空！请确保 CLI 已成功登录且风控未封锁此账号。');
     }
 
-    const finalUrl = firstSubUrl.startsWith('//') ? 'https:' + firstSubUrl : firstSubUrl;
+    const finalUrl = targetSubUrl.startsWith('//') ? 'https:' + targetSubUrl : targetSubUrl;
 
 
-    // 4. 解析并拉取 CDN 的 JSON 文件
+    // 5. 解析并拉取 CDN 的 JSON 文件
     const fetchJs = `
       (async () => {
-         const url = '${finalUrl}';
+         const url = ${JSON.stringify(finalUrl)};
          const res = await fetch(url);
          const text = await res.text();
          
@@ -75,8 +81,7 @@ cli({
     const items = await page.evaluate(fetchJs);
 
     if (items?.error) {
-      console.error("[DEBUG] Subtitle Parse Error:", items);
-      throw new Error(`字幕获取失败: ${items.error}`);
+      throw new Error(`字幕获取失败: ${items.error}${items.text ? ' — ' + items.text : ''}`);
     }
 
     const finalItems = items?.data || [];
@@ -84,7 +89,7 @@ cli({
       throw new Error('解析到的字幕列表对象不符合数组格式');
     }
 
-    // 4. 数据映射
+    // 6. 数据映射
     return finalItems.map((item: any, idx: number) => ({
       index: idx + 1,
       from: Number(item.from || 0).toFixed(2) + 's',
