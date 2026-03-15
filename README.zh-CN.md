@@ -11,7 +11,7 @@ OpenCLI 通过 Chrome 浏览器 + [Playwright MCP Bridge](https://github.com/nic
 
 ## ✨ 亮点
 
-- 🌐 **28+ 命令，16 个站点** — B站、知乎、小红书、Twitter、Reddit、GitHub、V2EX、Hacker News、BBC、微博、BOSS直聘、Yahoo Finance、路透社、什么值得买、携程、YouTube
+- 🌐 **27 个命令，15 个站点** — B站、知乎、小红书、Twitter、Reddit、V2EX、Hacker News、BBC、微博、BOSS直聘、Yahoo Finance、路透社、什么值得买、携程、YouTube
 - 🔐 **零风控** — 复用 Chrome 登录态，无需存储任何凭证
 - 🤖 **AI 原生** — `explore` 自动发现 API，`synthesize` 生成适配器，`cascade` 探测认证策略
 - 📝 **声明式 YAML** — 大部分适配器只需 ~30 行 YAML
@@ -73,7 +73,7 @@ npm install -g @jackwener/opencli@latest
 }
 ```
 
-公共 API 命令（`hackernews`、`github search`、`v2ex`）无需浏览器。
+公共 API 命令（`hackernews`、`v2ex`、`bbc`）无需浏览器。
 
 > **⚠️ 重要**：浏览器命令复用你的 Chrome 登录状态。运行命令前，你必须已在 Chrome 中登录目标网站。如果获取到空数据或报错，请先检查登录状态。
 
@@ -93,7 +93,6 @@ npm install -g @jackwener/opencli@latest
 | **reuters** | `search` | 🔐 浏览器 |
 | **smzdm** | `search` | 🔐 浏览器 |
 | **ctrip** | `search` | 🔐 浏览器 |
-| **github** | `trending` `search` | 🔐 / 🌐 |
 | **v2ex** | `hot` `latest` `topic` | 🌐 公共 API |
 | **hackernews** | `top` | 🌐 公共 API |
 | **bbc** | `news` | 🌐 公共 API |

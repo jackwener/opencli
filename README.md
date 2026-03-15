@@ -7,7 +7,7 @@
 
 [![npm](https://img.shields.io/npm/v/@jackwener/opencli)](https://www.npmjs.com/package/@jackwener/opencli)
 
-A CLI tool that turns **any website** into a command-line interface. **28+ commands** across **16 sites** — bilibili, zhihu, xiaohongshu, twitter, reddit, github, v2ex, hackernews, bbc, weibo, boss, yahoo-finance, reuters, smzdm, ctrip, youtube — powered by browser session reuse and AI-native discovery.
+A CLI tool that turns **any website** into a command-line interface. **27 commands** across **15 sites** — bilibili, zhihu, xiaohongshu, twitter, reddit, v2ex, hackernews, bbc, weibo, boss, yahoo-finance, reuters, smzdm, ctrip, youtube — powered by browser session reuse and AI-native discovery.
 
 ## ✨ Highlights
 
@@ -72,7 +72,7 @@ Browser commands need:
 }
 ```
 
-Public API commands (`hackernews`, `github search`, `v2ex`) need no browser at all.
+Public API commands (`hackernews`, `v2ex`, `bbc`) need no browser at all.
 
 > **⚠️ Important**: Browser commands reuse your Chrome login session. You must be logged into the target website in Chrome before running commands. If you get empty data or errors, check your login status first.
 
@@ -92,7 +92,6 @@ Public API commands (`hackernews`, `github search`, `v2ex`) need no browser at a
 | **reuters** | `search` | 🔐 Browser |
 | **smzdm** | `search` | 🔐 Browser |
 | **ctrip** | `search` | 🔐 Browser |
-| **github** | `trending` `search` | 🔐 / 🌐 |
 | **v2ex** | `hot` `latest` `topic` | 🌐 Public |
 | **hackernews** | `top` | 🌐 Public |
 | **bbc** | `news` | 🌐 Public |

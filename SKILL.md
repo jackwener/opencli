@@ -3,7 +3,7 @@ name: opencli
 description: "OpenCLI — Make any website your CLI. Zero risk, AI-powered, reuse Chrome login."
 version: 0.1.0
 author: jackwener
-tags: [cli, browser, web, mcp, playwright, bilibili, zhihu, twitter, github, v2ex, hackernews, reddit, xiaohongshu, AI, agent]
+tags: [cli, browser, web, mcp, playwright, bilibili, zhihu, twitter, v2ex, hackernews, reddit, xiaohongshu, AI, agent]
 ---
 
 # OpenCLI
@@ -34,7 +34,7 @@ Browser commands require:
 
 > **Note**: You must be logged into the target website in Chrome before running commands. Tabs opened during command execution are auto-closed afterwards.
 
-Public API commands (`hackernews`, `github search`, `v2ex`) need no browser.
+Public API commands (`hackernews`, `v2ex`, `bbc`) need no browser.
 
 ## Commands Reference
 
@@ -60,9 +60,9 @@ opencli xiaohongshu search --keyword "美食"  # 搜索笔记
 opencli xiaohongshu notifications             # 通知（mentions/likes/connections）
 opencli xiaohongshu feed --limit 10           # 推荐 Feed
 
-# GitHub (trending=browser, search=public)
-opencli github trending --limit 10       # GitHub Trending
-opencli github search --keyword "cli"    # 搜索仓库
+# Public API commands
+opencli bbc news --limit 10              # BBC News headlines
+opencli v2ex hot --limit 10              # V2EX 热门话题
 
 # Twitter/X (browser)
 opencli twitter trending --limit 10      # 热门话题
