@@ -84,6 +84,34 @@ const EXTENSION_LOCK_POLL = parseInt(process.env.OPENCLI_EXTENSION_LOCK_POLL_INT
 const CONNECT_TIMEOUT = parseInt(process.env.OPENCLI_BROWSER_CONNECT_TIMEOUT ?? '30', 10);
 const LOCK_DIR = path.join(os.tmpdir(), 'opencli-mcp-lock');
 
+interface TabSummary {
+  index: number;
+  url?: string;
+  raw: string;
+}
+
+function parseTabs(input: any): TabSummary[] {
+  if (Array.isArray(input)) {
+    return input.map((tab, index) => ({
+      index,
+      url: typeof tab?.url === 'string' ? tab.url : undefined,
+      raw: JSON.stringify(tab),
+    }));
+  }
+  if (typeof input !== 'string') return [];
+
+  const lines = input.split('\n').map(line => line.trim()).filter(Boolean);
+  return lines.map((line, fallbackIndex) => {
+    const idx = line.match(/Tab\s+(\d+)/)?.[1];
+    const url = line.match(/(chrome-extension:\/\/\S+|https?:\/\/\S+)/)?.[1];
+    return {
+      index: idx ? parseInt(idx, 10) : fallbackIndex,
+      url,
+      raw: line,
+    };
+  });
+}
+
 // JSON-RPC helpers
 let _nextId = 1;
 function jsonRpcRequest(method: string, params: Record<string, any> = {}): string {
@@ -462,9 +490,16 @@ export class PlaywrightMCP {
       if (this._page && this._proc && !this._proc.killed) {
         try {
           const tabs = await this._page.tabs();
-          const tabStr = typeof tabs === 'string' ? tabs : JSON.stringify(tabs);
-          const allTabs = tabStr.match(/Tab (\d+)/g) || [];
-          const currentTabCount = allTabs.length;
+          const parsedTabs = parseTabs(tabs);
+          const currentTabCount = parsedTabs.length;
+
+          const extensionTabs = parsedTabs
+            .filter(tab => tab.url?.includes('chrome-extension://mmlmfjhmonkocbjadbfplnigmagldckm/connect.html'))
+            .map(tab => tab.index)
+            .sort((a, b) => b - a);
+          for (const tabIndex of extensionTabs) {
+            try { await this._page.closeTab(tabIndex); } catch {}
+          }
 
           // Close tabs in reverse order to avoid index shifting issues
           // Keep the original tabs that existed before the command started

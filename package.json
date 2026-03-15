@@ -12,7 +12,7 @@
   },
   "scripts": {
     "dev": "tsx src/main.ts",
-    "build": "tsc && npm run clean-yaml && npm run copy-yaml && npm run build-manifest",
+    "build": "rm -rf dist tsconfig.tsbuildinfo && tsc && npm run clean-yaml && npm run copy-yaml && npm run build-manifest",
     "build-manifest": "node dist/build-manifest.js || true",
     "clean-yaml": "find dist/clis -name '*.yaml' -o -name '*.yml' 2>/dev/null | xargs rm -f",
     "copy-yaml": "find src/clis -name '*.yaml' -o -name '*.yml' | while read f; do d=\"dist/${f#src/}\"; mkdir -p \"$(dirname \"$d\")\"; cp \"$f\" \"$d\"; done",

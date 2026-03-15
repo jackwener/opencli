@@ -9,7 +9,7 @@
 [![Node.js Version](https://img.shields.io/node/v/@jackwener/opencli?style=flat-square)](https://nodejs.org)
 [![License](https://img.shields.io/npm/l/@jackwener/opencli?style=flat-square)](./LICENSE)
 
-A CLI tool that turns **any website** into a command-line interface. **47 commands** across **17 sites** — bilibili, zhihu, xiaohongshu, twitter, reddit, xueqiu, github, v2ex, hackernews, bbc, weibo, boss, yahoo-finance, reuters, smzdm, ctrip, youtube — powered by browser session reuse and AI-native discovery.
+A CLI tool that turns **any website** into a command-line interface. **50 commands** across **17 sites** — bilibili, zhihu, xiaohongshu, twitter, reddit, xueqiu, v2ex, hackernews, bbc, weibo, boss, yahoo-finance, reuters, smzdm, ctrip, youtube, coupang — powered by browser session reuse and AI-native discovery.
 
 ---
 
@@ -97,6 +97,7 @@ opencli list                              # See all commands
 opencli list -f yaml                      # List commands as YAML
 opencli hackernews top --limit 5          # Public API, no browser
 opencli bilibili hot --limit 5            # Browser command
+opencli coupang search --query "milk"     # Logged-in browser search on Coupang
 opencli zhihu hot -f json                 # JSON output
 opencli zhihu hot -f yaml                 # YAML output
 ```
@@ -122,21 +123,21 @@ npm install -g @jackwener/opencli@latest
 
 | Site | Commands | Mode |
 |------|----------|------|
-| **bilibili** | `hot` `search` `me` `favorite` ... (11 commands) | 🔐 Browser |
+| **bilibili** | `dynamic` `favorite` `feed` `following` `history` `hot` `me` `ranking` `search` `subtitle` `user-videos` | 🔐 Browser |
 | **zhihu** | `hot` `search` `question` | 🔐 Browser |
-| **xiaohongshu** | `search` `notifications` `feed` `me` `user` | 🔐 Browser |
+| **xiaohongshu** | `feed` `notifications` `search` `user` | 🔐 Browser |
 | **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` | 🔐 Browser |
 | **twitter** | `trending` `bookmarks` `profile` `search` `timeline` | 🔐 Browser |
 | **reddit** | `hot` `frontpage` `search` `subreddit` | 🔐 Browser |
 | **weibo** | `hot` | 🔐 Browser |
 | **boss** | `search` | 🔐 Browser |
+| **coupang** | `search` `add-to-cart` | 🔐 Browser |
 | **youtube** | `search` | 🔐 Browser |
 | **yahoo-finance** | `quote` | 🔐 Browser |
 | **reuters** | `search` | 🔐 Browser |
 | **smzdm** | `search` | 🔐 Browser |
 | **ctrip** | `search` | 🔐 Browser |
-| **github** | `search` | 🌐 Public |
-| **v2ex** | `hot` `latest` `topic` | 🌐 Public |
+| **v2ex** | `daily` `hot` `latest` `me` `notifications` `topic` | 🌐 Public |
 | **hackernews** | `top` | 🌐 Public |
 | **bbc** | `news` | 🌐 Public |
 

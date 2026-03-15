@@ -102,7 +102,8 @@ for (const [, cmd] of registry) {
   const subCmd = siteCmd.command(cmd.name).description(cmd.description);
 
   for (const arg of cmd.args) {
-    const flag = arg.required ? `--${arg.name} <value>` : `--${arg.name} [value]`;
+    const optionName = toKebabCase(arg.name);
+    const flag = arg.required ? `--${optionName} <value>` : `--${optionName} [value]`;
     if (arg.required) subCmd.requiredOption(flag, arg.help ?? '');
     else if (arg.default != null) subCmd.option(flag, arg.help ?? '', String(arg.default));
     else subCmd.option(flag, arg.help ?? '');
@@ -139,6 +140,10 @@ function coerce(v: any, t: string): any {
   if (t === 'int') return parseInt(String(v), 10);
   if (t === 'float') return parseFloat(String(v));
   return String(v);
+}
+
+function toKebabCase(v: string): string {
+  return v.replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/_/g, '-').toLowerCase();
 }
 
 program.parse();
