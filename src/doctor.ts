@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import chalk from 'chalk';
 import type { IPage } from './types.js';
-import { PlaywrightMCP, getTokenFingerprint } from './browser/index.js';
+import { PlaywrightMCP, getTokenFingerprint, resolveCdpEndpoint } from './browser/index.js';
 import { browserSession } from './runtime.js';
 
 const PLAYWRIGHT_SERVER_NAME = 'playwright';
@@ -592,9 +592,13 @@ export function renderBrowserDoctorReport(report: DoctorReport): string {
   const lines = [chalk.bold(`opencli v${report.cliVersion ?? 'unknown'} doctor`), ''];
 
   // CDP endpoint mode (for remote/server environments)
-  const cdpEndpoint = process.env.OPENCLI_CDP_ENDPOINT;
-  if (cdpEndpoint) {
-    lines.push(statusLine('OK', `CDP endpoint: ${chalk.cyan(cdpEndpoint)}`));
+  const { endpoint: cdpEndpoint, requestedCdp } = resolveCdpEndpoint();
+  if (requestedCdp) {
+    if (cdpEndpoint) {
+      lines.push(statusLine('OK', `CDP endpoint: ${chalk.cyan(cdpEndpoint)}`));
+    } else {
+      lines.push(statusLine('MISSING', 'CDP endpoint (auto-discovery failed)'));
+    }
     lines.push(chalk.dim('  → Remote Chrome mode: extension token not required'));
     lines.push('');
     return lines.join('\n');
