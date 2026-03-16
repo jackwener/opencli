@@ -49,23 +49,57 @@ describe('browser helpers', () => {
     expect(__test__.appendLimited('12345', '67890', 8)).toBe('34567890');
   });
 
-  it('builds Playwright MCP args with kebab-case executable path', () => {
-    expect(__test__.buildMcpArgs({
-      mcpPath: '/tmp/cli.js',
-      executablePath: '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
-    })).toEqual([
-      '/tmp/cli.js',
-      '--extension',
-      '--executable-path',
-      '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
-    ]);
+  it('builds extension MCP args when token is set', () => {
+    const savedToken = process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+    process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN = 'test-token';
+    try {
+      expect(__test__.buildMcpArgs({
+        mcpPath: '/tmp/cli.js',
+        executablePath: '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
+      })).toEqual([
+        '/tmp/cli.js',
+        '--extension',
+        '--executable-path',
+        '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
+      ]);
 
-    expect(__test__.buildMcpArgs({
-      mcpPath: '/tmp/cli.js',
-    })).toEqual([
-      '/tmp/cli.js',
-      '--extension',
-    ]);
+      expect(__test__.buildMcpArgs({
+        mcpPath: '/tmp/cli.js',
+      })).toEqual([
+        '/tmp/cli.js',
+        '--extension',
+      ]);
+    } finally {
+      if (savedToken) {
+        process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN = savedToken;
+      } else {
+        delete process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+      }
+    }
+  });
+
+  it('builds standalone MCP args when no extension token is set', () => {
+    const savedToken = process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+    delete process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+    try {
+      // Without token: no --extension, no --headless — browser launches in headed mode
+      expect(__test__.buildMcpArgs({
+        mcpPath: '/tmp/cli.js',
+      })).toEqual([
+        '/tmp/cli.js',
+      ]);
+
+      expect(__test__.buildMcpArgs({
+        mcpPath: '/tmp/cli.js',
+        executablePath: '/usr/bin/chromium',
+      })).toEqual([
+        '/tmp/cli.js',
+        '--executable-path',
+        '/usr/bin/chromium',
+      ]);
+    } finally {
+      if (savedToken) process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN = savedToken;
+    }
   });
 
   it('times out slow promises', async () => {

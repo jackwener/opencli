@@ -21,6 +21,7 @@ A CLI tool that turns **any website** into a command-line interface. **59 comman
 - [Built-in Commands](#built-in-commands)
 - [Output Formats](#output-formats)
 - [For AI Agents (Developer Guide)](#for-ai-agents-developer-guide)
+- [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Releasing New Versions](#releasing-new-versions)
 - [License](#license)
@@ -175,6 +176,24 @@ opencli cascade https://api.example.com/data
 ```
 
 Explore outputs to `.opencli/explore/<site>/` (manifest.json, endpoints.json, capabilities.json, auth.json).
+
+## Testing
+
+See **[TESTING.md](./TESTING.md)** for the full testing guide, including:
+
+- Current test coverage (unit + ~52 E2E tests across all 18 sites)
+- How to run tests locally
+- How to add tests when creating new adapters
+- CI/CD pipeline with sharding
+- Headless browser mode (`OPENCLI_HEADLESS=1`)
+
+```bash
+# Quick start
+npm run build
+npx vitest run                              # All tests
+npx vitest run src/                          # Unit tests only
+npx vitest run tests/e2e/                    # E2E tests
+```
 
 ## Troubleshooting
 

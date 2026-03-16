@@ -2,12 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
+  schedule:
+    - cron: '0 8 * * 1'  # Weekly Monday 08:00 UTC — smoke tests
+  workflow_dispatch:
 
 jobs:
-  check:
+  # ── Fast gate: typecheck + build ──
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,6 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -24,3 +29,60 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # ── Unit tests (vitest shard) ──
+  unit-test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests (shard ${{ matrix.shard }}/2)
+        run: npx vitest run src/ --reporter=verbose --shard=${{ matrix.shard }}/2
+
+  # ── Smoke tests (scheduled / manual only) ──
+  smoke-test:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install real Chrome
+        uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: stable
+
+      - name: Install xvfb
+        run: sudo apt-get install -y xvfb
+
+      - name: Build
+        run: npm run build
+
+      - name: Run smoke tests
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            npx vitest run tests/smoke/ --reporter=verbose
+        env:
+          OPENCLI_BROWSER_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+    timeout-minutes: 15

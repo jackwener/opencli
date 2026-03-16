@@ -1,0 +1,47 @@
+name: E2E Headed Chrome
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  e2e-headed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install real Chrome (stable)
+        uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: stable
+
+      - name: Verify Chrome installation
+        run: |
+          echo "Chrome path: ${{ steps.setup-chrome.outputs.chrome-path }}"
+          ${{ steps.setup-chrome.outputs.chrome-path }} --version
+
+      - name: Install xvfb for headed mode
+        run: sudo apt-get install -y xvfb
+
+      - name: Build
+        run: npm run build
+
+      - name: Run E2E tests (headed Chrome + xvfb)
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            npx vitest run tests/e2e/ --reporter=verbose
+        env:
+          OPENCLI_BROWSER_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}

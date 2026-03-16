@@ -349,6 +349,7 @@ export class PlaywrightMCP {
     return new Promise<Page>((resolve, reject) => {
       const isDebug = process.env.DEBUG?.includes('opencli:mcp');
       const debugLog = (msg: string) => isDebug && console.error(`[opencli:mcp] ${msg}`);
+      const useExtension = !!process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
       const extensionToken = process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
       const tokenFingerprint = getTokenFingerprint(extensionToken);
       let stderrBuffer = '';
@@ -392,7 +393,8 @@ export class PlaywrightMCP {
         executablePath: process.env.OPENCLI_BROWSER_EXECUTABLE_PATH,
       });
       if (process.env.OPENCLI_VERBOSE) {
-        console.error(`[opencli] Extension token: ${extensionToken ? `configured (fingerprint ${tokenFingerprint})` : 'missing'}`);
+        console.error(`[opencli] Mode: ${useExtension ? 'extension' : 'standalone'}`);
+        if (useExtension) console.error(`[opencli] Extension token: fingerprint ${tokenFingerprint}`);
       }
       debugLog(`Spawning node ${mcpArgs.join(' ')}`);
 
@@ -610,7 +612,14 @@ function appendLimited(current: string, chunk: string, limit: number): string {
 }
 
 function buildMcpArgs(input: { mcpPath: string; executablePath?: string | null }): string[] {
-  const args = [input.mcpPath, '--extension'];
+  const hasToken = !!process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+  const args = [input.mcpPath];
+  if (hasToken) {
+    // Connect to user's running Chrome via MCP Bridge extension
+    args.push('--extension');
+  }
+  // Without --extension, @playwright/mcp launches its own browser (headed by default).
+  // In CI, xvfb provides a virtual display for headed mode.
   if (input.executablePath) {
     args.push('--executable-path', input.executablePath);
   }
