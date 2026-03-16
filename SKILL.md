@@ -11,7 +11,7 @@ tags: [cli, browser, web, mcp, playwright, bilibili, zhihu, twitter, github, v2e
 > Make any website your CLI. Reuse Chrome login, zero risk, AI-powered discovery.
 
 > [!CAUTION]
-> **AI Agent 必读：创建或修改任何适配器之前，你必须先阅读 [CLI-CREATOR.md](./CLI-CREATOR.md)！**
+> **AI Agent 必读：创建或修改任何适配器之前，你必须先阅读 [CLI-EXPLORER.md](./CLI-EXPLORER.md)！**
 > 该文档包含完整的 API 发现工作流（必须使用 Playwright MCP Bridge 浏览器探索）、5 级认证策略决策树、平台 SDK 速查表、`tap` 步骤调试流程、分页 API 模板、级联请求模式、以及常见陷阱。
 > **本文件（SKILL.md）仅提供命令参考和简化模板，不足以正确开发适配器。**
 
@@ -183,8 +183,12 @@ opencli bilibili hot -v         # Show each pipeline step and data flow
 
 ## Creating Adapters
 
+> [!TIP]
+> **快速模式**：如果你只想为一个具体页面生成一个命令，直接看 [CLI-ONESHOT.md](./CLI-ONESHOT.md)。
+> 只需要一个 URL + 一句话描述，4 步搞定。
+
 > [!IMPORTANT]
-> **STOP — 在写任何代码之前，先阅读 [CLI-CREATOR.md](./CLI-CREATOR.md)。**
+> **完整模式 — 在写任何代码之前，先阅读 [CLI-EXPLORER.md](./CLI-EXPLORER.md)。**
 > 它包含：① AI Agent 浏览器探索工作流（必须用 Playwright MCP 抓包验证 API）② 认证策略决策树 ③ 平台 SDK（如 Bilibili 的 `apiGet`/`fetchJson`）④ YAML vs TS 选择指南 ⑤ `tap` 步骤调试方法 ⑥ 级联请求模板 ⑦ 常见陷阱表。
 > **下方仅为简化模板参考，直接使用极易踩坑。**
 
@@ -335,7 +339,6 @@ ${{ index + 1 }}
 | `OPENCLI_BROWSER_CONNECT_TIMEOUT` | 30 | Browser connection timeout (sec) |
 | `OPENCLI_BROWSER_COMMAND_TIMEOUT` | 45 | Command execution timeout (sec) |
 | `OPENCLI_BROWSER_EXPLORE_TIMEOUT` | 120 | Explore timeout (sec) |
-| `OPENCLI_EXTENSION_LOCK_TIMEOUT` | 120 | Extension lock timeout (sec) |
 | `OPENCLI_CDP_ENDPOINT` | — | Manual CDP WebSocket endpoint (overrides auto-discovery) |
 | `OPENCLI_USE_CDP` | — | Set to `1` to use Chrome 144+ CDP auto-discovery instead of extension |
 | `OPENCLI_FORCE_EXTENSION` | — | Set to `1` to skip CDP and force extension mode |
@@ -347,6 +350,5 @@ ${{ index + 1 }}
 |-------|----------|
 | `npx not found` | Install Node.js: `brew install node` |
 | `Timed out connecting to browser` | 1) Chrome must be open 2) Enable remote debugging at `chrome://inspect#remote-debugging` or install MCP Bridge extension |
-| `Extension lock timed out` | Another opencli command is running; browser commands run serially |
 | `Target page context` error | Add `navigate:` step before `evaluate:` in YAML |
 | Empty table data | Check if evaluate returns JSON string (MCP parsing) or data path is wrong |
