@@ -15,7 +15,7 @@ import { formatBytes } from '../../download/progress.js';
  * Convert HTML content to Markdown.
  * This is a simplified converter for Zhihu article content.
  */
-function htmlToMarkdown(html: string): string {
+export function htmlToMarkdown(html: string): string {
   let md = html;
 
   // Remove script and style tags
@@ -44,7 +44,7 @@ function htmlToMarkdown(html: string): string {
   });
   md = md.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (match, content) => {
     let index = 0;
-    return content.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, () => `${++index}. $1\n`) + '\n';
+    return content.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_itemMatch, itemContent) => `${++index}. ${itemContent}\n`) + '\n';
   });
 
   // Convert bold and italic

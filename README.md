@@ -1,7 +1,7 @@
 # OpenCLI
 
 > **Make any website or Electron App your CLI.**  
-> Zero risk · Reuse Chrome login · AI-powered discovery · 80+ commands · 19 sites
+> Zero risk · Reuse Chrome login · AI-powered discovery · Browser + Desktop automation
 
 [中文文档](./README.zh-CN.md)
 
@@ -22,6 +22,7 @@ Turn ANY Electron application into a CLI tool! Recombine, script, and extend app
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [Built-in Commands](#built-in-commands)
+- [Download Support](#download-support)
 - [Output Formats](#output-formats)
 - [For AI Agents (Developer Guide)](#for-ai-agents-developer-guide)
 - [Remote Chrome (Server/Headless)](#remote-chrome-serverheadless)
@@ -143,39 +144,101 @@ npm install -g @jackwener/opencli@latest
 
 ## Built-in Commands
 
-**32 sites · 162 commands** — run `opencli list` for the live registry.
+Run `opencli list` for the live registry.
 
-| Site | Commands | Count | Mode |
-|------|----------|:-----:|------|
-| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` | 18 | 🔐 Browser |
-| **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `read` `user` `user-posts` `user-comments` `upvote` `save` `comment` `subscribe` `saved` `upvoted` | 15 | 🔐 Browser |
-| **cursor** | `status` `send` `read` `new` `dump` `composer` `model` `extract-code` `ask` `screenshot` `history` `export` | 12 | 🖥️ Desktop |
-| **bilibili** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` | 11 | 🔐 Browser |
-| **codex** | `status` `send` `read` `new` `extract-diff` `model` `ask` `screenshot` `history` `export` | 10 | 🖥️ Desktop |
-| **chatwise** | `status` `new` `send` `read` `ask` `model` `history` `export` `screenshot` | 9 | 🖥️ Desktop |
-| **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | 8 | 🖥️ Desktop |
-| **discord** | `status` `send` `read` `channels` `servers` `search` `members` | 7 | 🖥️ Desktop |
-| **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | 6 | 🌐 / 🔐 |
-| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` | 6 | 🔐 Browser |
-| **antigravity** | `status` `send` `read` `new` `evaluate` | 5 | 🖥️ Desktop |
-| **xiaohongshu** | `search` `notifications` `feed` `me` `user` | 5 | 🔐 Browser |
-| **chatgpt** | `status` `new` `send` `read` `ask` | 5 | 🖥️ Desktop |
-| **wechat** | `status` `send` `new` `search` `read` | 5 | 🖥️ Desktop |
-| **feishu** | `status` `send` `new` `search` `read` | 5 | 🖥️ Desktop |
-| **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` | 3 | 🌐 Public |
-| **youtube** | `search` `video` `transcript` | 3 | 🔐 Browser |
-| **zhihu** | `hot` `search` `question` | 3 | 🔐 Browser |
-| **boss** | `search` `detail` | 2 | 🔐 Browser |
-| **coupang** | `search` `add-to-cart` | 2 | 🔐 Browser |
-| **bbc** | `news` | 1 | 🌐 Public |
-| **ctrip** | `search` | 1 | 🔐 Browser |
-| **github** | `search` | 1 | 🌐 Public |
-| **hackernews** | `top` | 1 | 🌐 Public |
-| **linkedin** | `search` | 1 | 🔐 Browser |
-| **reuters** | `search` | 1 | 🔐 Browser |
-| **smzdm** | `search` | 1 | 🔐 Browser |
-| **weibo** | `hot` | 1 | 🔐 Browser |
-| **yahoo-finance** | `quote` | 1 | 🔐 Browser |
+| Site | Commands | Mode |
+|------|----------|------|
+| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` | 🔐 Browser |
+| **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `read` `user` `user-posts` `user-comments` `upvote` `save` `comment` `subscribe` `saved` `upvoted` | 🔐 Browser |
+| **cursor** | `status` `send` `read` `new` `dump` `composer` `model` `extract-code` `ask` `screenshot` `history` `export` | 🖥️ Desktop |
+| **bilibili** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` `download` | 🔐 Browser |
+| **codex** | `status` `send` `read` `new` `extract-diff` `model` `ask` `screenshot` `history` `export` | 🖥️ Desktop |
+| **chatwise** | `status` `new` `send` `read` `ask` `model` `history` `export` `screenshot` | 🖥️ Desktop |
+| **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | 🖥️ Desktop |
+| **discord** | `status` `send` `read` `channels` `servers` `search` `members` | 🖥️ Desktop |
+| **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | 🌐 / 🔐 |
+| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` | 🔐 Browser |
+| **antigravity** | `status` `send` `read` `new` `evaluate` | 🖥️ Desktop |
+| **chatgpt** | `status` `new` `send` `read` `ask` | 🖥️ Desktop |
+| **wechat** | `status` `send` `new` `search` `read` | 🖥️ Desktop |
+| **feishu** | `status` `send` `new` `search` `read` | 🖥️ Desktop |
+| **xiaohongshu** | `search` `notifications` `feed` `me` `user` `download` | 🔐 Browser |
+| **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` | 🌐 Public |
+| **zhihu** | `hot` `search` `question` `download` | 🔐 Browser |
+| **youtube** | `search` `video` `transcript` | 🔐 Browser |
+| **boss** | `search` `detail` | 🔐 Browser |
+| **coupang** | `search` `add-to-cart` | 🔐 Browser |
+| **bbc** | `news` | 🌐 Public |
+| **ctrip** | `search` | 🔐 Browser |
+| **github** | `search` | 🌐 Public |
+| **hackernews** | `top` | 🌐 Public |
+| **linkedin** | `search` | 🔐 Browser |
+| **reuters** | `search` | 🔐 Browser |
+| **smzdm** | `search` | 🔐 Browser |
+| **weibo** | `hot` | 🔐 Browser |
+| **yahoo-finance** | `quote` | 🔐 Browser |
+
+## Download Support
+
+OpenCLI supports downloading images, videos, and articles from supported platforms.
+
+### Supported Platforms
+
+| Platform | Content Types | Notes |
+|----------|---------------|-------|
+| **xiaohongshu** | Images, Videos | Downloads all media from a note |
+| **bilibili** | Videos | Requires `yt-dlp` installed |
+| **twitter** | Images, Videos | Downloads from user media tab or single tweet |
+| **zhihu** | Articles (Markdown) | Exports articles with optional image download |
+
+### Prerequisites
+
+For video downloads from streaming platforms, you need to install `yt-dlp`:
+
+```bash
+# Install yt-dlp
+pip install yt-dlp
+# or
+brew install yt-dlp
+```
+
+### Usage Examples
+
+```bash
+# Download images/videos from Xiaohongshu note
+opencli xiaohongshu download --note-id abc123 --output ./xhs
+
+# Download Bilibili video (requires yt-dlp)
+opencli bilibili download --bvid BV1xxx --output ./bilibili
+opencli bilibili download --bvid BV1xxx --quality 1080p  # Specify quality
+
+# Download Twitter media from user
+opencli twitter download --username elonmusk --limit 20 --output ./twitter
+
+# Download single tweet media
+opencli twitter download --tweet-url "https://x.com/user/status/123" --output ./twitter
+
+# Export Zhihu article to Markdown
+opencli zhihu download --url "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu
+
+# Export with local images
+opencli zhihu download --url "https://zhuanlan.zhihu.com/p/xxx" --download-images
+```
+
+### Pipeline Step (for YAML adapters)
+
+The `download` step can be used in YAML pipelines:
+
+```yaml
+pipeline:
+  - fetch: https://api.example.com/media
+  - download:
+      url: ${{ item.imageUrl }}
+      dir: ./downloads
+      filename: ${{ item.title | sanitize }}.jpg
+      concurrency: 5
+      skip_existing: true
+```
 
 ## Output Formats
 
@@ -220,7 +283,7 @@ Explore outputs to `.opencli/explore/<site>/` (manifest.json, endpoints.json, ca
 
 See **[TESTING.md](./TESTING.md)** for the full testing guide, including:
 
-- Current test coverage (unit + E2E tests across 19 sites)
+- Current test coverage (unit + E2E tests across browser and desktop adapters)
 - How to run tests locally
 - How to add tests when creating new adapters
 - CI/CD pipeline with sharding
