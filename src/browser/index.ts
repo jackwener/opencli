@@ -9,6 +9,7 @@ export { Page } from './page.js';
 export { PlaywrightMCP } from './mcp.js';
 export { getTokenFingerprint, formatBrowserConnectError } from './errors.js';
 export type { ConnectFailureKind, ConnectFailureInput } from './errors.js';
+export { resolveCdpEndpoint } from './discover.js';
 
 // Test-only helpers — exposed for unit tests
 import { createJsonRpcRequest } from './mcp.js';

@@ -21,6 +21,7 @@ A CLI tool that turns **any website** into a command-line interface — Bilibili
 - [Built-in Commands](#built-in-commands)
 - [Output Formats](#output-formats)
 - [For AI Agents (Developer Guide)](#for-ai-agents-developer-guide)
+- [Remote Chrome (Server/Headless)](#remote-chrome-serverheadless)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Releasing New Versions](#releasing-new-versions)
@@ -197,6 +198,70 @@ opencli cascade https://api.example.com/data
 ```
 
 Explore outputs to `.opencli/explore/<site>/` (manifest.json, endpoints.json, capabilities.json, auth.json).
+
+## Remote Chrome (Server/Headless)
+
+For server environments without a display, you can connect OpenCLI to a Chrome browser running on your local machine via Chrome DevTools Protocol (CDP).
+
+### How It Works
+
+```
+Local Machine                           Server
+┌──────────────────────────────┐       ┌──────────────────────────────┐
+│ Chrome (logged into sites)   │       │ OpenCLI                      │
+│ --remote-debugging-port=9222 │◀─────▶│ OPENCLI_CDP_ENDPOINT=        │
+└──────────────────────────────┘  SSH  │   http://localhost:9222      │
+                                tunnel └──────────────────────────────┘
+```
+
+### Step 1: Start Chrome with Remote Debugging (Local Machine)
+
+**macOS:**
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/chrome-debug-profile"
+```
+
+**Linux:**
+```bash
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/chrome-debug-profile"
+```
+
+**Windows:**
+```cmd
+"C:\Program Files\Google\Chrome\Application\chrome.exe" ^
+  --remote-debugging-port=9222 ^
+  --user-data-dir="%USERPROFILE%\chrome-debug-profile"
+```
+
+### Step 2: Log Into Target Websites
+
+Open Chrome and log into the websites you want to use (e.g., bilibili.com, zhihu.com).
+
+### Step 3: Create SSH Tunnel (Local Machine)
+
+Forward the debugging port to your server:
+
+```bash
+ssh -R 9222:localhost:9222 your-server
+```
+
+### Step 4: Run OpenCLI on Server
+
+```bash
+export OPENCLI_CDP_ENDPOINT="http://localhost:9222"
+opencli doctor                    # Verify connection
+opencli bilibili hot --limit 5    # Test a command
+```
+
+### Persistent Configuration
+
+Add to your shell profile (`~/.bashrc` or `~/.zshrc`):
+
+```bash
+export OPENCLI_CDP_ENDPOINT="http://localhost:9222"
+```
 
 ## Testing
 

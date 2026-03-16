@@ -591,6 +591,15 @@ export function renderBrowserDoctorReport(report: DoctorReport): string {
   const hasMismatch = uniqueFingerprints.length > 1;
   const lines = [chalk.bold(`opencli v${report.cliVersion ?? 'unknown'} doctor`), ''];
 
+  // CDP endpoint mode (for remote/server environments)
+  const cdpEndpoint = process.env.OPENCLI_CDP_ENDPOINT;
+  if (cdpEndpoint) {
+    lines.push(statusLine('OK', `CDP endpoint: ${chalk.cyan(cdpEndpoint)}`));
+    lines.push(chalk.dim('  → Remote Chrome mode: extension token not required'));
+    lines.push('');
+    return lines.join('\n');
+  }
+
   const installStatus: ReportStatus = report.extensionInstalled ? 'OK' : 'MISSING';
   const installDetail = report.extensionInstalled
     ? `Extension installed (${report.extensionBrowsers.join(', ')})`

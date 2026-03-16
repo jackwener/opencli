@@ -4,7 +4,7 @@
 
 import { createHash } from 'node:crypto';
 
-export type ConnectFailureKind = 'missing-token' | 'extension-timeout' | 'extension-not-installed' | 'mcp-init' | 'process-exit' | 'unknown';
+export type ConnectFailureKind = 'missing-token' | 'extension-timeout' | 'extension-not-installed' | 'mcp-init' | 'process-exit' | 'cdp-connection-failed' | 'unknown';
 
 export type ConnectFailureInput = {
   kind: ConnectFailureKind;
@@ -25,6 +25,15 @@ export function formatBrowserConnectError(input: ConnectFailureInput): Error {
   const stderr = input.stderr?.trim();
   const suffix = stderr ? `\n\nMCP stderr:\n${stderr}` : '';
   const tokenHint = input.tokenFingerprint ? ` Token fingerprint: ${input.tokenFingerprint}.` : '';
+
+  if (input.kind === 'cdp-connection-failed') {
+    return new Error(
+      `Failed to connect to remote Chrome via CDP endpoint.\n\n` +
+      `Check if Chrome is running with remote debugging enabled (--remote-debugging-port=9222) or DevToolsActivePort is available under chrome://inspect#remote-debugging.\n` +
+      `If you specified OPENCLI_CDP_ENDPOINT=1, auto-discovery might have failed.` +
+      suffix,
+    );
+  }
 
   if (input.kind === 'missing-token') {
     return new Error(
@@ -74,8 +83,15 @@ export function inferConnectFailureKind(args: {
   stderr: string;
   rawMessage?: string;
   exited?: boolean;
+  isCdpMode?: boolean;
 }): ConnectFailureKind {
   const haystack = `${args.rawMessage ?? ''}\n${args.stderr}`.toLowerCase();
+
+  if (args.isCdpMode) {
+    if (args.rawMessage?.startsWith('MCP init failed:')) return 'mcp-init';
+    if (args.exited) return 'cdp-connection-failed';
+    return 'cdp-connection-failed';
+  }
 
   if (!args.hasExtensionToken)
     return 'missing-token';

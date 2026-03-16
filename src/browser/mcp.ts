@@ -9,7 +9,7 @@ import { withTimeoutMs, DEFAULT_BROWSER_CONNECT_TIMEOUT } from '../runtime.js';
 import { PKG_VERSION } from '../version.js';
 import { Page } from './page.js';
 import { getTokenFingerprint, formatBrowserConnectError, inferConnectFailureKind } from './errors.js';
-import { findMcpServerPath, buildMcpLaunchSpec } from './discover.js';
+import { findMcpServerPath, buildMcpLaunchSpec, resolveCdpEndpoint } from './discover.js';
 import { extractTabIdentities, extractTabEntries, diffTabIndexes, appendLimited } from './tabs.js';
 
 const STDERR_BUFFER_LIMIT = 16 * 1024;
@@ -114,7 +114,8 @@ export class PlaywrightMCP {
     return new Promise<Page>((resolve, reject) => {
       const isDebug = process.env.DEBUG?.includes('opencli:mcp');
       const debugLog = (msg: string) => isDebug && console.error(`[opencli:mcp] ${msg}`);
-      const useExtension = !!process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+      const { endpoint: cdpEndpoint, requestedCdp } = resolveCdpEndpoint();
+      const useExtension = !requestedCdp;
       const extensionToken = process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
       const tokenFingerprint = getTokenFingerprint(extensionToken);
       let stderrBuffer = '';
@@ -150,15 +151,17 @@ export class PlaywrightMCP {
         settleError(inferConnectFailureKind({
           hasExtensionToken: !!extensionToken,
           stderr: stderrBuffer,
+          isCdpMode: requestedCdp,
         }));
       }, timeout * 1000);
 
       const launchSpec = buildMcpLaunchSpec({
         mcpPath,
         executablePath: process.env.OPENCLI_BROWSER_EXECUTABLE_PATH,
+        cdpEndpoint,
       });
       if (process.env.OPENCLI_VERBOSE) {
-        console.error(`[opencli] Mode: ${useExtension ? 'extension' : 'standalone'}`);
+        console.error(`[opencli] Mode: ${requestedCdp ? 'CDP' : useExtension ? 'extension' : 'standalone'}`);
         if (useExtension) console.error(`[opencli] Extension token: fingerprint ${tokenFingerprint}`);
         if (launchSpec.usedNpxFallback) {
           console.error('[opencli] Playwright MCP not found locally; bootstrapping via npx @playwright/mcp@latest');
@@ -218,6 +221,7 @@ export class PlaywrightMCP {
             hasExtensionToken: !!extensionToken,
             stderr: stderrBuffer,
             exited: true,
+            isCdpMode: requestedCdp,
           }), { exitCode: code });
         }
       });
@@ -235,6 +239,7 @@ export class PlaywrightMCP {
             hasExtensionToken: !!extensionToken,
             stderr: stderrBuffer,
             rawMessage: `MCP init failed: ${resp.error.message}`,
+            isCdpMode: requestedCdp,
           }), { rawMessage: resp.error.message });
           return;
         }
