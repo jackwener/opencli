@@ -164,7 +164,8 @@ opencli validate bilibili   # Validate specific site
 opencli setup               # Interactive token setup (auto-discover + TUI checkbox)
 opencli doctor              # Diagnose token & extension config across all tools
 opencli doctor --live       # Also test live browser connectivity
-opencli doctor --fix -y     # Auto-fix all config files (non-interactive)
+opencli doctor --fix        # Fix mismatched configs (interactive confirmation)
+opencli doctor --fix -y     # Fix all configs non-interactively
 ```
 
 ### AI Agent Workflow

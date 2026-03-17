@@ -90,7 +90,8 @@ export PLAYWRIGHT_MCP_EXTENSION_TOKEN="<你的-token>"
 ```bash
 opencli doctor            # Token 与配置诊断
 opencli doctor --live     # 额外测试浏览器连通性
-opencli doctor --fix -y   # 自动修复所有不一致的配置文件
+opencli doctor --fix      # 修复不一致的配置（交互确认）
+opencli doctor --fix -y   # 无交互直接修复所有配置
 ```
 
 ## 快速开始

@@ -91,7 +91,8 @@ Verify with `opencli doctor` — shows colored status for extension install, tok
 ```bash
 opencli doctor            # Token & config diagnosis
 opencli doctor --live     # Also test live browser connectivity
-opencli doctor --fix -y   # Auto-fix all mismatched configs
+opencli doctor --fix      # Fix mismatched configs (interactive confirmation)
+opencli doctor --fix -y   # Fix all configs non-interactively
 ```
 
 ## Quick Start
