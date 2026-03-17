@@ -656,6 +656,25 @@ function findMcpServerPath(): string | null {
     return _cachedMcpServerPath;
   }
 
+  // Check global npm/yarn locations derived from current Node runtime.
+  const nodePrefix = path.resolve(path.dirname(process.execPath), '..');
+  const globalNodeModules = path.join(nodePrefix, 'lib', 'node_modules');
+  const globalMcp = path.join(globalNodeModules, '@playwright', 'mcp', 'cli.js');
+  if (fs.existsSync(globalMcp)) {
+    _cachedMcpServerPath = globalMcp;
+    return _cachedMcpServerPath;
+  }
+
+  // Check npm global root directly.
+  try {
+    const npmRootGlobal = execSync('npm root -g 2>/dev/null', { encoding: 'utf-8', timeout: 5000 }).trim();
+    const npmGlobalMcp = path.join(npmRootGlobal, '@playwright', 'mcp', 'cli.js');
+    if (npmRootGlobal && fs.existsSync(npmGlobalMcp)) {
+      _cachedMcpServerPath = npmGlobalMcp;
+      return _cachedMcpServerPath;
+    }
+  } catch {}
+
   // Check common locations
   const candidates = [
     path.join(os.homedir(), '.npm', '_npx'),
