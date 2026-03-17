@@ -2,6 +2,7 @@
  * YouTube video metadata — read ytInitialPlayerResponse + ytInitialData from video page.
  */
 import { cli, Strategy } from '../../registry.js';
+import { parseVideoId } from './utils.js';
 
 cli({
   site: 'youtube',
@@ -14,20 +15,8 @@ cli({
   ],
   columns: ['field', 'value'],
   func: async (page, kwargs) => {
-    // Normalize: accept full URL (watch, shorts, embed, live, youtu.be) or bare video ID
-    let videoUrl = kwargs.url;
-    if (!kwargs.url.startsWith('http')) {
-      videoUrl = `https://www.youtube.com/watch?v=${kwargs.url}`;
-    } else {
-      try {
-        const parsed = new URL(kwargs.url);
-        const pathMatch = parsed.pathname.match(/^\/(shorts|embed|live|v)\/([^/?]+)/);
-        if (pathMatch) {
-          videoUrl = `https://www.youtube.com/watch?v=${pathMatch[2]}`;
-        }
-      } catch {}
-    }
-
+    const videoId = parseVideoId(kwargs.url);
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     await page.goto(videoUrl);
     await page.wait(3);
 
@@ -43,10 +32,10 @@ cli({
         // Try to get full description from ytInitialData
         let fullDescription = details.shortDescription || '';
         try {
-          const secondary = yt?.contents?.twoColumnWatchNextResults
+          const contents = yt?.contents?.twoColumnWatchNextResults
             ?.results?.results?.contents;
-          if (secondary) {
-            for (const c of secondary) {
+          if (contents) {
+            for (const c of contents) {
               const desc = c.videoSecondaryInfoRenderer?.attributedDescription?.content;
               if (desc) { fullDescription = desc; break; }
             }
@@ -56,10 +45,10 @@ cli({
         // Get like count if available
         let likes = '';
         try {
-          const primary = yt?.contents?.twoColumnWatchNextResults
+          const contents = yt?.contents?.twoColumnWatchNextResults
             ?.results?.results?.contents;
-          if (primary) {
-            for (const c of primary) {
+          if (contents) {
+            for (const c of contents) {
               const buttons = c.videoPrimaryInfoRenderer?.videoActions
                 ?.menuRenderer?.topLevelButtons;
               if (buttons) {
@@ -85,10 +74,10 @@ cli({
         // Get channel subscriber count if available
         let subscribers = '';
         try {
-          const secondary = yt?.contents?.twoColumnWatchNextResults
+          const contents = yt?.contents?.twoColumnWatchNextResults
             ?.results?.results?.contents;
-          if (secondary) {
-            for (const c of secondary) {
+          if (contents) {
+            for (const c of contents) {
               const owner = c.videoSecondaryInfoRenderer?.owner
                 ?.videoOwnerRenderer?.subscriberCountText?.simpleText;
               if (owner) { subscribers = owner; break; }

@@ -10,12 +10,13 @@
  *   --mode raw: every caption segment as-is with precise timestamps
  */
 import { cli, Strategy } from '../../registry.js';
+import { parseVideoId } from './utils.js';
 import {
   groupTranscriptSegments,
   formatGroupedTranscript,
   type RawSegment,
   type Chapter,
-} from '../../transcript-group.js';
+} from './transcript-group.js';
 
 cli({
   site: 'youtube',
@@ -31,25 +32,7 @@ cli({
   // columns intentionally omitted — raw and grouped modes return different schemas,
   // so we let the renderer auto-detect columns from the data keys.
   func: async (page, kwargs) => {
-    let videoId = kwargs.url;
-    if (kwargs.url.startsWith('http')) {
-      try {
-        const parsed = new URL(kwargs.url);
-        if (parsed.searchParams.has('v')) {
-          videoId = parsed.searchParams.get('v')!;
-        } else if (parsed.hostname === 'youtu.be') {
-          videoId = parsed.pathname.slice(1).split('/')[0];
-        } else {
-          // Handle /shorts/xxx, /embed/xxx, /live/xxx, /v/xxx
-          const pathMatch = parsed.pathname.match(/^\/(shorts|embed|live|v)\/([^/?]+)/);
-          if (pathMatch) videoId = pathMatch[2];
-        }
-      } catch {
-        // Not a valid URL — treat entire input as video ID
-      }
-    }
-
-    // Always navigate to canonical watch?v= page for consistent ytcfg context
+    const videoId = parseVideoId(kwargs.url);
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     await page.goto(videoUrl);
     await page.wait(3);
@@ -59,67 +42,50 @@ cli({
 
     // Step 1: Get caption track URL via Android InnerTube API
     const captionData = await page.evaluate(`
-      (async function() {
-        var cfg = window.ytcfg && window.ytcfg.data_ || {};
-        var apiKey = cfg.INNERTUBE_API_KEY;
+      (async () => {
+        const cfg = window.ytcfg?.data_ || {};
+        const apiKey = cfg.INNERTUBE_API_KEY;
         if (!apiKey) return { error: 'INNERTUBE_API_KEY not found on page' };
 
-        var videoId = ${JSON.stringify(videoId)};
-
-        var resp = await fetch('/youtubei/v1/player?key=' + apiKey + '&prettyPrint=false', {
+        const resp = await fetch('/youtubei/v1/player?key=' + apiKey + '&prettyPrint=false', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38' } },
-            videoId: videoId
+            videoId: ${JSON.stringify(videoId)}
           })
         });
 
         if (!resp.ok) return { error: 'InnerTube player API returned HTTP ' + resp.status };
-        var data = await resp.json();
+        const data = await resp.json();
 
-        var renderer = data.captions && data.captions.playerCaptionsTracklistRenderer;
-        if (!renderer || !renderer.captionTracks || renderer.captionTracks.length === 0) {
+        const renderer = data.captions?.playerCaptionsTracklistRenderer;
+        if (!renderer?.captionTracks?.length) {
           return { error: 'No captions available for this video' };
         }
 
-        var tracks = renderer.captionTracks;
-        var available = [];
-        for (var i = 0; i < tracks.length; i++) {
-          available.push(tracks[i].languageCode + (tracks[i].kind === 'asr' ? ' (auto)' : ''));
-        }
+        const tracks = renderer.captionTracks;
+        const available = tracks.map(t => t.languageCode + (t.kind === 'asr' ? ' (auto)' : ''));
 
-        var langPref = ${JSON.stringify(lang)};
-        var track = null;
+        const langPref = ${JSON.stringify(lang)};
+        let track = null;
         if (langPref) {
-          for (var i = 0; i < tracks.length; i++) {
-            if (tracks[i].languageCode === langPref) { track = tracks[i]; break; }
-          }
-          if (!track) {
-            for (var i = 0; i < tracks.length; i++) {
-              if (tracks[i].languageCode.indexOf(langPref) === 0) { track = tracks[i]; break; }
-            }
-          }
+          track = tracks.find(t => t.languageCode === langPref)
+            || tracks.find(t => t.languageCode.startsWith(langPref));
         }
         if (!track) {
-          for (var i = 0; i < tracks.length; i++) {
-            if (tracks[i].kind !== 'asr') { track = tracks[i]; break; }
-          }
-          if (!track) track = tracks[0];
+          track = tracks.find(t => t.kind !== 'asr') || tracks[0];
         }
-
-        var langMatched = !!(langPref && track.languageCode === langPref);
-        var langPrefixMatched = !!(langPref && !langMatched && track.languageCode.indexOf(langPref) === 0);
 
         return {
           captionUrl: track.baseUrl,
           language: track.languageCode,
           kind: track.kind || 'manual',
-          available: available,
+          available,
           requestedLang: langPref || null,
-          langMatched: langMatched,
-          langPrefixMatched: langPrefixMatched
+          langMatched: !!(langPref && track.languageCode === langPref),
+          langPrefixMatched: !!(langPref && track.languageCode !== langPref && track.languageCode.startsWith(langPref))
         };
       })()
     `);
@@ -138,54 +104,52 @@ cli({
 
     // Step 2: Fetch caption XML and parse segments
     const segments: RawSegment[] = await page.evaluate(`
-      (async function() {
-        var url = ${JSON.stringify(captionData.captionUrl)};
-        var resp = await fetch(url);
-        var xml = await resp.text();
+      (async () => {
+        const resp = await fetch(${JSON.stringify(captionData.captionUrl)});
+        const xml = await resp.text();
 
-        if (!xml || xml.length === 0) {
+        if (!xml?.length) {
           return { error: 'Caption URL returned empty response' };
         }
 
         function getAttr(tag, name) {
-          var needle = name + '="';
-          var idx = tag.indexOf(needle);
+          const needle = name + '="';
+          const idx = tag.indexOf(needle);
           if (idx === -1) return '';
-          var valStart = idx + needle.length;
-          var valEnd = tag.indexOf('"', valStart);
+          const valStart = idx + needle.length;
+          const valEnd = tag.indexOf('"', valStart);
           if (valEnd === -1) return '';
           return tag.substring(valStart, valEnd);
         }
 
         function decodeEntities(s) {
-          var r = s;
-          while (r.indexOf('&amp;') !== -1) r = r.split('&amp;').join('&');
-          while (r.indexOf('&lt;') !== -1) r = r.split('&lt;').join('<');
-          while (r.indexOf('&gt;') !== -1) r = r.split('&gt;').join('>');
-          while (r.indexOf('&quot;') !== -1) r = r.split('&quot;').join('"');
-          while (r.indexOf('&#39;') !== -1) r = r.split('&#39;').join("'");
-          return r;
+          return s
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>')
+            .replaceAll('&quot;', '"')
+            .replaceAll('&#39;', "'");
         }
 
-        var isFormat3 = xml.indexOf('<p t="') !== -1;
-        var marker = isFormat3 ? '<p ' : '<text ';
-        var endMarker = isFormat3 ? '</p>' : '</text>';
-        var results = [];
-        var pos = 0;
+        const isFormat3 = xml.includes('<p t="');
+        const marker = isFormat3 ? '<p ' : '<text ';
+        const endMarker = isFormat3 ? '</p>' : '</text>';
+        const results = [];
+        let pos = 0;
 
         while (true) {
-          var tagStart = xml.indexOf(marker, pos);
+          const tagStart = xml.indexOf(marker, pos);
           if (tagStart === -1) break;
-          var contentStart = xml.indexOf('>', tagStart);
+          let contentStart = xml.indexOf('>', tagStart);
           if (contentStart === -1) break;
           contentStart += 1;
-          var tagEnd = xml.indexOf(endMarker, contentStart);
+          const tagEnd = xml.indexOf(endMarker, contentStart);
           if (tagEnd === -1) break;
 
-          var attrStr = xml.substring(tagStart + marker.length, contentStart - 1);
-          var content = xml.substring(contentStart, tagEnd);
+          const attrStr = xml.substring(tagStart + marker.length, contentStart - 1);
+          const content = xml.substring(contentStart, tagEnd);
 
-          var startSec, durSec;
+          let startSec, durSec;
           if (isFormat3) {
             startSec = (parseFloat(getAttr(attrStr, 't')) || 0) / 1000;
             durSec = (parseFloat(getAttr(attrStr, 'd')) || 0) / 1000;
@@ -195,9 +159,9 @@ cli({
           }
 
           // Strip inner tags (e.g. <s> in srv3 format) and decode entities
-          var text = decodeEntities(content.replace(/<[^>]+>/g, '')).split('\\n').join(' ').trim();
+          const text = decodeEntities(content.replace(/<[^>]+>/g, '')).split('\\\\n').join(' ').trim();
           if (text) {
-            results.push({ start: startSec, end: startSec + durSec, text: text });
+            results.push({ start: startSec, end: startSec + durSec, text });
           }
 
           pos = tagEnd + endMarker.length;
@@ -223,12 +187,12 @@ cli({
     if (mode === 'grouped') {
       try {
         const chapterData = await page.evaluate(`
-          (async function() {
-            var cfg = window.ytcfg && window.ytcfg.data_ || {};
-            var apiKey = cfg.INNERTUBE_API_KEY;
+          (async () => {
+            const cfg = window.ytcfg?.data_ || {};
+            const apiKey = cfg.INNERTUBE_API_KEY;
             if (!apiKey) return [];
 
-            var resp = await fetch('/youtubei/v1/next?key=' + apiKey + '&prettyPrint=false', {
+            const resp = await fetch('/youtubei/v1/next?key=' + apiKey + '&prettyPrint=false', {
               method: 'POST',
               credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
@@ -238,30 +202,26 @@ cli({
               })
             });
             if (!resp.ok) return [];
-            var data = await resp.json();
+            const data = await resp.json();
 
-            var chapters = [];
+            const chapters = [];
 
             // Try chapterRenderer from player bar
-            var panels = data.playerOverlays
-              && data.playerOverlays.playerOverlayRenderer
-              && data.playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer
-              && data.playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer.decoratedPlayerBarRenderer
-              && data.playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer.decoratedPlayerBarRenderer.playerBar
-              && data.playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer.decoratedPlayerBarRenderer.playerBar.multiMarkersPlayerBarRenderer
-              && data.playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer.decoratedPlayerBarRenderer.playerBar.multiMarkersPlayerBarRenderer.markersMap;
+            const panels = data.playerOverlays?.playerOverlayRenderer
+              ?.decoratedPlayerBarRenderer?.decoratedPlayerBarRenderer
+              ?.playerBar?.multiMarkersPlayerBarRenderer?.markersMap;
 
             if (Array.isArray(panels)) {
-              for (var p = 0; p < panels.length; p++) {
-                var markers = panels[p].value && panels[p].value.chapters;
+              for (const panel of panels) {
+                const markers = panel.value?.chapters;
                 if (!Array.isArray(markers)) continue;
-                for (var m = 0; m < markers.length; m++) {
-                  var ch = markers[m].chapterRenderer;
+                for (const marker of markers) {
+                  const ch = marker.chapterRenderer;
                   if (!ch) continue;
-                  var title = ch.title && ch.title.simpleText || '';
-                  var startMs = ch.timeRangeStartMillis;
+                  const title = ch.title?.simpleText || '';
+                  const startMs = ch.timeRangeStartMillis;
                   if (title && typeof startMs === 'number') {
-                    chapters.push({ title: title, start: startMs / 1000 });
+                    chapters.push({ title, start: startMs / 1000 });
                   }
                 }
               }
@@ -269,23 +229,22 @@ cli({
             if (chapters.length > 0) return chapters;
 
             // Fallback: macroMarkersListItemRenderer from engagement panels
-            var engPanels = data.engagementPanels;
+            const engPanels = data.engagementPanels;
             if (!Array.isArray(engPanels)) return [];
-            for (var ep = 0; ep < engPanels.length; ep++) {
-              var content = engPanels[ep].engagementPanelSectionListRenderer
-                && engPanels[ep].engagementPanelSectionListRenderer.content;
-              var items = content && content.macroMarkersListRenderer && content.macroMarkersListRenderer.contents;
+            for (const ep of engPanels) {
+              const content = ep.engagementPanelSectionListRenderer?.content;
+              const items = content?.macroMarkersListRenderer?.contents;
               if (!Array.isArray(items)) continue;
-              for (var it = 0; it < items.length; it++) {
-                var renderer = items[it].macroMarkersListItemRenderer;
+              for (const item of items) {
+                const renderer = item.macroMarkersListItemRenderer;
                 if (!renderer) continue;
-                var t = renderer.title && renderer.title.simpleText || '';
-                var ts = renderer.timeDescription && renderer.timeDescription.simpleText || '';
+                const t = renderer.title?.simpleText || '';
+                const ts = renderer.timeDescription?.simpleText || '';
                 if (!t || !ts) continue;
-                var parts = ts.split(':').map(Number);
-                var secs = null;
-                if (parts.length === 3 && parts.every(function(n) { return !isNaN(n); })) secs = parts[0]*3600 + parts[1]*60 + parts[2];
-                else if (parts.length === 2 && parts.every(function(n) { return !isNaN(n); })) secs = parts[0]*60 + parts[1];
+                const parts = ts.split(':').map(Number);
+                let secs = null;
+                if (parts.length === 3 && parts.every(n => !isNaN(n))) secs = parts[0]*3600 + parts[1]*60 + parts[2];
+                else if (parts.length === 2 && parts.every(n => !isNaN(n))) secs = parts[0]*60 + parts[1];
                 if (secs !== null) chapters.push({ title: t, start: secs });
               }
             }
