@@ -135,7 +135,7 @@ describe('browser helpers', () => {
         headless: true,
         sessionFile: '/tmp/session.json',
         caps: ['storage'],
-      })).toEqual({ args: ['/tmp/cli.js', '--headless', '--storage-state', '/tmp/session.json', '--caps', 'storage'], headless: true });
+      })).toEqual({ args: ['/tmp/cli.js', '--headless', '--isolated', '--storage-state', '/tmp/session.json', '--caps', 'storage'], headless: true });
     } finally {
       if (savedCI !== undefined) process.env.CI = savedCI;
       else delete process.env.CI;

@@ -218,8 +218,9 @@ function buildRuntimeArgs(input?: {
       sessionFile = candidate && fs.existsSync(candidate) ? candidate : null;
     }
     if (sessionFile) {
-      args.push('--storage-state', sessionFile);
-      args.push('--isolated');
+      // --storage-state requires --isolated (uses browser.newContext() which supports storageState,
+      // vs the default launchPersistentContext() which does not).
+      args.push('--isolated', '--storage-state', sessionFile);
     }
   } else if (input?.cdpEndpoint) {
     // CDP endpoint (remote Chrome debugging or local Auto-Discovery)
