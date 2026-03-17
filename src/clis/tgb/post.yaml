@@ -1,6 +1,6 @@
 site: tgb
 name: post
-description: 抓取淘股吧帖子正文（极速版）
+description: 抓取淘股吧帖子正文
 domain: tgb.cn
 strategy: cookie
 browser: true
