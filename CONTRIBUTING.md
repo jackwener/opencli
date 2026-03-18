@@ -98,32 +98,34 @@ Best for commands that need JavaScript injection, multi-step flows, or write ope
 Create a file like `src/clis/<site>/<command>.ts`:
 
 ```typescript
-import { cli } from '../../registry.js';
+import { cli, Strategy } from '../../registry.js';
 
 cli({
   site: 'mysite',
   name: 'search',
   description: 'Search MySite',
   domain: 'www.mysite.com',
-  args: {
-    query: { type: 'string', description: 'Search query', required: true },
-    limit: { type: 'int', default: 10, description: 'Max results' },
-  },
+  strategy: Strategy.COOKIE,
+  args: [
+    { name: 'query', required: true, help: 'Search query' },
+    { name: 'limit', type: 'int', default: 10, help: 'Max results' },
+  ],
   columns: ['title', 'url', 'date'],
 
-  async run({ page, args }) {
-    await page.navigate('https://www.mysite.com');
+  func: async (page, kwargs) => {
+    const { query, limit = 10 } = kwargs;
+    await page.goto('https://www.mysite.com');
 
     const data = await page.evaluate(`
       (async () => {
-        const res = await fetch('/api/search?q=${args.query}', {
+        const res = await fetch('/api/search?q=${encodeURIComponent(query)}', {
           credentials: 'include'
         });
         return (await res.json()).results;
       })()
     `);
 
-    return data.slice(0, args.limit).map((item, i) => ({
+    return data.slice(0, Number(limit)).map((item: any) => ({
       title: item.title,
       url: item.url,
       date: item.created_at,

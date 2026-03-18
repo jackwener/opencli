@@ -37,26 +37,13 @@ body:
     validations:
       required: true
 
-  - type: dropdown
-    id: data-strategy
-    attributes:
-      label: Data Access Strategy
-      description: "How is the data accessed? (see [CLI-EXPLORER.md](../../CLI-EXPLORER.md) for details)"
-      options:
-        - Public API (no auth needed)
-        - Cookie-based (browser session)
-        - Header-based (token/API key)
-        - Browser JS injection
-        - Not sure
-    validations:
-      required: true
-
   - type: textarea
     id: api-examples
     attributes:
-      label: Example API Endpoints
-      description: If you've found any API endpoints, share them here (optional).
+      label: Example Links or API Endpoints
+      description: Share any example page URLs or API endpoints if you have them (optional).
       placeholder: |
+        Example page: https://www.producthunt.com/posts/example
         GET https://api.producthunt.com/v2/posts?order=votes
         Response: { "posts": [{ "name": "...", "tagline": "..." }] }
     validations:
