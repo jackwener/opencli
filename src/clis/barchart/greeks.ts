@@ -13,6 +13,7 @@ cli({
   strategy: Strategy.COOKIE,
   args: [
     { name: 'symbol', required: true, help: 'Stock ticker (e.g. AAPL)' },
+    { name: 'expiration', type: 'str', help: 'Expiration date (YYYY-MM-DD). Defaults to nearest.' },
     { name: 'limit', type: 'int', default: 10, help: 'Number of near-the-money strikes per type' },
   ],
   columns: [
@@ -21,6 +22,7 @@ cli({
   ],
   func: async (page, kwargs) => {
     const symbol = kwargs.symbol.toUpperCase().trim();
+    const expiration = kwargs.expiration ?? '';
     const limit = kwargs.limit ?? 10;
 
     await page.goto(`https://www.barchart.com/stocks/quotes/${encodeURIComponent(symbol)}/options`);
@@ -29,6 +31,7 @@ cli({
     const data = await page.evaluate(`
       (async () => {
         const sym = '${symbol}';
+        const expDate = '${expiration}';
         const limit = ${limit};
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const headers = { 'X-CSRF-TOKEN': csrf };
@@ -40,8 +43,9 @@ cli({
             'expirationDate','optionType','percentFromLast',
           ].join(',');
 
-          const url = '/proxies/core-api/v1/options/chain?symbol=' + encodeURIComponent(sym)
+          let url = '/proxies/core-api/v1/options/chain?symbol=' + encodeURIComponent(sym)
             + '&fields=' + fields + '&raw=1';
+          if (expDate) url += '&expirationDate=' + encodeURIComponent(expDate);
           const resp = await fetch(url, { credentials: 'include', headers });
           if (resp.ok) {
             const d = await resp.json();
