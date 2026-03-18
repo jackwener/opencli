@@ -286,7 +286,7 @@ opencli cascade https://api.example.com/data
 - **返回空数据，或者报错 "Unauthorized"**
   - Chrome 里的登录态可能已经过期（甚至被要求过滑动验证码）。请打开当前 Chrome 页面，在新标签页重新手工登录或刷新该页面。
 - **Node API 错误 (如 parseArgs, fs 等)**
-  - 确保 Node.js 版本 `>= 18`。旧版不支持我们使用的现代核心库 API。
+  - 确保 Node.js 版本 `>= 20`。旧版不支持我们使用的现代核心库 API。
 - **Token 问题**
   - 运行 `opencli doctor` 诊断所有工具的 Token 配置状态。
   - 使用 `opencli doctor --live` 测试浏览器连通性。
