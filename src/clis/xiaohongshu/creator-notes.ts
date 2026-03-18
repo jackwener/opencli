@@ -72,8 +72,10 @@ cli({
           const dateLine = lines.find(l => l.includes('发布于'));
           const dateMatch = dateLine?.match(/发布于\\s+(\\d{4}年\\d{2}月\\d{2}日\\s+\\d{2}:\\d{2})/);
 
-          // Find the metrics — typically 4 consecutive numbers
-          const nums = text.match(/(?:^|\\s)(\\d+)(?:\\s|$)/g)?.map(n => parseInt(n.trim())) || [];
+          // Remove the publish timestamp before collecting note metrics.
+          // Otherwise year/month/day/hour digits are picked up as views/likes/etc.
+          const metricText = dateLine ? text.replace(dateLine, ' ') : text;
+          const nums = metricText.match(/(?:^|\\s)(\\d+)(?:\\s|$)/g)?.map(n => parseInt(n.trim())) || [];
 
           if (title && !title.includes('全部笔记')) {
             results.push({
