@@ -1,6 +1,6 @@
 # Contributing to OpenCLI
 
-Thanks for your interest in contributing to OpenCLI! This guide covers everything you need to get started.
+Thanks for your interest in contributing to OpenCLI.
 
 ## Quick Start
 
@@ -15,48 +15,19 @@ npm install
 # 3. Build
 npm run build
 
-# 4. Link globally (optional, for testing `opencli` command)
+# 4. Run a few checks
+npx tsc --noEmit
+npx vitest run src/
+
+# 5. Link globally (optional, for testing `opencli` command)
 npm link
-
-# 5. Run tests
-npx vitest run src/        # Unit tests
-npx vitest run tests/e2e/  # E2E tests (needs build first)
-```
-
-## Project Structure
-
-```
-src/
-├── main.ts              # CLI entry point (Commander.js)
-├── engine.ts            # Command discovery & execution
-├── registry.ts          # Command registration
-├── output.ts            # Multi-format output (table/json/yaml/md/csv)
-├── browser/             # Playwright MCP browser layer
-│   ├── mcp.ts           # Process + JSON-RPC transport
-│   ├── page.ts          # IPage implementation
-│   ├── discover.ts      # MCP path + CDP endpoint discovery
-│   ├── errors.ts        # Connection diagnostics
-│   └── tabs.ts          # Tab lifecycle management
-├── pipeline/            # YAML declarative data pipeline engine
-│   ├── executor.ts      # Pipeline runner
-│   ├── template.ts      # Expression interpolation
-│   └── steps/           # Step handlers (fetch, browser, intercept, etc.)
-├── clis/                # Site adapters (19 sites, 80+ commands)
-│   ├── hackernews/      # Example: YAML-only adapter
-│   ├── twitter/         # Example: TypeScript adapter
-│   └── ...
-├── doctor.ts            # Token & config diagnostics
-├── explore.ts           # AI-powered site discovery
-└── *.test.ts            # Unit tests (co-located)
 ```
 
 ## Adding a New Site Adapter
 
-This is the most common type of contribution. OpenCLI supports two adapter formats:
+This is the most common type of contribution. Start with YAML when possible, and use TypeScript only when you need browser-side logic or multi-step flows.
 
 ### YAML Adapter (Recommended for data-fetching commands)
-
-Best for commands that fetch data from public or cookie-authenticated APIs.
 
 Create a file like `src/clis/<site>/<command>.yaml`:
 
@@ -89,11 +60,9 @@ pipeline:
 columns: [rank, title, score, url]
 ```
 
-See [`hackernews/top.yaml`](src/clis/hackernews/top.yaml) for a complete real-world example.
+See [`hackernews/top.yaml`](src/clis/hackernews/top.yaml) for a real example.
 
 ### TypeScript Adapter (For complex browser interactions)
-
-Best for commands that need JavaScript injection, multi-step flows, or write operations (post, like, follow).
 
 Create a file like `src/clis/<site>/<command>.ts`:
 
@@ -134,17 +103,7 @@ cli({
 });
 ```
 
-### Choosing Between YAML and TypeScript
-
-| Criteria | YAML | TypeScript |
-|----------|------|------------|
-| Simple GET + transform | ✅ | Overkill |
-| Needs browser cookies | ✅ (`browser: true`) | ✅ |
-| Multi-step flow | ❌ | ✅ |
-| Write operations (post, like) | ❌ | ✅ |
-| Complex JS injection | ❌ | ✅ |
-
-> **Tip**: Use `opencli explore <url>` to discover APIs and `opencli cascade <api-url>` to find the right auth strategy. See [CLI-EXPLORER.md](./CLI-EXPLORER.md) for the full workflow.
+Use `opencli explore <url>` to discover APIs and see [CLI-EXPLORER.md](./CLI-EXPLORER.md) if you need the full adapter workflow.
 
 ### Validate Your Adapter
 
@@ -161,24 +120,12 @@ opencli <site> <command> -v
 
 ## Testing
 
-See [TESTING.md](./TESTING.md) for the full testing guide.
-
-### Where to Add Tests
-
-| Adapter Type | Test File |
-|---|---|
-| Public API (`browser: false`) | `tests/e2e/public-commands.test.ts` |
-| Browser, public data | `tests/e2e/browser-public.test.ts` |
-| Browser, needs login | `tests/e2e/browser-auth.test.ts` |
-| Internal module | `src/<module>.test.ts` (co-located) |
-
-### Running Tests
+See [TESTING.md](./TESTING.md) for the full guide and exact test locations.
 
 ```bash
 npx vitest run src/           # Unit tests
 npx vitest run tests/e2e/     # E2E tests
 npx vitest run                # All tests
-npx vitest src/               # Watch mode
 ```
 
 ## Code Style
@@ -200,20 +147,20 @@ test(reddit): add e2e test for save command
 chore: bump vitest to v4
 ```
 
-Common scopes: site name (`twitter`, `reddit`), module name (`browser`, `pipeline`, `engine`), or omit for broad changes.
+Common scopes: site name (`twitter`, `reddit`) or module name (`browser`, `pipeline`, `engine`).
 
 ## Submitting a Pull Request
 
 1. Create a feature branch: `git checkout -b feat/mysite-trending`
-2. Make your changes and add tests
-3. Run checks:
+2. Make your changes and add tests when relevant
+3. Run the checks that apply:
    ```bash
    npx tsc --noEmit           # Type check
    npx vitest run src/        # Unit tests
    opencli validate           # YAML validation (if applicable)
    ```
 4. Commit using conventional commit format
-5. Push and open a PR — the [PR template](/.github/pull_request_template.md) will guide you through the checklist
+5. Push and open a PR
 
 ## License
 

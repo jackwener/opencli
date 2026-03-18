@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug! Please fill in as much detail as possible.
+        Thanks for taking the time to report a bug. A short reproduction and any error output are usually enough.
 
   - type: textarea
     id: description
@@ -51,7 +51,6 @@ body:
     attributes:
       label: Node.js Version
       options:
-        - "18.x"
         - "20.x"
         - "22.x"
         - Other
@@ -67,19 +66,6 @@ body:
         - Linux
         - Windows
         - Other
-    validations:
-      required: true
-
-  - type: dropdown
-    id: browser-mode
-    attributes:
-      label: Browser Connection Mode
-      description: How is OpenCLI connected to Chrome?
-      options:
-        - Extension (Playwright MCP Bridge)
-        - CDP (Remote Debugging / SSH Tunnel)
-        - Standalone (no extension, auto-launched browser)
-        - N/A (non-browser command)
     validations:
       required: true
 

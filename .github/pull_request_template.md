@@ -2,7 +2,7 @@
 
 <!-- Briefly describe your changes and link to any related issues. -->
 
-Fixes #
+Related issue:
 
 ## Type of Change
 
@@ -15,11 +15,9 @@ Fixes #
 
 ## Checklist
 
-- [ ] `npx tsc --noEmit` passes (type check)
-- [ ] `npx vitest run src/` passes (unit tests)
-- [ ] New adapter has a corresponding E2E test (see [TESTING.md](./TESTING.md))
-- [ ] YAML adapter passes `opencli validate` (if applicable)
-- [ ] Documentation updated (if applicable)
+- [ ] I ran the checks relevant to this PR
+- [ ] I updated tests or docs if needed
+- [ ] I included output or screenshots when useful
 
 ## Screenshots / Output
 
