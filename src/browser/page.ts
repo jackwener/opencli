@@ -6,6 +6,7 @@ import { formatSnapshot } from '../snapshotFormatter.js';
 import { normalizeEvaluateSource } from '../pipeline/template.js';
 import { generateInterceptorJs, generateReadInterceptedJs } from '../interceptor.js';
 import type { IPage } from '../types.js';
+import { BrowserConnectError } from '../errors.js';
 
 /**
  * Page abstraction wrapping JSON-RPC calls to Playwright MCP.
@@ -18,10 +19,28 @@ export class Page implements IPage {
     if (resp.error) throw new Error(`page.${method}: ${(resp.error as any).message ?? JSON.stringify(resp.error)}`);
     // Extract text content from MCP result
     const result = resp.result as any;
+
+    if (result?.isError) {
+      const errorText = result.content?.find((c: any) => c.type === 'text')?.text || 'Unknown MCP Error';
+      throw new BrowserConnectError(
+        errorText,
+        'Please check if the browser is running or if the Playwright MCP / CDP connection is configured correctly.'
+      );
+    }
+
     if (result?.content) {
       const textParts = result.content.filter((c: any) => c.type === 'text');
-      if (textParts.length === 1) {
-        let text = textParts[0].text;
+      if (textParts.length >= 1) {
+        let text = textParts[textParts.length - 1].text; // Usually the main output is in the last text block
+
+        // Some versions of the MCP return error text without the `isError` boolean flag
+        if (typeof text === 'string' && text.trim().startsWith('### Error')) {
+            throw new BrowserConnectError(
+              text.trim(),
+              'Please check if the browser is running or if the Playwright MCP / CDP connection is configured correctly.'
+            );
+        }
+
         // MCP browser_evaluate returns: "[JSON]\n### Ran Playwright code\n```js\n...\n```"
         // Strip the "### Ran Playwright code" suffix to get clean JSON
         const codeMarker = text.indexOf('### Ran Playwright code');
