@@ -1,0 +1,41 @@
+site: linux-do
+name: categories
+description: linux.do 分类列表
+domain: linux.do
+browser: true
+
+args:
+  limit:
+    type: int
+    default: 20
+    description: Number of categories
+
+pipeline:
+  - navigate: https://linux.do
+
+  - evaluate: |
+      (async () => {
+        const res = await fetch('/categories.json', { credentials: 'include' });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' - 请先登录 linux.do');
+        let data;
+        try { data = await res.json(); } catch { throw new Error('响应不是有效 JSON - 请先登录 linux.do'); }
+        const cats = data?.category_list?.categories || [];
+        return cats.slice(0, ${{ args.limit }}).map(c => ({
+          name: c.name,
+          slug: c.slug,
+          id: c.id,
+          topics: c.topic_count,
+          description: (c.description_text || '').slice(0, 80),
+        }));
+      })()
+
+  - map:
+      name: ${{ item.name }}
+      slug: ${{ item.slug }}
+      id: ${{ item.id }}
+      topics: ${{ item.topics }}
+      description: ${{ item.description }}
+
+  - limit: ${{ args.limit }}
+
+columns: [name, slug, id, topics, description]
