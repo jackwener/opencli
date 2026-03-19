@@ -42,6 +42,20 @@ export const historyCommand = cli({
       return [{ Index: 0, Title: 'No history found. Ensure the sidebar is visible.' }];
     }
 
-    return items;
+    const dateHeaders = /^(today|yesterday|last week|last month|last year|this week|this month|older|previous \d+ days|\d+ days ago)$/i;
+    const numericOnly = /^[\d\s]+$/;
+    const modelPath = /^[\w.-]+\/[\w.-]/;
+    const seen = new Set<string>();
+    const deduped = items.filter((item: { Index: number; Title: string }) => {
+      const t = item.Title.trim();
+      if (dateHeaders.test(t)) return false;
+      if (numericOnly.test(t)) return false;
+      if (modelPath.test(t)) return false;
+      if (seen.has(t)) return false;
+      seen.add(t);
+      return true;
+    }).map((item: { Index: number; Title: string }, i: number) => ({ Index: i + 1, Title: item.Title }));
+
+    return deduped;
   },
 });

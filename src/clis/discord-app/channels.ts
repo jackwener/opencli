@@ -14,28 +14,40 @@ export const channelsCommand = cli({
     const channels = await page.evaluate(`
       (function() {
         const results = [];
-        // Discord channel list items
-        const items = document.querySelectorAll('[data-list-item-id*="channels___"], [class*="containerDefault_"]');
-        
-        items.forEach((item, i) => {
-          const nameEl = item.querySelector('[class*="name_"], [class*="channelName"]');
-          const name = nameEl ? nameEl.textContent.trim() : (item.textContent || '').trim().substring(0, 50);
-          
-          if (!name || name.length < 1) return;
-          
-          // Detect channel type from icon or aria-label
-          const iconEl = item.querySelector('[class*="icon"]');
-          let type = 'Text';
-          if (iconEl) {
-            const cls = iconEl.className || '';
-            if (cls.includes('voice') || cls.includes('speaker')) type = 'Voice';
-            else if (cls.includes('forum')) type = 'Forum';
-            else if (cls.includes('announcement')) type = 'Announcement';
-          }
-          
-          results.push({ Index: i + 1, Channel: name, Type: type });
+
+        // Discord channel links: <a> tags with href like /channels/GUILD/CHANNEL
+        const links = document.querySelectorAll('a[href*="/channels/"][data-list-item-id^="channels___"]');
+
+        links.forEach(function(el) {
+          var label = el.getAttribute('aria-label') || '';
+          if (!label) return;
+
+          // Skip categories
+          if (/[（(]category[）)]/i.test(label)) return;
+
+          // Strip any leading status prefix before the first comma (e.g. "unread, ", locale-agnostic)
+          var commaIdx = label.search(/[,，]/);
+          var cleaned = commaIdx !== -1 ? label.slice(commaIdx + 1).trimStart() : label;
+
+          // Extract name and type from "name (type)" or "name（type）"
+          var m = cleaned.match(/^(.+?)\s*[（(](.+?)[）)]\s*$/);
+          // If no type annotation found, skip — real channels always have "(Type channel)" in aria-label
+          if (!m) return;
+          var name = m[1].trim();
+          var rawType = m[2].toLowerCase();
+
+          // Discord channel names are ASCII-only; skip placeholder entries (e.g. locked channels)
+          if (!name || !/^[\x20-\x7E]+$/.test(name)) return;
+
+          var type = 'Text';
+          if (rawType.includes('voice')) type = 'Voice';
+          else if (rawType.includes('forum')) type = 'Forum';
+          else if (rawType.includes('announcement')) type = 'Announcement';
+          else if (rawType.includes('stage')) type = 'Stage';
+
+          results.push({ Index: results.length + 1, Channel: name, Type: type });
         });
-        
+
         return results;
       })()
     `);
