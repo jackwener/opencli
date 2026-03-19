@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { executeCommand } from './engine.js';
 import { type CliCommand, fullName, getRegistry, strategyLabel } from './registry.js';
 import { render as renderOutput } from './output.js';
+import { detectDrift, formatDriftWarning } from './drift.js';
 import { BrowserBridge, CDPBridge } from './browser/index.js';
 import { browserSession, DEFAULT_BROWSER_COMMAND_TIMEOUT, runWithTimeout } from './runtime.js';
 import { PKG_VERSION } from './version.js';
@@ -165,6 +166,13 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         } else { result = await executeCommand(cmd, null, kwargs, actionOpts.verbose); }
         if (actionOpts.verbose && (!result || (Array.isArray(result) && result.length === 0))) {
           console.error(chalk.yellow(`[Verbose] Warning: Command returned an empty result. If the website structural API changed or requires authentication, check the network or update the adapter.`));
+        }
+        // Schema drift: warn if columns are suspiciously empty (non-breaking, stderr only)
+        if (Array.isArray(result) && result.length > 0 && cmd.columns?.length) {
+          const report = detectDrift(result, cmd.columns);
+          if (report.hasDrift) {
+            console.error(formatDriftWarning(report, fullName(cmd)));
+          }
         }
         renderOutput(result, { fmt: actionOpts.format, columns: cmd.columns, title: `${cmd.site}/${cmd.name}`, elapsed: (Date.now() - startTime) / 1000, source: fullName(cmd) });
       } catch (err: any) { 
