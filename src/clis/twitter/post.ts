@@ -26,8 +26,13 @@ cli({
             const box = document.querySelector('[data-testid="tweetTextarea_0"]');
             if (box) {
                 box.focus();
-                // insertText is the most reliable way to trigger React's onChange events
-                document.execCommand('insertText', false, ${JSON.stringify(kwargs.text)});
+                // Use ClipboardEvent paste: Draft.js handles paste robustly,
+                // while execCommand('insertText') corrupts state on multi-paragraph text (\n\n)
+                const dt = new DataTransfer();
+                dt.setData('text/plain', ${JSON.stringify(kwargs.text)});
+                box.dispatchEvent(new ClipboardEvent('paste', {
+                    bubbles: true, cancelable: true, clipboardData: dt
+                }));
             } else {
                 return { ok: false, message: 'Could not find the tweet composer text area.' };
             }
