@@ -20,8 +20,8 @@ cli({
   browser: true,
   args: [
     { name: 'uid', required: true, help: 'Encrypted UID of the candidate (from recommend)' },
-    { name: 'security_id', required: true, help: 'Security ID of the candidate' },
-    { name: 'job_id', required: true, help: 'Encrypted job ID' },
+    { name: 'security-id', required: true, help: 'Security ID of the candidate' },
+    { name: 'job-id', required: true, help: 'Encrypted job ID' },
     { name: 'text', default: '', help: 'Custom greeting message (uses default template if empty)' },
   ],
   columns: ['status', 'detail'],
@@ -29,8 +29,8 @@ cli({
     if (!page) throw new Error('Browser page required');
 
     const uid = kwargs.uid;
-    const securityId = kwargs.security_id;
-    const jobId = kwargs.job_id;
+    const securityId = kwargs['security-id'];
+    const jobId = kwargs['job-id'];
     const text = kwargs.text;
 
     if (process.env.OPENCLI_VERBOSE) {

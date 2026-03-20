@@ -15,12 +15,12 @@ cli({
   domain: 'reddit.com',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'post_id', required: true, help: 'Post ID (e.g. 1abc123) or full URL' },
+    { name: 'post-id', required: true, help: 'Post ID (e.g. 1abc123) or full URL' },
     { name: 'sort', default: 'best', help: 'Comment sort: best, top, new, controversial, old, qa' },
     { name: 'limit', type: 'int', default: 25, help: 'Number of top-level comments' },
     { name: 'depth', type: 'int', default: 2, help: 'Max reply depth (1=no replies, 2=one level of replies, etc.)' },
     { name: 'replies', type: 'int', default: 5, help: 'Max replies shown per comment at each level (sorted by score)' },
-    { name: 'max_length', type: 'int', default: 2000, help: 'Max characters per comment body (min 100)' },
+    { name: 'max-length', type: 'int', default: 2000, help: 'Max characters per comment body (min 100)' },
   ],
   columns: ['type', 'author', 'score', 'text'],
   func: async (page, kwargs) => {
@@ -28,14 +28,14 @@ cli({
     const limit = Math.max(1, kwargs.limit ?? 25);
     const maxDepth = Math.max(1, kwargs.depth ?? 2);
     const maxReplies = Math.max(1, kwargs.replies ?? 5);
-    const maxLength = Math.max(100, kwargs.max_length ?? 2000);
+    const maxLength = Math.max(100, kwargs['max-length'] ?? 2000);
 
     await page.goto('https://www.reddit.com');
     await page.wait(2);
 
     const data = await page.evaluate(`
       (async function() {
-        var postId = ${JSON.stringify(kwargs.post_id)};
+        var postId = ${JSON.stringify(kwargs['post-id'])};
         var urlMatch = postId.match(/comments\\/([a-z0-9]+)/);
         if (urlMatch) postId = urlMatch[1];
 

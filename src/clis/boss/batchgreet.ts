@@ -15,7 +15,7 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'job_id', default: '', help: 'Filter by encrypted job ID (greet all jobs if empty)' },
+    { name: 'job-id', default: '', help: 'Filter by encrypted job ID (greet all jobs if empty)' },
     { name: 'limit', type: 'int', default: 5, help: 'Max candidates to greet' },
     { name: 'text', default: '', help: 'Custom greeting message (uses default if empty)' },
   ],
@@ -23,7 +23,7 @@ cli({
   func: async (page: IPage | null, kwargs) => {
     if (!page) throw new Error('Browser page required');
 
-    const filterJobId = kwargs.job_id || '';
+    const filterJobId = kwargs['job-id'] || '';
     const limit = kwargs.limit || 5;
     const text = kwargs.text || '你好，请问您对这个职位感兴趣吗？';
 

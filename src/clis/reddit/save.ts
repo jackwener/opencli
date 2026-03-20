@@ -8,7 +8,7 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'post_id', type: 'string', required: true, help: 'Post ID (e.g. 1abc123) or fullname (t3_xxx)' },
+    { name: 'post-id', type: 'string', required: true, help: 'Post ID (e.g. 1abc123) or fullname (t3_xxx)' },
     { name: 'undo', type: 'boolean', default: false, help: 'Unsave instead of save' },
   ],
   columns: ['status', 'message'],
@@ -20,7 +20,7 @@ cli({
 
     const result = await page.evaluate(`(async () => {
       try {
-        let postId = ${JSON.stringify(kwargs.post_id)};
+        let postId = ${JSON.stringify(kwargs['post-id'])};
         const urlMatch = postId.match(/comments\\/([a-z0-9]+)/);
         if (urlMatch) postId = urlMatch[1];
         const fullname = postId.startsWith('t3_') || postId.startsWith('t1_')

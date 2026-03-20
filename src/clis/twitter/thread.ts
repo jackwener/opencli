@@ -122,12 +122,12 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'tweet_id', type: 'string', required: true },
+    { name: 'tweet-id', type: 'string', required: true },
     { name: 'limit', type: 'int', default: 50 },
   ],
   columns: ['id', 'author', 'text', 'likes', 'retweets', 'url'],
   func: async (page, kwargs) => {
-    let tweetId = kwargs.tweet_id;
+    let tweetId = kwargs['tweet-id'];
     const urlMatch = tweetId.match(/\/status\/(\d+)/);
     if (urlMatch) tweetId = urlMatch[1];
 

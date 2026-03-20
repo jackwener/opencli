@@ -15,12 +15,12 @@ cli({
   domain: 'www.xiaohongshu.com',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'keyword', required: true, help: 'Search keyword' },
+    { name: 'query', required: true, help: 'Search keyword' },
     { name: 'limit', type: 'int', default: 20, help: 'Number of results' },
   ],
   columns: ['rank', 'title', 'author', 'likes'],
   func: async (page, kwargs) => {
-    const keyword = encodeURIComponent(kwargs.keyword);
+    const keyword = encodeURIComponent(kwargs.query);
     await page.goto(
       `https://www.xiaohongshu.com/search_result?keyword=${keyword}&source=web_search_result_notes`
     );

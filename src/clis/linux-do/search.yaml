@@ -5,10 +5,10 @@ domain: linux.do
 browser: true
 
 args:
-  keyword:
+  query:
     type: str
     required: true
-    description: Search keyword
+    description: Search query
   limit:
     type: int
     default: 20
@@ -19,7 +19,7 @@ pipeline:
 
   - evaluate: |
       (async () => {
-        const keyword = ${{ args.keyword | json }};
+        const keyword = ${{ args.query | json }};
         const res = await fetch('/search.json?q=' + encodeURIComponent(keyword), { credentials: 'include' });
         if (!res.ok) throw new Error('HTTP ' + res.status + ' - 请先登录 linux.do');
         let data;

@@ -11,14 +11,14 @@ cli({
   args: [
     { name: 'page', type: 'int', default: 1, help: 'Page number' },
     { name: 'limit', type: 'int', default: 20, help: 'Number of results' },
-    { name: 'job_id', default: '0', help: 'Filter by job ID (0=all)' },
+    { name: 'job-id', default: '0', help: 'Filter by job ID (0=all)' },
   ],
   columns: ['name', 'job', 'last_msg', 'last_time', 'uid', 'security_id'],
   func: async (page: IPage | null, kwargs) => {
     if (!page) throw new Error('Browser page required');
     await page.goto('https://www.zhipin.com/web/chat/index');
     await page.wait({ time: 2 });
-    const jobId = kwargs.job_id || '0';
+    const jobId = kwargs['job-id'] || '0';
     const pageNum = kwargs.page || 1;
     const limit = kwargs.limit || 20;
     const targetUrl = `https://www.zhipin.com/wapi/zprelation/friend/getBossFriendListV2.json?page=${pageNum}&status=0&jobId=${jobId}`;

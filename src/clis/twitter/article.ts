@@ -8,12 +8,12 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'tweet_id', type: 'string', positional: true, required: true, help: 'Tweet ID or URL containing the article' },
+    { name: 'tweet-id', type: 'string', positional: true, required: true, help: 'Tweet ID or URL containing the article' },
   ],
   columns: ['title', 'author', 'content', 'url'],
   func: async (page, kwargs) => {
     // Extract tweet ID from URL if needed
-    let tweetId = kwargs.tweet_id;
+    let tweetId = kwargs['tweet-id'];
     const urlMatch = tweetId.match(/\/(?:status|article)\/(\d+)/);
     if (urlMatch) tweetId = urlMatch[1];
 

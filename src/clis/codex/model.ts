@@ -9,11 +9,11 @@ export const modelCommand = cli({
   strategy: Strategy.UI,
   browser: true,
   args: [
-    { name: 'model_name', required: false, positional: true, help: 'The ID of the model to switch to (e.g. gpt-4)' }
+    { name: 'model-name', required: false, positional: true, help: 'The ID of the model to switch to (e.g. gpt-4)' }
   ],
   columns: ['Status', 'Model'],
   func: async (page: IPage, kwargs: any) => {
-    const desiredModel = kwargs.model_name as string | undefined;
+    const desiredModel = kwargs['model-name'] as string | undefined;
 
     if (!desiredModel) {
       // Just read the current model. We traverse iframes/webviews if needed.

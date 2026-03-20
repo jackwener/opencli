@@ -11,7 +11,7 @@ cli({
   strategy: Strategy.PUBLIC,
   browser: false,
   args: [
-    { name: 'keyword', positional: true, required: true, help: 'Search keyword' },
+    { name: 'query', positional: true, required: true, help: 'Search keyword' },
     { name: 'limit', type: 'int', default: 10, help: 'Max results' },
     { name: 'lang', default: 'en', help: 'Language code (e.g. en, zh, ja)' },
   ],

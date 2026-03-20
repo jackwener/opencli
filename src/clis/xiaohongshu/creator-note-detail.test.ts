@@ -250,7 +250,7 @@ describe('xiaohongshu creator-note-detail', () => {
       null,
     ]);
 
-    const result = await cmd!.func!(page, { note_id: 'demo-note-id' });
+    const result = await cmd!.func!(page, { 'note-id': 'demo-note-id' });
 
     expect((page.goto as any).mock.calls[0][0]).toBe('https://creator.xiaohongshu.com/statistics/note-detail?noteId=demo-note-id');
     expect((page.evaluate as any).mock.calls[0][0]).toContain("document.querySelector('.note-title')");

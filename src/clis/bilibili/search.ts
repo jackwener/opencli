@@ -4,14 +4,14 @@ import { apiGet, stripHtml } from '../../bilibili.js';
 cli({
   site: 'bilibili', name: 'search', description: 'Search Bilibili videos or users', domain: 'www.bilibili.com', strategy: Strategy.COOKIE,
   args: [
-    { name: 'keyword', required: true, help: 'Search keyword' },
+    { name: 'query', required: true, help: 'Search keyword' },
     { name: 'type', default: 'video', help: 'video or user' },
     { name: 'page', type: 'int', default: 1, help: 'Result page' },
     { name: 'limit', type: 'int', default: 20, help: 'Number of results' },
   ],
   columns: ['rank', 'title', 'author', 'score', 'url'],
   func: async (page, kwargs) => {
-    const { keyword, type = 'video', page: pageNum = 1, limit = 20 } = kwargs;
+    const { query: keyword, type = 'video', page: pageNum = 1, limit = 20 } = kwargs;
     const searchType = type === 'user' ? 'bili_user' : 'video';
     const payload = await apiGet(page, '/x/web-interface/wbi/search/type', { params: { search_type: searchType, keyword, page: pageNum }, signed: true });
     const results: any[] = payload?.data?.result ?? [];

@@ -9,7 +9,7 @@ cli({
   domain: 'weread.qq.com',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'bookId', positional: true, required: true, help: 'Book ID (from shelf or search results)' },
+    { name: 'book-id', positional: true, required: true, help: 'Book ID (from shelf or search results)' },
     { name: 'limit', type: 'int', default: 20, help: 'Max results' },
   ],
   columns: ['chapter', 'text', 'createTime'],

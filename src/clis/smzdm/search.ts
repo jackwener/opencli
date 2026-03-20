@@ -14,12 +14,12 @@ cli({
   domain: 'www.smzdm.com',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'keyword', required: true, help: 'Search keyword' },
+    { name: 'query', required: true, help: 'Search keyword' },
     { name: 'limit', type: 'int', default: 20, help: 'Number of results' },
   ],
   columns: ['rank', 'title', 'price', 'mall', 'comments', 'url'],
   func: async (page, kwargs) => {
-    const q = encodeURIComponent(kwargs.keyword);
+    const q = encodeURIComponent(kwargs.query);
     const limit = kwargs.limit || 20;
 
     // Navigate directly to search results page

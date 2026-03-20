@@ -9,7 +9,7 @@ cli({
   strategy: Strategy.PUBLIC,
   browser: false,
   args: [
-    { name: 'keyword', positional: true, required: true, help: 'Search keyword (e.g. "attention is all you need")' },
+    { name: 'query', positional: true, required: true, help: 'Search keyword (e.g. "attention is all you need")' },
     { name: 'limit', type: 'int', default: 10, help: 'Max results (max 25)' },
   ],
   columns: ['id', 'title', 'authors', 'published'],

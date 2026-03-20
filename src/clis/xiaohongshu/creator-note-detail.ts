@@ -431,11 +431,11 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'note_id', type: 'string', required: true, help: 'Note ID (from creator-notes or note-detail page URL)' },
+    { name: 'note-id', type: 'string', required: true, help: 'Note ID (from creator-notes or note-detail page URL)' },
   ],
   columns: ['section', 'metric', 'value', 'extra'],
   func: async (page, kwargs) => {
-    const noteId: string = kwargs.note_id;
+    const noteId: string = kwargs['note-id'];
     const rows = await fetchCreatorNoteDetailRows(page, noteId);
 
     const hasCoreMetric = rows.some((row) => row.section !== '笔记信息' && row.value);

@@ -9,7 +9,7 @@ cli({
   domain: 'weread.qq.com',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'bookId', positional: true, required: true, help: 'Book ID (numeric, from search or shelf results)' },
+    { name: 'book-id', positional: true, required: true, help: 'Book ID (numeric, from search or shelf results)' },
   ],
   columns: ['title', 'author', 'publisher', 'intro', 'category', 'rating'],
   func: async (page: IPage, args) => {

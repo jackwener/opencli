@@ -16,12 +16,12 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'keyword', type: 'string', required: true },
+    { name: 'query', type: 'string', required: true },
     { name: 'limit', type: 'int', default: 20 },
   ],
   columns: ['author', 'content', 'likes', 'comments', 'time', 'url'],
   func: async (page, kwargs) => {
-    const keyword = kwargs.keyword as string;
+    const keyword = kwargs.query as string;
     const limit = (kwargs.limit as number) || 20;
 
     // 1. 直接导航到搜索页

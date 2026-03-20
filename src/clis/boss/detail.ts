@@ -16,7 +16,7 @@ cli({
 
   browser: true,
   args: [
-    { name: 'security_id', required: true, help: 'Security ID from search results (securityId field)' },
+    { name: 'security-id', required: true, help: 'Security ID from search results (securityId field)' },
   ],
   columns: [
     'name', 'salary', 'experience', 'degree', 'city', 'district',
@@ -28,7 +28,7 @@ cli({
   func: async (page: IPage | null, kwargs) => {
     if (!page) throw new Error('Browser page required');
 
-    const securityId = kwargs.security_id;
+    const securityId = kwargs['security-id'];
 
     // Navigate to zhipin.com first to establish cookie context (referrer + cookies)
     await page.goto('https://www.zhipin.com/web/geek/job');

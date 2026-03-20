@@ -17,13 +17,13 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'job_id', default: '', help: 'Encrypted job ID (show all if empty)' },
+    { name: 'job-id', default: '', help: 'Encrypted job ID (show all if empty)' },
   ],
   columns: ['job_name', 'salary', 'city', 'status', 'total_chats', 'encrypt_job_id'],
   func: async (page: IPage | null, kwargs) => {
     if (!page) throw new Error('Browser page required');
 
-    const filterJobId = kwargs.job_id || '';
+    const filterJobId = kwargs['job-id'] || '';
 
     if (process.env.OPENCLI_VERBOSE) {
       console.error('[opencli:boss] Fetching job statistics...');

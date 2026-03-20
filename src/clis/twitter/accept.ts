@@ -10,14 +10,14 @@ cli({
   browser: true,
   timeoutSeconds: 600, // 10 min — batch operation iterating many conversations
   args: [
-    { name: 'keyword', type: 'string', required: true, help: 'Keywords to match (comma-separated for OR, e.g. "群,微信")' },
+    { name: 'query', type: 'string', required: true, help: 'Keywords to match (comma-separated for OR, e.g. "群,微信")' },
     { name: 'max', type: 'int', required: false, default: 20, help: 'Maximum number of requests to accept (default: 20)' },
   ],
   columns: ['index', 'status', 'user', 'message'],
   func: async (page: IPage | null, kwargs: any) => {
     if (!page) throw new Error('Requires browser');
 
-    const keywords: string[] = kwargs.keyword.split(',').map((k: string) => k.trim()).filter(Boolean);
+    const keywords: string[] = kwargs.query.split(',').map((k: string) => k.trim()).filter(Boolean);
     const maxAccepts: number = kwargs.max ?? 20;
     const results: Array<{ index: number; status: string; user: string; message: string }> = [];
     let acceptCount = 0;

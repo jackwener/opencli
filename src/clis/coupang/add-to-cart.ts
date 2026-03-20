@@ -102,12 +102,12 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'productId', required: false, help: 'Coupang product ID' },
+    { name: 'product-id', required: false, help: 'Coupang product ID' },
     { name: 'url', required: false, help: 'Canonical product URL' },
   ],
   columns: ['ok', 'product_id', 'url', 'message'],
   func: async (page, kwargs) => {
-    const rawProductId = kwargs.productId ?? kwargs.product_id;
+    const rawProductId = kwargs['product-id'] ?? kwargs['product-id'];
     const productId = normalizeProductId(rawProductId);
     const targetUrl = canonicalizeProductUrl(kwargs.url, productId);
 
