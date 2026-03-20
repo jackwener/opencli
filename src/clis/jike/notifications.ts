@@ -44,7 +44,6 @@ cli({
 
     // 1. 直接导航到通知页
     await page.goto('https://web.okjike.com/notification');
-    await page.wait(5);
 
     // 3. 优先用 React fiber 提取通知数据
     //    通知 fiber 数据结构与帖子不同，需查找含 type + user 字段的 props

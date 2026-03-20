@@ -32,7 +32,6 @@ cli({
 
     // Navigate to note page
     await page.goto(`https://www.xiaohongshu.com/explore/${noteId}`);
-    await page.wait(3);
 
     // Extract note info and media URLs
     const data = await page.evaluate(`

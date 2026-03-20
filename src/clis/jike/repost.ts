@@ -22,7 +22,6 @@ cli({
   columns: ['status', 'message'],
   func: async (page, kwargs) => {
     await page.goto(`https://web.okjike.com/originalPost/${kwargs.id}`);
-    await page.wait(5);
 
     // 1. 点击操作栏中的转发按钮（第三个子元素）
     const clickResult = await page.evaluate(`(async () => {

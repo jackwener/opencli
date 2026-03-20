@@ -117,7 +117,6 @@ cli({
 
     const finalUrl = targetUrl || canonicalizeProductUrl('', productId);
     await page.goto(finalUrl);
-    await page.wait(3);
 
     const result = await page.evaluate(buildAddToCartEvaluate(productId));
     const loginHints = result?.loginHints ?? {};

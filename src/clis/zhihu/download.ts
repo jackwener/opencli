@@ -104,7 +104,6 @@ cli({
 
     // Navigate to article page
     await page.goto(url);
-    await page.wait(3);
 
     // Extract article content
     const data = await page.evaluate(`

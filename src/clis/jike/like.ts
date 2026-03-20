@@ -21,7 +21,6 @@ cli({
   func: async (page, kwargs) => {
     // 1. 导航到帖子详情页
     await page.goto(`https://web.okjike.com/originalPost/${kwargs.id}`);
-    await page.wait(5);
 
     // 2. 找到点赞按钮并点击
     const result = await page.evaluate(`(async () => {

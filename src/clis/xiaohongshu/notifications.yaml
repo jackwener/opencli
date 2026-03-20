@@ -19,7 +19,6 @@ columns: [rank, user, action, content, note, time]
 
 pipeline:
   - navigate: https://www.xiaohongshu.com/notification
-  - wait: 3
   - tap:
       store: notification
       action: getNotification

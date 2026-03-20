@@ -24,7 +24,6 @@ cli({
 
     // Navigate directly to search results page
     await page.goto(`https://search.smzdm.com/?c=home&s=${q}&v=b`);
-    await page.wait(2);
 
     const data = await page.evaluate(`
       (() => {

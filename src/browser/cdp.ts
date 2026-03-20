@@ -158,12 +158,17 @@ class CDPPage implements IPage {
   constructor(private bridge: CDPBridge) {}
 
   /** Navigate with proper load event waiting (P1 fix #3) */
-  async goto(url: string): Promise<void> {
+  async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
     await this.bridge.send('Page.enable');
     const loadPromise = this.bridge.waitForEvent('Page.loadEventFired', 30_000)
       .catch(() => {}); // Don't fail if event times out
     await this.bridge.send('Page.navigate', { url });
     await loadPromise;
+    // Post-load settle: SPA frameworks need extra time to render after load event
+    if (options?.waitUntil !== 'none') {
+      const settleMs = options?.settleMs ?? 1000;
+      await new Promise(resolve => setTimeout(resolve, settleMs));
+    }
   }
 
   async evaluate(js: string): Promise<any> {

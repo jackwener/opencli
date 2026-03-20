@@ -15,7 +15,6 @@ columns: [title, author, likes, type, url]
 
 pipeline:
   - navigate: https://www.xiaohongshu.com/explore
-  - wait: 3
   - tap:
       store: feed
       action: fetchFeeds

@@ -31,7 +31,6 @@ cli({
     const maxLength = Math.max(100, kwargs['max-length'] ?? 2000);
 
     await page.goto('https://www.reddit.com');
-    await page.wait(2);
 
     const data = await page.evaluate(`
       (async function() {

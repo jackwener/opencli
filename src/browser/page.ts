@@ -42,7 +42,7 @@ export class Page implements IPage {
     return { workspace: this.workspace };
   }
 
-  async goto(url: string): Promise<void> {
+  async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
     const result = await sendCommand('navigate', {
       url,
       ...this._workspaceOpt(),
@@ -51,6 +51,12 @@ export class Page implements IPage {
     // Remember the tabId for subsequent exec calls
     if (result?.tabId) {
       this._tabId = result.tabId;
+    }
+    // Post-load settle: the extension already waits for tab.status === 'complete',
+    // but SPA frameworks (React/Vue) need extra time to render after DOM load.
+    if (options?.waitUntil !== 'none') {
+      const settleMs = options?.settleMs ?? 1000;
+      await new Promise(resolve => setTimeout(resolve, settleMs));
     }
   }
 

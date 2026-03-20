@@ -17,7 +17,6 @@ cli({
   func: async (page, kwargs) => {
     const symbol = kwargs.symbol.toUpperCase().trim();
     await page.goto(`https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/`);
-    await page.wait(3);
     const data = await page.evaluate(`
       (async () => {
         const sym = '${symbol}';

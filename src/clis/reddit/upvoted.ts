@@ -15,7 +15,6 @@ cli({
     if (!page) throw new Error('Requires browser');
 
     await page.goto('https://www.reddit.com');
-    await page.wait(3);
 
     const result = await page.evaluate(`(async () => {
       try {

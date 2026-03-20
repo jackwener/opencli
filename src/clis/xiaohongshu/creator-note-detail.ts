@@ -408,7 +408,6 @@ async function captureNoteDetailDomData(page: IPage): Promise<CreatorNoteDetailD
 
 export async function fetchCreatorNoteDetailRows(page: IPage, noteId: string): Promise<CreatorNoteDetailRow[]> {
   await page.goto(`https://creator.xiaohongshu.com/statistics/note-detail?noteId=${encodeURIComponent(noteId)}`);
-  await page.wait(4);
 
   const domData = await captureNoteDetailDomData(page).catch(() => null);
   let rows = parseCreatorNoteDetailDomData(domData, noteId);

@@ -21,7 +21,6 @@ cli({
   columns: ['status', 'message'],
   func: async (page, kwargs) => {
     await page.goto(`https://web.okjike.com/originalPost/${kwargs.id}`);
-    await page.wait(5);
 
     // 1. 找到评论输入框并填入文本
     const inputResult = await page.evaluate(`(async () => {

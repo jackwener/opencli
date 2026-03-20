@@ -34,8 +34,14 @@ OpenCLI is built on a **Dual-Engine Architecture** that supports both declarativ
 ### Registry (`src/registry.ts`)
 Central command registry. All adapters register their commands via the `cli()` function with metadata: site, name, description, domain, strategy, args, columns.
 
-### Engine (`src/engine.ts`)
-Command discovery and execution engine. Discovers commands from the registry, parses arguments, executes the appropriate adapter, and routes output through the formatter.
+### Discovery (`src/discovery.ts`)
+CLI discovery and manifest loading. Discovers commands from YAML and TypeScript adapter files, parses YAML pipelines, and registers them into the central registry.
+
+### Execution (`src/execution.ts`)
+Command execution: argument validation, lazy loading of adapter modules, and executing the appropriate handler function.
+
+### Commander Adapter (`src/commanderAdapter.ts`)
+Bridges the Registry commands to Commander.js subcommands. Handles positional args, named options, browser session wiring, and output formatting. Isolates all Commander-specific logic so the core is framework-agnostic.
 
 ### Browser (`src/browser.ts`)
 Manages connections to Chrome via the Browser Bridge WebSocket daemon. Handles JSON-RPC messaging, tab management, and extension/standalone mode switching.
@@ -60,15 +66,22 @@ OpenCLI uses a 3-tier authentication strategy:
 | `public` | Direct HTTP fetch, no auth | Public APIs (HackerNews, BBC) |
 | `cookie` | Reuse Chrome cookies via Browser Bridge | Logged-in sites (Bilibili, Zhihu) |
 | `header` | Custom auth headers | API-key based services |
+| `intercept` | Network request interception | GraphQL/XHR capture (Twitter) |
+| `ui` | DOM interaction via accessibility snapshot | Desktop apps, write operations |
 
 ## Directory Structure
 
 ```
 src/
 ├── main.ts              # Entry point
-├── engine.ts            # Command execution engine
+├── cli.ts               # Commander.js CLI setup + built-in commands
+├── commanderAdapter.ts  # Registry → Commander bridge
+├── discovery.ts         # CLI discovery, manifest loading, YAML parsing
+├── execution.ts         # Arg validation, command execution
 ├── registry.ts          # Command registry
-├── browser.ts           # Browser Bridge connection
+├── serialization.ts     # Command serialization helpers
+├── runtime.ts           # Browser session & timeout management
+├── browser/             # Browser Bridge connection
 ├── output.ts            # Output formatting
 ├── doctor.ts            # Diagnostic tool
 ├── pipeline/            # YAML pipeline engine

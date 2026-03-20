@@ -21,7 +21,6 @@ cli({
   func: async (page, kwargs) => {
     // 1. 导航到首页（有内联发帖框）
     await page.goto('https://web.okjike.com');
-    await page.wait(5);
 
     // 2. 在发帖框中输入文本
     const textResult = await page.evaluate(`(async () => {

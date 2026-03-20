@@ -105,7 +105,7 @@ opencli reddit hot --subreddit programming  # 指定子版块
 opencli reddit frontpage --limit 10      # 首页 /r/all
 opencli reddit popular --limit 10        # /r/popular 热门
 opencli reddit search "AI" --sort top --time week  # 搜索（支持排序+时间过滤）
-opencli reddit subreddit --name rust --sort top --time month  # 子版块浏览（支持时间过滤）
+opencli reddit subreddit rust --sort top --time month  # 子版块浏览（支持时间过滤）
 opencli reddit read --post-id 1abc123    # 阅读帖子 + 评论
 opencli reddit user spez                 # 用户资料（karma、注册时间）
 opencli reddit user-posts spez           # 用户发帖历史

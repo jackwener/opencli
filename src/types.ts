@@ -6,7 +6,7 @@
  */
 
 export interface IPage {
-  goto(url: string): Promise<void>;
+  goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void>;
   evaluate(js: string): Promise<any>;
   getCookies(opts?: { domain?: string; url?: string }): Promise<Array<{
     name: string;

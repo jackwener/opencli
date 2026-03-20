@@ -14,7 +14,6 @@ columns: [prompt, model, status, image_url, created_at]
 
 pipeline:
   - navigate: https://jimeng.jianying.com/ai-tool/generate?type=image&workspace=0
-  - wait: 3
   - evaluate: |
       (async () => {
         const limit = ${{ args.limit }};

@@ -7,8 +7,13 @@ import type { IPage } from '../../types.js';
 import { render } from '../template.js';
 
 export async function stepNavigate(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
-  const url = render(params, { args, data });
-  await page!.goto(String(url));
+  if (typeof params === 'object' && params && 'url' in params) {
+    const url = String(render(params.url, { args, data }));
+    await page!.goto(url, { waitUntil: params.waitUntil, settleMs: params.settleMs });
+  } else {
+    const url = render(params, { args, data });
+    await page!.goto(String(url));
+  }
   return data;
 }
 

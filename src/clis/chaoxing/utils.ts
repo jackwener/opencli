@@ -96,7 +96,6 @@ export async function getCourses(page: IPage): Promise<ChaoxingCourse[]> {
 /** Navigate to the interaction page to establish a Chaoxing session. */
 export async function initSession(page: IPage): Promise<void> {
   await page.goto('https://mooc2-ans.chaoxing.com/mooc2-ans/visit/interaction');
-  await page.wait(3);
 }
 
 /**
@@ -108,7 +107,6 @@ export async function enterCourse(page: IPage, course: ChaoxingCourse): Promise<
     `https://mooc1.chaoxing.com/visit/stucoursemiddle` +
     `?courseid=${course.courseId}&clazzid=${course.classId}&cpi=${course.cpi}&ismooc2=1&v=2`;
   await page.goto(url);
-  await page.wait(3);
 }
 
 /**

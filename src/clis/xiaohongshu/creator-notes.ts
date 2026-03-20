@@ -162,7 +162,6 @@ async function fetchCreatorNotesByApi(page: IPage, limit: number): Promise<Creat
   const notes: CreatorNoteRow[] = [];
 
   await page.goto(`https://creator.xiaohongshu.com/statistics/data-analysis?type=0&page_size=${pageSize}&page_num=1`);
-  await page.wait(4);
 
   for (let pageNum = 1; pageNum <= maxPages && notes.length < limit; pageNum++) {
     const apiPath = `${NOTE_ANALYZE_API_PATH}?type=0&page_size=${pageSize}&page_num=${pageNum}`;
@@ -210,7 +209,6 @@ export async function fetchCreatorNotes(page: IPage, limit: number): Promise<Cre
 
   if (notes.length === 0) {
     await page.goto('https://creator.xiaohongshu.com/new/note-manager');
-    await page.wait(4);
 
     const maxPageDowns = Math.max(0, Math.ceil(limit / 10) + 1);
     for (let i = 0; i <= maxPageDowns; i++) {

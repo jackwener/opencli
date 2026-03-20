@@ -24,7 +24,6 @@ cli({
 
     // 1. 导航到即刻首页，等待 SPA 重定向到 /following
     await page.goto('https://web.okjike.com');
-    await page.wait(5);
 
     // 2. 通过 React fiber 提取帖子数据
     const extract = async (): Promise<JikePost[]> => {

@@ -17,7 +17,6 @@ cli({
   func: async (page, kwargs) => {
     const count = Math.min(kwargs.limit || 30, 50);
     await page.goto('https://weibo.com');
-    await page.wait(2);
     const data = await page.evaluate(`
       (async () => {
         const resp = await fetch('/ajax/statuses/hot_band', {credentials: 'include'});

@@ -21,7 +21,6 @@ cli({
   columns: ['field', 'value'],
   func: async (page, _kwargs) => {
     await page.goto('https://creator.xiaohongshu.com/new/home');
-    await page.wait(3);
 
     const data = await page.evaluate(`
       async () => {

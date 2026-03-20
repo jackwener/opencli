@@ -38,7 +38,6 @@ cli({
     const limit = Math.max(1, Number(kwargs.limit ?? 15));
 
     await page.goto(`https://www.xiaohongshu.com/user/profile/${userId}`);
-    await page.wait(3);
 
     let snapshot = await readUserSnapshot(page);
     let results = extractXhsUserNotes(snapshot ?? {}, userId);
