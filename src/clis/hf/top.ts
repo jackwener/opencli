@@ -129,7 +129,6 @@ cli({
       rank: i + 1,
       title: item.title ?? '',
       upvotes: item.paper?.upvotes ?? 0,
-      comments: item.numComments ?? 0,
       authors: formatAuthors(item.paper?.authors ?? []),
     }));
   },
