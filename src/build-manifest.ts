@@ -231,6 +231,7 @@ function scanTs(filePath: string, site: string): ManifestEntry {
     // Extract browser: false (some adapters bypass browser entirely)
     const browserMatch = src.match(/browser\s*:\s*(true|false)/);
     if (browserMatch) entry.browser = browserMatch[1] === 'true';
+    else entry.browser = entry.strategy !== 'public';
 
     // Extract columns
     const colMatch = src.match(/columns\s*:\s*\[([^\]]*)\]/);

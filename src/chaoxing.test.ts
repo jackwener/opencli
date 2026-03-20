@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { formatTimestamp, workStatusLabel } from './chaoxing.js';
 
+function localDatePrefixFromMillis(ts: number): string {
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 describe('formatTimestamp', () => {
   it('formats millisecond timestamp', () => {
-    // 2026-01-15 08:30 UTC+8
     const ts = new Date('2026-01-15T00:30:00Z').getTime();
     const result = formatTimestamp(ts);
-    expect(result).toMatch(/2026-01-15/);
+    expect(result).toMatch(new RegExp(`^${localDatePrefixFromMillis(ts)}\\s`));
   });
 
   it('formats second timestamp', () => {
-    const ts = Math.floor(new Date('2026-06-01T12:00:00Z').getTime() / 1000);
+    const millis = new Date('2026-06-01T12:00:00Z').getTime();
+    const ts = Math.floor(millis / 1000);
     const result = formatTimestamp(ts);
-    expect(result).toMatch(/2026-06-01/);
+    expect(result).toMatch(new RegExp(`^${localDatePrefixFromMillis(millis)}\\s`));
   });
 
   it('returns empty for null/undefined/0', () => {
