@@ -35,6 +35,7 @@ export interface CliCommand {
   pipeline?: Record<string, unknown>[];
   timeoutSeconds?: number;
   source?: string;
+  footerExtra?: (kwargs: Record<string, any>) => string | undefined;
 }
 
 /** Internal extension for lazy-loaded TS modules (not exposed in public API) */
@@ -63,6 +64,7 @@ export function cli(opts: CliOptions): CliCommand {
     func: opts.func,
     pipeline: opts.pipeline,
     timeoutSeconds: opts.timeoutSeconds,
+    footerExtra: opts.footerExtra,
   };
 
   const key = fullName(cmd);

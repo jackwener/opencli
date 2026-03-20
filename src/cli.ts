@@ -166,7 +166,8 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         if (actionOpts.verbose && (!result || (Array.isArray(result) && result.length === 0))) {
           console.error(chalk.yellow(`[Verbose] Warning: Command returned an empty result. If the website structural API changed or requires authentication, check the network or update the adapter.`));
         }
-        renderOutput(result, { fmt: actionOpts.format, columns: cmd.columns, title: `${cmd.site}/${cmd.name}`, elapsed: (Date.now() - startTime) / 1000, source: fullName(cmd) });
+        const resolved = getRegistry().get(fullName(cmd)) ?? cmd;
+        renderOutput(result, { fmt: actionOpts.format, columns: resolved.columns, title: `${resolved.site}/${resolved.name}`, elapsed: (Date.now() - startTime) / 1000, source: fullName(resolved), footerExtra: resolved.footerExtra?.(kwargs) });
       } catch (err: any) { 
         if (err instanceof CliError) {
           console.error(chalk.red(`Error [${err.code}]: ${err.message}`));

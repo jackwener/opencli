@@ -29,6 +29,29 @@ function formatAuthors(authors: PaperAuthor[], max = 3): string {
   return names.slice(0, max).join(', ') + ' et al.';
 }
 
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function getMonthRange(): string {
+  const now = new Date();
+  return `${MONTH_ABBR[now.getUTCMonth()]} ${now.getUTCFullYear()}`;
+}
+
+function getWeekRange(): string {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  const daysToSat = day === 6 ? 0 : 6 - day;
+  const end = new Date(now);
+  end.setUTCDate(now.getUTCDate() + daysToSat);
+  const start = new Date(end);
+  start.setUTCDate(end.getUTCDate() - 6);
+
+  const sm = MONTH_ABBR[start.getUTCMonth()];
+  const em = MONTH_ABBR[end.getUTCMonth()];
+  const sd = start.getUTCDate();
+  const ed = end.getUTCDate();
+  return sm === em ? `${sm} ${sd}-${ed}` : `${sm} ${sd}-${em} ${ed}`;
+}
+
 cli({
   site: 'hf',
   name: 'top',
@@ -41,6 +64,12 @@ cli({
     { name: 'date', type: 'str', required: false, help: 'Date (YYYY-MM-DD), defaults to most recent' },
     { name: 'period', type: 'str', default: 'daily', choices: ['daily', 'weekly', 'monthly'], help: 'Time period: daily, weekly, or monthly' },
   ],
+  footerExtra: (kwargs) => {
+    if (kwargs._footerDate) return kwargs._footerDate;
+    if (kwargs.period === 'monthly') return getMonthRange();
+    if (kwargs.period === 'weekly') return getWeekRange();
+    return kwargs.date ?? new Date().toISOString().slice(0, 10);
+  },
   func: async (_page, kwargs) => {
     const period = String(kwargs.period ?? 'daily');
     const endpoint = process.env.HF_ENDPOINT?.replace(/\/+$/, '') || 'https://huggingface.co';
@@ -55,6 +84,21 @@ cli({
       const body = await res.json();
       if (!Array.isArray(body)) throw new CliError('FETCH_ERROR', 'Unexpected HF API response', 'Check endpoint');
       const data: PeriodPaper[] = body;
+      const dates = data.map((d) => d.publishedAt).filter(Boolean).sort();
+      if (dates.length > 0) {
+        if (period === 'monthly') {
+          const d = new Date(dates[0]);
+          kwargs._footerDate = `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+        } else {
+          const start = new Date(dates[0]);
+          const end = new Date(dates[dates.length - 1]);
+          const sm = MONTH_ABBR[start.getUTCMonth()];
+          const em = MONTH_ABBR[end.getUTCMonth()];
+          const sd = start.getUTCDate();
+          const ed = end.getUTCDate();
+          kwargs._footerDate = sm === em ? `${sm} ${sd}-${ed}` : `${sm} ${sd}-${em} ${ed}`;
+        }
+      }
       const sorted = [...data].sort((a, b) => (b.upvotes ?? 0) - (a.upvotes ?? 0));
       return sorted.slice(0, Number(kwargs.limit)).map((item, i) => ({
         rank: i + 1,

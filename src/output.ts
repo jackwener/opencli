@@ -12,6 +12,7 @@ export interface RenderOptions {
   title?: string;
   elapsed?: number;
   source?: string;
+  footerExtra?: string;
 }
 
 export function render(data: unknown, opts: RenderOptions = {}): void {
@@ -56,6 +57,7 @@ function renderTable(data: unknown, opts: RenderOptions): void {
   footer.push(`${rows.length} items`);
   if (opts.elapsed) footer.push(`${opts.elapsed.toFixed(1)}s`);
   if (opts.source) footer.push(opts.source);
+  if (opts.footerExtra) footer.push(opts.footerExtra);
   console.log(chalk.dim(footer.join(' · ')));
 }
 
