@@ -21,6 +21,8 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .action((opts) => {
       const registry = getRegistry();
       const commands = [...registry.values()].sort((a, b) => fullName(a).localeCompare(fullName(b)));
+      const fmt = opts.json && opts.format === 'table' ? 'json' : opts.format;
+      const isStructured = fmt === 'json' || fmt === 'yaml';
       const rows = commands.map(c => ({
         command: fullName(c),
         site: c.site,
@@ -28,13 +30,26 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         description: c.description,
         strategy: strategyLabel(c),
         browser: c.browser,
-        args: c.args.map(a => a.name).join(', '),
+        // Structured formats get full arg schema; table/csv/md get comma-joined names
+        args: isStructured
+          ? c.args.map(a => {
+              const arg: Record<string, unknown> = { name: a.name };
+              if (a.type) arg.type = a.type;
+              if (a.required) arg.required = true;
+              if (a.positional) arg.positional = true;
+              if (a.choices?.length) arg.choices = a.choices;
+              if (a.default != null) arg.default = a.default;
+              if (a.help) arg.help = a.help;
+              return arg;
+            })
+          : c.args.map(a => a.name).join(', '),
+        ...(isStructured && c.columns?.length ? { columns: c.columns } : {}),
+        ...(isStructured && c.domain ? { domain: c.domain } : {}),
       }));
-      const fmt = opts.json && opts.format === 'table' ? 'json' : opts.format;
       if (fmt !== 'table') {
         renderOutput(rows, {
           fmt,
-          columns: ['command', 'site', 'name', 'description', 'strategy', 'browser', 'args'],
+          columns: ['command', 'site', 'name', 'description', 'strategy', 'browser', 'args', ...(isStructured ? ['columns', 'domain'] : [])],
           title: 'opencli/list',
           source: 'opencli list',
         });
@@ -122,36 +137,6 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       printCompletionScript(shell);
     });
 
-  program.command('describe')
-    .description('Describe a CLI command or external tool')
-    .argument('<target>', 'Site name or external CLI name')
-    .argument('[subcommands...]', 'Subcommand path (e.g. pr list)')
-    .option('-f, --format <fmt>', 'Output format: text, json', 'text')
-    .action(async (target: string, subcommands: string[], opts: { format: string }) => {
-      if (opts.format !== 'text' && opts.format !== 'json') {
-        console.error(chalk.red(`Error: Invalid format '${opts.format}'. Use 'text' or 'json'.`));
-        process.exitCode = 1;
-        return;
-      }
-      const { describeTarget, renderDescribeText, renderDescribeJson } = await import('./describe.js');
-      try {
-        const result = describeTarget(target, subcommands);
-        if (opts.format === 'json') {
-          console.log(renderDescribeJson(result));
-        } else {
-          console.log(renderDescribeText(result));
-        }
-      } catch (err: any) {
-        if (err instanceof CliError) {
-          console.error(chalk.red(`Error [${err.code}]: ${err.message}`));
-          if (err.hint) console.error(chalk.yellow(`Hint: ${err.hint}`));
-        } else {
-          console.error(chalk.red(`Error: ${err.message}`));
-        }
-        process.exitCode = 1;
-      }
-    });
-
   const externalClis = loadExternalClis();
 
   program.command('install')
@@ -234,6 +219,23 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       }
     }
     subCmd.option('-f, --format <fmt>', 'Output format: table, json, yaml, md, csv', 'table').option('-v, --verbose', 'Debug output', false);
+
+    // Enhance --help with registry metadata not shown by Commander
+    const helpExtra: string[] = [];
+    const choicesArgs = cmd.args.filter(a => a.choices?.length);
+    if (choicesArgs.length > 0) {
+      for (const a of choicesArgs) {
+        const def = a.default != null ? `  (default: ${a.default})` : '';
+        helpExtra.push(`  --${a.name}: ${a.choices!.join(', ')}${def}`);
+      }
+    }
+    const metaParts: string[] = [];
+    metaParts.push(`Strategy: ${strategyLabel(cmd)}`);
+    metaParts.push(`Browser: ${cmd.browser ? 'yes' : 'no'}`);
+    if (cmd.domain) metaParts.push(`Domain: ${cmd.domain}`);
+    helpExtra.push(`\n${metaParts.join(' | ')}`);
+    if (cmd.columns?.length) helpExtra.push(`Output columns: ${cmd.columns.join(', ')}`);
+    subCmd.addHelpText('after', '\n' + helpExtra.join('\n') + '\n');
 
     subCmd.action(async (...actionArgs: any[]) => {
       // Commander passes positional args first, then options object, then the Command
