@@ -1,0 +1,56 @@
+site: producthunt
+name: top
+description: "Today's top products on Product Hunt"
+domain: www.producthunt.com
+browser: true
+
+args:
+  limit:
+    type: int
+    default: 15
+    description: Number of products
+
+pipeline:
+  - navigate: https://www.producthunt.com
+
+  - evaluate: |
+      (async () => {
+        const res = await fetch('https://www.producthunt.com/frontend/graphql', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `{
+              homefeed(first: ${{ args.limit }}) {
+                edges {
+                  node {
+                    ... on Post {
+                      name
+                      tagline
+                      votesCount
+                      commentsCount
+                      website
+                      slug
+                    }
+                  }
+                }
+              }
+            }`
+          })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+        const edges = json?.data?.homefeed?.edges || [];
+        return edges.map((e, i) => ({
+          rank: i + 1,
+          name: e.node.name,
+          tagline: e.node.tagline,
+          votes: e.node.votesCount,
+          comments: e.node.commentsCount,
+          url: 'https://www.producthunt.com/posts/' + e.node.slug,
+        }));
+      })()
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, name, tagline, votes, comments, url]
