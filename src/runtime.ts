@@ -1,4 +1,13 @@
+import { BrowserBridge, CDPBridge } from './browser/index.js';
 import type { IPage } from './types.js';
+
+/**
+ * Returns the appropriate browser factory based on environment config.
+ * Uses CDPBridge when OPENCLI_CDP_ENDPOINT is set, otherwise BrowserBridge.
+ */
+export function getBrowserFactory(): new () => IBrowserFactory {
+  return (process.env.OPENCLI_CDP_ENDPOINT ? CDPBridge : BrowserBridge) as any;
+}
 
 export const DEFAULT_BROWSER_CONNECT_TIMEOUT = parseInt(process.env.OPENCLI_BROWSER_CONNECT_TIMEOUT ?? '30', 10);
 export const DEFAULT_BROWSER_COMMAND_TIMEOUT = parseInt(process.env.OPENCLI_BROWSER_COMMAND_TIMEOUT ?? '60', 10);

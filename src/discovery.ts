@@ -12,13 +12,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import yaml from 'js-yaml';
 import { type CliCommand, type InternalCliCommand, type Arg, Strategy, registerCommand } from './registry.js';
-import type { IPage } from './types.js';
-import { executePipeline } from './pipeline.js';
 import { log } from './logger.js';
-import { AdapterLoadError } from './errors.js';
-
-/** Set of TS module paths that have been loaded */
-const _loadedModules = new Set<string>();
 
 /**
  * Discover and register CLI commands.
@@ -170,106 +164,4 @@ async function registerYamlCli(filePath: string, defaultSite: string): Promise<v
   } catch (err: any) {
     log.warn(`Failed to load ${filePath}: ${err.message}`);
   }
-}
-
-/**
- * Validates and coerces arguments based on the command's Arg definitions.
- */
-function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = { ...kwargs };
-
-  for (const argDef of cmdArgs) {
-    const val = result[argDef.name];
-    
-    // 1. Check required
-    if (argDef.required && (val === undefined || val === null || val === '')) {
-      throw new Error(`Argument "${argDef.name}" is required.\n${argDef.help ? `Hint: ${argDef.help}` : ''}`);
-    }
-
-    if (val !== undefined && val !== null) {
-      // 2. Type coercion
-      if (argDef.type === 'int' || argDef.type === 'number') {
-        const num = Number(val);
-        if (Number.isNaN(num)) {
-          throw new Error(`Argument "${argDef.name}" must be a valid number. Received: "${val}"`);
-        }
-        result[argDef.name] = num;
-      } else if (argDef.type === 'boolean' || argDef.type === 'bool') {
-        if (typeof val === 'string') {
-          const lower = val.toLowerCase();
-          if (lower === 'true' || lower === '1') result[argDef.name] = true;
-          else if (lower === 'false' || lower === '0') result[argDef.name] = false;
-          else throw new Error(`Argument "${argDef.name}" must be a boolean (true/false). Received: "${val}"`);
-        } else {
-          result[argDef.name] = Boolean(val);
-        }
-      }
-
-      // 3. Choices validation
-      const coercedVal = result[argDef.name];
-      if (argDef.choices && argDef.choices.length > 0) {
-        // Only stringent check for string/number types against choices array
-        if (!argDef.choices.map(String).includes(String(coercedVal))) {
-          throw new Error(`Argument "${argDef.name}" must be one of: ${argDef.choices.join(', ')}. Received: "${coercedVal}"`);
-        }
-      }
-    } else if (argDef.default !== undefined) {
-      // Set default if value is missing
-      result[argDef.name] = argDef.default;
-    }
-  }
-  return result;
-}
-
-/**
- * Execute a CLI command. Handles lazy-loading of TS modules.
- */
-export async function executeCommand(
-  cmd: CliCommand,
-  page: IPage | null,
-  rawKwargs: Record<string, any>,
-  debug: boolean = false,
-): Promise<any> {
-  let kwargs: Record<string, any>;
-  try {
-    kwargs = coerceAndValidateArgs(cmd.args, rawKwargs);
-  } catch (err: any) {
-    // Re-throw validation errors clearly
-    throw new Error(`[Argument Validation Error]\n${err.message}`);
-  }
-
-  // Lazy-load TS module on first execution
-  const internal = cmd as InternalCliCommand;
-  if (internal._lazy && internal._modulePath) {
-    const modulePath = internal._modulePath;
-    if (!_loadedModules.has(modulePath)) {
-      try {
-        await import(`file://${modulePath}`);
-        _loadedModules.add(modulePath);
-      } catch (err: any) {
-        throw new AdapterLoadError(
-          `Failed to load adapter module ${modulePath}: ${err.message}`,
-          'Check that the adapter file exists and has no syntax errors.',
-        );
-      }
-    }
-    // After loading, the module's cli() call will have updated the registry
-    // with the real func/pipeline. Re-fetch the command.
-    const { getRegistry, fullName } = await import('./registry.js');
-    const updated = getRegistry().get(fullName(cmd));
-    if (updated && updated.func) {
-      return updated.func(page!, kwargs, debug);
-    }
-    if (updated && updated.pipeline) {
-      return executePipeline(page, updated.pipeline, { args: kwargs, debug });
-    }
-  }
-
-  if (cmd.func) {
-    return cmd.func(page!, kwargs, debug);
-  }
-  if (cmd.pipeline) {
-    return executePipeline(page, cmd.pipeline, { args: kwargs, debug });
-  }
-  throw new Error(`Command ${cmd.site}/${cmd.name} has no func or pipeline`);
 }

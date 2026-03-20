@@ -1,9 +1,10 @@
 /**
- * Tests for engine.ts: CLI discovery and command execution.
+ * Tests for discovery and execution modules.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { discoverClis, executeCommand } from './engine.js';
+import { discoverClis } from './discovery.js';
+import { executeCommand } from './execution.js';
 import { getRegistry, cli, Strategy } from './registry.js';
 
 describe('discoverClis', () => {
@@ -27,7 +28,7 @@ describe('executeCommand', () => {
       func: async (_page, kwargs) => [{ noteId: kwargs['note-id'] }],
     });
 
-    const result = await executeCommand(cmd, null, { 'note-id': 'abc123' });
+    const result = await executeCommand(cmd, { 'note-id': 'abc123' });
     expect(result).toEqual([{ noteId: 'abc123' }]);
   });
 
@@ -43,7 +44,7 @@ describe('executeCommand', () => {
       },
     });
 
-    const result = await executeCommand(cmd, null, { query: 'hello' });
+    const result = await executeCommand(cmd, { query: 'hello' });
     expect(result).toEqual([{ title: 'hello' }]);
   });
 
@@ -61,7 +62,7 @@ describe('executeCommand', () => {
     });
 
     // Pipeline commands require page for evaluate step, so we'll test the error path
-    await expect(executeCommand(cmd, null, {})).rejects.toThrow();
+    await expect(executeCommand(cmd, {})).rejects.toThrow();
   });
 
   it('throws for command with no func or pipeline', async () => {
@@ -72,7 +73,7 @@ describe('executeCommand', () => {
       browser: false,
     });
 
-    await expect(executeCommand(cmd, null, {})).rejects.toThrow('has no func or pipeline');
+    await expect(executeCommand(cmd, {})).rejects.toThrow('has no func or pipeline');
   });
 
   it('passes debug flag to func', async () => {
@@ -88,7 +89,7 @@ describe('executeCommand', () => {
       },
     });
 
-    await executeCommand(cmd, null, {}, true);
+    await executeCommand(cmd, {}, true);
     expect(receivedDebug).toBe(true);
   });
 });

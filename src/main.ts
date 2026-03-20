@@ -6,7 +6,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { discoverClis } from './engine.js';
+import { discoverClis } from './discovery.js';
 import { getCompletions } from './completion.js';
 import { runCli } from './cli.js';
 

@@ -90,70 +90,7 @@ export function registerCommand(cmd: CliCommand): void {
   _registry.set(fullName(cmd), cmd);
 }
 
-// ── Serialization helpers (shared by list, --help, manifest) ────────────────
+// Re-export serialization helpers from their dedicated module
+export { serializeArg, serializeCommand, formatArgSummary, formatRegistryHelpText } from './serialization.js';
+export type { SerializedArg } from './serialization.js';
 
-export type SerializedArg = {
-  name: string;
-  type: string;
-  required: boolean;
-  positional: boolean;
-  choices: string[];
-  default: unknown;
-  help: string;
-};
-
-/** Stable arg schema — every field is always present (no sparse objects). */
-export function serializeArg(a: Arg): SerializedArg {
-  return {
-    name: a.name,
-    type: a.type ?? 'string',
-    required: !!a.required,
-    positional: !!a.positional,
-    choices: a.choices ?? [],
-    default: a.default ?? null,
-    help: a.help ?? '',
-  };
-}
-
-/** Full command metadata for structured output (json/yaml). */
-export function serializeCommand(cmd: CliCommand) {
-  return {
-    command: fullName(cmd),
-    site: cmd.site,
-    name: cmd.name,
-    description: cmd.description,
-    strategy: strategyLabel(cmd),
-    browser: !!cmd.browser,
-    args: cmd.args.map(serializeArg),
-    columns: cmd.columns ?? [],
-    domain: cmd.domain ?? null,
-  };
-}
-
-/** Human-readable arg summary: `<required> [optional]` style. */
-export function formatArgSummary(args: Arg[]): string {
-  return args
-    .map(a => {
-      if (a.positional) return a.required ? `<${a.name}>` : `[${a.name}]`;
-      return a.required ? `--${a.name}` : `[--${a.name}]`;
-    })
-    .join(' ');
-}
-
-/** Generate the --help appendix showing registry metadata not exposed by Commander. */
-export function formatRegistryHelpText(cmd: CliCommand): string {
-  const lines: string[] = [];
-  const choicesArgs = cmd.args.filter(a => a.choices?.length);
-  for (const a of choicesArgs) {
-    const prefix = a.positional ? `<${a.name}>` : `--${a.name}`;
-    const def = a.default != null ? `  (default: ${a.default})` : '';
-    lines.push(`  ${prefix}: ${a.choices!.join(', ')}${def}`);
-  }
-  const meta: string[] = [];
-  meta.push(`Strategy: ${strategyLabel(cmd)}`);
-  meta.push(`Browser: ${cmd.browser ? 'yes' : 'no'}`);
-  if (cmd.domain) meta.push(`Domain: ${cmd.domain}`);
-  lines.push(meta.join(' | '));
-  if (cmd.columns?.length) lines.push(`Output columns: ${cmd.columns.join(', ')}`);
-  return '\n' + lines.join('\n') + '\n';
-}
