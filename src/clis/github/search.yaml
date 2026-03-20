@@ -1,0 +1,33 @@
+site: github
+name: search
+description: Search GitHub repositories
+domain: github.com
+strategy: public
+browser: false
+
+args:
+  query:
+    type: string
+    required: true
+    description: Search query
+  limit:
+    type: int
+    default: 15
+    description: Number of repositories
+
+pipeline:
+  - fetch:
+      url: https://api.github.com/search/repositories?q=${{ args.query }}&sort=stars&order=desc&per_page=${{ args.limit }}
+
+  - select: items
+
+  - map:
+      name: ${{ item.full_name }}
+      description: ${{ item.description }}
+      stars: ${{ item.stargazers_count }}
+      forks: ${{ item.forks_count }}
+      language: ${{ item.language }}
+
+  - limit: ${{ args.limit }}
+
+columns: [name, description, stars, forks, language]
