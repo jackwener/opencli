@@ -45,7 +45,7 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           args: >-
-            --base docs
+            --root-dir docs
             --include-fragments
             --no-progress
             --exclude-path docs/node_modules
