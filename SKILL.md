@@ -1,6 +1,6 @@
 ---
 name: opencli
-description: "OpenCLI — Make any website or Electron App your CLI. Zero risk, AI-powered, reuse Chrome login. 80+ commands across 19 sites."
+description: "OpenCLI — Make any website or Electron App your CLI. Zero risk, AI-powered, reuse Chrome login. 150+ commands across 30+ sites."
 version: 1.1.0
 author: jackwener
 tags: [cli, browser, web, chrome-extension, cdp, bilibili, zhihu, twitter, github, v2ex, hackernews, reddit, xiaohongshu, xueqiu, youtube, boss, coupang, AI, agent]
@@ -48,7 +48,7 @@ Public API commands (`hackernews`, `github search`, `v2ex`) need no browser.
 ```bash
 # Bilibili (browser)
 opencli bilibili hot --limit 10          # B站热门视频
-opencli bilibili search --keyword "rust"  # 搜索视频
+opencli bilibili search "rust"            # 搜索视频 (query positional)
 opencli bilibili me                       # 我的信息
 opencli bilibili favorite                 # 我的收藏
 opencli bilibili history --limit 20       # 观看历史
@@ -61,15 +61,19 @@ opencli bilibili following --limit 20     # 我的关注列表 (支持 --uid 查
 
 # 知乎 (browser)
 opencli zhihu hot --limit 10             # 知乎热榜
-opencli zhihu search --keyword "AI"      # 搜索
-opencli zhihu question --id 34816524     # 问题详情和回答
+opencli zhihu search "AI"                # 搜索 (query positional)
+opencli zhihu question 34816524            # 问题详情和回答 (id positional)
 
 # 小红书 (browser)
-opencli xiaohongshu search --keyword "美食"  # 搜索笔记
+opencli xiaohongshu search "美食"           # 搜索笔记 (query positional)
 opencli xiaohongshu notifications             # 通知（mentions/likes/connections）
 opencli xiaohongshu feed --limit 10           # 推荐 Feed
-opencli xiaohongshu me                        # 我的信息
-opencli xiaohongshu user --uid xxx             # 用户主页
+opencli xiaohongshu user xxx               # 用户主页 (id positional)
+opencli xiaohongshu creator-notes --limit 10   # 创作者笔记列表
+opencli xiaohongshu creator-note-detail --note-id xxx  # 笔记详情
+opencli xiaohongshu creator-notes-summary      # 笔记数据概览
+opencli xiaohongshu creator-profile            # 创作者资料
+opencli xiaohongshu creator-stats              # 创作者数据统计
 
 # 雪球 Xueqiu (browser)
 opencli xueqiu hot-stock --limit 10      # 雪球热门股票榜
@@ -77,15 +81,15 @@ opencli xueqiu stock --symbol SH600519   # 查看股票实时行情
 opencli xueqiu watchlist                 # 获取自选股/持仓列表
 opencli xueqiu feed                      # 我的关注 timeline
 opencli xueqiu hot --limit 10            # 雪球热榜
-opencli xueqiu search --keyword "特斯拉"  # 搜索
+opencli xueqiu search "特斯拉"            # 搜索 (query positional)
 
 # GitHub (public)
-opencli github search --keyword "cli"    # 搜索仓库
+opencli github search "cli"              # 搜索仓库 (query positional)
 
 # Twitter/X (browser)
 opencli twitter trending --limit 10      # 热门话题
 opencli twitter bookmarks --limit 20     # 获取收藏的书签推文
-opencli twitter search --keyword "AI"    # 搜索推文
+opencli twitter search "AI"              # 搜索推文 (query positional)
 opencli twitter profile elonmusk         # 用户资料
 opencli twitter timeline --limit 20      # 时间线
 opencli twitter thread 1234567890        # 推文 thread（原文 + 回复）
@@ -100,15 +104,15 @@ opencli reddit hot --limit 10            # 热门帖子
 opencli reddit hot --subreddit programming  # 指定子版块
 opencli reddit frontpage --limit 10      # 首页 /r/all
 opencli reddit popular --limit 10        # /r/popular 热门
-opencli reddit search --query "AI" --sort top --time week  # 搜索（支持排序+时间过滤）
+opencli reddit search "AI" --sort top --time week  # 搜索（支持排序+时间过滤）
 opencli reddit subreddit --name rust --sort top --time month  # 子版块浏览（支持时间过滤）
-opencli reddit read --post_id 1abc123    # 阅读帖子 + 评论
-opencli reddit user --username spez      # 用户资料（karma、注册时间）
-opencli reddit user-posts --username spez  # 用户发帖历史
-opencli reddit user-comments --username spez  # 用户评论历史
-opencli reddit upvote --post_id xxx --direction up  # 投票（up/down/none）
-opencli reddit save --post_id xxx        # 收藏帖子
-opencli reddit comment --post_id xxx --text "Great!"  # 发表评论
+opencli reddit read --post-id 1abc123    # 阅读帖子 + 评论
+opencli reddit user spez                 # 用户资料（karma、注册时间）
+opencli reddit user-posts spez           # 用户发帖历史
+opencli reddit user-comments spez        # 用户评论历史
+opencli reddit upvote --post-id xxx --direction up  # 投票（up/down/none）
+opencli reddit save --post-id xxx        # 收藏帖子
+opencli reddit comment --post-id xxx "Great!"  # 发表评论 (text positional)
 opencli reddit subscribe --subreddit python  # 订阅子版块
 opencli reddit saved --limit 10          # 我的收藏
 opencli reddit upvoted --limit 10        # 我的赞
@@ -116,7 +120,7 @@ opencli reddit upvoted --limit 10        # 我的赞
 # V2EX (public + browser)
 opencli v2ex hot --limit 10              # 热门话题
 opencli v2ex latest --limit 10           # 最新话题
-opencli v2ex topic --id 1024             # 主题详情
+opencli v2ex topic 1024                  # 主题详情 (id positional)
 opencli v2ex daily                       # 每日签到 (browser)
 opencli v2ex me                          # 我的信息 (browser)
 opencli v2ex notifications --limit 10    # 通知 (browser)
@@ -131,14 +135,26 @@ opencli bbc news --limit 10             # BBC News RSS headlines
 opencli weibo hot --limit 10            # 微博热搜
 
 # BOSS直聘 (browser)
-opencli boss search --query "AI agent"  # 搜索职位
-opencli boss detail --securityId xxx    # 职位详情
+opencli boss search "AI agent"          # 搜索职位 (query positional)
+opencli boss detail --security-id xxx    # 职位详情
+opencli boss recommend --limit 10        # 推荐职位
+opencli boss joblist --limit 10          # 职位列表
+opencli boss greet --security-id xxx     # 打招呼
+opencli boss batchgreet --job-id xxx     # 批量打招呼
+opencli boss send --uid xxx "消息内容"    # 发消息 (text positional)
+opencli boss chatlist --limit 10         # 聊天列表
+opencli boss chatmsg --security-id xxx   # 聊天记录
+opencli boss invite --security-id xxx    # 邀请沟通
+opencli boss mark --security-id xxx      # 标记管理
+opencli boss exchange --security-id xxx  # 交换联系方式
+opencli boss resume                    # 简历管理
+opencli boss stats                     # 数据统计
 
 # YouTube (browser)
-opencli youtube search --query "rust"   # 搜索视频
-opencli youtube video --url "https://www.youtube.com/watch?v=xxx"  # 视频元数据（标题、播放量、描述等）
-opencli youtube transcript --url "https://www.youtube.com/watch?v=xxx"  # 获取视频字幕/转录
-opencli youtube transcript --url "xxx" --lang zh-Hans --mode raw  # 指定语言 + 原始时间戳模式
+opencli youtube search "rust"            # 搜索视频 (query positional)
+opencli youtube video "https://www.youtube.com/watch?v=xxx"  # 视频元数据
+opencli youtube transcript "https://www.youtube.com/watch?v=xxx"  # 获取视频字幕/转录
+opencli youtube transcript "xxx" --lang zh-Hans --mode raw  # 指定语言 + 原始时间戳模式
 
 # Yahoo Finance (browser)
 opencli yahoo-finance quote --symbol AAPL  # 股票行情
@@ -147,13 +163,13 @@ opencli yahoo-finance quote --symbol AAPL  # 股票行情
 opencli sinafinance news --limit 10 --type 1  # 7x24实时快讯 (0=全部 1=A股 2=宏观 3=公司 4=数据 5=市场 6=国际 7=观点 8=央行 9=其它)
 
 # Reuters (browser)
-opencli reuters search --query "AI"     # 路透社搜索
+opencli reuters search "AI"              # 路透社搜索 (query positional)
 
 # 什么值得买 (browser)
-opencli smzdm search --keyword "耳机"    # 搜索好价
+opencli smzdm search "耳机"              # 搜索好价 (query positional)
 
 # 携程 (browser)
-opencli ctrip search --query "三亚"      # 搜索目的地
+opencli ctrip search "三亚"              # 搜索目的地 (query positional)
 
 # Antigravity (Electron/CDP)
 opencli antigravity status              # 检查 CDP 连接
@@ -163,6 +179,54 @@ opencli antigravity new                 # 清空聊天、开启新对话
 opencli antigravity extract-code        # 自动抽取 AI 回复中的代码块
 opencli antigravity model claude        # 切换底层模型
 opencli antigravity watch               # 流式监听增量消息
+
+# Barchart (browser)
+opencli barchart quote --symbol AAPL     # 股票行情
+opencli barchart options --symbol AAPL   # 期权链
+opencli barchart greeks --symbol AAPL    # 期权 Greeks
+opencli barchart flow --limit 20         # 异常期权活动
+
+# Jike 即刻 (browser)
+opencli jike feed --limit 10             # 动态流
+opencli jike search "AI"                 # 搜索 (query positional)
+opencli jike create "内容"                # 发布动态 (text positional)
+opencli jike like xxx                    # 点赞 (id positional)
+opencli jike comment xxx "评论"           # 评论 (id + text positional)
+opencli jike repost xxx                  # 转发 (id positional)
+opencli jike notifications               # 通知
+
+# Linux.do (public)
+opencli linux-do hot --limit 10          # 热门话题
+opencli linux-do latest --limit 10       # 最新话题
+opencli linux-do search "rust"           # 搜索 (query positional)
+opencli linux-do topic 1024              # 主题详情 (id positional)
+
+# StackOverflow (public)
+opencli stackoverflow hot --limit 10     # 热门问题
+opencli stackoverflow search "typescript"  # 搜索 (query positional)
+opencli stackoverflow bounties --limit 10  # 悬赏问题
+
+# WeRead 微信读书 (browser)
+opencli weread shelf --limit 10          # 书架
+opencli weread search "AI"               # 搜索图书 (query positional)
+opencli weread book xxx                  # 图书详情 (book-id positional)
+opencli weread highlights xxx            # 划线笔记 (book-id positional)
+opencli weread notes xxx                 # 想法笔记 (book-id positional)
+opencli weread ranking --limit 10        # 排行榜
+
+# Jimeng 即梦 AI (browser)
+opencli jimeng generate --prompt "描述"  # AI 生图
+opencli jimeng history --limit 10        # 生成历史
+
+# Grok (Desktop)
+opencli grok ask "问题"                  # 提问 Grok (text positional)
+
+# HuggingFace (public)
+opencli hf top --limit 10                # 热门模型
+
+# 超星学习通 (browser)
+opencli chaoxing assignments             # 作业列表
+opencli chaoxing exams                   # 考试列表
 ```
 
 ### Management Commands
@@ -300,7 +364,7 @@ cli({
   site: 'mysite',
   name: 'search',
   strategy: Strategy.INTERCEPT, // Or COOKIE
-  args: [{ name: 'keyword', required: true }],
+  args: [{ name: 'query', required: true, positional: true }],
   columns: ['rank', 'title', 'url'],
   func: async (page, kwargs) => {
     await page.goto('https://www.mysite.com/search');
@@ -351,7 +415,7 @@ cli({
 
 ```yaml
 # Arguments with defaults
-${{ args.keyword }}
+${{ args.query }}
 ${{ args.limit | default(20) }}
 
 # Current item (in map/filter)

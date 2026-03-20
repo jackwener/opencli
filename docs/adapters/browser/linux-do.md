@@ -30,10 +30,10 @@ opencli linux-do latest --limit 10
 opencli linux-do categories
 
 # Search topics
-opencli linux-do search --query "NixOS"
+opencli linux-do search "NixOS"
 
 # View topic details
-opencli linux-do topic --id 12345
+opencli linux-do topic 12345
 
 # JSON output
 opencli linux-do hot -f json

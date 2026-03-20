@@ -166,10 +166,10 @@ cli({
 
 ### 3.4 公共模式复用
 
-迁移过程中如果发现多个适配器共享逻辑，考虑提取到 `src/<site>.ts` 工具文件：
+迁移过程中如果发现多个适配器共享逻辑，考虑提取到 `src/clis/<site>/utils.ts` 工具文件：
 
 ```typescript
-// src/<site>.ts
+// src/clis/<site>/utils.ts
 export async function fetchWithAuth(page, url) { ... }
 export function parseItem(raw) { ... }
 ```

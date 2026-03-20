@@ -13,13 +13,13 @@
 
 ```bash
 # Search for papers
-opencli arxiv search --query "transformer attention" --limit 10
+opencli arxiv search "transformer attention" --limit 10
 
 # Get paper details by arXiv ID
-opencli arxiv paper --id 2301.00001
+opencli arxiv paper 2301.00001
 
 # JSON output
-opencli arxiv search --query "LLM" -f json
+opencli arxiv search "LLM" -f json
 ```
 
 ## Prerequisites

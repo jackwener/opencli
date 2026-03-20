@@ -196,7 +196,7 @@ cat src/clis/<site>/feed.ts   # 读最相似的那个
 
 写 TS 适配器之前，先看看你的目标站点有没有**现成的 helper 函数**可以复用：
 
-#### Bilibili (`src/bilibili.ts`)
+#### Bilibili (`src/clis/bilibili/utils.ts`)
 
 | 函数 | 用途 | 何时使用 |
 |------|------|----------|
@@ -342,10 +342,11 @@ name: search
 description: 知乎搜索
 
 args:
-  keyword:
+  query:
     type: str
     required: true
-    description: Search keyword
+    positional: true
+    description: Search query
   limit:
     type: int
     default: 10
@@ -355,7 +356,7 @@ pipeline:
 
   - evaluate: |
       (async () => {
-        const q = encodeURIComponent('${{ args.keyword }}');
+        const q = encodeURIComponent('${{ args.query }}');
         const res = await fetch('/api/v4/search_v3?q=' + q + '&t=general&limit=${{ args.limit }}', {
           credentials: 'include'
         });
@@ -455,7 +456,7 @@ cli({
   name: 'search',
   description: 'Search tweets',
   strategy: Strategy.HEADER,
-  args: [{ name: 'keyword', required: true }],
+  args: [{ name: 'query', required: true, positional: true }],
   columns: ['rank', 'author', 'text', 'likes'],
   func: async (page, kwargs) => {
     await page.goto('https://x.com');
@@ -474,7 +475,7 @@ cli({
           'X-Twitter-Auth-Type': 'OAuth2Session',
         };
 
-        const variables = JSON.stringify({ rawQuery: '${kwargs.keyword}', count: 20 });
+        const variables = JSON.stringify({ rawQuery: '${kwargs.query}', count: 20 });
         const url = '/i/api/graphql/xxx/SearchTimeline?variables=' + encodeURIComponent(variables);
         const res = await fetch(url, { headers, credentials: 'include' });
         return await res.json();
@@ -631,7 +632,7 @@ git add src/clis/mysite/ && git commit -m "feat(mysite): add hot" && git push
 ```typescript
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
-import { apiGet } from '../../bilibili.js'; // 复用平台 SDK
+import { apiGet } from './utils.js'; // 复用平台 SDK
 
 cli({
   site: 'bilibili',
@@ -694,7 +695,7 @@ cli({
 | 嵌套字段访问 | `${{ item.node?.title }}` 不工作 | 在 evaluate 中 flatten 数据，不在模板中用 optional chaining |
 | 缺少 `strategy: public` | 公开 API 也启动浏览器，7s → 1s | 公开 API 加上 `strategy: public` + `browser: false` |
 | evaluate 返回字符串 | map 步骤收到 `""` 而非数组 | pipeline 有 auto-parse，但建议在 evaluate 内 `.map()` 整形 |
-| 搜索参数被 URL 编码 | `${{ args.keyword }}` 被浏览器二次编码 | 在 evaluate 内用 `encodeURIComponent()` 手动编码 |
+| 搜索参数被 URL 编码 | `${{ args.query }}` 被浏览器二次编码 | 在 evaluate 内用 `encodeURIComponent()` 手动编码 |
 | Cookie 过期 | 返回 401 / 空数据 | 在浏览器里重新登录目标站点 |
 | Extension tab 残留 | Chrome 多出 `chrome-extension://` tab | 已自动清理；若残留，手动关闭即可 |
 | TS evaluate 格式 | `() => {}` 报 `result is not a function` | TS 中 `page.evaluate()` 必须用 IIFE：`(async () => { ... })()` |

@@ -11,9 +11,9 @@
 
 OpenCLI 将任何网站或 Electron 应用（如 Antigravity）变成命令行工具 — B站、知乎、小红书、Twitter/X、Reddit、YouTube 等[多种站点与应用](#内置命令) — 复用浏览器登录态，AI 驱动探索。
 
-💡 **专为 AI Agent 打造**：只需在全局 `.cursorrules` 或 `AGENT.md` 中配置简单指令，引导 AI 通过 Bash 执行 `opencli list` 来检索可用的 CLI 工具及其用法。随后，将你常用的 CLI 列表整合注册进去（`opencli register mycli`），AI 便能瞬间学会自动调用相应的本地工具！
+**专为 AI Agent 打造**：只需在全局 `.cursorrules` 或 `AGENT.md` 中配置简单指令，引导 AI 通过 Bash 执行 `opencli list` 来检索可用的 CLI 工具及其用法。随后，将你常用的 CLI 列表整合注册进去（`opencli register mycli`），AI 便能瞬间学会自动调用相应的本地工具！
 
-🔥 **opencli 支持 CLI 化所有 electron 应用！最强大更新来袭！** 🔥
+**opencli 支持 CLI 化所有 electron 应用！最强大更新来袭！**
 CLI all electron！现在支持把所有 electron 应用 CLI 化，从而组合出各种神奇的能力。
 如果你在使用诸如 Antigravity Ultra 等工具时觉得不够灵活或难以扩展，现在通过 OpenCLI 把他 CLI 化，轻松打破界限。
 现在，**AI 可以自己控制自己**！结合 cc/openclaw 就可以远程控制任何 electron 应用！无限玩法！！
@@ -130,12 +130,12 @@ npm install -g @jackwener/opencli@latest
 | **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` | 浏览器 |
 | **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` | 桌面端 |
 | **chatgpt** | `status` `new` `send` `read` `ask` | 桌面端 |
-| **xiaohongshu** | `search` `notifications` `feed` `me` `user` `download` | 浏览器 |
+| **xiaohongshu** | `search` `notifications` `feed` `user` `download` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | 浏览器 |
 | **apple-podcasts** | `search` `episodes` `top` | 公开 |
 | **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` | 公开 |
 | **zhihu** | `hot` `search` `question` `download` | 浏览器 |
 | **youtube** | `search` `video` `transcript` | 浏览器 |
-| **boss** | `search` `detail` | 浏览器 |
+| **boss** | `search` `detail` `recommend` `joblist` `greet` `batchgreet` `send` `chatlist` `chatmsg` `invite` `mark` `exchange` `resume` `stats` | 浏览器 |
 | **coupang** | `search` `add-to-cart` | 浏览器 |
 | **bbc** | `news` | 公共 API |
 | **bloomberg** | `main` `markets` `economics` `industries` `tech` `politics` `businessweek` `opinions` `feeds` `news` | 公共 API / 浏览器 |
@@ -150,6 +150,15 @@ npm install -g @jackwener/opencli@latest
 | **weibo** | `hot` | 浏览器 |
 | **yahoo-finance** | `quote` | 浏览器 |
 | **sinafinance** | `news` | 🌐 公开 |
+| **barchart** | `quote` `options` `greeks` `flow` | 浏览器 |
+| **chaoxing** | `assignments` `exams` | 浏览器 |
+| **grok** | `ask` | 桌面端 |
+| **hf** | `top` | 公开 |
+| **jike** | `feed` `search` `create` `like` `comment` `repost` `notifications` `post` `topic` `user` | 浏览器 |
+| **jimeng** | `generate` `history` | 浏览器 |
+| **linux-do** | `hot` `latest` `search` `categories` `category` `topic` | 公开 |
+| **stackoverflow** | `hot` `search` `bounties` `unanswered` | 公开 |
+| **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | 浏览器 |
 
 > **Bloomberg 说明**：Bloomberg 的 RSS 列表命令（`main`、各栏目 feed、`feeds`）无需浏览器即可使用。`bloomberg news` 适用于当前 Chrome 会话本身就能访问的标准 Bloomberg 文章页。音频页和部分非标准页面可能失败，OpenCLI 也不会绕过 Bloomberg 的付费墙、登录或权限校验。
 
@@ -198,23 +207,23 @@ brew install yt-dlp
 
 ```bash
 # 下载小红书笔记中的图片/视频
-opencli xiaohongshu download --note_id abc123 --output ./xhs
+opencli xiaohongshu download --note-id abc123 --output ./xhs
 
 # 下载B站视频（需要 yt-dlp）
 opencli bilibili download --bvid BV1xxx --output ./bilibili
 opencli bilibili download --bvid BV1xxx --quality 1080p  # 指定画质
 
 # 下载 Twitter 用户的媒体
-opencli twitter download --username elonmusk --limit 20 --output ./twitter
+opencli twitter download elonmusk --limit 20 --output ./twitter
 
 # 下载单条推文的媒体
 opencli twitter download --tweet-url "https://x.com/user/status/123" --output ./twitter
 
 # 导出知乎文章为 Markdown
-opencli zhihu download --url "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu
+opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu
 
-# 导出文章并下载图片到本地
-opencli zhihu download --url "https://zhuanlan.zhihu.com/p/xxx" --download-images
+# 导出并下载图片
+opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --download-images
 ```
 
 ### Pipeline Step（用于 YAML 适配器）

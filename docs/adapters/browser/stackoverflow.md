@@ -18,7 +18,7 @@
 opencli stackoverflow hot --limit 10
 
 # Search questions
-opencli stackoverflow search --query "async await" --limit 20
+opencli stackoverflow search "async await" --limit 20
 
 # Active bounties
 opencli stackoverflow bounties --limit 10

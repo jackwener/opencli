@@ -21,10 +21,10 @@
 opencli weread shelf --limit 20
 
 # Search books
-opencli weread search --query "三体"
+opencli weread search "三体"
 
 # View book details
-opencli weread book --id <book-id>
+opencli weread book <book-id>
 
 # Book rankings
 opencli weread ranking --limit 10
@@ -33,10 +33,10 @@ opencli weread ranking --limit 10
 opencli weread notebooks
 
 # View highlights for a book
-opencli weread highlights --id <book-id>
+opencli weread highlights <book-id>
 
 # View your notes
-opencli weread notes --id <book-id>
+opencli weread notes <book-id>
 
 # JSON output
 opencli weread shelf -f json

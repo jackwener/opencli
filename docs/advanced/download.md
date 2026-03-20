@@ -26,23 +26,23 @@ brew install yt-dlp
 
 ```bash
 # Download images/videos from Xiaohongshu note
-opencli xiaohongshu download --note_id abc123 --output ./xhs
+opencli xiaohongshu download --note-id abc123 --output ./xhs
 
 # Download Bilibili video (requires yt-dlp)
 opencli bilibili download --bvid BV1xxx --output ./bilibili
 opencli bilibili download --bvid BV1xxx --quality 1080p
 
 # Download Twitter media from user
-opencli twitter download --username elonmusk --limit 20 --output ./twitter
+opencli twitter download elonmusk --limit 20 --output ./twitter
 
 # Download single tweet media
 opencli twitter download --tweet-url "https://x.com/user/status/123" --output ./twitter
 
 # Export Zhihu article to Markdown
-opencli zhihu download --url "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu
+opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu
 
 # Export with local images
-opencli zhihu download --url "https://zhuanlan.zhihu.com/p/xxx" --download-images
+opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --download-images
 ```
 
 ## Pipeline Step (YAML Adapters)

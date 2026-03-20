@@ -9,9 +9,13 @@
 | `opencli xiaohongshu search` | |
 | `opencli xiaohongshu notifications` | |
 | `opencli xiaohongshu feed` | |
-| `opencli xiaohongshu me` | |
 | `opencli xiaohongshu user` | |
 | `opencli xiaohongshu download` | |
+| `opencli xiaohongshu creator-notes` | |
+| `opencli xiaohongshu creator-note-detail` | |
+| `opencli xiaohongshu creator-notes-summary` | |
+| `opencli xiaohongshu creator-profile` | |
+| `opencli xiaohongshu creator-stats` | |
 
 ## Usage Examples
 

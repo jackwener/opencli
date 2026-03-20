@@ -13,16 +13,16 @@
 
 ```bash
 # Search articles
-opencli wikipedia search --query "quantum computing" --limit 10
+opencli wikipedia search "quantum computing" --limit 10
 
 # Get article summary
 opencli wikipedia summary --title "Artificial intelligence"
 
 # Search in other languages
-opencli wikipedia search --query "人工智能" --lang zh
+opencli wikipedia search "人工智能" --lang zh
 
 # JSON output
-opencli wikipedia search --query "Rust" -f json
+opencli wikipedia search "Rust" -f json
 ```
 
 ## Prerequisites

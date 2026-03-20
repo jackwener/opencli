@@ -24,16 +24,16 @@
 opencli jike feed --limit 10
 
 # Search posts
-opencli jike search --query "AI" --limit 20
+opencli jike search "AI" --limit 20
 
 # View post details and comments
-opencli jike post --id <post-id>
+opencli jike post <post-id>
 
 # Create a new post
 opencli jike create --content "Hello Jike!"
 
 # Like a post
-opencli jike like --id <post-id>
+opencli jike like <post-id>
 
 # JSON output
 opencli jike feed -f json
