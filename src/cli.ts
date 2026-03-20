@@ -43,8 +43,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
               return arg;
             })
           : c.args.map(a => a.name).join(', '),
-        ...(isStructured && c.columns?.length ? { columns: c.columns } : {}),
-        ...(isStructured && c.domain ? { domain: c.domain } : {}),
+        ...(isStructured ? { columns: c.columns ?? [], domain: c.domain ?? null } : {}),
       }));
       if (fmt !== 'table') {
         renderOutput(rows, {
@@ -225,15 +224,16 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     const choicesArgs = cmd.args.filter(a => a.choices?.length);
     if (choicesArgs.length > 0) {
       for (const a of choicesArgs) {
+        const prefix = a.positional ? `<${a.name}>` : `--${a.name}`;
         const def = a.default != null ? `  (default: ${a.default})` : '';
-        helpExtra.push(`  --${a.name}: ${a.choices!.join(', ')}${def}`);
+        helpExtra.push(`  ${prefix}: ${a.choices!.join(', ')}${def}`);
       }
     }
     const metaParts: string[] = [];
     metaParts.push(`Strategy: ${strategyLabel(cmd)}`);
     metaParts.push(`Browser: ${cmd.browser ? 'yes' : 'no'}`);
     if (cmd.domain) metaParts.push(`Domain: ${cmd.domain}`);
-    helpExtra.push(`\n${metaParts.join(' | ')}`);
+    helpExtra.push(metaParts.join(' | '));
     if (cmd.columns?.length) helpExtra.push(`Output columns: ${cmd.columns.join(', ')}`);
     subCmd.addHelpText('after', '\n' + helpExtra.join('\n') + '\n');
 
