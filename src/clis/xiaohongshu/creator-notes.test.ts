@@ -33,6 +33,7 @@ function createPageMock(evaluateResult: any, interceptedRequests: any[] = []): I
     autoScroll: vi.fn().mockResolvedValue(undefined),
     installInterceptor: vi.fn().mockResolvedValue(undefined),
     getInterceptedRequests,
+    getCookies: vi.fn().mockResolvedValue([]),
     screenshot: vi.fn().mockResolvedValue(''),
   };
 }
