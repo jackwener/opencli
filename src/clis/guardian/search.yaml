@@ -1,0 +1,32 @@
+site: guardian
+name: search
+description: Search The Guardian news articles
+domain: www.theguardian.com
+strategy: public
+browser: false
+
+args:
+  query:
+    type: string
+    required: true
+    description: Search query
+  limit:
+    type: int
+    default: 15
+    description: Number of articles
+
+pipeline:
+  - fetch:
+      url: https://content.guardianapis.com/search?api-key=test&q=${{ args.query }}&page-size=${{ args.limit }}&order-by=relevance
+
+  - select: response.results
+
+  - map:
+      title: ${{ item.webTitle }}
+      section: ${{ item.sectionName }}
+      date: ${{ item.webPublicationDate }}
+      url: ${{ item.webUrl }}
+
+  - limit: ${{ args.limit }}
+
+columns: [title, section, date, url]
