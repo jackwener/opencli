@@ -70,9 +70,9 @@ describe('xiaohongshu creator-notes', () => {
         title: '神雕侠侣战力金字塔',
         date: '2025年12月04日 19:45',
         views: 148208,
-        likes: 324,
-        collects: 2279,
-        comments: 465,
+        likes: 2279,
+        collects: 465,
+        comments: 324,
         url: '',
       },
       {
@@ -117,10 +117,43 @@ describe('xiaohongshu creator-notes', () => {
         title: '示例笔记',
         date: '2026年03月19日 12:00',
         views: 10,
-        likes: 2,
-        collects: 3,
-        comments: 4,
+        likes: 3,
+        collects: 4,
+        comments: 2,
         url: 'https://creator.xiaohongshu.com/statistics/note-detail?noteId=69ba940500000000200384db',
+      },
+    ]);
+  });
+
+  it('prefers note card dom data when the analyze api is unavailable', async () => {
+    const cmd = getRegistry().get('xiaohongshu/creator-notes');
+    expect(cmd?.func).toBeTypeOf('function');
+
+    const page = createPageMock([
+      undefined,
+      [
+        {
+          id: '693155fc000000000d03b42c',
+          title: '神雕侠侣战力金字塔',
+          date: '2025年12月04日 19:45',
+          metrics: [148284, 319, 2280, 466, 33],
+        },
+      ],
+    ]);
+
+    const result = await cmd!.func!(page, { limit: 1 });
+
+    expect(result).toEqual([
+      {
+        rank: 1,
+        id: '693155fc000000000d03b42c',
+        title: '神雕侠侣战力金字塔',
+        date: '2025年12月04日 19:45',
+        views: 148284,
+        likes: 2280,
+        collects: 466,
+        comments: 319,
+        url: 'https://creator.xiaohongshu.com/statistics/note-detail?noteId=693155fc000000000d03b42c',
       },
     ]);
   });

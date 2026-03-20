@@ -30,6 +30,13 @@ type CreatorNoteRow = {
 
 export type { CreatorNoteRow };
 
+type CreatorNoteDomCard = {
+  id: string;
+  title: string;
+  date: string;
+  metrics: number[];
+};
+
 type CreatorAnalyzeApiResponse = {
   error?: string;
   data?: {
@@ -97,9 +104,9 @@ export function parseCreatorNotesText(bodyText: string): CreatorNoteRow[] {
       title,
       date: dateMatch[1],
       views: metrics[0] ?? 0,
-      likes: metrics[1] ?? 0,
-      collects: metrics[2] ?? 0,
-      comments: metrics[3] ?? 0,
+      likes: metrics[2] ?? 0,
+      collects: metrics[3] ?? 0,
+      comments: metrics[1] ?? 0,
       url: '',
     });
 
@@ -121,6 +128,19 @@ export function parseCreatorNoteIdsFromHtml(bodyHtml: string): string[] {
   }
 
   return ids;
+}
+
+function mapDomCards(cards: CreatorNoteDomCard[]): CreatorNoteRow[] {
+  return cards.map((card) => ({
+    id: card.id,
+    title: card.title,
+    date: card.date,
+    views: card.metrics[0] ?? 0,
+    likes: card.metrics[2] ?? 0,
+    collects: card.metrics[3] ?? 0,
+    comments: card.metrics[1] ?? 0,
+    url: buildNoteDetailUrl(card.id),
+  }));
 }
 
 function mapAnalyzeItems(items: NonNullable<CreatorAnalyzeApiResponse['data']>['note_infos']): CreatorNoteRow[] {
@@ -194,6 +214,27 @@ export async function fetchCreatorNotes(page: IPage, limit: number): Promise<Cre
 
     const maxPageDowns = Math.max(0, Math.ceil(limit / 10) + 1);
     for (let i = 0; i <= maxPageDowns; i++) {
+      const domCards = await page.evaluate(`() => {
+        const noteIdRe = /"noteId":"([0-9a-f]{24})"/;
+        return Array.from(document.querySelectorAll('div.note[data-impression], div.note')).map((card) => {
+          const impression = card.getAttribute('data-impression') || '';
+          const id = impression.match(noteIdRe)?.[1] || '';
+          const title = (card.querySelector('.title, .raw')?.innerText || '').trim();
+          const dateText = (card.querySelector('.time_status, .time')?.innerText || '').trim();
+          const date = dateText.replace(/^发布于\\s*/, '');
+          const metrics = Array.from(card.querySelectorAll('.icon_list .icon'))
+            .map((el) => parseInt((el.innerText || '').trim(), 10))
+            .filter((value) => Number.isFinite(value));
+          return { id, title, date, metrics };
+        });
+      }`) as CreatorNoteDomCard[] | undefined;
+      const parsedDomNotes = mapDomCards(Array.isArray(domCards) ? domCards : []).filter((note) => note.title && note.date);
+      if (parsedDomNotes.length > 0) {
+        notes = parsedDomNotes;
+      }
+
+      if (notes.length >= limit || (notes.length > 0 && i === 0)) break;
+
       const body = await page.evaluate('() => ({ text: document.body.innerText, html: document.body.innerHTML })') as {
         text?: string;
         html?: string;

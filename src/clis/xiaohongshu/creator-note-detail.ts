@@ -21,6 +21,23 @@ type CreatorNoteDetailRow = {
 
 export type { CreatorNoteDetailRow };
 
+type CreatorNoteDetailDomMetric = {
+  label: string;
+  value: string;
+  extra: string;
+};
+
+type CreatorNoteDetailDomSection = {
+  title: string;
+  metrics: CreatorNoteDetailDomMetric[];
+};
+
+type CreatorNoteDetailDomData = {
+  title: string;
+  infoText: string;
+  sections: CreatorNoteDetailDomSection[];
+};
+
 type AudienceSourceItem = {
   title?: string;
   value_with_double?: number;
@@ -87,6 +104,7 @@ const NOTE_DETAIL_METRICS = [
 ] as const;
 
 const NOTE_DETAIL_METRIC_LABELS = new Set<string>(NOTE_DETAIL_METRICS.map((metric) => metric.label));
+const NOTE_DETAIL_SECTIONS = new Set<string>(NOTE_DETAIL_METRICS.map((metric) => metric.section));
 const NOTE_DETAIL_NOISE_LINES = new Set([
   '切换笔记',
   '笔记诊断',
@@ -144,6 +162,11 @@ function findMetricValue(lines: string[], startIndex: number): { value: string; 
   return { value, extra };
 }
 
+function findPublishedAt(text: string): string {
+  const match = text.match(/\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}\b/);
+  return match?.[0] ?? '';
+}
+
 export function parseCreatorNoteDetailText(bodyText: string, noteId: string): CreatorNoteDetailRow[] {
   const lines = bodyText
     .split('\n')
@@ -171,6 +194,35 @@ export function parseCreatorNoteDetailText(bodyText: string, noteId: string): Cr
   }
 
   return rows;
+}
+
+export function parseCreatorNoteDetailDomData(dom: CreatorNoteDetailDomData | null | undefined, noteId: string): CreatorNoteDetailRow[] {
+  if (!dom) return [];
+  const title = typeof dom.title === 'string' ? dom.title.trim() : '';
+  const infoText = typeof dom.infoText === 'string' ? dom.infoText : '';
+  const sections = Array.isArray(dom.sections) ? dom.sections : [];
+
+  const rows: CreatorNoteDetailRow[] = [
+    { section: '笔记信息', metric: 'note_id', value: noteId, extra: '' },
+    { section: '笔记信息', metric: 'title', value: title, extra: '' },
+    { section: '笔记信息', metric: 'published_at', value: findPublishedAt(infoText), extra: '' },
+  ];
+
+  for (const section of sections) {
+    if (!NOTE_DETAIL_SECTIONS.has(section.title)) continue;
+    for (const metric of section.metrics) {
+      if (!NOTE_DETAIL_METRIC_LABELS.has(metric.label)) continue;
+      rows.push({
+        section: section.title,
+        metric: metric.label,
+        value: metric.value,
+        extra: metric.extra,
+      });
+    }
+  }
+
+  const hasMetric = rows.some((row) => row.section !== '笔记信息' && row.value);
+  return hasMetric ? rows : [];
 }
 
 function toPercentString(value?: number): string {
@@ -325,12 +377,45 @@ async function captureNoteDetailPayload(page: IPage, noteId: string): Promise<No
   return captured > 0 ? payload : null;
 }
 
+async function captureNoteDetailDomData(page: IPage): Promise<CreatorNoteDetailDomData | null> {
+  const result = await page.evaluate(`() => {
+    const norm = (value) => (value || '').trim();
+    const sections = Array.from(document.querySelectorAll('.shell-container')).map((container) => {
+      const containerText = norm(container.innerText);
+      const title = containerText.startsWith('互动数据')
+        ? '互动数据'
+        : containerText.includes('基础数据')
+          ? '基础数据'
+          : '';
+      const metrics = Array.from(container.querySelectorAll('.block-container.block')).map((block) => ({
+        label: norm(block.querySelector('.des')?.innerText),
+        value: norm(block.querySelector('.content')?.innerText),
+        extra: norm(block.querySelector('.text-with-fans')?.innerText),
+      })).filter((metric) => metric.label && metric.value);
+      return { title, metrics };
+    }).filter((section) => section.title && section.metrics.length > 0);
+
+    return {
+      title: norm(document.querySelector('.note-title')?.innerText),
+      infoText: norm(document.querySelector('.note-info-content')?.innerText),
+      sections,
+    };
+  }`);
+
+  if (!result || typeof result !== 'object') return null;
+  return result as CreatorNoteDetailDomData;
+}
+
 export async function fetchCreatorNoteDetailRows(page: IPage, noteId: string): Promise<CreatorNoteDetailRow[]> {
   await page.goto(`https://creator.xiaohongshu.com/statistics/note-detail?noteId=${encodeURIComponent(noteId)}`);
   await page.wait(4);
 
-  const bodyText = await page.evaluate('() => document.body.innerText');
-  const rows = parseCreatorNoteDetailText(typeof bodyText === 'string' ? bodyText : '', noteId);
+  const domData = await captureNoteDetailDomData(page).catch(() => null);
+  let rows = parseCreatorNoteDetailDomData(domData, noteId);
+  if (rows.length === 0) {
+    const bodyText = await page.evaluate('() => document.body.innerText');
+    rows = parseCreatorNoteDetailText(typeof bodyText === 'string' ? bodyText : '', noteId);
+  }
   const apiPayload = await captureNoteDetailPayload(page, noteId).catch(() => null);
   appendTrendRows(rows, apiPayload ?? undefined);
   appendAudienceRows(rows, apiPayload ?? undefined);

@@ -1,13 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { IPage } from '../../types.js';
 import { getRegistry } from '../../registry.js';
-import { appendAudienceRows, appendTrendRows, parseCreatorNoteDetailText } from './creator-note-detail.js';
+import { appendAudienceRows, appendTrendRows, parseCreatorNoteDetailDomData, parseCreatorNoteDetailText } from './creator-note-detail.js';
 import './creator-note-detail.js';
 
 function createPageMock(evaluateResult: any): IPage {
+  const evaluate = Array.isArray(evaluateResult)
+    ? vi.fn()
+        .mockResolvedValueOnce(evaluateResult[0])
+        .mockResolvedValue(evaluateResult[evaluateResult.length - 1])
+    : vi.fn().mockResolvedValue(evaluateResult);
+
   return {
     goto: vi.fn().mockResolvedValue(undefined),
-    evaluate: vi.fn().mockResolvedValue(evaluateResult),
+    evaluate,
     snapshot: vi.fn().mockResolvedValue(undefined),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -93,6 +99,47 @@ describe('xiaohongshu creator-note-detail', () => {
     ]);
   });
 
+  it('parses structured note detail dom data into rows', () => {
+    expect(parseCreatorNoteDetailDomData({
+      title: '神雕侠侣战力金字塔',
+      infoText: '神雕侠侣战力金字塔\n#武侠\n2025-12-04 19:45\n切换笔记',
+      sections: [
+        {
+          title: '基础数据',
+          metrics: [
+            { label: '曝光数', value: '898204', extra: '粉丝占比 0.5%' },
+            { label: '观看数', value: '148284', extra: '粉丝占比 0.6%' },
+            { label: '封面点击率', value: '17.1%', extra: '粉丝 19.1%' },
+            { label: '平均观看时长', value: '30.1秒', extra: '粉丝 17.7秒' },
+            { label: '涨粉数', value: '101', extra: '' },
+          ],
+        },
+        {
+          title: '互动数据',
+          metrics: [
+            { label: '点赞数', value: '2280', extra: '粉丝占比 3.6%' },
+            { label: '评论数', value: '319', extra: '粉丝占比 9.4%' },
+            { label: '收藏数', value: '466', extra: '粉丝占比 9.4%' },
+            { label: '分享数', value: '33', extra: '粉丝占比 17.7%' },
+          ],
+        },
+      ],
+    }, '693155fc000000000d03b42c')).toEqual([
+      { section: '笔记信息', metric: 'note_id', value: '693155fc000000000d03b42c', extra: '' },
+      { section: '笔记信息', metric: 'title', value: '神雕侠侣战力金字塔', extra: '' },
+      { section: '笔记信息', metric: 'published_at', value: '2025-12-04 19:45', extra: '' },
+      { section: '基础数据', metric: '曝光数', value: '898204', extra: '粉丝占比 0.5%' },
+      { section: '基础数据', metric: '观看数', value: '148284', extra: '粉丝占比 0.6%' },
+      { section: '基础数据', metric: '封面点击率', value: '17.1%', extra: '粉丝 19.1%' },
+      { section: '基础数据', metric: '平均观看时长', value: '30.1秒', extra: '粉丝 17.7秒' },
+      { section: '基础数据', metric: '涨粉数', value: '101', extra: '' },
+      { section: '互动数据', metric: '点赞数', value: '2280', extra: '粉丝占比 3.6%' },
+      { section: '互动数据', metric: '评论数', value: '319', extra: '粉丝占比 9.4%' },
+      { section: '互动数据', metric: '收藏数', value: '466', extra: '粉丝占比 9.4%' },
+      { section: '互动数据', metric: '分享数', value: '33', extra: '粉丝占比 17.7%' },
+    ]);
+  });
+
   it('appends audience source and portrait rows from API payloads', () => {
     const rows = appendAudienceRows([], {
       audienceSource: {
@@ -171,40 +218,42 @@ describe('xiaohongshu creator-note-detail', () => {
     const cmd = getRegistry().get('xiaohongshu/creator-note-detail');
     expect(cmd?.func).toBeTypeOf('function');
 
-    const page = createPageMock(`笔记数据详情
-示例笔记
-2026-03-19 12:00
-曝光数
-100
-粉丝占比 10%
-观看数
-50
-粉丝占比 20%
-封面点击率
-12%
-粉丝 11%
-平均观看时长
-30秒
-粉丝 31秒
-涨粉数
-2
-点赞数
-8
-粉丝占比 25%
-评论数
-1
-粉丝占比 0%
-收藏数
-3
-粉丝占比 50%
-分享数
-0
-粉丝占比 0%`);
+    const page = createPageMock([
+      {
+        title: '示例笔记',
+        infoText: '示例笔记\n2026-03-19 12:00\n切换笔记',
+        sections: [
+          {
+            title: '基础数据',
+            metrics: [
+              { label: '曝光数', value: '100', extra: '粉丝占比 10%' },
+              { label: '观看数', value: '50', extra: '粉丝占比 20%' },
+              { label: '封面点击率', value: '12%', extra: '粉丝 11%' },
+              { label: '平均观看时长', value: '30秒', extra: '粉丝 31秒' },
+              { label: '涨粉数', value: '2', extra: '' },
+            ],
+          },
+          {
+            title: '互动数据',
+            metrics: [
+              { label: '点赞数', value: '8', extra: '粉丝占比 25%' },
+              { label: '评论数', value: '1', extra: '粉丝占比 0%' },
+              { label: '收藏数', value: '3', extra: '粉丝占比 50%' },
+              { label: '分享数', value: '0', extra: '粉丝占比 0%' },
+            ],
+          },
+        ],
+      },
+      null,
+      null,
+      null,
+      null,
+    ]);
 
     const result = await cmd!.func!(page, { note_id: 'demo-note-id' });
 
     expect((page.goto as any).mock.calls[0][0]).toBe('https://creator.xiaohongshu.com/statistics/note-detail?noteId=demo-note-id');
-    expect((page.evaluate as any).mock.calls[0][0]).toBe('() => document.body.innerText');
+    expect((page.evaluate as any).mock.calls[0][0]).toContain("document.querySelector('.note-title')");
     expect(result).toEqual([
       { section: '笔记信息', metric: 'note_id', value: 'demo-note-id', extra: '' },
       { section: '笔记信息', metric: 'title', value: '示例笔记', extra: '' },
