@@ -1,0 +1,32 @@
+site: npmjs
+name: search
+description: Search npm packages
+domain: www.npmjs.com
+strategy: public
+browser: false
+
+args:
+  query:
+    type: string
+    required: true
+    description: Search query
+  limit:
+    type: int
+    default: 15
+    description: Number of packages
+
+pipeline:
+  - fetch:
+      url: https://registry.npmjs.org/-/v1/search?text=${{ args.query }}&size=${{ args.limit }}
+
+  - select: objects
+
+  - map:
+      name: ${{ item.package.name }}
+      version: ${{ item.package.version }}
+      description: ${{ item.package.description }}
+      weekly: ${{ item.downloads.weekly }}
+
+  - limit: ${{ args.limit }}
+
+columns: [name, version, description, weekly]
