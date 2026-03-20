@@ -21,6 +21,12 @@ Run `opencli list` for the live registry.
 | **[ctrip](/adapters/browser/ctrip)** | `search` | 🔐 Browser |
 | **[reuters](/adapters/browser/reuters)** | `search` | 🔐 Browser |
 | **[smzdm](/adapters/browser/smzdm)** | `search` | 🔐 Browser |
+| **[jike](/adapters/browser/jike)** | `feed` `search` `post` `topic` `user` `create` `comment` `like` `repost` `notifications` | 🔐 Browser |
+| **[jimeng](/adapters/browser/jimeng)** | `generate` `history` | 🔐 Browser |
+| **[linux-do](/adapters/browser/linux-do)** | `hot` `latest` `categories` `category` `search` `topic` | 🔐 Browser |
+| **[chaoxing](/adapters/browser/chaoxing)** | `assignments` `exams` | 🔐 Browser |
+| **[grok](/adapters/browser/grok)** | `ask` | 🔐 Browser |
+| **[weread](/adapters/browser/weread)** | `shelf` `search` `book` `ranking` `notebooks` `highlights` `notes` | 🔐 Browser |
 
 ## Public API Adapters
 
@@ -32,6 +38,12 @@ Run `opencli list` for the live registry.
 | **[apple-podcasts](/adapters/browser/apple-podcasts)** | `search` `episodes` `top` | 🌐 Public |
 | **[xiaoyuzhou](/adapters/browser/xiaoyuzhou)** | `podcast` `podcast-episodes` `episode` | 🌐 Public |
 | **[yahoo-finance](/adapters/browser/yahoo-finance)** | `quote` | 🌐 Public |
+| **[arxiv](/adapters/browser/arxiv)** | `search` `paper` | 🌐 Public |
+| **[barchart](/adapters/browser/barchart)** | `quote` `options` `greeks` `flow` | 🌐 Public |
+| **[hf](/adapters/browser/hf)** | `top` | 🌐 Public |
+| **[sinafinance](/adapters/browser/sinafinance)** | `news` | 🌐 Public |
+| **[stackoverflow](/adapters/browser/stackoverflow)** | `hot` `search` `bounties` `unanswered` | 🌐 Public |
+| **[wikipedia](/adapters/browser/wikipedia)** | `search` `summary` | 🌐 Public |
 
 ## Desktop Adapters
 

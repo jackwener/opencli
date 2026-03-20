@@ -19,6 +19,13 @@ Related issue:
 - [ ] I updated tests or docs if needed
 - [ ] I included output or screenshots when useful
 
+### Documentation (if adding/modifying an adapter)
+
+- [ ] Added doc page under `docs/adapters/` (if new adapter)
+- [ ] Updated `docs/adapters/index.md` table (if new adapter)
+- [ ] Updated sidebar in `docs/.vitepress/config.mts` (if new adapter)
+
 ## Screenshots / Output
 
 <!-- If applicable, paste CLI output or screenshots here. -->
+

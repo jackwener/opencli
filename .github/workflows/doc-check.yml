@@ -1,0 +1,54 @@
+name: Doc Check
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: doc-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Adapter doc coverage ──
+  doc-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check adapter doc coverage
+        run: bash scripts/check-doc-coverage.sh --strict
+
+  # ── VitePress build validation ──
+  docs-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build docs (catches broken links & sidebar refs)
+        run: npm run docs:build
+
+  # ── Dead link check ──
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check internal links with lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --base docs
+            --include-fragments
+            --no-progress
+            --exclude-path docs/node_modules
+            --exclude 'https?://.*'
+            'docs/**/*.md'
+          fail: true

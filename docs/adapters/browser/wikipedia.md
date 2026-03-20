@@ -1,0 +1,30 @@
+# Wikipedia
+
+**Mode**: 🌐 Public · **Domain**: `wikipedia.org`
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `opencli wikipedia search` | Search Wikipedia articles |
+| `opencli wikipedia summary` | Get Wikipedia article summary |
+
+## Usage Examples
+
+```bash
+# Search articles
+opencli wikipedia search --query "quantum computing" --limit 10
+
+# Get article summary
+opencli wikipedia summary --title "Artificial intelligence"
+
+# Search in other languages
+opencli wikipedia search --query "人工智能" --lang zh
+
+# JSON output
+opencli wikipedia search --query "Rust" -f json
+```
+
+## Prerequisites
+
+- No browser required — uses public Wikipedia API
