@@ -5,6 +5,7 @@ dist/
 .opencli/
 .mcp.json
 *.log
+.DS_Store
 
 # VitePress
 docs/.vitepress/dist

@@ -2,7 +2,7 @@
  * CDP client — implements IPage by connecting directly to a Chrome/Electron CDP WebSocket.
  */
 
-import { WebSocket } from 'ws';
+import { WebSocket, type RawData } from 'ws';
 import type { IPage } from '../types.js';
 import { wrapForEval } from './utils.js';
 
@@ -45,12 +45,12 @@ export class CDPBridge {
         resolve(new CDPPage(this));
       });
 
-      ws.on('error', (err) => {
+      ws.on('error', (err: Error) => {
         clearTimeout(timeout);
         reject(err);
       });
 
-      ws.on('message', (data) => {
+      ws.on('message', (data: RawData) => {
         try {
           const msg = JSON.parse(data.toString());
           if (msg.id && this._pending.has(msg.id)) {

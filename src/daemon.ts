@@ -12,7 +12,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer, WebSocket, type RawData } from 'ws';
 
 const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? '19825', 10);
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
@@ -138,11 +138,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 const httpServer = createServer((req, res) => { handleRequest(req, res).catch(() => { res.writeHead(500); res.end(); }); });
 const wss = new WebSocketServer({ server: httpServer, path: '/ext' });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws: WebSocket) => {
   console.error('[daemon] Extension connected');
   extensionWs = ws;
 
-  ws.on('message', (data) => {
+  ws.on('message', (data: RawData) => {
     try {
       const msg = JSON.parse(data.toString());
 
