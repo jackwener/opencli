@@ -46,6 +46,31 @@ describe('browser public-data commands E2E', () => {
     }
   }, 60_000);
 
+  it('bloomberg news returns article detail when the article page is accessible', async () => {
+    const feedResult = await runCli(['bloomberg', 'tech', '--limit', '1', '-f', 'json']);
+    if (feedResult.code !== 0) {
+      console.warn('bloomberg news: skipped — could not load Bloomberg tech feed');
+      return;
+    }
+
+    const feedItems = parseJsonOutput(feedResult.stdout);
+    const link = Array.isArray(feedItems) ? feedItems[0]?.link : null;
+    if (!link) {
+      console.warn('bloomberg news: skipped — tech feed returned no link');
+      return;
+    }
+
+    const data = await tryBrowserCommand(['bloomberg', 'news', link, '-f', 'json']);
+    expectDataOrSkip(data, 'bloomberg news');
+    if (data) {
+      expect(data[0]).toHaveProperty('title');
+      expect(data[0]).toHaveProperty('summary');
+      expect(data[0]).toHaveProperty('link');
+      expect(data[0]).toHaveProperty('mediaLinks');
+      expect(data[0]).toHaveProperty('content');
+    }
+  }, 60_000);
+
   // ── v2ex daily (browser: true) ──
   it('v2ex daily returns topics', async () => {
     const data = await tryBrowserCommand(['v2ex', 'daily', '--limit', '3', '-f', 'json']);

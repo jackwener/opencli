@@ -196,25 +196,28 @@ function scanYaml(filePath: string, site: string): ManifestEntry | null {
   }
 }
 
-function scanTs(filePath: string, site: string): ManifestEntry {
+function scanTs(filePath: string, site: string): ManifestEntry | null {
   // TS adapters self-register via cli() at import time.
   // We statically parse the source to extract metadata for the manifest stub.
   const baseName = path.basename(filePath, path.extname(filePath));
   const relativePath = `${site}/${baseName}.js`;
 
-  const entry: ManifestEntry = {
-    site,
-    name: baseName,
-    description: '',
-    strategy: 'cookie',
-    browser: true,
-    args: [],
-    type: 'ts',
-    modulePath: relativePath,
-  };
-
   try {
     const src = fs.readFileSync(filePath, 'utf-8');
+
+    // Helper/test modules should not appear as CLI commands in the manifest.
+    if (!/\bcli\s*\(/.test(src)) return null;
+
+    const entry: ManifestEntry = {
+      site,
+      name: baseName,
+      description: '',
+      strategy: 'cookie',
+      browser: true,
+      args: [],
+      type: 'ts',
+      modulePath: relativePath,
+    };
 
     // Extract description
     const descMatch = src.match(/description\s*:\s*['"`]([^'"`]*)['"`]/);
@@ -244,11 +247,12 @@ function scanTs(filePath: string, site: string): ManifestEntry {
     if (argsBlock) {
       entry.args = parseTsArgsBlock(argsBlock);
     }
+
+    return entry;
   } catch {
     // If parsing fails, fall back to empty metadata — module will self-register at runtime
+    return null;
   }
-
-  return entry;
 }
 
 export function buildManifest(): ManifestEntry[] {
@@ -264,10 +268,11 @@ export function buildManifest(): ManifestEntry[] {
           const entry = scanYaml(filePath, site);
           if (entry) manifest.push(entry);
         } else if (
-          (file.endsWith('.ts') && !file.endsWith('.d.ts') && file !== 'index.ts') ||
-          (file.endsWith('.js') && !file.endsWith('.d.js') && file !== 'index.js')
+          (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts') && file !== 'index.ts') ||
+          (file.endsWith('.js') && !file.endsWith('.d.js') && !file.endsWith('.test.js') && file !== 'index.js')
         ) {
-          manifest.push(scanTs(filePath, site));
+          const entry = scanTs(filePath, site);
+          if (entry) manifest.push(entry);
         }
       }
     }

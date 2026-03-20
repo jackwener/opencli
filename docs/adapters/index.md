@@ -14,6 +14,7 @@ Run `opencli list` for the live registry.
 | **[xueqiu](/adapters/browser/xueqiu)** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` | 🔐 Browser |
 | **[youtube](/adapters/browser/youtube)** | `search` `video` `transcript` | 🔐 Browser |
 | **[v2ex](/adapters/browser/v2ex)** | `hot` `latest` `topic` `daily` `me` `notifications` | 🌐 / 🔐 |
+| **[bloomberg](/adapters/browser/bloomberg)** | `main` `markets` `economics` `industries` `tech` `politics` `businessweek` `opinions` `feeds` `news` | 🌐 / 🔐 |
 | **[weibo](/adapters/browser/weibo)** | `hot` | 🔐 Browser |
 | **[linkedin](/adapters/browser/linkedin)** | `search` | 🔐 Browser |
 | **[coupang](/adapters/browser/coupang)** | `search` `add-to-cart` | 🔐 Browser |

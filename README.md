@@ -138,6 +138,7 @@ Run `opencli list` for the live registry.
 | **boss** | `search` `detail` | Browser |
 | **coupang** | `search` `add-to-cart` | Browser |
 | **bbc** | `news` | Public |
+| **bloomberg** | `main` `markets` `economics` `industries` `tech` `politics` `businessweek` `opinions` `feeds` `news` | Public / Browser |
 | **ctrip** | `search` | Browser |
 | **github** | `search` | Public |
 | **arxiv** | `search` `paper` | Public |
@@ -149,6 +150,8 @@ Run `opencli list` for the live registry.
 | **weibo** | `hot` | Browser |
 | **yahoo-finance** | `quote` | Browser |
 | **sinafinance** | `news` | 🌐 Public |
+
+> **Bloomberg note**: The RSS-backed Bloomberg listing commands (`main`, section feeds, `feeds`) work without a browser. `bloomberg news` is for standard Bloomberg story/article pages that your current Chrome session can already access. Audio and some other non-standard pages may fail, and OpenCLI does not bypass Bloomberg paywall or entitlement checks.
 
 ### External CLI Hub
 
