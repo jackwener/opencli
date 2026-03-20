@@ -1,6 +1,9 @@
 /**
- * 什么值得买搜索好价 — browser cookie, HTML parse.
- * Source: bb-sites/smzdm/search.js
+ * 什么值得买搜索好价 — browser cookie, DOM scraping.
+ *
+ * Fix: The old adapter used `search.smzdm.com/ajax/` which returns 404.
+ * New approach: navigate to `search.smzdm.com/?c=home&s=<keyword>&v=b`
+ * and scrape the rendered DOM directly.
  */
 import { cli, Strategy } from '../../registry.js';
 
@@ -18,46 +21,34 @@ cli({
   func: async (page, kwargs) => {
     const q = encodeURIComponent(kwargs.keyword);
     const limit = kwargs.limit || 20;
-    await page.goto('https://www.smzdm.com');
+
+    // Navigate directly to search results page
+    await page.goto(`https://search.smzdm.com/?c=home&s=${q}&v=b`);
     await page.wait(2);
+
     const data = await page.evaluate(`
-      (async () => {
-        const q = '${q}';
+      (() => {
         const limit = ${limit};
-        // Try youhui channel first, then home
-        for (const channel of ['youhui', 'home']) {
-          try {
-            const resp = await fetch('https://search.smzdm.com/ajax/?c=' + channel + '&s=' + q + '&p=1&v=b', {
-              credentials: 'include',
-              headers: {'X-Requested-With': 'XMLHttpRequest'}
-            });
-            if (!resp.ok) continue;
-            const html = await resp.text();
-            if (html.indexOf('feed-row-wide') === -1) continue;
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const items = doc.querySelectorAll('li.feed-row-wide');
-            const results = [];
-            items.forEach((li, i) => {
-              if (results.length >= limit) return;
-              const titleEl = li.querySelector('h5.feed-block-title > a')
-                           || li.querySelector('h5 > a');
-              if (!titleEl) return;
-              const title = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
-              const url = titleEl.getAttribute('href') || '';
-              const priceEl = li.querySelector('.z-highlight');
-              const price = priceEl ? priceEl.textContent.trim() : '';
-              let mall = '';
-              const extrasSpan = li.querySelector('.z-feed-foot-r .feed-block-extras span');
-              if (extrasSpan) mall = extrasSpan.textContent.trim();
-              const commentEl = li.querySelector('.feed-btn-comment');
-              const comments = commentEl ? parseInt(commentEl.textContent.trim()) || 0 : 0;
-              results.push({rank: results.length + 1, title, price, mall, comments, url});
-            });
-            if (results.length > 0) return results;
-          } catch(e) { continue; }
-        }
-        return {error: 'No results'};
+        const items = document.querySelectorAll('li.feed-row-wide');
+        const results = [];
+        items.forEach((li) => {
+          if (results.length >= limit) return;
+          const titleEl = li.querySelector('h5.feed-block-title > a')
+                       || li.querySelector('h5 > a');
+          if (!titleEl) return;
+          const title = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
+          const url = titleEl.getAttribute('href') || titleEl.href || '';
+          const priceEl = li.querySelector('.z-highlight');
+          const price = priceEl ? priceEl.textContent.trim() : '';
+          let mall = '';
+          const mallEl = li.querySelector('.z-feed-foot-r .feed-block-extras span')
+                      || li.querySelector('.z-feed-foot-r span');
+          if (mallEl) mall = mallEl.textContent.trim();
+          const commentEl = li.querySelector('.feed-btn-comment');
+          const comments = commentEl ? parseInt(commentEl.textContent.trim()) || 0 : 0;
+          results.push({ rank: results.length + 1, title, price, mall, comments, url });
+        });
+        return results;
       })()
     `);
     if (!Array.isArray(data)) return [];
