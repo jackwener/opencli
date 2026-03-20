@@ -60,7 +60,9 @@ export async function wbiSign(
   for (const key of Object.keys(allParams).sort()) {
     sorted[key] = String(allParams[key]).replace(/[!'()*]/g, '');
   }
-  const query = new URLSearchParams(sorted).toString();
+  // Bilibili WBI verification expects %20 for spaces, not + (URLSearchParams default).
+  // Using + causes signature mismatch → CORS-blocked error response → TypeError: Failed to fetch.
+  const query = new URLSearchParams(sorted).toString().replace(/\+/g, '%20');
   const wRid = await md5(query + mixinKey);
   sorted.w_rid = wRid;
   return sorted;
@@ -78,7 +80,7 @@ export async function apiGet(
   }
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
-  );
+  ).toString().replace(/\+/g, '%20');
   const url = `${baseUrl}${path}?${qs}`;
   return fetchJson(page, url);
 }
