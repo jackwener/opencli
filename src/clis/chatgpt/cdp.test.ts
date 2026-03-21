@@ -50,4 +50,10 @@ describe('chatgpt cdp helpers', () => {
       { Role: 'Assistant', Text: 'Sure' },
     ]);
   });
+
+  it('strips localized reasoning chrome and timing-only lines from readback text', () => {
+    expect(__test__.normalizeChatGPTText('立即回答')).toBe('');
+    expect(__test__.normalizeChatGPTText('Thought for 10s')).toBe('');
+    expect(__test__.normalizeChatGPTText('ChatGPT 说：\n已完成推理\n立即回答\n\nOK')).toBe('OK');
+  });
 });

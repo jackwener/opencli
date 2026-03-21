@@ -45,6 +45,18 @@ const CHATGPT_UI_CHROME = new Set([
   'ChatGPT 说：',
   'Sources',
   '来源',
+  'Finished thinking',
+  'Answer immediately',
+  '已完成推理',
+  '立即回答',
+  '复制消息',
+  '复制回复',
+  '编辑消息',
+  '喜欢',
+  '不喜欢',
+  '分享',
+  '更多操作',
+  '切换模型',
 ]);
 
 export function formatChatGPTStatusRow(
@@ -79,6 +91,15 @@ export function formatChatGPTSendResultRow(opts: {
   };
 }
 
+function isChatGPTChromeLine(text: string | null | undefined): boolean {
+  const cleaned = String(text ?? '').trim();
+  if (!cleaned) return false;
+  if (CHATGPT_UI_CHROME.has(cleaned)) return true;
+
+  return /^thought for\s+\d+\s*s$/i.test(cleaned)
+    || /^思考了?\s*\d+\s*秒$/.test(cleaned);
+}
+
 export function normalizeChatGPTText(text: string | null | undefined): string {
   const cleaned = String(text ?? '')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
@@ -86,15 +107,14 @@ export function normalizeChatGPTText(text: string | null | undefined): string {
     .trim();
 
   if (!cleaned) return '';
+  if (isChatGPTChromeLine(cleaned)) return '';
 
   const lines = cleaned
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
 
-  if (lines.length <= 1) return cleaned;
-
-  const filtered = lines.filter((line) => !CHATGPT_UI_CHROME.has(line));
+  const filtered = lines.filter((line) => !isChatGPTChromeLine(line));
   return filtered.join('\n').trim();
 }
 
@@ -127,16 +147,28 @@ export async function probeChatGPTCDP(surface: ChatGPTSurface): Promise<Record<s
 
 export async function readChatGPTCDP(surface: ChatGPTSurface): Promise<ChatGPTTurn[]> {
   return withChatGPTCDP(surface, 'read', async (page) => {
-    const rawTurns = await page.evaluate(readScript()) as RawChatGPTTurn[];
-    const turns = normalizeChatGPTTurns(Array.isArray(rawTurns) ? rawTurns : []);
+    const rawTurnValue = await page.evaluate(readScript());
+    const rawTurns = Array.isArray(rawTurnValue) ? rawTurnValue as RawChatGPTTurn[] : [];
+    const turns = normalizeChatGPTTurns(rawTurns);
+    const probe = await probeChatGPTPage(page);
 
     if (turns.length > 0) {
-      return [turns[turns.length - 1]!];
+      const lastTurn = turns[turns.length - 1]!;
+      const lastRawTurn = rawTurns[rawTurns.length - 1];
+      const lastRawRole = normalizeChatGPTRole(lastRawTurn?.role);
+      const lastRawText = normalizeChatGPTText(lastRawTurn?.text);
+
+      if (probe.busy && lastTurn.Role === 'User' && lastRawRole === 'Assistant' && !lastRawText) {
+        return [{ Role: 'System', Text: 'ChatGPT is currently generating a response.' }];
+      }
+
+      return [lastTurn];
     }
 
-    const probe = await probeChatGPTPage(page);
     const detail = probe.likelyChatGPT
-      ? 'No visible chat messages were found in the current ChatGPT window.'
+      ? probe.busy
+        ? 'ChatGPT is currently generating a response.'
+        : 'No visible chat messages were found in the current ChatGPT window.'
       : 'Connected CDP target does not look like ChatGPT. Try setting OPENCLI_CDP_TARGET=chatgpt.';
 
     return [{ Role: 'System', Text: detail }];
@@ -421,7 +453,7 @@ function readScript(): string {
           '';
 
         const contentNode =
-          container.querySelector('.markdown, .prose, [data-testid*="message-content"], [data-testid*="conversation-turn-content"], .whitespace-pre-wrap, p, li, pre, code') ||
+          container.querySelector('.markdown, .prose, [data-testid*="message-content"], [data-testid*="conversation-turn-content"], .whitespace-pre-wrap, pre, code') ||
           container;
         const text = elementText(contentNode || container);
 
