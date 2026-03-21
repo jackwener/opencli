@@ -4,11 +4,15 @@
   "version": "0.2.0",
   "description": "Bridge between opencli CLI and your browser — execute commands, read cookies, manage tabs.",
   "permissions": [
-    "debugger",
     "tabs",
     "cookies",
     "activeTab",
-    "alarms"
+    "alarms",
+    "scripting",
+    "debugger"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "dist/background.js",

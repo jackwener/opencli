@@ -31,7 +31,7 @@ async function ensureAttached(tabId) {
   } catch {
   }
 }
-async function evaluate(tabId, expression) {
+async function evaluate$1(tabId, expression) {
   await ensureAttached(tabId);
   const result = await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
     expression,
@@ -44,7 +44,6 @@ async function evaluate(tabId, expression) {
   }
   return result.result?.value;
 }
-const evaluateAsync = evaluate;
 async function screenshot(tabId, options = {}) {
   await ensureAttached(tabId);
   const format = options.format ?? "png";
@@ -74,7 +73,7 @@ async function screenshot(tabId, options = {}) {
     }
   }
 }
-function detach(tabId) {
+function detach$1(tabId) {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);
   try {
@@ -82,12 +81,82 @@ function detach(tabId) {
   } catch {
   }
 }
-function registerListeners() {
+function registerListeners$1() {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
   });
   chrome.debugger.onDetach.addListener((source) => {
     if (source.tabId) attached.delete(source.tabId);
+  });
+}
+
+const cspBlockedTabs = /* @__PURE__ */ new Set();
+async function evaluate(tabId, expression) {
+  if (cspBlockedTabs.has(tabId)) {
+    return evaluate$1(tabId, expression);
+  }
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: (expr) => {
+        try {
+          const result = (0, eval)(expr);
+          if (result && typeof result === "object" && typeof result.then === "function") {
+            return result.then(
+              (v) => JSON.stringify({ ok: true, v }),
+              (e) => JSON.stringify({ ok: false, err: e?.message || String(e) })
+            );
+          }
+          return JSON.stringify({ ok: true, v: result });
+        } catch (e) {
+          return JSON.stringify({ ok: false, err: e?.message || String(e) });
+        }
+      },
+      args: [expression]
+    });
+    if (!results || results.length === 0) {
+      throw new Error("executeScript returned no results");
+    }
+    const frame = results[0];
+    if (frame.error) {
+      throw new Error(frame.error.message || String(frame.error));
+    }
+    const raw = frame.result;
+    if (raw === null || raw === void 0) {
+      return evaluate$1(tabId, expression);
+    }
+    if (typeof raw === "string") {
+      const parsed = JSON.parse(raw);
+      if (!parsed.ok) {
+        const err = parsed.err || "";
+        if (err.includes("Content Security Policy") || err.includes("'unsafe-eval'")) {
+          cspBlockedTabs.add(tabId);
+          return evaluate$1(tabId, expression);
+        }
+        throw new Error(err || "Eval error");
+      }
+      return parsed.v;
+    }
+    return raw;
+  } catch (e) {
+    const msg = e?.message || String(e);
+    if (msg.includes("Content Security Policy") || msg.includes("'unsafe-eval'")) {
+      cspBlockedTabs.add(tabId);
+      return evaluate$1(tabId, expression);
+    }
+    throw e;
+  }
+}
+const evaluateAsync = evaluate;
+function detach(tabId) {
+  cspBlockedTabs.delete(tabId);
+  detach$1(tabId);
+}
+function registerListeners() {
+  registerListeners$1();
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    cspBlockedTabs.delete(tabId);
   });
 }
 

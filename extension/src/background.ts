@@ -7,7 +7,7 @@
 
 import type { Command, Result } from './protocol';
 import { DAEMON_WS_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
-import * as executor from './cdp';
+import * as executor from './scripting';
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
