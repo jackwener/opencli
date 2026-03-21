@@ -5,6 +5,10 @@
 import type { IPage } from '../../types.js';
 import { render } from '../template.js';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /** Simple async concurrency limiter */
 async function mapConcurrent<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
@@ -25,9 +29,9 @@ async function mapConcurrent<T, R>(items: T[], limit: number, fn: (item: T, inde
 /** Single URL fetch helper */
 async function fetchSingle(
   page: IPage | null, url: string, method: string,
-  queryParams: Record<string, any>, headers: Record<string, any>,
-  args: Record<string, any>, data: any,
-): Promise<any> {
+  queryParams: Record<string, unknown>, headers: Record<string, unknown>,
+  args: Record<string, unknown>, data: unknown,
+): Promise<unknown> {
   const renderedParams: Record<string, string> = {};
   for (const [k, v] of Object.entries(queryParams)) renderedParams[k] = String(render(v, { args, data }));
   const renderedHeaders: Record<string, string> = {};
@@ -65,7 +69,7 @@ async function fetchSingle(
 async function fetchBatchInBrowser(
   page: IPage, urls: string[], method: string,
   headers: Record<string, string>, concurrency: number,
-): Promise<any[]> {
+): Promise<unknown[]> {
   const headersJs = JSON.stringify(headers);
   const urlsJs = JSON.stringify(urls);
   return page.evaluate(`
@@ -97,16 +101,17 @@ async function fetchBatchInBrowser(
   `);
 }
 
-export async function stepFetch(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
-  const urlOrObj = typeof params === 'string' ? params : (params?.url ?? '');
-  const method = params?.method ?? 'GET';
-  const queryParams: Record<string, any> = params?.params ?? {};
-  const headers: Record<string, any> = params?.headers ?? {};
+export async function stepFetch(page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
+  const paramObject = isRecord(params) ? params : {};
+  const urlOrObj = typeof params === 'string' ? params : (paramObject.url ?? '');
+  const method = typeof paramObject.method === 'string' ? paramObject.method : 'GET';
+  const queryParams = isRecord(paramObject.params) ? paramObject.params : {};
+  const headers = isRecord(paramObject.headers) ? paramObject.headers : {};
   const urlTemplate = String(urlOrObj);
 
   // Per-item fetch when data is array and URL references item
   if (Array.isArray(data) && urlTemplate.includes('item')) {
-    const concurrency = typeof params?.concurrency === 'number' ? params.concurrency : 5;
+    const concurrency = typeof paramObject.concurrency === 'number' ? paramObject.concurrency : 5;
 
     // Render all URLs upfront
     const renderedHeaders: Record<string, string> = {};
@@ -114,7 +119,7 @@ export async function stepFetch(page: IPage | null, params: any, data: any, args
     const renderedParams: Record<string, string> = {};
     for (const [k, v] of Object.entries(queryParams)) renderedParams[k] = String(render(v, { args, data }));
 
-    const urls = data.map((item: any, index: number) => {
+    const urls = data.map((item, index) => {
       let url = String(render(urlTemplate, { args, data, item, index }));
       if (Object.keys(renderedParams).length > 0) {
         const qs = new URLSearchParams(renderedParams).toString();

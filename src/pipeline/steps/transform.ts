@@ -2,14 +2,19 @@
  * Pipeline steps: data transforms — select, map, filter, sort, limit.
  */
 
+import type { IPage } from '../../types.js';
 import { render, evalExpr } from '../template.js';
 
-export async function stepSelect(_page: any, params: any, data: any, args: Record<string, any>): Promise<any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export async function stepSelect(_page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   const pathStr = String(render(params, { args, data }));
   if (data && typeof data === 'object') {
-    let current = data;
+    let current: unknown = data;
     for (const part of pathStr.split('.')) {
-      if (current && typeof current === 'object' && !Array.isArray(current)) current = (current as any)[part];
+      if (isRecord(current)) current = current[part];
       else if (Array.isArray(current) && /^\d+$/.test(part)) current = current[parseInt(part, 10)];
       else return null;
     }
@@ -18,24 +23,25 @@ export async function stepSelect(_page: any, params: any, data: any, args: Recor
   return data;
 }
 
-export async function stepMap(_page: any, params: any, data: any, args: Record<string, any>): Promise<any> {
+export async function stepMap(_page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   if (!data || typeof data !== 'object') return data;
-  let source = data;
+  let source: unknown = data;
 
   // Support inline select: { map: { select: 'path', key: '${{ item.x }}' } }
-  if (params && typeof params === 'object' && 'select' in params) {
-    source = await stepSelect(null, (params as any).select, data, args);
+  if (isRecord(params) && 'select' in params) {
+    source = await stepSelect(null, params.select, data, args);
   }
 
   if (!source || typeof source !== 'object') return source;
 
-  let items: any[] = Array.isArray(source) ? source : [source];
-  if (!Array.isArray(source) && typeof source === 'object' && 'data' in source) items = source.data;
-  const result: any[] = [];
+  let items: unknown[] = Array.isArray(source) ? source : [source];
+  if (isRecord(source) && Array.isArray(source.data)) items = source.data;
+  const result: Array<Record<string, unknown>> = [];
+  const templateParams = isRecord(params) ? params : {};
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const row: Record<string, any> = {};
-    for (const [key, template] of Object.entries(params)) {
+    const row: Record<string, unknown> = {};
+    for (const [key, template] of Object.entries(templateParams)) {
       if (key === 'select') continue;
       row[key] = render(template, { args, data: source, item, index: i });
     }
@@ -44,19 +50,26 @@ export async function stepMap(_page: any, params: any, data: any, args: Record<s
   return result;
 }
 
-export async function stepFilter(_page: any, params: any, data: any, args: Record<string, any>): Promise<any> {
+export async function stepFilter(_page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   if (!Array.isArray(data)) return data;
   return data.filter((item, i) => evalExpr(String(params), { args, item, index: i }));
 }
 
-export async function stepSort(_page: any, params: any, data: any, _args: Record<string, any>): Promise<any> {
+export async function stepSort(_page: IPage | null, params: unknown, data: unknown, _args: Record<string, unknown>): Promise<unknown> {
   if (!Array.isArray(data)) return data;
-  const key = typeof params === 'object' ? (params.by ?? '') : String(params);
-  const reverse = typeof params === 'object' ? params.order === 'desc' : false;
-  return [...data].sort((a, b) => { const va = a[key] ?? ''; const vb = b[key] ?? ''; const cmp = va < vb ? -1 : va > vb ? 1 : 0; return reverse ? -cmp : cmp; });
+  const key = isRecord(params) ? String(params.by ?? '') : String(params);
+  const reverse = isRecord(params) ? params.order === 'desc' : false;
+  return [...data].sort((a, b) => {
+    const left = isRecord(a) ? a[key] : undefined;
+    const right = isRecord(b) ? b[key] : undefined;
+    const va = left ?? '';
+    const vb = right ?? '';
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return reverse ? -cmp : cmp;
+  });
 }
 
-export async function stepLimit(_page: any, params: any, data: any, args: Record<string, any>): Promise<any> {
+export async function stepLimit(_page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   if (!Array.isArray(data)) return data;
   return data.slice(0, Number(render(params, { args, data })));
 }

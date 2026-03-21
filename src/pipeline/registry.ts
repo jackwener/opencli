@@ -18,11 +18,11 @@ import { stepDownload } from './steps/download.js';
  * TData is the type of the `data` state flowing into the step.
  * TResult is the expected return type.
  */
-export type StepHandler<TData = any, TResult = any> = (
+export type StepHandler<TData = unknown, TResult = unknown, TParams = unknown> = (
   page: IPage | null,
-  params: any,
+  params: TParams,
   data: TData,
-  args: Record<string, any>
+  args: Record<string, unknown>
 ) => Promise<TResult>;
 
 const _stepRegistry = new Map<string, StepHandler>();

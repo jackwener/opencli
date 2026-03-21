@@ -6,10 +6,14 @@
 import type { IPage } from '../../types.js';
 import { render } from '../template.js';
 
-export async function stepNavigate(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
-  if (typeof params === 'object' && params && 'url' in params) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export async function stepNavigate(page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
+  if (isRecord(params) && 'url' in params) {
     const url = String(render(params.url, { args, data }));
-    await page!.goto(url, { waitUntil: params.waitUntil, settleMs: params.settleMs });
+    await page!.goto(url, { waitUntil: params.waitUntil as 'load' | 'none' | undefined, settleMs: typeof params.settleMs === 'number' ? params.settleMs : undefined });
   } else {
     const url = render(params, { args, data });
     await page!.goto(String(url));
@@ -17,13 +21,13 @@ export async function stepNavigate(page: IPage | null, params: any, data: any, a
   return data;
 }
 
-export async function stepClick(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
+export async function stepClick(page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   await page!.click(String(render(params, { args, data })).replace(/^@/, ''));
   return data;
 }
 
-export async function stepType(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
-  if (typeof params === 'object' && params) {
+export async function stepType(page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
+  if (isRecord(params)) {
     const ref = String(render(params.ref ?? '', { args, data })).replace(/^@/, '');
     const text = String(render(params.text ?? '', { args, data }));
     await page!.typeText(ref, text);
@@ -32,32 +36,37 @@ export async function stepType(page: IPage | null, params: any, data: any, args:
   return data;
 }
 
-export async function stepWait(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
+export async function stepWait(page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   if (typeof params === 'number') await page!.wait(params);
-  else if (typeof params === 'object' && params) {
+  else if (isRecord(params)) {
     if ('text' in params) {
       await page!.wait({
         text: String(render(params.text, { args, data })),
-        timeout: params.timeout
+        timeout: typeof params.timeout === 'number' ? params.timeout : undefined,
       });
     } else if ('time' in params) await page!.wait(Number(params.time));
   } else if (typeof params === 'string') await page!.wait(Number(render(params, { args, data })));
   return data;
 }
 
-export async function stepPress(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
+export async function stepPress(page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   await page!.pressKey(String(render(params, { args, data })));
   return data;
 }
 
-export async function stepSnapshot(page: IPage | null, params: any, _data: any, _args: Record<string, any>): Promise<any> {
-  const opts = (typeof params === 'object' && params) ? params : {};
-  return page!.snapshot({ interactive: opts.interactive ?? false, compact: opts.compact ?? false, maxDepth: opts.max_depth, raw: opts.raw ?? false });
+export async function stepSnapshot(page: IPage | null, params: unknown, _data: unknown, _args: Record<string, unknown>): Promise<unknown> {
+  const opts = isRecord(params) ? params : {};
+  return page!.snapshot({
+    interactive: typeof opts.interactive === 'boolean' ? opts.interactive : false,
+    compact: typeof opts.compact === 'boolean' ? opts.compact : false,
+    maxDepth: typeof opts.max_depth === 'number' ? opts.max_depth : undefined,
+    raw: typeof opts.raw === 'boolean' ? opts.raw : false,
+  });
 }
 
-export async function stepEvaluate(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
+export async function stepEvaluate(page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   const js = String(render(params, { args, data }));
-  let result = await page!.evaluate(js);
+  let result: unknown = await page!.evaluate(js);
   // MCP may return JSON as a string — auto-parse it
   if (typeof result === 'string') {
     const trimmed = result.trim();

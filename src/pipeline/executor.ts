@@ -8,18 +8,18 @@ import { getStep, type StepHandler } from './registry.js';
 import { log } from '../logger.js';
 
 export interface PipelineContext {
-  args?: Record<string, any>;
+  args?: Record<string, unknown>;
   debug?: boolean;
 }
 
 export async function executePipeline(
   page: IPage | null,
-  pipeline: any[],
+  pipeline: unknown[],
   ctx: PipelineContext = {},
-): Promise<any> {
+): Promise<unknown> {
   const args = ctx.args ?? {};
   const debug = ctx.debug ?? false;
-  let data: any = null;
+  let data: unknown = null;
   const total = pipeline.length;
 
   for (let i = 0; i < pipeline.length; i++) {
@@ -41,7 +41,7 @@ export async function executePipeline(
   return data;
 }
 
-function debugStepStart(stepNum: number, total: number, op: string, params: any): void {
+function debugStepStart(stepNum: number, total: number, op: string, params: unknown): void {
   let preview = '';
   if (typeof params === 'string') {
     preview = params.length <= 80 ? ` → ${params}` : ` → ${params.slice(0, 77)}...`;
@@ -51,7 +51,7 @@ function debugStepStart(stepNum: number, total: number, op: string, params: any)
   log.step(stepNum, total, op, preview);
 }
 
-function debugStepResult(op: string, data: any): void {
+function debugStepResult(op: string, data: unknown): void {
   if (data === null || data === undefined) {
     log.stepResult('(no data)');
   } else if (Array.isArray(data)) {

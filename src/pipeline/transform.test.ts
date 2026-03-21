@@ -88,12 +88,12 @@ describe('stepFilter', () => {
 describe('stepSort', () => {
   it('sorts ascending by key', async () => {
     const result = await stepSort(null, 'score', SAMPLE_DATA, {});
-    expect(result.map((r: any) => r.title)).toEqual(['Alpha', 'Gamma', 'Beta']);
+    expect((result as typeof SAMPLE_DATA).map((r) => r.title)).toEqual(['Alpha', 'Gamma', 'Beta']);
   });
 
   it('sorts descending', async () => {
     const result = await stepSort(null, { by: 'score', order: 'desc' }, SAMPLE_DATA, {});
-    expect(result.map((r: any) => r.title)).toEqual(['Beta', 'Gamma', 'Alpha']);
+    expect((result as typeof SAMPLE_DATA).map((r) => r.title)).toEqual(['Beta', 'Gamma', 'Alpha']);
   });
 
   it('does not mutate original', async () => {

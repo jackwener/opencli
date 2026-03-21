@@ -3,13 +3,17 @@
  */
 
 export interface RenderContext {
-  args?: Record<string, any>;
-  data?: any;
-  item?: any;
+  args?: Record<string, unknown>;
+  data?: unknown;
+  item?: unknown;
   index?: number;
 }
 
-export function render(template: any, ctx: RenderContext): any {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function render(template: unknown, ctx: RenderContext): unknown {
   if (typeof template !== 'string') return template;
   const trimmed = template.trim();
   // Full expression: entire string is a single ${{ ... }}
@@ -26,7 +30,7 @@ export function render(template: any, ctx: RenderContext): any {
   return template.replace(/\$\{\{\s*(.*?)\s*\}\}/g, (_m, expr) => String(evalExpr(expr.trim(), ctx)));
 }
 
-export function evalExpr(expr: string, ctx: RenderContext): any {
+export function evalExpr(expr: string, ctx: RenderContext): unknown {
   const args = ctx.args ?? {};
   const item = ctx.item ?? {};
   const data = ctx.data;
@@ -81,7 +85,7 @@ export function evalExpr(expr: string, ctx: RenderContext): any {
  *   default(val), join(sep), upper, lower, truncate(n), trim,
  *   replace(old,new), keys, length, first, last, json
  */
-function applyFilter(filterExpr: string, value: any): any {
+function applyFilter(filterExpr: string, value: unknown): unknown {
   const match = filterExpr.match(/^(\w+)(?:\((.+)\))?$/);
   if (!match) return value;
   const [, name, rawArgs] = match;
@@ -158,21 +162,22 @@ function applyFilter(filterExpr: string, value: any): any {
   }
 }
 
-export function resolvePath(pathStr: string, ctx: RenderContext): any {
+export function resolvePath(pathStr: string, ctx: RenderContext): unknown {
   const args = ctx.args ?? {};
   const item = ctx.item ?? {};
   const data = ctx.data;
   const index = ctx.index ?? 0;
   const parts = pathStr.split('.');
   const rootName = parts[0];
-  let obj: any; let rest: string[];
+  let obj: unknown;
+  let rest: string[];
   if (rootName === 'args') { obj = args; rest = parts.slice(1); }
   else if (rootName === 'item') { obj = item; rest = parts.slice(1); }
   else if (rootName === 'data') { obj = data; rest = parts.slice(1); }
   else if (rootName === 'index') return index;
   else { obj = item; rest = parts; }
   for (const part of rest) {
-    if (obj && typeof obj === 'object' && !Array.isArray(obj)) obj = obj[part];
+    if (isRecord(obj)) obj = obj[part];
     else if (Array.isArray(obj) && /^\d+$/.test(part)) obj = obj[parseInt(part, 10)];
     else return null;
   }
@@ -190,7 +195,7 @@ export function resolvePath(pathStr: string, ctx: RenderContext): any {
  * If opencli ever loads untrusted third-party adapters, this MUST be replaced
  * with a proper sandboxed evaluator.
  */
-function evalJsExpr(expr: string, ctx: RenderContext): any {
+function evalJsExpr(expr: string, ctx: RenderContext): unknown {
   // Guard against absurdly long expressions that could indicate injection.
   if (expr.length > 2000) return undefined;
 
