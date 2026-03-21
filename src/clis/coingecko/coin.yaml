@@ -1,0 +1,33 @@
+site: coingecko
+name: coin
+description: Get detailed info for a specific cryptocurrency
+domain: api.coingecko.com
+strategy: public
+browser: false
+
+args:
+  id:
+    type: str
+    required: true
+    positional: true
+    description: "Coin ID (e.g. bitcoin, ethereum, solana)"
+
+pipeline:
+  - fetch:
+      url: https://api.coingecko.com/api/v3/coins/${{ args.id }}?localization=false&tickers=false&community_data=false&developer_data=false
+
+  - map:
+      name: ${{ item.name }}
+      symbol: ${{ item.symbol }}
+      rank: ${{ item.market_cap_rank }}
+      price: ${{ item.market_data.current_price.usd }}
+      change_24h: ${{ item.market_data.price_change_percentage_24h }}
+      change_7d: ${{ item.market_data.price_change_percentage_7d }}
+      change_30d: ${{ item.market_data.price_change_percentage_30d }}
+      market_cap: ${{ item.market_data.market_cap.usd }}
+      volume: ${{ item.market_data.total_volume.usd }}
+      ath: ${{ item.market_data.ath.usd }}
+      ath_change: ${{ item.market_data.ath_change_percentage.usd }}
+      sentiment_up: ${{ item.sentiment_votes_up_percentage }}
+
+columns: [name, symbol, rank, price, change_24h, change_7d, change_30d, market_cap, ath, ath_change]

@@ -1,0 +1,30 @@
+site: coingecko
+name: trending
+description: Trending cryptocurrencies on CoinGecko
+domain: api.coingecko.com
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 15
+    description: Number of coins
+
+pipeline:
+  - fetch:
+      url: https://api.coingecko.com/api/v3/search/trending
+
+  - select: coins
+
+  - map:
+      rank: ${{ index + 1 }}
+      name: ${{ item.item.name }}
+      symbol: ${{ item.item.symbol }}
+      price: ${{ item.item.data.price }}
+      market_cap: ${{ item.item.data.market_cap }}
+      cap_rank: ${{ item.item.market_cap_rank }}
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, name, symbol, price, market_cap, cap_rank]

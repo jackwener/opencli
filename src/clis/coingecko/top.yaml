@@ -1,0 +1,33 @@
+site: coingecko
+name: top
+description: Top cryptocurrencies by market cap
+domain: api.coingecko.com
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 20
+    description: Number of coins
+  currency:
+    type: str
+    default: usd
+    description: Price currency (usd, eur, gbp, jpy, aud, cny, etc.)
+
+pipeline:
+  - fetch:
+      url: https://api.coingecko.com/api/v3/coins/markets?vs_currency=${{ args.currency }}&order=market_cap_desc&per_page=${{ args.limit }}&page=1
+
+  - map:
+      rank: ${{ item.market_cap_rank }}
+      name: ${{ item.name }}
+      symbol: ${{ item.symbol }}
+      price: ${{ item.current_price }}
+      change_24h: ${{ item.price_change_percentage_24h }}
+      market_cap: ${{ item.market_cap }}
+      volume: ${{ item.total_volume }}
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, name, symbol, price, change_24h, market_cap, volume]
