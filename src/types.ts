@@ -5,32 +5,55 @@
  * instead of `any` for browser interactions.
  */
 
+export interface BrowserCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path?: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  expirationDate?: number;
+}
+
+export interface SnapshotOptions {
+  interactive?: boolean;
+  compact?: boolean;
+  maxDepth?: number;
+  raw?: boolean;
+  viewportExpand?: number;
+  maxTextLength?: number;
+}
+
+export interface WaitOptions {
+  text?: string;
+  time?: number;
+  timeout?: number;
+}
+
+export interface ScreenshotOptions {
+  format?: 'png' | 'jpeg';
+  quality?: number;
+  fullPage?: boolean;
+  path?: string;
+}
+
+export interface BrowserSessionInfo {
+  workspace?: string;
+  connected?: boolean;
+  [key: string]: unknown;
+}
+
 export interface IPage {
   goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void>;
   evaluate(js: string): Promise<any>;
-  getCookies(opts?: { domain?: string; url?: string }): Promise<Array<{
-    name: string;
-    value: string;
-    domain: string;
-    path?: string;
-    secure?: boolean;
-    httpOnly?: boolean;
-    expirationDate?: number;
-  }>>;
-  snapshot(opts?: {
-    interactive?: boolean;
-    compact?: boolean;
-    maxDepth?: number;
-    raw?: boolean;
-    viewportExpand?: number;
-    maxTextLength?: number;
-  }): Promise<any>;
+  getCookies(opts?: { domain?: string; url?: string }): Promise<BrowserCookie[]>;
+  snapshot(opts?: SnapshotOptions): Promise<any>;
   click(ref: string): Promise<void>;
   typeText(ref: string, text: string): Promise<void>;
   pressKey(key: string): Promise<void>;
   scrollTo(ref: string): Promise<any>;
   getFormState(): Promise<any>;
-  wait(options: number | { text?: string; time?: number; timeout?: number }): Promise<void>;
+  wait(options: number | WaitOptions): Promise<void>;
   tabs(): Promise<any>;
   closeTab(index?: number): Promise<void>;
   newTab(): Promise<void>;
@@ -41,5 +64,5 @@ export interface IPage {
   autoScroll(options?: { times?: number; delayMs?: number }): Promise<void>;
   installInterceptor(pattern: string): Promise<void>;
   getInterceptedRequests(): Promise<any[]>;
-  screenshot(options?: { format?: 'png' | 'jpeg'; quality?: number; fullPage?: boolean; path?: string }): Promise<string>;
+  screenshot(options?: ScreenshotOptions): Promise<string>;
 }

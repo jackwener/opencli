@@ -113,7 +113,8 @@ export async function sendCommand(
   throw new Error('sendCommand: max retries exhausted');
 }
 
-export async function listSessions(): Promise<any[]> {
+export async function listSessions(): Promise<BrowserSessionInfo[]> {
   const result = await sendCommand('sessions');
   return Array.isArray(result) ? result : [];
 }
+import type { BrowserSessionInfo } from '../types.js';

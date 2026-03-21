@@ -72,7 +72,7 @@ async function fetchBatchInBrowser(
 ): Promise<unknown[]> {
   const headersJs = JSON.stringify(headers);
   const urlsJs = JSON.stringify(urls);
-  return page.evaluate(`
+  return (await page.evaluate(`
     async () => {
       const urls = ${urlsJs};
       const method = "${method}";
@@ -98,7 +98,7 @@ async function fetchBatchInBrowser(
       await Promise.all(workers);
       return results;
     }
-  `);
+  `)) as unknown[];
 }
 
 export async function stepFetch(page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {

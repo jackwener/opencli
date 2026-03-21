@@ -223,6 +223,10 @@ function flattenFields(obj: unknown, prefix: string, maxDepth: number): string[]
   return names;
 }
 
+function isBooleanRecord(value: unknown): value is Record<string, boolean> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function scoreEndpoint(ep: { contentType: string; responseAnalysis: AnalyzedEndpoint['responseAnalysis']; pattern: string; status: number | null; hasSearchParam: boolean; hasPaginationParam: boolean; hasLimitParam: boolean }): number {
   let s = 0;
   if (ep.contentType.includes('json')) s += 10;
@@ -488,7 +492,10 @@ export async function exploreUrl(
 
       // Step 6: Detect framework
       let framework: Record<string, boolean> = {};
-      try { const fw = await page.evaluate(FRAMEWORK_DETECT_JS); if (fw && typeof fw === 'object') framework = fw; } catch {}
+      try {
+        const fw = await page.evaluate(FRAMEWORK_DETECT_JS);
+        if (isBooleanRecord(fw)) framework = fw;
+      } catch {}
 
       // Step 6.5: Discover stores (Pinia / Vuex)
       let stores: DiscoveredStore[] = [];
@@ -551,7 +558,12 @@ export function renderExploreSummary(result: ExploreResult): string {
 async function readPageMetadata(page: IPage): Promise<{ url: string; title: string }> {
   try {
     const result = await page.evaluate(`() => ({ url: window.location.href, title: document.title || '' })`);
-    if (result && typeof result === 'object') return { url: String(result.url ?? ''), title: String(result.title ?? '') };
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      return {
+        url: String((result as Record<string, unknown>).url ?? ''),
+        title: String((result as Record<string, unknown>).title ?? ''),
+      };
+    }
   } catch {}
   return { url: '', title: '' };
 }
