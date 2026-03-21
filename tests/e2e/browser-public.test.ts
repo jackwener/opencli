@@ -186,7 +186,7 @@ describe('browser public-data commands E2E', () => {
     expectDataOrSkip(data, 'xiaohongshu search');
   }, 60_000);
 
-  // ── google search (browser: true, cookie strategy) ──
+  // ── google search (browser: true, public strategy) ──
   it('google search returns results', async () => {
     const data = await tryBrowserCommand(['google', 'search', 'typescript', '--limit', '5', '-f', 'json']);
     expectDataOrSkip(data, 'google search');
