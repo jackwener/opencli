@@ -7,7 +7,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { PLUGINS_DIR } from './discovery.js';
 import { log } from './logger.js';
 
@@ -22,7 +22,7 @@ export interface PluginInfo {
  * Install a plugin from a source.
  * Currently supports "github:user/repo" format (git clone wrapper).
  */
-export function installPlugin(source: string): void {
+export function installPlugin(source: string): string {
   const parsed = parseSource(source);
   if (!parsed) {
     throw new Error(
@@ -44,7 +44,7 @@ export function installPlugin(source: string): void {
   fs.mkdirSync(PLUGINS_DIR, { recursive: true });
 
   try {
-    execSync(`git clone --depth 1 ${cloneUrl} ${targetDir}`, {
+    execFileSync('git', ['clone', '--depth', '1', cloneUrl, targetDir], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -57,7 +57,7 @@ export function installPlugin(source: string): void {
   const pkgJsonPath = path.join(targetDir, 'package.json');
   if (fs.existsSync(pkgJsonPath)) {
     try {
-      execSync('npm install --production', {
+      execFileSync('npm', ['install', '--omit=dev'], {
         cwd: targetDir,
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -76,6 +76,8 @@ export function installPlugin(source: string): void {
     // (node cannot load .ts files directly without tsx).
     transpilePluginTs(targetDir);
   }
+
+  return name;
 }
 
 /**
@@ -150,7 +152,7 @@ function getPluginSource(dir: string): string | undefined {
 /** Parse a plugin source string into clone URL and name */
 function parseSource(source: string): { cloneUrl: string; name: string } | null {
   // github:user/repo
-  const githubMatch = source.match(/^github:(.+?)\/(.+?)$/);
+  const githubMatch = source.match(/^github:([\w.-]+)\/([\w.-]+)$/);
   if (githubMatch) {
     const [, user, repo] = githubMatch;
     const name = repo.replace(/^opencli-plugin-/, '');
@@ -161,7 +163,7 @@ function parseSource(source: string): { cloneUrl: string; name: string } | null 
   }
 
   // https://github.com/user/repo (or .git)
-  const urlMatch = source.match(/^https?:\/\/github\.com\/(.+?)\/(.+?)(?:\.git)?$/);
+  const urlMatch = source.match(/^https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
   if (urlMatch) {
     const [, user, repo] = urlMatch;
     const name = repo.replace(/^opencli-plugin-/, '');
@@ -182,8 +184,8 @@ function parseSource(source: string): { cloneUrl: string; name: string } | null 
 function linkHostOpencli(pluginDir: string): void {
   try {
     // Determine the host opencli package root from this module's location.
-    // In dev (tsx): import.meta.url → file:///…/opencli/src/plugin.ts  → root is ../../
-    // In prod (node): import.meta.url → file:///…/opencli/dist/plugin.js → root is ../
+    // Both dev (tsx src/plugin.ts) and prod (node dist/plugin.js) are one level
+    // deep, so path.dirname + '..' always gives us the package root.
     const thisFile = new URL(import.meta.url).pathname;
     const hostRoot = path.resolve(path.dirname(thisFile), '..');
 
@@ -234,14 +236,11 @@ function transpilePluginTs(pluginDir: string): void {
       if (fs.existsSync(jsPath)) continue;
 
       try {
-        execSync(
-          `"${esbuildBin}" "${tsFile}" --outfile="${jsFile}" --format=esm --platform=node`,
-          {
-            cwd: pluginDir,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-          }
-        );
+        execFileSync(esbuildBin, [tsFile, `--outfile=${jsFile}`, '--format=esm', '--platform=node'], {
+          cwd: pluginDir,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
         log.debug(`Transpiled plugin file: ${tsFile} → ${jsFile}`);
       } catch (err: any) {
         log.warn(`Failed to transpile ${tsFile}: ${err.message}`);

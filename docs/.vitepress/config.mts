@@ -151,7 +151,7 @@ export default defineConfig({
                 { text: '快速开始', link: '/zh/guide/getting-started' },
                 { text: '安装', link: '/zh/guide/installation' },
                 { text: 'Browser Bridge', link: '/zh/guide/browser-bridge' },
-                { text: '插件', link: '/guide/plugins' },
+                { text: '插件', link: '/zh/guide/plugins' },
               ],
             },
           ],

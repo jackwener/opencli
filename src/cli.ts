@@ -242,8 +242,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .action(async (source: string) => {
       const { installPlugin } = await import('./plugin.js');
       try {
-        installPlugin(source);
-        const name = source.split('/').pop()?.replace(/^opencli-plugin-/, '') ?? source;
+        const name = installPlugin(source);
         console.log(chalk.green(`✅ Plugin "${name}" installed successfully.`));
         console.log(chalk.dim(`   Restart opencli to use the new commands.`));
       } catch (err: any) {
