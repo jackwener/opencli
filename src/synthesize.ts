@@ -7,16 +7,96 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import yaml from 'js-yaml';
 import { VOLATILE_PARAMS, SEARCH_PARAMS, LIMIT_PARAMS, PAGINATION_PARAMS } from './constants.js';
+import type { ExploreAuthSummary, ExploreEndpointArtifact, ExploreManifest } from './explore.js';
 
 /** Renamed aliases for backward compatibility with local references */
 const SEARCH_PARAM_NAMES = SEARCH_PARAMS;
 const LIMIT_PARAM_NAMES = LIMIT_PARAMS;
 const PAGE_PARAM_NAMES = PAGINATION_PARAMS;
 
+interface RecommendedArg {
+  name: string;
+  type?: string;
+  required?: boolean;
+  default?: unknown;
+}
+
+interface StoreHint {
+  store: string;
+  action: string;
+}
+
+export interface SynthesizeCapability {
+  name: string;
+  description: string;
+  strategy: string;
+  confidence?: number;
+  endpoint?: string;
+  itemPath?: string | null;
+  recommendedColumns?: string[];
+  recommendedArgs?: RecommendedArg[];
+  recommended_args?: RecommendedArg[];
+  recommendedColumnsLegacy?: string[];
+  recommended_columns?: string[];
+  storeHint?: StoreHint;
+}
+
+export interface GeneratedArgDefinition {
+  type: string;
+  required?: boolean;
+  default?: unknown;
+  description?: string;
+}
+
+type CandidatePipelineStep =
+  | { navigate: string }
+  | { wait: number }
+  | { evaluate: string }
+  | { select: string }
+  | { map: Record<string, string> }
+  | { limit: string }
+  | { fetch: { url: string } }
+  | { tap: { store: string; action: string; timeout: number; capture?: string; select?: string | null } };
+
+export interface CandidateYaml {
+  site: string;
+  name: string;
+  description: string;
+  domain: string;
+  strategy: string;
+  browser: boolean;
+  args: Record<string, GeneratedArgDefinition>;
+  pipeline: CandidatePipelineStep[];
+  columns: string[];
+}
+
+export interface SynthesizeCandidateSummary {
+  name: string;
+  path: string;
+  strategy: string;
+  confidence?: number;
+}
+
+export interface SynthesizeResult {
+  site: string;
+  explore_dir: string;
+  out_dir: string;
+  candidate_count: number;
+  candidates: SynthesizeCandidateSummary[];
+}
+
+type ExploreManifestLike = Pick<ExploreManifest, 'target_url' | 'final_url'> & Partial<ExploreManifest>;
+interface LoadedExploreBundle {
+  manifest: ExploreManifest;
+  endpoints: ExploreEndpointArtifact[];
+  capabilities: SynthesizeCapability[];
+  auth: ExploreAuthSummary;
+}
+
 export function synthesizeFromExplore(
   target: string,
   opts: { outDir?: string; top?: number } = {},
-): Record<string, any> {
+): SynthesizeResult {
   const exploreDir = resolveExploreDir(target);
   const bundle = loadExploreBundle(exploreDir);
 
@@ -25,9 +105,9 @@ export function synthesizeFromExplore(
 
   const site = bundle.manifest.site;
   const capabilities = (bundle.capabilities ?? [])
-    .sort((a: any, b: any) => (b.confidence ?? 0) - (a.confidence ?? 0))
+    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
     .slice(0, opts.top ?? 3);
-  const candidates: any[] = [];
+  const candidates: SynthesizeCandidateSummary[] = [];
 
   for (const cap of capabilities) {
     const endpoint = chooseEndpoint(cap, bundle.endpoints);
@@ -44,7 +124,7 @@ export function synthesizeFromExplore(
   return { site, explore_dir: exploreDir, out_dir: targetDir, candidate_count: candidates.length, candidates };
 }
 
-export function renderSynthesizeSummary(result: Record<string, any>): string {
+export function renderSynthesizeSummary(result: SynthesizeResult): string {
   const lines = ['opencli synthesize: OK', `Site: ${result.site}`, `Source: ${result.explore_dir}`, `Candidates: ${result.candidate_count}`];
   for (const c of result.candidates ?? []) lines.push(`  • ${c.name} (${c.strategy}, ${((c.confidence ?? 0) * 100).toFixed(0)}% confidence) → ${c.path}`);
   return lines.join('\n');
@@ -57,33 +137,34 @@ export function resolveExploreDir(target: string): string {
   throw new Error(`Explore directory not found: ${target}`);
 }
 
-export function loadExploreBundle(exploreDir: string): Record<string, any> {
+export function loadExploreBundle(exploreDir: string): LoadedExploreBundle {
   return {
-    manifest: JSON.parse(fs.readFileSync(path.join(exploreDir, 'manifest.json'), 'utf-8')),
-    endpoints: JSON.parse(fs.readFileSync(path.join(exploreDir, 'endpoints.json'), 'utf-8')),
-    capabilities: JSON.parse(fs.readFileSync(path.join(exploreDir, 'capabilities.json'), 'utf-8')),
+    manifest: JSON.parse(fs.readFileSync(path.join(exploreDir, 'manifest.json'), 'utf-8')) as ExploreManifest,
+    endpoints: JSON.parse(fs.readFileSync(path.join(exploreDir, 'endpoints.json'), 'utf-8')) as ExploreEndpointArtifact[],
+    capabilities: JSON.parse(fs.readFileSync(path.join(exploreDir, 'capabilities.json'), 'utf-8')) as SynthesizeCapability[],
     auth: JSON.parse(fs.readFileSync(path.join(exploreDir, 'auth.json'), 'utf-8')),
   };
 }
 
-function chooseEndpoint(cap: any, endpoints: any[]): any | null {
+function chooseEndpoint(cap: SynthesizeCapability, endpoints: ExploreEndpointArtifact[]): ExploreEndpointArtifact | null {
   if (!endpoints.length) return null;
   // Match by endpoint pattern from capability
   if (cap.endpoint) {
-    const match = endpoints.find((e: any) => e.pattern === cap.endpoint || e.url?.includes(cap.endpoint));
+    const endpointPattern = cap.endpoint;
+    const match = endpoints.find((endpoint) => endpoint.pattern === endpointPattern || endpoint.url?.includes(endpointPattern));
     if (match) return match;
   }
-  return endpoints.sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0))[0];
+  return [...endpoints].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
 }
 
 // ── URL templating ─────────────────────────────────────────────────────────
 
-function buildTemplatedUrl(rawUrl: string, cap: any, _endpoint: any): string {
+function buildTemplatedUrl(rawUrl: string, cap: SynthesizeCapability, _endpoint: ExploreEndpointArtifact): string {
   try {
     const u = new URL(rawUrl);
     const base = `${u.protocol}//${u.host}${u.pathname}`;
     const params: Array<[string, string]> = [];
-    const hasKeyword = cap.recommendedArgs?.some((a: any) => a.name === 'keyword');
+    const hasKeyword = cap.recommendedArgs?.some((arg) => arg.name === 'keyword');
 
     u.searchParams.forEach((v, k) => {
       if (VOLATILE_PARAMS.has(k)) return;
@@ -101,7 +182,7 @@ function buildTemplatedUrl(rawUrl: string, cap: any, _endpoint: any): string {
  * Build inline evaluate script for browser-based fetch+parse.
  * Follows patterns from bilibili/hot.yaml and twitter/trending.yaml.
  */
-function buildEvaluateScript(url: string, itemPath: string, endpoint: any): string {
+function buildEvaluateScript(url: string, itemPath: string, endpoint: ExploreEndpointArtifact): string {
   const pathChain = itemPath.split('.').map((p: string) => `?.${p}`).join('');
   const detectedFields = endpoint?.detectedFields ?? {};
   const hasFields = Object.keys(detectedFields).length > 0;
@@ -127,9 +208,9 @@ function buildEvaluateScript(url: string, itemPath: string, endpoint: any): stri
 
 // ── YAML pipeline generation ───────────────────────────────────────────────
 
-function buildCandidateYaml(site: string, manifest: any, cap: any, endpoint: any): { name: string; yaml: any } {
+function buildCandidateYaml(site: string, manifest: ExploreManifestLike, cap: SynthesizeCapability, endpoint: ExploreEndpointArtifact): { name: string; yaml: CandidateYaml } {
   const needsBrowser = cap.strategy !== 'public';
-  const pipeline: any[] = [];
+  const pipeline: CandidatePipelineStep[] = [];
   const templatedUrl = buildTemplatedUrl(endpoint?.url ?? manifest.target_url, cap, endpoint);
 
   let domain = '';
@@ -139,7 +220,7 @@ function buildCandidateYaml(site: string, manifest: any, cap: any, endpoint: any
     // Store Action: navigate + wait + tap (declarative, clean)
     pipeline.push({ navigate: manifest.target_url });
     pipeline.push({ wait: 3 });
-    const tapStep: Record<string, any> = {
+    const tapStep: { store: string; action: string; timeout: number; capture?: string; select?: string | null } = {
       store: cap.storeHint.store,
       action: cap.storeHint.action,
       timeout: 8,
@@ -170,7 +251,7 @@ function buildCandidateYaml(site: string, manifest: any, cap: any, endpoint: any
   // Map fields
   const mapStep: Record<string, string> = {};
   const columns = cap.recommendedColumns ?? ['title', 'url'];
-  if (!cap.recommendedArgs?.some((a: any) => a.name === 'keyword')) mapStep['rank'] = '${{ index + 1 }}';
+  if (!cap.recommendedArgs?.some((arg) => arg.name === 'keyword')) mapStep['rank'] = '${{ index + 1 }}';
   const detectedFields = endpoint?.detectedFields ?? {};
   for (const col of columns) {
     const fieldPath = detectedFields[col];
@@ -180,9 +261,9 @@ function buildCandidateYaml(site: string, manifest: any, cap: any, endpoint: any
   pipeline.push({ limit: '${{ args.limit | default(20) }}' });
 
   // Args
-  const argsDef: Record<string, any> = {};
+  const argsDef: Record<string, GeneratedArgDefinition> = {};
   for (const arg of cap.recommendedArgs ?? []) {
-    const def: any = { type: arg.type ?? 'str' };
+    const def: GeneratedArgDefinition = { type: arg.type ?? 'str' };
     if (arg.required) def.required = true;
     if (arg.default != null) def.default = arg.default;
     if (arg.name === 'keyword') def.description = 'Search keyword';
@@ -203,7 +284,7 @@ function buildCandidateYaml(site: string, manifest: any, cap: any, endpoint: any
 }
 
 /** Backward-compatible export for scaffold.ts */
-export function buildCandidate(site: string, targetUrl: string, cap: any, endpoint: any): any {
+export function buildCandidate(site: string, targetUrl: string, cap: SynthesizeCapability, endpoint: ExploreEndpointArtifact): { name: string; yaml: CandidateYaml } {
   // Map old-style field names to new ones
   const normalizedCap = {
     ...cap,

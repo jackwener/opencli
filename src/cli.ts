@@ -140,7 +140,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         : undefined;
       const workspace = `explore:${inferHost(url, opts.site)}`;
       const result = await exploreUrl(url, {
-        BrowserFactory: getBrowserFactory() as any,
+        BrowserFactory: getBrowserFactory(),
         site: opts.site,
         goal: opts.goal,
         waitSeconds: parseFloat(opts.wait),
@@ -172,7 +172,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       const workspace = `generate:${inferHost(url, opts.site)}`;
       const r = await generateCliFromUrl({
         url,
-        BrowserFactory: getBrowserFactory() as any,
+        BrowserFactory: getBrowserFactory(),
         builtinClis: BUILTIN_CLIS,
         userClis: USER_CLIS,
         goal: opts.goal,

@@ -9,10 +9,59 @@
  */
 
 import { exploreUrl } from './explore.js';
-import { synthesizeFromExplore } from './synthesize.js';
+import type { IBrowserFactory } from './runtime.js';
+import { synthesizeFromExplore, type SynthesizeCandidateSummary, type SynthesizeResult } from './synthesize.js';
 
 // TODO: implement real CLI registration (copy candidate YAML to user clis dir)
-function registerCandidates(_opts: any): any { return { ok: true, count: 0 }; }
+interface RegisterCandidatesOptions {
+  target: string;
+  builtinClis?: string;
+  userClis?: string;
+  name?: string;
+}
+
+interface RegisterCandidatesResult {
+  ok: boolean;
+  count: number;
+}
+
+export interface GenerateCliOptions {
+  url: string;
+  BrowserFactory: new () => IBrowserFactory;
+  builtinClis?: string;
+  userClis?: string;
+  goal?: string | null;
+  site?: string;
+  waitSeconds?: number;
+  top?: number;
+  register?: boolean;
+  workspace?: string;
+}
+
+export interface GenerateCliResult {
+  ok: boolean;
+  goal?: string | null;
+  normalized_goal?: string | null;
+  site: string;
+  selected_candidate: SynthesizeCandidateSummary | null;
+  selected_command: string;
+  explore: {
+    endpoint_count: number;
+    api_endpoint_count: number;
+    capability_count: number;
+    top_strategy: string;
+    framework: Record<string, boolean>;
+  };
+  synthesize: {
+    candidate_count: number;
+    candidates: Array<Pick<SynthesizeCandidateSummary, 'name' | 'strategy' | 'confidence'>>;
+  };
+  register: RegisterCandidatesResult | null;
+}
+
+function registerCandidates(_opts: RegisterCandidatesOptions): RegisterCandidatesResult {
+  return { ok: true, count: 0 };
+}
 
 const CAPABILITY_ALIASES: Record<string, string[]> = {
   search:    ['search', '搜索', '查找', 'query', 'keyword'],
@@ -41,7 +90,7 @@ function normalizeGoal(goal?: string | null): string | null {
 /**
  * Select the best candidate matching the user's goal.
  */
-function selectCandidate(candidates: any[], goal?: string | null): any {
+function selectCandidate(candidates: SynthesizeResult['candidates'], goal?: string | null): SynthesizeCandidateSummary | null {
   if (!candidates.length) return null;
   if (!goal) return candidates[0]; // highest confidence first
 
@@ -58,12 +107,12 @@ function selectCandidate(candidates: any[], goal?: string | null): any {
   return partial ?? candidates[0];
 }
 
-export async function generateCliFromUrl(opts: any): Promise<any> {
+export async function generateCliFromUrl(opts: GenerateCliOptions): Promise<GenerateCliResult> {
   // Step 1: Deep Explore
   const exploreResult = await exploreUrl(opts.url, {
     BrowserFactory: opts.BrowserFactory,
     site: opts.site,
-    goal: normalizeGoal(opts.goal) ?? opts.goal,
+    goal: normalizeGoal(opts.goal) ?? opts.goal ?? undefined,
     waitSeconds: opts.waitSeconds ?? 3,
     workspace: opts.workspace,
   });
@@ -75,10 +124,10 @@ export async function generateCliFromUrl(opts: any): Promise<any> {
 
   // Step 3: Select best candidate for goal
   const selected = selectCandidate(synthesizeResult.candidates ?? [], opts.goal);
-  const selectedSite = selected?.site ?? synthesizeResult.site ?? exploreResult.site;
+  const selectedSite = synthesizeResult.site ?? exploreResult.site;
 
   // Step 4: Register (if requested)
-  let registerResult: any = null;
+  let registerResult: RegisterCandidatesResult | null = null;
   if (opts.register !== false && synthesizeResult.candidate_count > 0) {
     try {
       registerResult = registerCandidates({
@@ -108,7 +157,7 @@ export async function generateCliFromUrl(opts: any): Promise<any> {
     },
     synthesize: {
       candidate_count: synthesizeResult.candidate_count,
-      candidates: (synthesizeResult.candidates ?? []).map((c: any) => ({
+      candidates: (synthesizeResult.candidates ?? []).map((c) => ({
         name: c.name,
         strategy: c.strategy,
         confidence: c.confidence,
@@ -118,7 +167,7 @@ export async function generateCliFromUrl(opts: any): Promise<any> {
   };
 }
 
-export function renderGenerateSummary(r: any): string {
+export function renderGenerateSummary(r: GenerateCliResult): string {
   const lines = [
     `opencli generate: ${r.ok ? 'OK' : 'FAIL'}`,
     `Site: ${r.site}`,

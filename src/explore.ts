@@ -9,10 +9,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DEFAULT_BROWSER_EXPLORE_TIMEOUT, browserSession, runWithTimeout } from './runtime.js';
+import type { IBrowserFactory } from './runtime.js';
 import { VOLATILE_PARAMS, SEARCH_PARAMS, PAGINATION_PARAMS, LIMIT_PARAMS, FIELD_ROLES } from './constants.js';
 import { detectFramework } from './scripts/framework.js';
 import { discoverStores } from './scripts/store.js';
 import { interactFuzz } from './scripts/interact.js';
+import type { IPage } from './types.js';
 
 // ── Site name detection ────────────────────────────────────────────────────
 
@@ -68,7 +70,61 @@ interface InferredCapability {
   name: string; description: string; strategy: string; confidence: number;
   endpoint: string; itemPath: string | null;
   recommendedColumns: string[];
-  recommendedArgs: Array<{ name: string; type: string; required: boolean; default?: any }>;
+  recommendedArgs: Array<{ name: string; type: string; required: boolean; default?: unknown }>;
+  storeHint?: { store: string; action: string };
+}
+
+export interface ExploreManifest {
+  site: string;
+  target_url: string;
+  final_url: string;
+  title: string;
+  framework: Record<string, boolean>;
+  stores: Array<{ type: DiscoveredStore['type']; id: string; actions: string[] }>;
+  top_strategy: string;
+  explored_at?: string;
+}
+
+export interface ExploreAuthSummary {
+  top_strategy: string;
+  indicators: string[];
+  framework: Record<string, boolean>;
+}
+
+export interface ExploreEndpointArtifact {
+  pattern: string;
+  method: string;
+  url: string;
+  status: number | null;
+  contentType: string;
+  score: number;
+  queryParams: string[];
+  itemPath: string | null;
+  itemCount: number;
+  detectedFields: Record<string, string>;
+  authIndicators: string[];
+}
+
+export interface ExploreResult {
+  site: string;
+  target_url: string;
+  final_url: string;
+  title: string;
+  framework: Record<string, boolean>;
+  stores: DiscoveredStore[];
+  top_strategy: string;
+  endpoint_count: number;
+  api_endpoint_count: number;
+  capabilities: InferredCapability[];
+  auth_indicators: string[];
+  out_dir: string;
+}
+
+export interface ExploreBundle {
+  manifest: ExploreManifest;
+  endpoints: ExploreEndpointArtifact[];
+  capabilities: InferredCapability[];
+  auth: ExploreAuthSummary;
 }
 
 /**
@@ -167,7 +223,7 @@ function flattenFields(obj: unknown, prefix: string, maxDepth: number): string[]
   return names;
 }
 
-function scoreEndpoint(ep: { contentType: string; responseAnalysis: any; pattern: string; status: number | null; hasSearchParam: boolean; hasPaginationParam: boolean; hasLimitParam: boolean }): number {
+function scoreEndpoint(ep: { contentType: string; responseAnalysis: AnalyzedEndpoint['responseAnalysis']; pattern: string; status: number | null; hasSearchParam: boolean; hasPaginationParam: boolean; hasLimitParam: boolean }): number {
   let s = 0;
   if (ep.contentType.includes('json')) s += 10;
   if (ep.responseAnalysis) { s += 5; s += Math.min(ep.responseAnalysis.itemCount, 10); s += Object.keys(ep.responseAnalysis.detectedFields).length * 2; }
@@ -321,7 +377,7 @@ function inferCapabilitiesFromEndpoints(
 /** Write explore artifacts (manifest, endpoints, capabilities, auth, stores) to disk. */
 async function writeExploreArtifacts(
   targetDir: string,
-  result: Record<string, any>,
+  result: Omit<ExploreResult, 'out_dir'>,
   analyzedEndpoints: AnalyzedEndpoint[],
   stores: DiscoveredStore[],
 ): Promise<void> {
@@ -354,12 +410,12 @@ async function writeExploreArtifacts(
 export async function exploreUrl(
   url: string,
   opts: {
-    BrowserFactory: new () => any;
+    BrowserFactory: new () => IBrowserFactory;
     site?: string; goal?: string; authenticated?: boolean;
     outDir?: string; waitSeconds?: number; query?: string;
     clickLabels?: string[]; auto?: boolean; workspace?: string;
   },
-): Promise<Record<string, any>> {
+): Promise<ExploreResult> {
   const waitSeconds = opts.waitSeconds ?? 3.0;
   const exploreTimeout = Math.max(DEFAULT_BROWSER_EXPLORE_TIMEOUT, 45.0 + waitSeconds * 8.0);
 
@@ -467,7 +523,7 @@ export async function exploreUrl(
   }, { workspace: opts.workspace });
 }
 
-export function renderExploreSummary(result: Record<string, any>): string {
+export function renderExploreSummary(result: ExploreResult): string {
   const lines = [
     'opencli probe: OK', `Site: ${result.site}`, `URL: ${result.target_url}`,
     `Title: ${result.title || '(none)'}`, `Strategy: ${result.top_strategy}`,
@@ -492,7 +548,7 @@ export function renderExploreSummary(result: Record<string, any>): string {
   return lines.join('\n');
 }
 
-async function readPageMetadata(page: any /* IPage */): Promise<{ url: string; title: string }> {
+async function readPageMetadata(page: IPage): Promise<{ url: string; title: string }> {
   try {
     const result = await page.evaluate(`() => ({ url: window.location.href, title: document.title || '' })`);
     if (result && typeof result === 'object') return { url: String(result.url ?? ''), title: String(result.title ?? '') };

@@ -18,12 +18,17 @@ import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMM
 
 /** Set of TS module paths that have been loaded */
 const _loadedModules = new Set<string>();
+type CommandArgs = Record<string, unknown>;
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /**
  * Validates and coerces arguments based on the command's Arg definitions.
  */
-export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = { ...kwargs };
+export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): CommandArgs {
+  const result: CommandArgs = { ...kwargs };
 
   for (const argDef of cmdArgs) {
     const val = result[argDef.name];
@@ -72,9 +77,9 @@ export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: Record<string, any
 async function runCommand(
   cmd: CliCommand,
   page: IPage | null,
-  kwargs: Record<string, any>,
+  kwargs: CommandArgs,
   debug: boolean,
-): Promise<any> {
+): Promise<unknown> {
   // Lazy-load TS module on first execution (manifest fast-path)
   const internal = cmd as InternalCliCommand;
   if (internal._lazy && internal._modulePath) {
@@ -83,9 +88,9 @@ async function runCommand(
       try {
         await import(`file://${modulePath}`);
         _loadedModules.add(modulePath);
-      } catch (err: any) {
+      } catch (err) {
         throw new AdapterLoadError(
-          `Failed to load adapter module ${modulePath}: ${err.message}`,
+          `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
           'Check that the adapter file exists and has no syntax errors.',
         );
       }
@@ -127,14 +132,14 @@ function resolvePreNav(cmd: CliCommand): string | null {
  */
 export async function executeCommand(
   cmd: CliCommand,
-  rawKwargs: Record<string, any>,
+  rawKwargs: CommandArgs,
   debug: boolean = false,
-): Promise<any> {
-  let kwargs: Record<string, any>;
+): Promise<unknown> {
+  let kwargs: CommandArgs;
   try {
     kwargs = coerceAndValidateArgs(cmd.args, rawKwargs);
-  } catch (err: any) {
-    throw new Error(`[Argument Validation Error]\n${err.message}`);
+  } catch (err) {
+    throw new Error(`[Argument Validation Error]\n${getErrorMessage(err)}`);
   }
 
   if (shouldUseBrowserSession(cmd)) {
