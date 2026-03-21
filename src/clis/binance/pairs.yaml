@@ -1,0 +1,30 @@
+site: binance
+name: pairs
+description: List active trading pairs on Binance
+domain: data-api.binance.vision
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 20
+    description: Number of trading pairs
+
+pipeline:
+  - fetch:
+      url: https://data-api.binance.vision/api/v3/exchangeInfo
+
+  - select: symbols
+
+  - filter: item.status
+
+  - map:
+      symbol: ${{ item.symbol }}
+      base: ${{ item.baseAsset }}
+      quote: ${{ item.quoteAsset }}
+      status: ${{ item.status }}
+
+  - limit: ${{ args.limit }}
+
+columns: [symbol, base, quote, status]

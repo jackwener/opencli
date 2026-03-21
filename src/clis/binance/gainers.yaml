@@ -1,0 +1,33 @@
+site: binance
+name: gainers
+description: Top gaining trading pairs by 24h price change
+domain: data-api.binance.vision
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 10
+    description: Number of trading pairs
+
+pipeline:
+  - fetch:
+      url: https://data-api.binance.vision/api/v3/ticker/24hr
+
+  - filter: item.priceChangePercent
+
+  - sort:
+      by: priceChangePercent
+      order: desc
+
+  - map:
+      rank: ${{ index + 1 }}
+      symbol: ${{ item.symbol }}
+      price: ${{ item.lastPrice }}
+      change_24h: ${{ item.priceChangePercent }}
+      volume: ${{ item.quoteVolume }}
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, symbol, price, change_24h, volume]
