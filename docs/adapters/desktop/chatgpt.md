@@ -15,6 +15,7 @@ The current built-in commands use native AppleScript automation — no extra lau
 - `opencli chatgpt new`: Activate ChatGPT and press `Cmd+N` to start a new conversation.
 - `opencli chatgpt send "message"`: Copy your message to clipboard, activate ChatGPT, paste, and submit.
 - `opencli chatgpt read`: Read the last visible message from the focused ChatGPT window via the Accessibility tree.
+- `opencli chatgpt ask "message"`: Send a prompt and wait for the visible reply in one shot.
 
 ## Approach 2: CDP (Advanced, Electron Debug Mode)
 
@@ -29,7 +30,7 @@ ChatGPT Desktop is also an Electron app and can be launched with a remote debugg
 export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
 ```
 
-> The CDP approach enables future advanced commands like DOM inspection, model switching, and code extraction.
+> The CDP approach is primarily for advanced automation and future desktop-only commands. The built-in command set above still works in the default AppleScript path unless you explicitly route through `OPENCLI_CDP_ENDPOINT`.
 
 ## How It Works
 

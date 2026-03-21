@@ -17,6 +17,7 @@ import { log } from './logger.js';
 
 /** Plugins directory: ~/.opencli/plugins/ */
 export const PLUGINS_DIR = path.join(os.homedir(), '.opencli', 'plugins');
+const CLI_MODULE_PATTERN = /\bcli\s*\(/;
 
 /**
  * Discover and register CLI commands.
@@ -114,6 +115,7 @@ async function discoverClisFromFs(dir: string): Promise<void> {
         (file.endsWith('.js') && !file.endsWith('.d.js')) ||
         (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts'))
       ) {
+        if (!(await isCliModule(filePath))) continue;
         promises.push(
           import(`file://${filePath}`).catch((err: any) => {
             log.warn(`Failed to load module ${filePath}: ${err.message}`);
@@ -200,6 +202,7 @@ async function discoverPluginDir(dir: string, site: string): Promise<void> {
     if (file.endsWith('.yaml') || file.endsWith('.yml')) {
       promises.push(registerYamlCli(filePath, site));
     } else if (file.endsWith('.js') && !file.endsWith('.d.js')) {
+      if (!(await isCliModule(filePath))) continue;
       promises.push(
         import(`file://${filePath}`).catch((err: any) => {
           log.warn(`Plugin ${site}/${file}: ${err.message}`);
@@ -211,6 +214,7 @@ async function discoverPluginDir(dir: string, site: string): Promise<void> {
       // Skip .ts if a compiled .js sibling exists (production mode can't load .ts)
       const jsFile = file.replace(/\.ts$/, '.js');
       if (fileSet.has(jsFile)) continue;
+      if (!(await isCliModule(filePath))) continue;
       promises.push(
         import(`file://${filePath}`).catch((err: any) => {
           log.warn(`Plugin ${site}/${file}: ${err.message}`);
@@ -219,4 +223,14 @@ async function discoverPluginDir(dir: string, site: string): Promise<void> {
     }
   }
   await Promise.all(promises);
+}
+
+async function isCliModule(filePath: string): Promise<boolean> {
+  try {
+    const source = await fs.promises.readFile(filePath, 'utf-8');
+    return CLI_MODULE_PATTERN.test(source);
+  } catch (err: any) {
+    log.warn(`Failed to inspect module ${filePath}: ${err.message}`);
+    return false;
+  }
 }

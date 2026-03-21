@@ -10,6 +10,41 @@ describe('discoverClis', () => {
     // Should not throw for missing directories
     await expect(discoverClis('/tmp/nonexistent-opencli-test-dir')).resolves.not.toThrow();
   });
+
+  it('imports only CLI command modules during filesystem discovery', async () => {
+    const tempRoot = await fs.promises.mkdtemp(path.join('/tmp', 'opencli-discovery-'));
+    const siteDir = path.join(tempRoot, 'temp-site');
+    const helperPath = path.join(siteDir, 'helper.ts');
+    const commandPath = path.join(siteDir, 'hello.ts');
+
+    try {
+      await fs.promises.mkdir(siteDir, { recursive: true });
+      await fs.promises.writeFile(helperPath, `
+globalThis.__opencli_helper_loaded__ = true;
+export const helper = true;
+`);
+      await fs.promises.writeFile(commandPath, `
+import { cli, Strategy } from '${path.join(process.cwd(), 'src', 'registry.ts')}';
+cli({
+  site: 'temp-site',
+  name: 'hello',
+  description: 'hello command',
+  strategy: Strategy.PUBLIC,
+  browser: false,
+  func: async () => [{ ok: true }],
+});
+`);
+
+      delete (globalThis as any).__opencli_helper_loaded__;
+      await discoverClis(tempRoot);
+
+      expect((globalThis as any).__opencli_helper_loaded__).toBeUndefined();
+      expect(getRegistry().get('temp-site/hello')).toBeDefined();
+    } finally {
+      delete (globalThis as any).__opencli_helper_loaded__;
+      await fs.promises.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('discoverPlugins', () => {

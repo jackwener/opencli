@@ -9,7 +9,7 @@
 [![Node.js Version](https://img.shields.io/node/v/@jackwener/opencli?style=flat-square)](https://nodejs.org)
 [![License](https://img.shields.io/npm/l/@jackwener/opencli?style=flat-square)](./LICENSE)
 
-A CLI tool that turns **any website** or **Electron app** into a command-line interface — Bilibili, Zhihu, 小红书, Twitter/X, Reddit, YouTube, Antigravity, and [many more](#built-in-commands) — powered by browser session reuse and AI-native discovery.
+A CLI tool that turns **any website**, **Electron app**, or **local CLI tool** into a command-line interface — Bilibili, Zhihu, 小红书, Twitter/X, Reddit, YouTube, Antigravity, `gh`, `docker`, and [many more](#built-in-commands) — powered by browser session reuse and AI-native discovery.
 
 **Built for AI Agents**: Simply configure an instruction in your global `AGENT.md` or `.cursorrules` guiding the AI to execute `opencli list` via Bash to discover available tools. Register your favorite local CLIs (`opencli register mycli`), and the AI will automatically learn how to invoke all your tools perfectly!
 
@@ -25,6 +25,7 @@ Turn ANY Electron application into a CLI tool! Recombine, script, and extend app
 - [Quick Start](#quick-start)
 - [Built-in Commands](#built-in-commands)
   - [Desktop App Adapters](#desktop-app-adapters)
+- [External CLI Hub](#external-cli-hub)
 - [Download Support](#download-support)
 - [Output Formats](#output-formats)
 - [For AI Agents (Developer Guide)](#for-ai-agents-developer-guide)
@@ -128,7 +129,7 @@ Run `opencli list` for the live registry.
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | Desktop |
 | **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | Public / Browser |
 | **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` | Browser |
-| **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` | Desktop |
+| **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` `serve` | Desktop |
 | **chatgpt** | `status` `new` `send` `read` `ask` | Desktop |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | Browser |
 | **apple-podcasts** | `search` `episodes` `top` | Public |

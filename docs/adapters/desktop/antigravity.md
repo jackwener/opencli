@@ -36,6 +36,9 @@ Scrape the entire current conversation history block as pure text.
 ### `opencli antigravity new`
 Click the "New Conversation" button to instantly clear the UI state and start fresh.
 
+### `opencli antigravity dump`
+Dump the current DOM and snapshot artifacts to `/tmp` for reverse-engineering and selector debugging.
+
 ### `opencli antigravity extract-code`
 Extract any multi-line code blocks from the current conversation view. Ideal for automated script extraction (e.g. `opencli antigravity extract-code > script.sh`).
 
@@ -44,3 +47,6 @@ Quickly target and switch the active LLM engine. Example: `opencli antigravity m
 
 ### `opencli antigravity watch`
 A long-running, streaming process that continuously polls the Antigravity UI for chat updates and outputs them in real-time to standard output.
+
+### `opencli antigravity serve --port 8082`
+Start an Anthropic-compatible `/v1/messages` proxy backed by the local Antigravity app. Useful when you want external tools to talk to Antigravity through an API-shaped interface.
