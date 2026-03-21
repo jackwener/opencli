@@ -52,7 +52,8 @@ export function installPlugin(source: string): void {
     throw new Error(`Failed to clone plugin: ${err.message}`);
   }
 
-  // If the plugin has a package.json, run npm install for peerDeps resolution
+  // If the plugin has a package.json, run npm install for regular deps,
+  // then symlink the host opencli into node_modules for peerDep resolution.
   const pkgJsonPath = path.join(targetDir, 'package.json');
   if (fs.existsSync(pkgJsonPath)) {
     try {
@@ -64,6 +65,12 @@ export function installPlugin(source: string): void {
     } catch {
       // Non-fatal: npm install may fail if no real deps
     }
+
+    // Symlink host opencli into plugin's node_modules so TS plugins
+    // can resolve '@jackwener/opencli/registry' against the running host.
+    // This is more reliable than depending on the npm-published version
+    // which may lag behind the local installation.
+    linkHostOpencli(targetDir);
   }
 }
 
@@ -158,6 +165,37 @@ function parseSource(source: string): { cloneUrl: string; name: string } | null 
   }
 
   return null;
+}
+
+/**
+ * Symlink the host opencli package into a plugin's node_modules.
+ * This ensures TS plugins resolve '@jackwener/opencli/registry' against
+ * the running host installation rather than a stale npm-published version.
+ */
+function linkHostOpencli(pluginDir: string): void {
+  try {
+    // Determine the host opencli package root from this module's location.
+    // In dev (tsx): import.meta.url → file:///…/opencli/src/plugin.ts  → root is ../../
+    // In prod (node): import.meta.url → file:///…/opencli/dist/plugin.js → root is ../
+    const thisFile = new URL(import.meta.url).pathname;
+    const hostRoot = path.resolve(path.dirname(thisFile), '..');
+
+    const targetLink = path.join(pluginDir, 'node_modules', '@jackwener', 'opencli');
+
+    // Remove existing (npm-installed copy or stale symlink)
+    if (fs.existsSync(targetLink)) {
+      fs.rmSync(targetLink, { recursive: true, force: true });
+    }
+
+    // Ensure parent directory exists
+    fs.mkdirSync(path.dirname(targetLink), { recursive: true });
+
+    // Create symlink
+    fs.symlinkSync(hostRoot, targetLink, 'dir');
+    log.debug(`Linked host opencli into plugin: ${targetLink} → ${hostRoot}`);
+  } catch (err: any) {
+    log.warn(`Failed to link host opencli into plugin: ${err.message}`);
+  }
 }
 
 export { parseSource as _parseSource };
