@@ -1,0 +1,38 @@
+site: coingecko
+name: gainers
+description: Top gaining cryptocurrencies by 24h price change
+domain: api.coingecko.com
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 10
+    description: Number of coins
+  currency:
+    type: str
+    default: usd
+    description: Price currency
+
+pipeline:
+  - fetch:
+      url: https://api.coingecko.com/api/v3/coins/markets?vs_currency=${{ args.currency }}&order=market_cap_desc&per_page=250&page=1
+
+  - filter: item.price_change_percentage_24h
+
+  - sort:
+      by: price_change_percentage_24h
+      order: desc
+
+  - map:
+      rank: ${{ index + 1 }}
+      name: ${{ item.name }}
+      symbol: ${{ item.symbol }}
+      price: ${{ item.current_price }}
+      change_24h: ${{ item.price_change_percentage_24h }}
+      cap_rank: ${{ item.market_cap_rank }}
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, name, symbol, price, change_24h, cap_rank]

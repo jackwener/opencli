@@ -1,0 +1,28 @@
+site: coingecko
+name: exchanges
+description: Top cryptocurrency exchanges by trading volume
+domain: api.coingecko.com
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 20
+    description: Number of exchanges
+
+pipeline:
+  - fetch:
+      url: https://api.coingecko.com/api/v3/exchanges?per_page=${{ args.limit }}
+
+  - map:
+      rank: ${{ index + 1 }}
+      name: ${{ item.name }}
+      country: ${{ item.country }}
+      trust_score: ${{ item.trust_score }}
+      volume_btc: ${{ item.trade_volume_24h_btc }}
+      year: ${{ item.year_established }}
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, name, country, trust_score, volume_btc, year]

@@ -13,31 +13,38 @@
 | `opencli instagram followers` | List user's followers |
 | `opencli instagram following` | List user's following |
 | `opencli instagram saved` | Get your saved posts |
+| `opencli instagram like` | Like a post |
+| `opencli instagram unlike` | Unlike a post |
+| `opencli instagram comment` | Comment on a post |
+| `opencli instagram save` | Bookmark a post |
+| `opencli instagram unsave` | Remove bookmark |
+| `opencli instagram follow` | Follow a user |
+| `opencli instagram unfollow` | Unfollow a user |
 
 ## Usage Examples
 
 ```bash
 # View a user's profile
-opencli instagram profile nasa
+opencli instagram profile --username nasa
 
 # Search users
-opencli instagram search nasa --limit 5
+opencli instagram search --query nasa --limit 5
 
 # View a user's recent posts
-opencli instagram user nasa --limit 10
+opencli instagram user --username nasa --limit 10
 
-# Discover trending posts
-opencli instagram explore --limit 20
+# Like a user's most recent post
+opencli instagram like --username nasa --index 1
 
-# List followers/following
-opencli instagram followers nasa --limit 20
-opencli instagram following nasa --limit 20
+# Comment on a post
+opencli instagram comment --username nasa --text "Amazing!" --index 1
 
-# Get your saved posts
-opencli instagram saved --limit 10
+# Follow/unfollow
+opencli instagram follow --username nasa
+opencli instagram unfollow --username nasa
 
 # JSON output
-opencli instagram profile nasa -f json
+opencli instagram profile --username nasa -f json
 ```
 
 ## Prerequisites

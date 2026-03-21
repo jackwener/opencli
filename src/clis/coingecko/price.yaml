@@ -1,0 +1,31 @@
+site: coingecko
+name: price
+description: Quick price check for one or more cryptocurrencies
+domain: api.coingecko.com
+strategy: public
+browser: false
+
+args:
+  ids:
+    type: str
+    required: true
+    positional: true
+    description: "Comma-separated coin IDs (e.g. bitcoin,ethereum,solana)"
+  currency:
+    type: str
+    default: usd
+    description: Price currency (usd, eur, gbp, aud, cny, etc.)
+
+pipeline:
+  - fetch:
+      url: https://api.coingecko.com/api/v3/coins/markets?vs_currency=${{ args.currency }}&ids=${{ args.ids }}&order=market_cap_desc
+
+  - map:
+      coin: ${{ item.name }}
+      symbol: ${{ item.symbol }}
+      price: ${{ item.current_price }}
+      change_24h: ${{ item.price_change_percentage_24h }}
+      market_cap: ${{ item.market_cap }}
+      volume: ${{ item.total_volume }}
+
+columns: [coin, symbol, price, change_24h, market_cap, volume]

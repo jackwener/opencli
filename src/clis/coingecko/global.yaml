@@ -1,0 +1,22 @@
+site: coingecko
+name: global
+description: Global cryptocurrency market overview
+domain: api.coingecko.com
+strategy: public
+browser: false
+
+pipeline:
+  - fetch:
+      url: https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1
+
+  - map:
+      rank: ${{ item.market_cap_rank }}
+      name: ${{ item.name }}
+      symbol: ${{ item.symbol }}
+      price: ${{ item.current_price }}
+      change_24h: ${{ item.price_change_percentage_24h }}
+      market_cap: ${{ item.market_cap }}
+
+  - limit: 10
+
+columns: [rank, name, symbol, price, change_24h, market_cap]

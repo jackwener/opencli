@@ -1,0 +1,27 @@
+site: coingecko
+name: categories
+description: Cryptocurrency categories ranked by market cap
+domain: api.coingecko.com
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 20
+    description: Number of categories
+
+pipeline:
+  - fetch:
+      url: https://api.coingecko.com/api/v3/coins/categories?order=market_cap_desc
+
+  - map:
+      rank: ${{ index + 1 }}
+      name: ${{ item.name }}
+      market_cap: ${{ item.market_cap }}
+      change_24h: ${{ item.market_cap_change_24h }}
+      volume_24h: ${{ item.volume_24h }}
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, name, market_cap, change_24h, volume_24h]
