@@ -1,5 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
-import { CliError } from '../../errors.js';
+import { navigateViaVueRouter, extractLawResults } from './shared.js';
 
 cli({
   site: 'gov-law',
@@ -16,78 +16,26 @@ cli({
   navigateBefore: false,
   func: async (page, kwargs) => {
     const limit = Math.min(kwargs.limit || 10, 20);
-    await page.goto('https://flk.npc.gov.cn/index.html');
-    await page.wait(4);
+    await navigateViaVueRouter(page, { searchWord: kwargs.query });
 
-    // Set search input value via Vue reactivity, then trigger search via Vue Router
+    // Set search input for Vue reactivity
     const query = JSON.stringify(kwargs.query);
     await page.evaluate(`
       (async () => {
-        // Set input value to trigger Vue's v-model binding
         const input = document.querySelector('.el-input__inner');
-        if (input) {
-          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-          nativeSetter.call(input, ${query});
+        if (input && !input.value) {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          setter.call(input, ${query});
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        // Wait for Vue to process the input
-        await new Promise(r => setTimeout(r, 500));
-        // Navigate via Vue Router with searchWord
-        const app = document.querySelector('#app');
-        const router = app?.__vue_app__?.config?.globalProperties?.$router;
-        if (!router) return 'no_router';
-        await router.push({path: '/search', query: {searchWord: ${query}}});
-        // After navigation, set the search input again on the search page
-        await new Promise(r => setTimeout(r, 1000));
-        const searchInput = document.querySelector('.el-input__inner');
-        if (searchInput && !searchInput.value) {
-          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-          setter.call(searchInput, ${query});
-          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-          searchInput.dispatchEvent(new Event('change', { bubbles: true }));
           await new Promise(r => setTimeout(r, 300));
-          // Trigger Enter key to execute search
-          searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-          searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
         }
       })()
     `);
-    await page.wait(5);
+    await page.wait(3);
 
-    // Check if Vue Router was available
-    const navResult = await page.evaluate(`location.href`);
-    if (typeof navResult === 'string' && !navResult.includes('/search')) {
-      throw new CliError(
-        'FRAMEWORK_CHANGED',
-        'Could not access Vue Router on flk.npc.gov.cn — the site may have been restructured.',
-        'Please report this issue so the adapter can be updated.',
-      );
-    }
-
-    const data = await page.evaluate(`
-      (async () => {
-        const normalize = v => (v || '').replace(/\\s+/g, ' ').trim();
-        for (let i = 0; i < 40; i++) {
-          if (document.querySelectorAll('.result-item').length > 0) break;
-          await new Promise(r => setTimeout(r, 500));
-        }
-        const results = [];
-        const items = document.querySelectorAll('.result-item');
-        for (const el of items) {
-          const title = normalize(el.querySelector('.title-content')?.textContent);
-          if (!title) continue;
-          const statusEl = el.querySelector('[class*="status"]');
-          const status = normalize(statusEl?.textContent);
-          const pubDate = normalize(el.querySelector('.publish-time')?.textContent).replace(/^公布日期[：:]\\s*/, '');
-          const type = normalize(el.querySelector('.type')?.textContent);
-          const department = normalize(el.querySelector('.department')?.textContent);
-          results.push({ rank: results.length + 1, title, status, publish_date: pubDate, type, department });
-          if (results.length >= ${limit}) break;
-        }
-        return results;
-      })()
-    `);
-    return Array.isArray(data) ? data : [];
+    return extractLawResults(page, limit);
   },
 });
