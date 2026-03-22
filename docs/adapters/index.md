@@ -19,6 +19,7 @@ Run `opencli list` for the live registry.
 | **[linkedin](/adapters/browser/linkedin)** | `search` | 🔐 Browser |
 | **[coupang](/adapters/browser/coupang)** | `search` `add-to-cart` | 🔐 Browser |
 | **[boss](/adapters/browser/boss)** | `search` `detail` | 🔐 Browser |
+| **[liepin](/adapters/browser/liepin)** | `search` | 🔐 Browser |
 | **[ctrip](/adapters/browser/ctrip)** | `search` | 🔐 Browser |
 | **[reuters](/adapters/browser/reuters)** | `search` | 🔐 Browser |
 | **[smzdm](/adapters/browser/smzdm)** | `search` | 🔐 Browser |
