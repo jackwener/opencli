@@ -68,6 +68,9 @@ export default defineConfig({
                 { text: 'Chaoxing', link: '/adapters/browser/chaoxing' },
                 { text: 'Grok', link: '/adapters/browser/grok' },
                 { text: 'WeRead', link: '/adapters/browser/weread' },
+                { text: 'Douban', link: '/adapters/browser/douban' },
+                { text: 'Sina Blog', link: '/adapters/browser/sinablog' },
+                { text: 'Substack', link: '/adapters/browser/substack' },
               ],
             },
             {

@@ -39,7 +39,7 @@ Browser commands require:
 
 > **Note**: You must be logged into the target website in Chrome before running commands. Tabs opened during command execution are auto-closed afterwards.
 
-Public API commands (`hackernews`, `github search`, `v2ex`) need no browser.
+Public API commands (`hackernews`, `v2ex`) need no browser.
 
 ## Commands Reference
 
@@ -83,8 +83,10 @@ opencli xueqiu feed                      # 我的关注 timeline
 opencli xueqiu hot --limit 10            # 雪球热榜
 opencli xueqiu search "特斯拉"            # 搜索 (query positional)
 
-# GitHub (public)
-opencli github search "cli"              # 搜索仓库 (query positional)
+# GitHub (via gh External CLI)
+opencli gh repo list                     # 列出仓库 (passthrough to gh)
+opencli gh pr list --limit 5             # PR 列表
+opencli gh issue list                    # Issue 列表
 
 # Twitter/X (browser)
 opencli twitter trending --limit 10      # 热门话题
