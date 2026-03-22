@@ -142,6 +142,7 @@ Run `opencli list` for the live registry.
 | **bloomberg** | `main` `markets` `economics` `industries` `tech` `politics` `businessweek` `opinions` `feeds` `news` | Public / Browser |
 | **ctrip** | `search` | Browser |
 | **devto** | `top` `tag` `user` | Public |
+| **weather** | `search` | Public |
 | **arxiv** | `search` `paper` | Public |
 | **wikipedia** | `search` `summary` | Public |
 | **hackernews** | `top` | Public |

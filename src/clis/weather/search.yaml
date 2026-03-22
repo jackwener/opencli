@@ -1,0 +1,27 @@
+site: weather
+name: search
+description: Search for live weather telemetry of any global city
+domain: wttr.in
+strategy: public
+browser: false
+
+args:
+  location:
+    type: string
+    required: true
+    description: City name or zip code to search for (e.g. Paris, 10001)
+
+pipeline:
+  - fetch:
+      url: "https://wttr.in/${{ args.location }}?format=j1"
+  
+  - select: current_condition
+  
+  - map:
+      condition: "${{ item.weatherDesc[0].value }}"
+      temp: "${{ item.temp_C }}°C"
+      feels: "${{ item.FeelsLikeC }}°C"
+      humidity: "${{ item.humidity }}%"
+      wind: "${{ item.windspeedKmph }} km/h"
+
+columns: [condition, temp, feels, humidity, wind]

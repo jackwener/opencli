@@ -44,6 +44,7 @@ Run `opencli list` for the live registry.
 | **[hf](/adapters/browser/hf)** | `top` | 🌐 Public |
 | **[sinafinance](/adapters/browser/sinafinance)** | `news` | 🌐 Public |
 | **[stackoverflow](/adapters/browser/stackoverflow)** | `hot` `search` `bounties` `unanswered` | 🌐 Public |
+| **[weather](/adapters/browser/weather)** | `search` | 🌐 Public |
 | **[wikipedia](/adapters/browser/wikipedia)** | `search` `summary` | 🌐 Public |
 
 ## Desktop Adapters
