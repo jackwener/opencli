@@ -11,6 +11,7 @@
 
 import { type CliCommand, type InternalCliCommand, type Arg, Strategy, getRegistry, fullName } from './registry.js';
 import type { IPage } from './types.js';
+import { pathToFileURL } from 'node:url';
 import { executePipeline } from './pipeline/index.js';
 import { AdapterLoadError } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
@@ -86,7 +87,7 @@ async function runCommand(
     const modulePath = internal._modulePath;
     if (!_loadedModules.has(modulePath)) {
       try {
-        await import(`file://${modulePath}`);
+        await import(pathToFileURL(modulePath).href);
         _loadedModules.add(modulePath);
       } catch (err) {
         throw new AdapterLoadError(
