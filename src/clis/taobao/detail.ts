@@ -12,9 +12,10 @@ cli({
   columns: ['field', 'value'],
   navigateBefore: false,
   func: async (page, kwargs) => {
-    await page.goto(`https://item.taobao.com/item.htm?id=${kwargs.id}`);
+    await page.goto('https://www.taobao.com');
+    await page.wait(2);
+    await page.evaluate(`location.href = 'https://item.taobao.com/item.htm?id=${kwargs.id}'`);
     await page.wait(6);
-    await page.autoScroll({ times: 1, delayMs: 1000 });
 
     const data = await page.evaluate(`
       (() => {
@@ -23,41 +24,53 @@ cli({
         const results = [];
 
         // Title
-        const titleEl = document.querySelector('[class*="mainTitle--"], [class*="ItemHeader--"], h1, .tb-main-title');
-        const title = titleEl ? normalize(titleEl.textContent) : document.title.split('-')[0].trim();
+        const titleEl = document.querySelector('[class*="mainTitle--"]');
+        const title = titleEl ? normalize(titleEl.textContent) : document.title.split('-')[0].replace(/^【[^】]+】/, '').trim();
         results.push({ field: '商品名称', value: title.slice(0, 100) });
 
-        // Price: find the main price number
-        const priceMatch = text.match(/¥\s*(\d+(?:\.\d{1,2})?)/);
-        const price = priceMatch ? '¥' + priceMatch[1] : '';
-        if (price) results.push({ field: '价格', value: price });
+        // Price: find ￥ or ¥ followed by digits in text (they may be split by newlines)
+        const pricePattern = /[￥¥]\\s*(\\d+(?:\\.\\d{1,2})?)/g;
+        const prices = [];
+        let m;
+        while ((m = pricePattern.exec(text)) && prices.length < 3) {
+          const p = parseFloat(m[1]);
+          if (p > 0.1 && p < 100000) prices.push(p);
+        }
+        if (prices.length > 0) {
+          const minPrice = Math.min(...prices);
+          results.push({ field: '价格', value: '¥' + minPrice });
+        }
 
-        // Sales / reviews
+        // Sales
         const salesMatch = text.match(/(\\d+万?\\+?)\\s*人付款/) || text.match(/月销\\s*(\\d+万?\\+?)/);
         if (salesMatch) results.push({ field: '销量', value: salesMatch[0] });
 
-        const reviewMatch = text.match(/累计评价\\s*(\\d+万?\\+?)/) || text.match(/(\\d+万?\\+?)\\s*条评价/);
-        if (reviewMatch) results.push({ field: '评价数', value: reviewMatch[1] || reviewMatch[0] });
+        // Reviews
+        const reviewMatch = text.match(/累计评价\\s*(\\d+万?\\+?)/) || text.match(/评价[（(]\\s*(\\d+万?\\+?)/);
+        if (reviewMatch) results.push({ field: '评价数', value: reviewMatch[1] });
 
-        // Rating
-        const ratingMatch = text.match(/(\\d+\\.?\\d*)\\s*分/) || text.match(/描述\\s*(\\d+\\.\\d+)/);
-        if (ratingMatch) results.push({ field: '评分', value: ratingMatch[0] });
+        // Shop rating
+        const ratingMatch = text.match(/(\\d+\\.\\d)\\s*(?:分|描述|物流|服务)/);
+        if (ratingMatch) results.push({ field: '店铺评分', value: ratingMatch[0] });
 
-        // Shop: use class prefix matching, exclude nav links
-        const shopEl = document.querySelector('[class*="shopName--"] a, [class*="ShopHeader--"] a, [class*="seller--"] a');
-        let shop = shopEl ? normalize(shopEl.textContent) : '';
-        if (!shop || shop.length < 2 || shop.includes('免费') || shop.includes('登录')) {
-          const shopMatch = text.match(/([\u4e00-\u9fa5A-Za-z]{2,15}(?:旗舰店|专卖店|企业店|专营店))/);
-          shop = shopMatch ? shopMatch[1] : '';
-        }
-        if (shop && shop.length > 1 && shop.length < 30) results.push({ field: '店铺', value: shop });
+        // Shop name
+        const shopMatch = text.match(/([\u4e00-\u9fa5A-Za-z0-9]{2,15}(?:旗舰店|专卖店|企业店|专营店))/);
+        if (shopMatch) results.push({ field: '店铺', value: shopMatch[1] });
 
         // Location
-        const locMatch = text.match(/发货地[：:]*\\s*([\u4e00-\u9fa5]{2,10})/);
+        const locMatch = text.match(/发货地[：:]*\\s*([\u4e00-\u9fa5]{2,10})/) || text.match(/([\u4e00-\u9fa5]{2,4}(?:省|市))\\s*发货/);
         if (locMatch) results.push({ field: '发货地', value: locMatch[1] });
 
+        // Specs available
+        const specMatch = text.match(/颜色分类/);
+        if (specMatch) {
+          const specSection = text.substring(text.indexOf('颜色分类'), text.indexOf('颜色分类') + 200);
+          const specs = specSection.split('\\n').filter(l => l.trim().length > 2 && l.trim().length < 50).slice(0, 5);
+          if (specs.length) results.push({ field: '可选规格', value: specs.join(' | ') });
+        }
+
         results.push({ field: 'ID', value: '${kwargs.id}' });
-        results.push({ field: '链接', value: location.href.split('?')[0] + '?id=${kwargs.id}' });
+        results.push({ field: '链接', value: location.href.split('&')[0] });
 
         return results;
       })()

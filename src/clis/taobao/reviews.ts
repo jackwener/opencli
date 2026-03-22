@@ -14,61 +14,61 @@ cli({
   navigateBefore: false,
   func: async (page, kwargs) => {
     const limit = Math.min(kwargs.limit || 10, 20);
-    await page.goto(`https://item.taobao.com/item.htm?id=${kwargs.id}`);
-    await page.wait(6);
-    await page.autoScroll({ times: 3, delayMs: 2000 });
+    // Navigate to product page first (to get cookies/session)
+    await page.goto('https://www.taobao.com');
+    await page.wait(2);
+    await page.evaluate(`location.href = 'https://item.taobao.com/item.htm?id=${kwargs.id}'`);
+    await page.wait(5);
 
+    // Try to fetch reviews via the rate API
     const data = await page.evaluate(`
       (async () => {
         const normalize = v => (v || '').replace(/\\s+/g, ' ').trim();
 
-        // Wait for reviews to load
-        for (let i = 0; i < 30; i++) {
-          if (document.querySelectorAll('[class*="comment--"], [class*="Comment--"], [class*="review--"], .rate-grid').length > 0) break;
-          await new Promise(r => setTimeout(r, 500));
-        }
-
-        const results = [];
-
-        // Strategy 1: Find comment elements by class prefix
-        const commentEls = document.querySelectorAll('[class*="comment--"], [class*="Comment--"], [class*="rateContent--"]');
-        if (commentEls.length > 0) {
-          for (const el of commentEls) {
-            const content = normalize(el.textContent);
-            if (content.length < 5 || content.length > 500) continue;
-            // Find user name nearby
-            const parent = el.closest('[class*="rateItem--"], [class*="item--"]') || el.parentElement?.parentElement;
-            const userEl = parent?.querySelector('[class*="userName--"], [class*="user--"]');
-            const user = userEl ? normalize(userEl.textContent) : '';
-            const dateEl = parent?.querySelector('[class*="date--"], [class*="time--"]');
-            const date = dateEl ? normalize(dateEl.textContent) : '';
-            const specEl = parent?.querySelector('[class*="sku--"], [class*="spec--"]');
-            const spec = specEl ? normalize(specEl.textContent) : '';
-
-            results.push({ rank: results.length + 1, user, content: content.slice(0, 150), date, spec });
-            if (results.length >= ${limit}) break;
+        // Try MTOP rate list API
+        try {
+          const resp = await fetch(
+            'https://rate.tmall.com/list_detail_rate.htm?itemId=${kwargs.id}&sellerId=&order=3&currentPage=1&pageSize=${limit}&callback=',
+            { credentials: 'include' }
+          );
+          let text = await resp.text();
+          // Remove JSONP wrapper if any
+          text = text.replace(/^[^{]*/, '').replace(/[^}]*$/, '');
+          const json = JSON.parse(text);
+          const list = json?.rateDetail?.rateList || json?.rateList || [];
+          if (list.length > 0) {
+            return list.slice(0, ${limit}).map((item, i) => ({
+              rank: i + 1,
+              user: (item.displayUserNick || item.userNick || '').slice(0, 15),
+              content: normalize(item.rateContent || '').slice(0, 150),
+              date: item.rateDate || '',
+              spec: normalize(item.auctionSku || '').slice(0, 40),
+            }));
           }
-        }
+        } catch {}
 
-        // Strategy 2: parse from page text if DOM extraction failed
-        if (results.length === 0) {
-          const text = document.body?.innerText || '';
-          // Look for review section
-          const reviewIdx = text.search(/评价|评论|买家秀/);
-          if (reviewIdx > 0) {
-            const section = text.substring(reviewIdx, reviewIdx + 3000);
-            const lines = section.split('\\n').map(l => l.trim()).filter(l => l.length > 10 && l.length < 300);
-            for (const line of lines) {
-              // Skip headers and navigation
-              if (line.match(/^(评价|评论|买家秀|全部|好评|中评|差评|有图|追评)/)) continue;
-              if (line.match(/^\\d+$/)) continue;
-              results.push({ rank: results.length + 1, user: '', content: line.slice(0, 150), date: '', spec: '' });
-              if (results.length >= ${limit}) break;
-            }
+        // Try alternative API endpoint
+        try {
+          const resp2 = await fetch(
+            'https://rate.taobao.com/feedRateList.htm?auctionNumId=${kwargs.id}&currentPageNum=1&pageSize=${limit}&orderType=feedbackdate&callback=',
+            { credentials: 'include' }
+          );
+          let text2 = await resp2.text();
+          text2 = text2.replace(/^[^{]*/, '').replace(/[^}]*$/, '');
+          const json2 = JSON.parse(text2);
+          const comments = json2?.comments || [];
+          if (comments.length > 0) {
+            return comments.slice(0, ${limit}).map((item, i) => ({
+              rank: i + 1,
+              user: (item.user?.nick || '').slice(0, 15),
+              content: normalize(item.content || '').slice(0, 150),
+              date: item.date || '',
+              spec: normalize(item.auction?.sku || '').slice(0, 40),
+            }));
           }
-        }
+        } catch {}
 
-        return results;
+        return [];
       })()
     `);
     return Array.isArray(data) ? data : [];

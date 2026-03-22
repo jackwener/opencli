@@ -6,82 +6,93 @@ cli({
   description: '查看淘宝购物车',
   domain: 'cart.taobao.com',
   strategy: Strategy.COOKIE,
-  args: [],
-  columns: ['index', 'title', 'price', 'quantity', 'shop', 'url'],
+  args: [
+    { name: 'limit', type: 'int', default: 20, help: '返回数量 (max 50)' },
+  ],
+  columns: ['index', 'title', 'price', 'spec', 'shop'],
   navigateBefore: false,
-  func: async (page) => {
-    await page.goto('https://cart.taobao.com/cart.htm');
+  func: async (page, kwargs) => {
+    const limit = Math.min(kwargs.limit || 20, 50);
+    await page.goto('https://www.taobao.com');
+    await page.wait(2);
+    await page.evaluate(`location.href = 'https://cart.taobao.com/cart.htm'`);
     await page.wait(6);
-    await page.autoScroll({ times: 1, delayMs: 1000 });
+    await page.autoScroll({ times: 3, delayMs: 1500 });
 
     const data = await page.evaluate(`
       (async () => {
         const normalize = v => (v || '').replace(/\\s+/g, ' ').trim();
+        const text = document.body?.innerText || '';
 
-        for (let i = 0; i < 20; i++) {
-          if (document.body?.innerText?.length > 500) break;
-          await new Promise(r => setTimeout(r, 500));
+        if (text.length < 500 || text.includes('请登录')) {
+          return [{index:0, title:'[需要登录] 请在自动化窗口中登录淘宝', price:'', spec:'', shop:''}];
         }
 
+        // Parse cart from text: each item ends with "移入收藏 删除"
+        // Split text by "移入收藏" delimiter
+        const sections = text.split(/移入收藏/);
         const results = [];
 
-        // Strategy 1: Find cart items by class prefix patterns
-        const items = document.querySelectorAll('[class*="order--"], [class*="item--"], [class*="cartItem--"]');
-        const seen = new Set();
-        for (const item of items) {
-          const titleEl = item.querySelector('[class*="itemTitle--"], [class*="title--"] a, a[href*="item.htm"]');
-          const title = titleEl ? normalize(titleEl.textContent) : '';
-          if (!title || title.length < 3 || seen.has(title)) continue;
-          seen.add(title);
+        for (const section of sections) {
+          const lines = section.split('\\n').map(l => l.trim()).filter(Boolean);
+          if (lines.length < 3) continue;
 
-          const priceEl = item.querySelector('[class*="price--"], [class*="Price--"]');
-          const price = priceEl ? normalize(priceEl.textContent) : '';
+          // Find the product title: longest line that looks like a product name
+          let title = '';
+          let titleIdx = -1;
+          for (let i = 0; i < lines.length; i++) {
+            const l = lines[i];
+            if (l.length > 15 && l.length < 200 && !l.match(/^(删除|全选|全部商品|合计|结算|找同款|退货|￥|¥|\\d+$|颜色|尺码|规格|套餐|主板|运行)/)) {
+              if (l.length > title.length) {
+                title = l;
+                titleIdx = i;
+              }
+            }
+          }
+          if (!title) continue;
 
-          const qtyEl = item.querySelector('[class*="quantity--"] input, [class*="amount--"] input, input[type="text"]');
-          const quantity = qtyEl ? qtyEl.value || '1' : '1';
+          // Price: find ￥ followed by digits (may be split across lines)
+          let price = '';
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i] === '￥' || lines[i] === '¥') {
+              // Next lines contain the price digits
+              let p = '';
+              for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+                if (lines[j].match(/^[\\d,.]+$/)) { p += lines[j]; }
+                else if (lines[j] === '.') { p += '.'; }
+                else break;
+              }
+              if (p) { price = '￥' + p; break; }
+            }
+          }
 
-          const shopEl = item.querySelector('[class*="shopName--"], [class*="shop--"] a');
-          const shop = shopEl ? normalize(shopEl.textContent) : '';
+          // Spec: lines starting with 颜色/尺码/规格/套餐
+          let spec = '';
+          for (const l of lines) {
+            if (l.match(/^(颜色分类|尺码|规格|套餐|主板|运行)[：:]/)) {
+              spec = l.slice(0, 40);
+              break;
+            }
+          }
 
-          const linkEl = item.querySelector('a[href*="item.htm"]');
-          let url = linkEl ? linkEl.getAttribute('href') || '' : '';
-          if (url.startsWith('//')) url = 'https:' + url;
+          // Shop: check the line before title or look for shop patterns
+          let shop = '';
+          if (titleIdx > 0) {
+            const prev = lines[titleIdx - 1];
+            if (prev && prev.length > 2 && prev.length < 30 && !prev.match(/^(删除|\\d|￥|¥|券|退|满|超)/)) {
+              shop = prev;
+            }
+          }
 
           results.push({
             index: results.length + 1,
             title: title.slice(0, 80),
             price,
-            quantity,
+            spec,
             shop,
-            url: url.split('&')[0],
           });
+          if (results.length >= ${limit}) break;
         }
-
-        // Strategy 2: parse from text if DOM failed
-        if (results.length === 0) {
-          const text = document.body?.innerText || '';
-          if (text.includes('购物车') && text.length > 200) {
-            const lines = text.split('\\n').map(l => l.trim()).filter(Boolean);
-            for (let i = 0; i < lines.length; i++) {
-              const line = lines[i];
-              if (line.length > 10 && line.length < 150 && !line.match(/^(购物车|全选|结算|商品|合计|¥)/) && lines[i+1]?.includes('¥')) {
-                results.push({
-                  index: results.length + 1,
-                  title: line.slice(0, 80),
-                  price: (lines[i+1].match(/¥[\\d.]+/) || [''])[0],
-                  quantity: '1',
-                  shop: '',
-                  url: '',
-                });
-              }
-            }
-          }
-        }
-
-        if (results.length === 0 && document.body?.innerText?.includes('登录')) {
-          return [{index:0, title:'[需要登录] 请在自动化窗口中登录淘宝', price:'', quantity:'', shop:'', url:''}];
-        }
-
         return results;
       })()
     `);

@@ -13,8 +13,10 @@ cli({
   navigateBefore: false,
   func: async (page, kwargs) => {
     const itemId = kwargs.id;
-    await page.goto(`https://item.taobao.com/item.htm?id=${itemId}`);
-    await page.wait(5);
+    await page.goto('https://www.taobao.com');
+    await page.wait(2);
+    await page.evaluate(`location.href = 'https://item.taobao.com/item.htm?id=${itemId}'`);
+    await page.wait(6);
 
     // Get product info
     const info = await page.evaluate(`
@@ -62,9 +64,9 @@ cli({
       })()
     `);
 
-    let status = '? 未知';
+    let status = '? 未确认（可能需要选规格）';
     if (result === 'success') status = '✓ 已加入购物车';
-    else if (result === 'need_spec') status = '✗ 需要先选择规格（请在浏览器中操作）';
+    else if (result === 'need_spec') status = '✗ 需要先选择规格';
     else if (result === 'login_required') status = '✗ 需要登录';
 
     return [{
