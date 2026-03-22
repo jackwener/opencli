@@ -228,7 +228,7 @@ async function getAutomationWindow(workspace) {
     }
   }
   const win = await chrome.windows.create({
-    url: "about:blank",
+    url: "data:text/html,<html></html>",
     focused: false,
     width: 1280,
     height: 900,
@@ -309,6 +309,7 @@ async function resolveTabId(tabId, workspace) {
   if (tabId !== void 0) {
     try {
       const tab = await chrome.tabs.get(tabId);
+      console.log(`[opencli] resolveTabId: explicit tabId=${tabId}, url=${tab.url}`);
       if (isDebuggableUrl(tab.url)) return tabId;
       console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
     } catch {
@@ -318,10 +319,14 @@ async function resolveTabId(tabId, workspace) {
   const windowId = await getAutomationWindow(workspace);
   const tabs = await chrome.tabs.query({ windowId });
   const debuggableTab = tabs.find((t) => t.id && isDebuggableUrl(t.url));
-  if (debuggableTab?.id) return debuggableTab.id;
+  if (debuggableTab?.id) {
+    console.log(`[opencli] resolveTabId: found debuggable tab ${debuggableTab.id} (${debuggableTab.url})`);
+    return debuggableTab.id;
+  }
+  console.warn(`[opencli] resolveTabId: no debuggable tabs found, tabs: ${tabs.map((t) => `${t.id}=${t.url}`).join(", ")}`);
   const reuseTab = tabs.find((t) => t.id);
   if (reuseTab?.id) {
-    await chrome.tabs.update(reuseTab.id, { url: "about:blank" });
+    await chrome.tabs.update(reuseTab.id, { url: "data:text/html,<html></html>" });
     await new Promise((resolve) => setTimeout(resolve, 300));
     try {
       const updated = await chrome.tabs.get(reuseTab.id);
@@ -335,7 +340,7 @@ async function resolveTabId(tabId, workspace) {
     } catch {
     }
   }
-  const newTab = await chrome.tabs.create({ windowId, url: "about:blank", active: true });
+  const newTab = await chrome.tabs.create({ windowId, url: "data:text/html,<html></html>", active: true });
   if (!newTab.id) throw new Error("Failed to create tab in automation window");
   return newTab.id;
 }
@@ -423,7 +428,7 @@ async function handleTabs(cmd, workspace) {
     }
     case "new": {
       const windowId = await getAutomationWindow(workspace);
-      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? "about:blank", active: true });
+      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? "data:text/html,<html></html>", active: true });
       return { id: cmd.id, ok: true, data: { tabId: tab.id, url: tab.url } };
     }
     case "close": {

@@ -135,9 +135,10 @@ async function getAutomationWindow(workspace: string): Promise<number> {
     }
   }
 
-  // Create a new window with about:blank (not chrome://newtab which blocks scripting)
+  // Create a new window with a data: URI that New Tab Override extensions cannot intercept.
+  // Using about:blank would be hijacked by extensions like "New Tab Override".
   const win = await chrome.windows.create({
-    url: 'about:blank',
+    url: 'data:text/html,<html></html>',
     focused: false,
     width: 1280,
     height: 900,
@@ -244,6 +245,7 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   if (tabId !== undefined) {
     try {
       const tab = await chrome.tabs.get(tabId);
+      console.log(`[opencli] resolveTabId: explicit tabId=${tabId}, url=${tab.url}`);
       if (isDebuggableUrl(tab.url)) return tabId;
       // Tab exists but URL is not debuggable — fall through to auto-resolve
       console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
@@ -259,7 +261,11 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   // Prefer an existing debuggable tab (about:blank, http://, https://, etc.)
   const tabs = await chrome.tabs.query({ windowId });
   const debuggableTab = tabs.find(t => t.id && isDebuggableUrl(t.url));
-  if (debuggableTab?.id) return debuggableTab.id;
+  if (debuggableTab?.id) {
+    console.log(`[opencli] resolveTabId: found debuggable tab ${debuggableTab.id} (${debuggableTab.url})`);
+    return debuggableTab.id;
+  }
+  console.warn(`[opencli] resolveTabId: no debuggable tabs found, tabs: ${tabs.map(t => `${t.id}=${t.url}`).join(', ')}`);
 
   // No debuggable tab found — this typically happens when a "New Tab Override"
   // extension replaces about:blank with a chrome-extension:// page.
@@ -267,7 +273,7 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   // accumulating orphan tabs if chrome.tabs.create is also intercepted).
   const reuseTab = tabs.find(t => t.id);
   if (reuseTab?.id) {
-    await chrome.tabs.update(reuseTab.id, { url: 'about:blank' });
+    await chrome.tabs.update(reuseTab.id, { url: 'data:text/html,<html></html>' });
     // Wait for the navigation to take effect
     await new Promise(resolve => setTimeout(resolve, 300));
     // Verify the URL is actually debuggable (New Tab Override may have intercepted)
@@ -288,7 +294,7 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   }
 
   // Window has no debuggable tabs — create one
-  const newTab = await chrome.tabs.create({ windowId, url: 'about:blank', active: true });
+  const newTab = await chrome.tabs.create({ windowId, url: 'data:text/html,<html></html>', active: true });
   if (!newTab.id) throw new Error('Failed to create tab in automation window');
   return newTab.id;
 }
@@ -397,7 +403,7 @@ async function handleTabs(cmd: Command, workspace: string): Promise<Result> {
     }
     case 'new': {
       const windowId = await getAutomationWindow(workspace);
-      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? 'about:blank', active: true });
+      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? 'data:text/html,<html></html>', active: true });
       return { id: cmd.id, ok: true, data: { tabId: tab.id, url: tab.url } };
     }
     case 'close': {
