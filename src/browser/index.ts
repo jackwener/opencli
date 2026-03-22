@@ -10,6 +10,7 @@ export { BrowserBridge, BrowserBridge as PlaywrightMCP } from './mcp.js';
 export { CDPBridge } from './cdp.js';
 export { CamoufoxBridge } from './camoufox-bridge.js';
 export { CamoufoxPage } from './camoufox-page.js';
+export * as CamoufoxPool from './camoufox-pool.js';
 export { isDaemonRunning } from './daemon-client.js';
 export { LiveSyncService } from './live-sync.js';
 export type { SyncServiceOptions } from './live-sync.js';

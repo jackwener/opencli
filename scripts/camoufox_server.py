@@ -36,8 +36,11 @@ def main():
         print(json.dumps({"ws_endpoint": ws_endpoint}), flush=True)
 
         # Keep the process running — the server lives as long as this process
-        import signal
-        signal.pause()
+        # Use threading.Event instead of signal.pause for cross-platform compat
+        import threading
+        threading.Event().wait()
+    except KeyboardInterrupt:
+        pass
     except Exception as e:
         print(json.dumps({"error": str(e)}), flush=True)
         sys.exit(1)

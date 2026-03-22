@@ -324,8 +324,9 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
 
   browserCmd
     .command('watch')
-    .description('Live sync: stream cookie/storage changes from Chrome → Camoufox in real-time')
+    .description('Live sync: initial full sync + stream changes from Chrome → Camoufox')
     .option('-d, --domain <domains>', 'Domains to watch (comma-separated)', '')
+    .option('--skip-initial', 'Skip initial full sync, only watch changes')
     .action(async (opts) => {
       const wsEndpoint = process.env.OPENCLI_CAMOUFOX_WS;
       if (!wsEndpoint) {
@@ -340,6 +341,10 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       const service = new LiveSyncService({
         camoufoxWs: wsEndpoint,
         domains,
+        skipInitialSync: opts.skipInitial,
+        onInitialSync: (stats) => {
+          console.log(chalk.green(`📦 Initial sync done: ${stats.cookies} cookies, ${stats.localStorage} localStorage entries`));
+        },
         onSync: (event) => {
           if (event.changeType === 'cookie' && event.cookie) {
             const action = event.cookie.removed ? chalk.red('DEL') : chalk.green('SET');
@@ -354,12 +359,13 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         },
       });
 
-      console.log(chalk.cyan(`🔄 Live sync started: Chrome → Camoufox`));
+      console.log(chalk.cyan(`🔄 Live sync starting: Chrome → Camoufox`));
       if (domains.length) console.log(chalk.dim(`   Watching: ${domains.join(', ')}`));
       else console.log(chalk.dim(`   Watching: all domains`));
-      console.log(chalk.dim('   Press Ctrl+C to stop'));
 
       await service.start();
+
+      console.log(chalk.cyan('👀 Watching for changes... (Ctrl+C to stop)'));
 
       // Keep running until Ctrl+C
       process.on('SIGINT', async () => {
@@ -503,6 +509,34 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       } catch {
         console.log(chalk.yellow(`❌ Camoufox not reachable at ${wsEndpoint}`));
         console.log(chalk.dim('   Restart with: opencli camoufox start'));
+      }
+    });
+
+  camoufoxCmd
+    .command('stop')
+    .description('Stop a running Camoufox server')
+    .action(async () => {
+      const { execSync } = await import('node:child_process');
+      try {
+        // Find camoufox server processes
+        const result = execSync("ps aux | grep 'camoufox_server\\|camoufox.*server' | grep -v grep", { encoding: 'utf-8' }).trim();
+        if (!result) {
+          console.log(chalk.yellow('No camoufox server process found'));
+          return;
+        }
+        const lines = result.split('\n');
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parts[1];
+          if (pid) {
+            try {
+              process.kill(parseInt(pid, 10), 'SIGTERM');
+              console.log(chalk.green(`✅ Stopped camoufox server (PID: ${pid})`));
+            } catch { /* already dead */ }
+          }
+        }
+      } catch {
+        console.log(chalk.yellow('No camoufox server process found'));
       }
     });
 
