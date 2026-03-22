@@ -21,5 +21,4 @@ OpenCLI 通过轻量级 **Browser Bridge** Chrome 扩展 + 微守护进程连接
 
 ```bash
 opencli doctor            # 检查扩展 + 守护进程连接
-opencli doctor --live     # 同时测试实时浏览器命令
 ```

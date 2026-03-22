@@ -23,7 +23,6 @@ That's it! The daemon auto-starts when you run any browser command. No tokens, n
 
 ```bash
 opencli doctor            # Check extension + daemon connectivity
-opencli doctor --live     # Also test live browser commands
 ```
 
 ## How It Works
