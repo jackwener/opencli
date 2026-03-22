@@ -36,6 +36,7 @@ async function ensureAttached(tabId) {
     await chrome.debugger.attach({ tabId }, "1.3");
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    const hint = msg.includes("chrome-extension://") ? ". Tip: another Chrome extension may be interfering — try disabling other extensions" : "";
     if (msg.includes("Another debugger is already attached")) {
       try {
         await chrome.debugger.detach({ tabId });
@@ -44,10 +45,10 @@ async function ensureAttached(tabId) {
       try {
         await chrome.debugger.attach({ tabId }, "1.3");
       } catch {
-        throw new Error(`attach failed: ${msg}`);
+        throw new Error(`attach failed: ${msg}${hint}`);
       }
     } else {
-      throw new Error(`attach failed: ${msg}`);
+      throw new Error(`attach failed: ${msg}${hint}`);
     }
   }
   attached.add(tabId);
@@ -310,7 +311,6 @@ async function resolveTabId(tabId, workspace) {
   if (tabId !== void 0) {
     try {
       const tab = await chrome.tabs.get(tabId);
-      console.log(`[opencli] resolveTabId: explicit tabId=${tabId}, url=${tab.url}`);
       if (isDebuggableUrl(tab.url)) return tabId;
       console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
     } catch {
@@ -320,11 +320,7 @@ async function resolveTabId(tabId, workspace) {
   const windowId = await getAutomationWindow(workspace);
   const tabs = await chrome.tabs.query({ windowId });
   const debuggableTab = tabs.find((t) => t.id && isDebuggableUrl(t.url));
-  if (debuggableTab?.id) {
-    console.log(`[opencli] resolveTabId: found debuggable tab ${debuggableTab.id} (${debuggableTab.url})`);
-    return debuggableTab.id;
-  }
-  console.warn(`[opencli] resolveTabId: no debuggable tabs found, tabs: ${tabs.map((t) => `${t.id}=${t.url}`).join(", ")}`);
+  if (debuggableTab?.id) return debuggableTab.id;
   const reuseTab = tabs.find((t) => t.id);
   if (reuseTab?.id) {
     await chrome.tabs.update(reuseTab.id, { url: "data:text/html,<html></html>" });
@@ -332,12 +328,7 @@ async function resolveTabId(tabId, workspace) {
     try {
       const updated = await chrome.tabs.get(reuseTab.id);
       if (isDebuggableUrl(updated.url)) return reuseTab.id;
-      console.warn(`[opencli] about:blank was intercepted (${updated.url}), trying data: URI`);
-      await chrome.tabs.update(reuseTab.id, { url: "data:text/html,<html></html>" });
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      const updated2 = await chrome.tabs.get(reuseTab.id);
-      if (isDebuggableUrl(updated2.url)) return reuseTab.id;
-      console.warn(`[opencli] data: URI also intercepted, creating fresh tab`);
+      console.warn(`[opencli] data: URI was intercepted (${updated.url}), creating fresh tab`);
     } catch {
     }
   }

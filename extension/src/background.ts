@@ -88,7 +88,7 @@ function scheduleReconnect(): void {
 // ─── Automation window isolation ─────────────────────────────────────
 // All opencli operations happen in a dedicated Chrome window so the
 // user's active browsing session is never touched.
-// The window auto-closes after 30s of idle (no commands).
+// The window auto-closes after 120s of idle (no commands).
 
 type AutomationSession = {
   windowId: number;
@@ -247,7 +247,6 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   if (tabId !== undefined) {
     try {
       const tab = await chrome.tabs.get(tabId);
-      console.log(`[opencli] resolveTabId: explicit tabId=${tabId}, url=${tab.url}`);
       if (isDebuggableUrl(tab.url)) return tabId;
       // Tab exists but URL is not debuggable — fall through to auto-resolve
       console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
@@ -260,42 +259,27 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   // Get (or create) the automation window
   const windowId = await getAutomationWindow(workspace);
 
-  // Prefer an existing debuggable tab (about:blank, http://, https://, etc.)
+  // Prefer an existing debuggable tab
   const tabs = await chrome.tabs.query({ windowId });
   const debuggableTab = tabs.find(t => t.id && isDebuggableUrl(t.url));
-  if (debuggableTab?.id) {
-    console.log(`[opencli] resolveTabId: found debuggable tab ${debuggableTab.id} (${debuggableTab.url})`);
-    return debuggableTab.id;
-  }
-  console.warn(`[opencli] resolveTabId: no debuggable tabs found, tabs: ${tabs.map(t => `${t.id}=${t.url}`).join(', ')}`);
+  if (debuggableTab?.id) return debuggableTab.id;
 
-  // No debuggable tab found — this typically happens when a "New Tab Override"
-  // extension replaces about:blank with a chrome-extension:// page.
-  // Reuse the first existing tab by navigating it to about:blank (avoids
-  // accumulating orphan tabs if chrome.tabs.create is also intercepted).
+  // No debuggable tab — another extension may have hijacked the tab URL.
+  // Try to reuse by navigating to a data: URI (not interceptable by New Tab Override).
   const reuseTab = tabs.find(t => t.id);
   if (reuseTab?.id) {
     await chrome.tabs.update(reuseTab.id, { url: 'data:text/html,<html></html>' });
-    // Wait for the navigation to take effect
     await new Promise(resolve => setTimeout(resolve, 300));
-    // Verify the URL is actually debuggable (New Tab Override may have intercepted)
     try {
       const updated = await chrome.tabs.get(reuseTab.id);
       if (isDebuggableUrl(updated.url)) return reuseTab.id;
-      // New Tab Override intercepted about:blank — try data: URI instead
-      console.warn(`[opencli] about:blank was intercepted (${updated.url}), trying data: URI`);
-      await chrome.tabs.update(reuseTab.id, { url: 'data:text/html,<html></html>' });
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const updated2 = await chrome.tabs.get(reuseTab.id);
-      if (isDebuggableUrl(updated2.url)) return reuseTab.id;
-      // data: URI also intercepted — create a brand new tab
-      console.warn(`[opencli] data: URI also intercepted, creating fresh tab`);
+      console.warn(`[opencli] data: URI was intercepted (${updated.url}), creating fresh tab`);
     } catch {
       // Tab was closed during navigation
     }
   }
 
-  // Window has no debuggable tabs — create one
+  // Fallback: create a new tab
   const newTab = await chrome.tabs.create({ windowId, url: 'data:text/html,<html></html>', active: true });
   if (!newTab.id) throw new Error('Failed to create tab in automation window');
   return newTab.id;

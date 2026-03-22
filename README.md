@@ -328,6 +328,8 @@ npx vitest run tests/e2e/                    # E2E tests
 
 - **"Extension not connected"**
   - Ensure the opencli Browser Bridge extension is installed and **enabled** in `chrome://extensions`.
+- **"attach failed: Cannot access a chrome-extension:// URL"**
+  - Another Chrome extension (e.g. youmind, New Tab Override, or AI assistant extensions) may be interfering. Try **disabling other extensions** temporarily, then retry.
 - **Empty data returns or 'Unauthorized' error**
   - Your login session in Chrome might have expired. Open a normal Chrome tab, navigate to the target site, and log in or refresh the page.
 - **Node API errors**

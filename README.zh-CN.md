@@ -311,6 +311,8 @@ opencli cascade https://api.example.com/data
 
 - **"Extension not connected" 报错**
   - 确保你当前的 Chrome 已安装且**开启了** opencli Browser Bridge 扩展（在 `chrome://extensions` 中检查）。
+- **"attach failed: Cannot access a chrome-extension:// URL" 报错**
+  - 其他 Chrome 扩展（如 youmind、New Tab Override 或 AI 助手类扩展）可能产生冲突。请尝试**暂时禁用其他扩展**后重试。
 - **返回空数据，或者报错 "Unauthorized"**
   - Chrome 里的登录态可能已经过期。请打开当前 Chrome 页面，在新标签页重新手工登录或刷新该页面。
 - **Node API 错误 (如 parseArgs, fs 等)**

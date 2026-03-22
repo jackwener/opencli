@@ -47,15 +47,18 @@ async function ensureAttached(tabId: number): Promise<void> {
     await chrome.debugger.attach({ tabId }, '1.3');
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
+    const hint = msg.includes('chrome-extension://')
+      ? '. Tip: another Chrome extension may be interfering — try disabling other extensions'
+      : '';
     if (msg.includes('Another debugger is already attached')) {
       try { await chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
       try {
         await chrome.debugger.attach({ tabId }, '1.3');
       } catch {
-        throw new Error(`attach failed: ${msg}`);
+        throw new Error(`attach failed: ${msg}${hint}`);
       }
     } else {
-      throw new Error(`attach failed: ${msg}`);
+      throw new Error(`attach failed: ${msg}${hint}`);
     }
   }
   attached.add(tabId);
