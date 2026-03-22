@@ -11,7 +11,7 @@ cli({
     { name: 'sort', default: 'default', choices: ['default', 'sale', 'price'], help: '排序 (default/sale销量/price价格)' },
     { name: 'limit', type: 'int', default: 10, help: '返回结果数量 (max 40)' },
   ],
-  columns: ['rank', 'title', 'price', 'sales', 'shop', 'location', 'url'],
+  columns: ['rank', 'title', 'price', 'sales', 'shop', 'location', 'item_id', 'url'],
   navigateBefore: false,
   func: async (page, kwargs) => {
     const limit = Math.min(kwargs.limit || 10, 40);
@@ -73,11 +73,18 @@ cli({
           const locEls = card.querySelectorAll('[class*="procity--"]');
           const location = Array.from(locEls).map(el => normalize(el.textContent)).join('');
 
-          // URL: first <a> in card (simba tracking link, redirects to product)
-          const linkEl = card.querySelector('a[href*="simba"], a[href*="taobao.com"], a[href*="tmall.com"]');
-          const url = linkEl ? linkEl.getAttribute('href')?.substring(0, 120) || '' : '';
+          // Item ID from data-spm-act-id on parent wrapper
+          let itemId = '';
+          let wrapper = card.parentElement;
+          for (let i = 0; i < 3 && wrapper; i++) {
+            const spmId = wrapper.getAttribute('data-spm-act-id');
+            if (spmId && /^\\d{10,}$/.test(spmId)) { itemId = spmId; break; }
+            wrapper = wrapper.parentElement;
+          }
 
-          results.push({ rank: results.length + 1, title: title.slice(0, 80), price, sales, shop, location, url });
+          const url = itemId ? 'https://item.taobao.com/item.htm?id=' + itemId : '';
+
+          results.push({ rank: results.length + 1, title: title.slice(0, 80), price, sales, shop, location, item_id: itemId, url });
           if (results.length >= ${limit}) break;
         }
 
