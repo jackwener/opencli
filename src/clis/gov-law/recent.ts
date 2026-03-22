@@ -1,11 +1,13 @@
 import { cli, Strategy } from '../../registry.js';
+import { CliError } from '../../errors.js';
 
 cli({
   site: 'gov-law',
   name: 'recent',
   description: '最新法律法规',
   domain: 'flk.npc.gov.cn',
-  strategy: Strategy.COOKIE,
+  strategy: Strategy.PUBLIC,
+  browser: true,
   args: [
     { name: 'limit', type: 'int', default: 10, help: '返回结果数量 (max 20)' },
   ],
@@ -21,12 +23,20 @@ cli({
       (async () => {
         const app = document.querySelector('#app');
         const router = app?.__vue_app__?.config?.globalProperties?.$router;
-        if (router) {
-          await router.push({path: '/search', query: {}});
-        }
+        if (!router) return 'no_router';
+        await router.push({path: '/search', query: {}});
       })()
     `);
     await page.wait(4);
+
+    const navResult = await page.evaluate(`location.href`);
+    if (typeof navResult === 'string' && !navResult.includes('/search')) {
+      throw new CliError(
+        'FRAMEWORK_CHANGED',
+        'Could not access Vue Router on flk.npc.gov.cn — the site may have been restructured.',
+        'Please report this issue so the adapter can be updated.',
+      );
+    }
 
     const data = await page.evaluate(`
       (async () => {

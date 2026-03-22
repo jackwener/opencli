@@ -5,7 +5,8 @@ cli({
   name: 'search',
   description: '中国政府网政策文件搜索',
   domain: 'sousuo.www.gov.cn',
-  strategy: Strategy.COOKIE,
+  strategy: Strategy.PUBLIC,
+  browser: true,
   args: [
     { name: 'query', positional: true, required: true, help: '搜索关键词' },
     { name: 'limit', type: 'int', default: 10, help: '返回结果数量 (max 20)' },

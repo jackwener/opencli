@@ -5,7 +5,8 @@ cli({
   name: 'search',
   description: '百度学术搜索',
   domain: 'xueshu.baidu.com',
-  strategy: Strategy.COOKIE,
+  strategy: Strategy.PUBLIC,
+  browser: true,
   args: [
     { name: 'query', positional: true, required: true, help: '搜索关键词' },
     { name: 'limit', type: 'int', default: 10, help: '返回结果数量 (max 20)' },
@@ -40,7 +41,7 @@ cli({
           for (const sp of spans) {
             const t = normalize(sp.textContent);
             if (!t || t === '，' || t === ',') continue;
-            if (t.startsWith('《') || t.startsWith('《')) { journal = t.replace(/[《》]/g, ''); continue; }
+            if (t.startsWith('《')) { journal = t.replace(/[《》]/g, ''); continue; }
             if (t.match(/^被引量[：:]/)) { cited = t.match(/(\\d+)/)?.[1] || '0'; continue; }
             if (t.match(/^-\\s*(\\d{4})/)) { year = t.match(/(\\d{4})/)?.[1] || ''; continue; }
             if (t.match(/^\\d{4}年?$/)) { year = t.match(/(\\d{4})/)?.[1] || ''; continue; }

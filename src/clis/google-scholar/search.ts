@@ -5,7 +5,8 @@ cli({
   name: 'search',
   description: 'Google Scholar 学术搜索',
   domain: 'scholar.google.com',
-  strategy: Strategy.COOKIE,
+  strategy: Strategy.PUBLIC,
+  browser: true,
   args: [
     { name: 'query', positional: true, required: true, help: '搜索关键词' },
     { name: 'limit', type: 'int', default: 10, help: '返回结果数量 (max 20)' },

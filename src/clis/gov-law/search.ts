@@ -1,11 +1,13 @@
 import { cli, Strategy } from '../../registry.js';
+import { CliError } from '../../errors.js';
 
 cli({
   site: 'gov-law',
   name: 'search',
   description: '国家法律法规数据库搜索',
   domain: 'flk.npc.gov.cn',
-  strategy: Strategy.COOKIE,
+  strategy: Strategy.PUBLIC,
+  browser: true,
   args: [
     { name: 'query', positional: true, required: true, help: '搜索关键词' },
     { name: 'limit', type: 'int', default: 10, help: '返回结果数量 (max 20)' },
@@ -34,9 +36,8 @@ cli({
         // Navigate via Vue Router with searchWord
         const app = document.querySelector('#app');
         const router = app?.__vue_app__?.config?.globalProperties?.$router;
-        if (router) {
-          await router.push({path: '/search', query: {searchWord: ${query}}});
-        }
+        if (!router) return 'no_router';
+        await router.push({path: '/search', query: {searchWord: ${query}}});
         // After navigation, set the search input again on the search page
         await new Promise(r => setTimeout(r, 1000));
         const searchInput = document.querySelector('.el-input__inner');
@@ -53,6 +54,16 @@ cli({
       })()
     `);
     await page.wait(5);
+
+    // Check if Vue Router was available
+    const navResult = await page.evaluate(`location.href`);
+    if (typeof navResult === 'string' && !navResult.includes('/search')) {
+      throw new CliError(
+        'FRAMEWORK_CHANGED',
+        'Could not access Vue Router on flk.npc.gov.cn — the site may have been restructured.',
+        'Please report this issue so the adapter can be updated.',
+      );
+    }
 
     const data = await page.evaluate(`
       (async () => {
