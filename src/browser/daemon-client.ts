@@ -7,6 +7,8 @@
 const DAEMON_PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? '19825', 10);
 const DAEMON_URL = `http://127.0.0.1:${DAEMON_PORT}`;
 
+import type { BrowserSessionInfo } from '../types.js';
+
 let _idCounter = 0;
 
 function generateId(): string {
@@ -69,17 +71,19 @@ export async function isExtensionConnected(): Promise<boolean> {
 
 /**
  * Send a command to the daemon and wait for a result.
- * Retries up to 3 times with 500ms delay for transient failures.
+ * Retries up to 4 times: network errors retry at 500ms,
+ * transient extension errors retry at 1500ms.
  */
 export async function sendCommand(
   action: DaemonCommand['action'],
   params: Omit<DaemonCommand, 'id' | 'action'> = {},
 ): Promise<unknown> {
-  const id = generateId();
-  const command: DaemonCommand = { id, action, ...params };
-  const maxRetries = 3;
+  const maxRetries = 4;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Generate a fresh ID per attempt to avoid daemon-side duplicate detection
+    const id = generateId();
+    const command: DaemonCommand = { id, action, ...params };
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 30000);
@@ -95,6 +99,17 @@ export async function sendCommand(
       const result = (await res.json()) as DaemonResult;
 
       if (!result.ok) {
+        // Check if error is a transient extension issue worth retrying
+        const errMsg = result.error ?? '';
+        const isTransient = errMsg.includes('Extension disconnected')
+          || errMsg.includes('Extension not connected')
+          || errMsg.includes('attach failed')
+          || errMsg.includes('no longer exists');
+        if (isTransient && attempt < maxRetries) {
+          // Longer delay for extension recovery (service worker restart)
+          await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
         throw new Error(result.error ?? 'Daemon command failed');
       }
 
@@ -117,4 +132,4 @@ export async function listSessions(): Promise<BrowserSessionInfo[]> {
   const result = await sendCommand('sessions');
   return Array.isArray(result) ? result : [];
 }
-import type { BrowserSessionInfo } from '../types.js';
+

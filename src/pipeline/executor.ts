@@ -2,7 +2,7 @@
  * Pipeline executor: runs YAML pipeline steps sequentially.
  */
 
-import chalk from 'chalk';
+
 import type { IPage } from '../types.js';
 import { getStep, type StepHandler } from './registry.js';
 import { log } from '../logger.js';
@@ -11,7 +11,12 @@ import { ConfigError } from '../errors.js';
 export interface PipelineContext {
   args?: Record<string, unknown>;
   debug?: boolean;
+  /** Max retry attempts per step (default: 2 for browser steps, 0 for others) */
+  stepRetries?: number;
 }
+
+/** Steps that interact with the browser and may fail transiently */
+const BROWSER_STEPS = new Set(['navigate', 'evaluate', 'click', 'type', 'press', 'wait', 'snapshot', 'scroll']);
 
 export async function executePipeline(
   page: IPage | null,
@@ -23,26 +28,66 @@ export async function executePipeline(
   let data: unknown = null;
   const total = pipeline.length;
 
-  for (let i = 0; i < pipeline.length; i++) {
-    const step = pipeline[i];
-    if (!step || typeof step !== 'object') continue;
-    for (const [op, params] of Object.entries(step)) {
-      if (debug) debugStepStart(i + 1, total, op, params);
+  try {
+    for (let i = 0; i < pipeline.length; i++) {
+      const step = pipeline[i];
+      if (!step || typeof step !== 'object') continue;
+      for (const [op, params] of Object.entries(step)) {
+        if (debug) debugStepStart(i + 1, total, op, params);
 
-      const handler = getStep(op);
-      if (handler) {
-        data = await handler(page, params, data, args);
-      } else {
-        throw new ConfigError(
-          `Unknown pipeline step "${op}" at index ${i}.`,
-          'Check the YAML pipeline step name or register the custom step before execution.',
-        );
+        const handler = getStep(op);
+        if (handler) {
+          data = await executeStepWithRetry(handler, page, params, data, args, op, ctx.stepRetries);
+        } else {
+          throw new ConfigError(
+            `Unknown pipeline step "${op}" at index ${i}.`,
+            'Check the YAML pipeline step name or register the custom step before execution.',
+          );
+        }
+
+        if (debug) debugStepResult(op, data);
       }
-
-      if (debug) debugStepResult(op, data);
     }
+  } catch (err) {
+    // Attempt cleanup: close automation window on pipeline failure
+    if (page && typeof (page as unknown as Record<string, unknown>).closeWindow === 'function') {
+      try { await (page as unknown as { closeWindow: () => Promise<void> }).closeWindow(); } catch { /* ignore */ }
+    }
+    throw err;
   }
   return data;
+}
+
+async function executeStepWithRetry(
+  handler: StepHandler,
+  page: IPage | null,
+  params: unknown,
+  data: unknown,
+  args: Record<string, unknown>,
+  op: string,
+  configRetries?: number,
+): Promise<unknown> {
+  const maxRetries = configRetries ?? (BROWSER_STEPS.has(op) ? 2 : 0);
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await handler(page, params, data, args);
+    } catch (err) {
+      if (attempt >= maxRetries) throw err;
+      // Only retry on transient browser errors
+      const msg = err instanceof Error ? err.message : '';
+      const isTransient = msg.includes('Extension disconnected')
+        || msg.includes('attach failed')
+        || msg.includes('no longer exists')
+        || msg.includes('CDP connection')
+        || msg.includes('Daemon command failed');
+      if (!isTransient) throw err;
+      // Brief delay before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  // Unreachable
+  throw new Error(`Step "${op}" failed after ${maxRetries} retries`);
 }
 
 function debugStepStart(stepNum: number, total: number, op: string, params: unknown): void {

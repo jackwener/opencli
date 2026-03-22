@@ -55,7 +55,9 @@ export class BrowserBridge {
   }
 
   private async _ensureDaemon(timeoutSeconds?: number): Promise<void> {
-    const timeoutMs = Math.max(1, timeoutSeconds ?? Math.ceil(DAEMON_SPAWN_TIMEOUT / 1000)) * 1000;
+    // Use default if not provided, zero, or negative
+    const effectiveSeconds = (timeoutSeconds && timeoutSeconds > 0) ? timeoutSeconds : Math.ceil(DAEMON_SPAWN_TIMEOUT / 1000);
+    const timeoutMs = effectiveSeconds * 1000;
 
     if (await isExtensionConnected()) return;
     if (await isDaemonRunning()) {

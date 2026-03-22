@@ -97,7 +97,7 @@ type AutomationSession = {
 };
 
 const automationSessions = new Map<string, AutomationSession>();
-const WINDOW_IDLE_TIMEOUT = 30000; // 30s
+const WINDOW_IDLE_TIMEOUT = 120000; // 120s — longer to survive slow pipelines
 
 function getWorkspaceKey(workspace?: string): string {
   return workspace?.trim() || 'default';
@@ -238,7 +238,20 @@ function isDebuggableUrl(url?: string): boolean {
  * Otherwise, find or create a tab in the dedicated automation window.
  */
 async function resolveTabId(tabId: number | undefined, workspace: string): Promise<number> {
-  if (tabId !== undefined) return tabId;
+  // Even when an explicit tabId is provided, validate it is still debuggable.
+  // This prevents issues when extensions hijack the tab URL to chrome-extension://
+  // or when the tab has been closed by the user.
+  if (tabId !== undefined) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (isDebuggableUrl(tab.url)) return tabId;
+      // Tab exists but URL is not debuggable — fall through to auto-resolve
+      console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
+    } catch {
+      // Tab was closed — fall through to auto-resolve
+      console.warn(`[opencli] Tab ${tabId} no longer exists, re-resolving`);
+    }
+  }
 
   // Get (or create) the automation window
   const windowId = await getAutomationWindow(workspace);
@@ -255,6 +268,8 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   const reuseTab = tabs.find(t => t.id);
   if (reuseTab?.id) {
     await chrome.tabs.update(reuseTab.id, { url: 'about:blank' });
+    // Wait briefly for the navigation to take effect
+    await new Promise(resolve => setTimeout(resolve, 200));
     return reuseTab.id;
   }
 
@@ -294,31 +309,62 @@ async function handleExec(cmd: Command, workspace: string): Promise<Result> {
 async function handleNavigate(cmd: Command, workspace: string): Promise<Result> {
   if (!cmd.url) return { id: cmd.id, ok: false, error: 'Missing url' };
   const tabId = await resolveTabId(cmd.tabId, workspace);
-  await chrome.tabs.update(tabId, { url: cmd.url });
 
-  // Wait for page to finish loading, checking current status first to avoid race
+  // Capture the current URL before navigation to detect actual URL change
+  const beforeTab = await chrome.tabs.get(tabId);
+  const beforeUrl = beforeTab.url ?? '';
+  const targetUrl = cmd.url;
+
+  await chrome.tabs.update(tabId, { url: targetUrl });
+
+  // Wait for: 1) URL to change from the old URL, 2) tab.status === 'complete'
+  // This avoids the race where 'complete' fires for the OLD URL (e.g. about:blank)
+  let timedOut = false;
   await new Promise<void>((resolve) => {
-    // Check if already complete (e.g. cached pages)
-    chrome.tabs.get(tabId).then(tab => {
-      if (tab.status === 'complete') { resolve(); return; }
+    let urlChanged = false;
 
-      const listener = (id: number, info: chrome.tabs.TabChangeInfo) => {
-        if (id === tabId && info.status === 'complete') {
+    const listener = (id: number, info: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+      if (id !== tabId) return;
+
+      // Track URL change (new URL differs from the one before navigation)
+      if (info.url && info.url !== beforeUrl) {
+        urlChanged = true;
+      }
+
+      // Only resolve when both URL has changed AND status is complete
+      if (urlChanged && info.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+
+    // Also check if the tab already navigated (e.g. instant cache hit)
+    setTimeout(async () => {
+      try {
+        const currentTab = await chrome.tabs.get(tabId);
+        if (currentTab.url !== beforeUrl && currentTab.status === 'complete') {
           chrome.tabs.onUpdated.removeListener(listener);
           resolve();
         }
-      };
-      chrome.tabs.onUpdated.addListener(listener);
-      // Timeout fallback
-      setTimeout(() => {
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }, 15000);
-    });
+      } catch { /* tab gone */ }
+    }, 100);
+
+    // Timeout fallback with warning
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      timedOut = true;
+      console.warn(`[opencli] Navigate to ${targetUrl} timed out after 15s`);
+      resolve();
+    }, 15000);
   });
 
   const tab = await chrome.tabs.get(tabId);
-  return { id: cmd.id, ok: true, data: { title: tab.title, url: tab.url, tabId } };
+  return {
+    id: cmd.id,
+    ok: true,
+    data: { title: tab.title, url: tab.url, tabId, timedOut },
+  };
 }
 
 async function handleTabs(cmd: Command, workspace: string): Promise<Result> {

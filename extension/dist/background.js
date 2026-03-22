@@ -5,8 +5,33 @@ const WS_RECONNECT_BASE_DELAY = 2e3;
 const WS_RECONNECT_MAX_DELAY = 6e4;
 
 const attached = /* @__PURE__ */ new Set();
+function isDebuggableUrl$1(url) {
+  if (!url) return false;
+  return !url.startsWith("chrome://") && !url.startsWith("chrome-extension://");
+}
 async function ensureAttached(tabId) {
-  if (attached.has(tabId)) return;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!isDebuggableUrl$1(tab.url)) {
+      attached.delete(tabId);
+      throw new Error(`Cannot debug tab ${tabId}: URL is ${tab.url ?? "unknown"}`);
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("Cannot debug tab")) throw e;
+    attached.delete(tabId);
+    throw new Error(`Tab ${tabId} no longer exists`);
+  }
+  if (attached.has(tabId)) {
+    try {
+      await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
+        expression: "1",
+        returnByValue: true
+      });
+      return;
+    } catch {
+      attached.delete(tabId);
+    }
+  }
   try {
     await chrome.debugger.attach({ tabId }, "1.3");
   } catch (e) {
@@ -89,6 +114,17 @@ function registerListeners() {
   chrome.debugger.onDetach.addListener((source) => {
     if (source.tabId) attached.delete(source.tabId);
   });
+  chrome.tabs.onUpdated.addListener((tabId, info) => {
+    if (info.url && !isDebuggableUrl$1(info.url)) {
+      if (attached.has(tabId)) {
+        attached.delete(tabId);
+        try {
+          chrome.debugger.detach({ tabId });
+        } catch {
+        }
+      }
+    }
+  });
 }
 
 let ws = null;
@@ -161,7 +197,7 @@ function scheduleReconnect() {
   }, delay);
 }
 const automationSessions = /* @__PURE__ */ new Map();
-const WINDOW_IDLE_TIMEOUT = 3e4;
+const WINDOW_IDLE_TIMEOUT = 12e4;
 function getWorkspaceKey(workspace) {
   return workspace?.trim() || "default";
 }
@@ -265,17 +301,30 @@ async function handleCommand(cmd) {
     };
   }
 }
-function isWebUrl(url) {
+function isDebuggableUrl(url) {
   if (!url) return false;
   return !url.startsWith("chrome://") && !url.startsWith("chrome-extension://");
 }
 async function resolveTabId(tabId, workspace) {
-  if (tabId !== void 0) return tabId;
+  if (tabId !== void 0) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (isDebuggableUrl(tab.url)) return tabId;
+      console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
+    } catch {
+      console.warn(`[opencli] Tab ${tabId} no longer exists, re-resolving`);
+    }
+  }
   const windowId = await getAutomationWindow(workspace);
   const tabs = await chrome.tabs.query({ windowId });
-  const webTab = tabs.find((t) => t.id && isWebUrl(t.url));
-  if (webTab?.id) return webTab.id;
-  if (tabs.length > 0 && tabs[0]?.id) return tabs[0].id;
+  const debuggableTab = tabs.find((t) => t.id && isDebuggableUrl(t.url));
+  if (debuggableTab?.id) return debuggableTab.id;
+  const reuseTab = tabs.find((t) => t.id);
+  if (reuseTab?.id) {
+    await chrome.tabs.update(reuseTab.id, { url: "about:blank" });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return reuseTab.id;
+  }
   const newTab = await chrome.tabs.create({ windowId, url: "about:blank", active: true });
   if (!newTab.id) throw new Error("Failed to create tab in automation window");
   return newTab.id;
@@ -292,7 +341,7 @@ async function listAutomationTabs(workspace) {
 }
 async function listAutomationWebTabs(workspace) {
   const tabs = await listAutomationTabs(workspace);
-  return tabs.filter((tab) => isWebUrl(tab.url));
+  return tabs.filter((tab) => isDebuggableUrl(tab.url));
 }
 async function handleExec(cmd, workspace) {
   if (!cmd.code) return { id: cmd.id, ok: false, error: "Missing code" };
@@ -307,28 +356,47 @@ async function handleExec(cmd, workspace) {
 async function handleNavigate(cmd, workspace) {
   if (!cmd.url) return { id: cmd.id, ok: false, error: "Missing url" };
   const tabId = await resolveTabId(cmd.tabId, workspace);
-  await chrome.tabs.update(tabId, { url: cmd.url });
+  const beforeTab = await chrome.tabs.get(tabId);
+  const beforeUrl = beforeTab.url ?? "";
+  const targetUrl = cmd.url;
+  await chrome.tabs.update(tabId, { url: targetUrl });
+  let timedOut = false;
   await new Promise((resolve) => {
-    chrome.tabs.get(tabId).then((tab2) => {
-      if (tab2.status === "complete") {
-        resolve();
-        return;
+    let urlChanged = false;
+    const listener = (id, info, tab2) => {
+      if (id !== tabId) return;
+      if (info.url && info.url !== beforeUrl) {
+        urlChanged = true;
       }
-      const listener = (id, info) => {
-        if (id === tabId && info.status === "complete") {
+      if (urlChanged && info.status === "complete") {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(async () => {
+      try {
+        const currentTab = await chrome.tabs.get(tabId);
+        if (currentTab.url !== beforeUrl && currentTab.status === "complete") {
           chrome.tabs.onUpdated.removeListener(listener);
           resolve();
         }
-      };
-      chrome.tabs.onUpdated.addListener(listener);
-      setTimeout(() => {
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }, 15e3);
-    });
+      } catch {
+      }
+    }, 100);
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      timedOut = true;
+      console.warn(`[opencli] Navigate to ${targetUrl} timed out after 15s`);
+      resolve();
+    }, 15e3);
   });
   const tab = await chrome.tabs.get(tabId);
-  return { id: cmd.id, ok: true, data: { title: tab.title, url: tab.url, tabId } };
+  return {
+    id: cmd.id,
+    ok: true,
+    data: { title: tab.title, url: tab.url, tabId, timedOut }
+  };
 }
 async function handleTabs(cmd, workspace) {
   switch (cmd.op) {
@@ -425,7 +493,7 @@ async function handleSessions(cmd) {
   const data = await Promise.all([...automationSessions.entries()].map(async ([workspace, session]) => ({
     workspace,
     windowId: session.windowId,
-    tabCount: (await chrome.tabs.query({ windowId: session.windowId })).filter((tab) => isWebUrl(tab.url)).length,
+    tabCount: (await chrome.tabs.query({ windowId: session.windowId })).filter((tab) => isDebuggableUrl(tab.url)).length,
     idleMsRemaining: Math.max(0, session.idleDeadlineAt - now)
   })));
   return { id: cmd.id, ok: true, data };

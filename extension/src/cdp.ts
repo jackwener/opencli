@@ -8,8 +8,40 @@
 
 const attached = new Set<number>();
 
+/** Check if a URL can be attached via CDP */
+function isDebuggableUrl(url?: string): boolean {
+  if (!url) return false;
+  return !url.startsWith('chrome://') && !url.startsWith('chrome-extension://');
+}
+
 async function ensureAttached(tabId: number): Promise<void> {
-  if (attached.has(tabId)) return;
+  // Verify the tab URL is debuggable before attempting attach
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!isDebuggableUrl(tab.url)) {
+      // Invalidate cache if previously attached
+      attached.delete(tabId);
+      throw new Error(`Cannot debug tab ${tabId}: URL is ${tab.url ?? 'unknown'}`);
+    }
+  } catch (e) {
+    // Re-throw our own error, catch only chrome.tabs.get failures
+    if (e instanceof Error && e.message.startsWith('Cannot debug tab')) throw e;
+    attached.delete(tabId);
+    throw new Error(`Tab ${tabId} no longer exists`);
+  }
+
+  if (attached.has(tabId)) {
+    // Verify the debugger is still actually attached by sending a harmless command
+    try {
+      await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+        expression: '1', returnByValue: true,
+      });
+      return; // Still attached and working
+    } catch {
+      // Stale cache entry — need to re-attach
+      attached.delete(tabId);
+    }
+  }
 
   try {
     await chrome.debugger.attach({ tabId }, '1.3');
@@ -121,5 +153,14 @@ export function registerListeners(): void {
   });
   chrome.debugger.onDetach.addListener((source) => {
     if (source.tabId) attached.delete(source.tabId);
+  });
+  // Invalidate attached cache when tab URL changes to non-debuggable
+  chrome.tabs.onUpdated.addListener((tabId, info) => {
+    if (info.url && !isDebuggableUrl(info.url)) {
+      if (attached.has(tabId)) {
+        attached.delete(tabId);
+        try { chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
+      }
+    }
   });
 }

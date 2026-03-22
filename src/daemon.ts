@@ -142,6 +142,27 @@ wss.on('connection', (ws: WebSocket) => {
   console.error('[daemon] Extension connected');
   extensionWs = ws;
 
+  // ── Heartbeat: ping every 15s, close if 2 pongs missed ──
+  let missedPongs = 0;
+  const heartbeatInterval = setInterval(() => {
+    if (ws.readyState !== WebSocket.OPEN) {
+      clearInterval(heartbeatInterval);
+      return;
+    }
+    if (missedPongs >= 2) {
+      console.error('[daemon] Extension heartbeat lost, closing connection');
+      clearInterval(heartbeatInterval);
+      ws.terminate();
+      return;
+    }
+    missedPongs++;
+    ws.ping();
+  }, 15000);
+
+  ws.on('pong', () => {
+    missedPongs = 0;
+  });
+
   ws.on('message', (data: RawData) => {
     try {
       const msg = JSON.parse(data.toString());
@@ -168,6 +189,7 @@ wss.on('connection', (ws: WebSocket) => {
 
   ws.on('close', () => {
     console.error('[daemon] Extension disconnected');
+    clearInterval(heartbeatInterval);
     if (extensionWs === ws) {
       extensionWs = null;
       // Reject all pending requests since the extension is gone
@@ -180,6 +202,7 @@ wss.on('connection', (ws: WebSocket) => {
   });
 
   ws.on('error', () => {
+    clearInterval(heartbeatInterval);
     if (extensionWs === ws) extensionWs = null;
   });
 });
