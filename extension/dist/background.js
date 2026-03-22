@@ -322,8 +322,18 @@ async function resolveTabId(tabId, workspace) {
   const reuseTab = tabs.find((t) => t.id);
   if (reuseTab?.id) {
     await chrome.tabs.update(reuseTab.id, { url: "about:blank" });
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    return reuseTab.id;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    try {
+      const updated = await chrome.tabs.get(reuseTab.id);
+      if (isDebuggableUrl(updated.url)) return reuseTab.id;
+      console.warn(`[opencli] about:blank was intercepted (${updated.url}), trying data: URI`);
+      await chrome.tabs.update(reuseTab.id, { url: "data:text/html,<html></html>" });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const updated2 = await chrome.tabs.get(reuseTab.id);
+      if (isDebuggableUrl(updated2.url)) return reuseTab.id;
+      console.warn(`[opencli] data: URI also intercepted, creating fresh tab`);
+    } catch {
+    }
   }
   const newTab = await chrome.tabs.create({ windowId, url: "about:blank", active: true });
   if (!newTab.id) throw new Error("Failed to create tab in automation window");

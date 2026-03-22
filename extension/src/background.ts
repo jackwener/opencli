@@ -268,12 +268,26 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   const reuseTab = tabs.find(t => t.id);
   if (reuseTab?.id) {
     await chrome.tabs.update(reuseTab.id, { url: 'about:blank' });
-    // Wait briefly for the navigation to take effect
-    await new Promise(resolve => setTimeout(resolve, 200));
-    return reuseTab.id;
+    // Wait for the navigation to take effect
+    await new Promise(resolve => setTimeout(resolve, 300));
+    // Verify the URL is actually debuggable (New Tab Override may have intercepted)
+    try {
+      const updated = await chrome.tabs.get(reuseTab.id);
+      if (isDebuggableUrl(updated.url)) return reuseTab.id;
+      // New Tab Override intercepted about:blank — try data: URI instead
+      console.warn(`[opencli] about:blank was intercepted (${updated.url}), trying data: URI`);
+      await chrome.tabs.update(reuseTab.id, { url: 'data:text/html,<html></html>' });
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const updated2 = await chrome.tabs.get(reuseTab.id);
+      if (isDebuggableUrl(updated2.url)) return reuseTab.id;
+      // data: URI also intercepted — create a brand new tab
+      console.warn(`[opencli] data: URI also intercepted, creating fresh tab`);
+    } catch {
+      // Tab was closed during navigation
+    }
   }
 
-  // Window has no tabs at all — create one
+  // Window has no debuggable tabs — create one
   const newTab = await chrome.tabs.create({ windowId, url: 'about:blank', active: true });
   if (!newTab.id) throw new Error('Failed to create tab in automation window');
   return newTab.id;
