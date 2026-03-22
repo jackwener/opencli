@@ -1,0 +1,26 @@
+site: dictionary
+name: search
+description: Search the Free Dictionary API for definitions, parts of speech, and pronunciations.
+domain: api.dictionaryapi.dev
+strategy: public
+browser: false
+
+args:
+  word:
+    type: string
+    required: true
+    description: Word to define (e.g., serendipity)
+
+pipeline:
+  - fetch:
+      url: "https://api.dictionaryapi.dev/api/v2/entries/en/${{ args.word }}"
+  
+  - map:
+      word: "${{ item.word }}"
+      phonetic: "${{ item.phonetic || item.phonetics?.[0]?.text || item.phonetics?.[1]?.text || '' }}"
+      type: "${{ item.meanings[0].partOfSpeech }}"
+      definition: "${{ item.meanings[0].definitions[0].definition }}"
+
+  - limit: 1
+
+columns: [word, phonetic, type, definition]

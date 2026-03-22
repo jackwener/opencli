@@ -45,6 +45,7 @@ Run `opencli list` for the live registry.
 | **[hackernews](/adapters/browser/hackernews)** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | 🌐 Public |
 | **[bbc](/adapters/browser/bbc)** | `news` | 🌐 Public |
 | **[devto](/adapters/browser/devto)** | `top` `tag` `user` | 🌐 Public |
+| **[dictionary](/adapters/browser/dictionary)** | `search` `synonyms` `examples` | 🌐 Public |
 | **[apple-podcasts](/adapters/browser/apple-podcasts)** | `search` `episodes` `top` | 🌐 Public |
 | **[xiaoyuzhou](/adapters/browser/xiaoyuzhou)** | `podcast` `podcast-episodes` `episode` | 🌐 Public |
 | **[yahoo-finance](/adapters/browser/yahoo-finance)** | `quote` | 🌐 Public |
