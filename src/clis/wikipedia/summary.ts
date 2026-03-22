@@ -1,6 +1,6 @@
-import { cli, Strategy } from '../../registry.js';
 import { CliError } from '../../errors.js';
-import { wikiFetch } from './utils.js';
+import { cli, Strategy } from '../../registry.js';
+import { type WikiSummary, formatSummaryRow, wikiFetch } from './utils.js';
 
 cli({
   site: 'wikipedia',
@@ -16,13 +16,8 @@ cli({
   func: async (_page, args) => {
     const lang = args.lang || 'en';
     const title = encodeURIComponent(args.title.replace(/ /g, '_'));
-    const data = await wikiFetch(lang, `/api/rest_v1/page/summary/${title}`) as { title?: string; description?: string; extract?: string; content_urls?: { desktop?: { page?: string } } };
+    const data = (await wikiFetch(lang, `/api/rest_v1/page/summary/${title}`)) as WikiSummary;
     if (!data?.title) throw new CliError('NOT_FOUND', `Article "${args.title}" not found`, 'Try searching first: opencli wikipedia search <keyword>');
-    return [{
-      title: data.title,
-      description: data.description ?? '-',
-      extract: (data.extract ?? '').slice(0, 300),
-      url: data.content_urls?.desktop?.page ?? `https://${lang}.wikipedia.org/wiki/${title}`,
-    }];
+    return [formatSummaryRow(data, lang)];
   },
 });
