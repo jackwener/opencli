@@ -10,7 +10,7 @@ const attached = new Set<number>();
 
 /** Check if a URL can be attached via CDP */
 function isDebuggableUrl(url?: string): boolean {
-  if (!url) return false;
+  if (!url) return true;  // empty/undefined = tab still loading, allow it
   return !url.startsWith('chrome://') && !url.startsWith('chrome-extension://');
 }
 

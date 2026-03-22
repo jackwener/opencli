@@ -6,7 +6,7 @@ const WS_RECONNECT_MAX_DELAY = 6e4;
 
 const attached = /* @__PURE__ */ new Set();
 function isDebuggableUrl$1(url) {
-  if (!url) return false;
+  if (!url) return true;
   return !url.startsWith("chrome://") && !url.startsWith("chrome-extension://");
 }
 async function ensureAttached(tabId) {
@@ -242,6 +242,7 @@ async function getAutomationWindow(workspace) {
   automationSessions.set(workspace, session);
   console.log(`[opencli] Created automation window ${session.windowId} (${workspace})`);
   resetWindowIdleTimer(workspace);
+  await new Promise((resolve) => setTimeout(resolve, 200));
   return session.windowId;
 }
 chrome.windows.onRemoved.addListener((windowId) => {
@@ -302,7 +303,7 @@ async function handleCommand(cmd) {
   }
 }
 function isDebuggableUrl(url) {
-  if (!url) return false;
+  if (!url) return true;
   return !url.startsWith("chrome://") && !url.startsWith("chrome-extension://");
 }
 async function resolveTabId(tabId, workspace) {

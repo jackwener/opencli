@@ -152,6 +152,8 @@ async function getAutomationWindow(workspace: string): Promise<number> {
   automationSessions.set(workspace, session);
   console.log(`[opencli] Created automation window ${session.windowId} (${workspace})`);
   resetWindowIdleTimer(workspace);
+  // Brief delay to let Chrome load the initial data: URI tab
+  await new Promise(resolve => setTimeout(resolve, 200));
   return session.windowId;
 }
 
@@ -229,7 +231,7 @@ async function handleCommand(cmd: Command): Promise<Result> {
 
 /** Check if a URL can be attached via CDP (not chrome:// or chrome-extension://) */
 function isDebuggableUrl(url?: string): boolean {
-  if (!url) return false;
+  if (!url) return true;  // empty/undefined = tab still loading, allow it
   return !url.startsWith('chrome://') && !url.startsWith('chrome-extension://');
 }
 
