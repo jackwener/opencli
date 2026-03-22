@@ -156,6 +156,7 @@ Run `opencli list` for the live registry.
 | **hf** | `top` | Public |
 | **jike** | `feed` `search` `create` `like` `comment` `repost` `notifications` `post` `topic` `user` | Browser |
 | **jimeng** | `generate` `history` | Browser |
+| **yollomi** | `generate` `video` `edit` `upload` `models` `remove-bg` `upscale` `face-swap` `restore` `try-on` `background` `object-remover` | Browser |
 | **linux-do** | `hot` `latest` `search` `categories` `category` `topic` | Public |
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | Public |
 | **steam** | `top-sellers` | Public |

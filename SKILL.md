@@ -3,7 +3,7 @@ name: opencli
 description: "OpenCLI — Make any website or Electron App your CLI. Zero risk, AI-powered, reuse Chrome login. 150+ commands across 30+ sites."
 version: 1.1.0
 author: jackwener
-tags: [cli, browser, web, chrome-extension, cdp, bilibili, zhihu, twitter, github, v2ex, hackernews, reddit, xiaohongshu, xueqiu, youtube, boss, coupang, AI, agent]
+tags: [cli, browser, web, chrome-extension, cdp, bilibili, zhihu, twitter, github, v2ex, hackernews, reddit, xiaohongshu, xueqiu, youtube, boss, coupang, yollomi, AI, agent]
 ---
 
 # OpenCLI
@@ -219,6 +219,14 @@ opencli weread ranking --limit 10        # 排行榜
 # Jimeng 即梦 AI (browser)
 opencli jimeng generate --prompt "描述"  # AI 生图
 opencli jimeng history --limit 10        # 生成历史
+
+# Yollomi yollomi.com (browser — 需在 Chrome 登录 yollomi.com，复用站点 session)
+opencli yollomi models --type image      # 列出图像模型与积分
+opencli yollomi generate "提示词" --model z-image-turbo   # 文生图
+opencli yollomi video "提示词" --model kling-2-1        # 视频
+opencli yollomi upload ./photo.jpg       # 上传得 URL，供 img2img / 工具链使用
+opencli yollomi remove-bg <image-url>    # 去背景（免费）
+opencli yollomi edit <image-url> "改成油画风格"        # Qwen 图像编辑
 
 # Grok (default + explicit web)
 opencli grok ask --prompt "问题"         # 提问 Grok（兼容默认路径）
