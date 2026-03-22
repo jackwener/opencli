@@ -8,7 +8,7 @@ cli({
   strategy: Strategy.INTERCEPT,
   browser: true,
   args: [
-    { name: 'user', type: 'string', required: false },
+    { name: 'user', positional: true, type: 'string', required: false },
     { name: 'limit', type: 'int', default: 50 },
   ],
   columns: ['screen_name', 'name', 'bio', 'followers'],

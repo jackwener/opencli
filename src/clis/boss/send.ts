@@ -19,7 +19,7 @@ cli({
   navigateBefore: false,
   browser: true,
   args: [
-    { name: 'uid', required: true, help: 'Encrypted UID of the candidate (from chatlist)' },
+    { name: 'uid', positional: true, required: true, help: 'Encrypted UID of the candidate (from chatlist)' },
     { name: 'text', required: true, positional: true, help: 'Message text to send' },
   ],
   columns: ['status', 'detail'],

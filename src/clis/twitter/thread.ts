@@ -122,7 +122,7 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'tweet-id', type: 'string', required: true },
+    { name: 'tweet-id', positional: true, type: 'string', required: true },
     { name: 'limit', type: 'int', default: 50 },
   ],
   columns: ['id', 'author', 'text', 'likes', 'retweets', 'url'],

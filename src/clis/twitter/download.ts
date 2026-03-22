@@ -27,7 +27,7 @@ cli({
   domain: 'x.com',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'username', help: 'Twitter username (downloads from media tab)' },
+    { name: 'username', positional: true, help: 'Twitter username (downloads from media tab)' },
     { name: 'tweet-url', help: 'Single tweet URL to download' },
     { name: 'limit', type: 'int', default: 10, help: 'Number of tweets to scan' },
     { name: 'output', default: './twitter-downloads', help: 'Output directory' },

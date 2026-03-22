@@ -10,6 +10,7 @@ args:
     positional: true
     description: Username of the post author
   text:
+    positional: true
     type: str
     required: true
     description: Comment text

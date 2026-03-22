@@ -128,7 +128,7 @@ Run `opencli list` for the live registry.
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | Desktop |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | Desktop |
 | **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | Public / Browser |
-| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` | Browser |
+| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | Browser |
 | **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` `serve` | Desktop |
 | **chatgpt** | `status` `new` `send` `read` `ask` | Desktop |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | Browser |
@@ -228,17 +228,17 @@ brew install yt-dlp
 
 ```bash
 # Download images/videos from Xiaohongshu note
-opencli xiaohongshu download --note-id abc123 --output ./xhs
+opencli xiaohongshu download abc123 --output ./xhs
 
 # Download Bilibili video (requires yt-dlp)
-opencli bilibili download --bvid BV1xxx --output ./bilibili
-opencli bilibili download --bvid BV1xxx --quality 1080p  # Specify quality
+opencli bilibili download BV1xxx --output ./bilibili
+opencli bilibili download BV1xxx --quality 1080p  # Specify quality
 
 # Download Twitter media from user
 opencli twitter download elonmusk --limit 20 --output ./twitter
 
 # Download single tweet media
-opencli twitter download --tweet-url "https://x.com/user/status/123" --output ./twitter
+opencli twitter download elonmusk --tweet-url "https://x.com/user/status/123" --output ./twitter
 
 # Export Zhihu article to Markdown
 opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu

@@ -293,7 +293,7 @@ export const askCommand = cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'prompt', type: 'string', required: true, help: 'Prompt to send to Grok' },
+    { name: 'prompt', positional: true, type: 'string', required: true, help: 'Prompt to send to Grok' },
     { name: 'timeout', type: 'int', default: 120, help: 'Max seconds to wait for response (default: 120)' },
     { name: 'new', type: 'boolean', default: false, help: 'Start a new chat before sending (default: false)' },
     { name: 'web', type: 'boolean', default: false, help: 'Use the explicit grok.com consumer web flow (default: false)' },

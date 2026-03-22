@@ -10,6 +10,7 @@ args:
     positional: true
     description: TikTok video URL
   text:
+    positional: true
     type: str
     required: true
     description: Comment text

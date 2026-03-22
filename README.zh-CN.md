@@ -129,7 +129,7 @@ npm install -g @jackwener/opencli@latest
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | 桌面端 |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | 桌面端 |
 | **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | 公开 / 浏览器 |
-| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` | 浏览器 |
+| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | 浏览器 |
 | **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` `serve` | 桌面端 |
 | **chatgpt** | `status` `new` `send` `read` `ask` | 桌面端 |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | 浏览器 |
@@ -229,17 +229,17 @@ brew install yt-dlp
 
 ```bash
 # 下载小红书笔记中的图片/视频
-opencli xiaohongshu download --note-id abc123 --output ./xhs
+opencli xiaohongshu download abc123 --output ./xhs
 
 # 下载B站视频（需要 yt-dlp）
-opencli bilibili download --bvid BV1xxx --output ./bilibili
-opencli bilibili download --bvid BV1xxx --quality 1080p  # 指定画质
+opencli bilibili download BV1xxx --output ./bilibili
+opencli bilibili download BV1xxx --quality 1080p  # 指定画质
 
 # 下载 Twitter 用户的媒体
 opencli twitter download elonmusk --limit 20 --output ./twitter
 
 # 下载单条推文的媒体
-opencli twitter download --tweet-url "https://x.com/user/status/123" --output ./twitter
+opencli twitter download elonmusk --tweet-url "https://x.com/user/status/123" --output ./twitter
 
 # 导出知乎文章为 Markdown
 opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu

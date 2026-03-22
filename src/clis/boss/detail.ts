@@ -13,7 +13,7 @@ cli({
   navigateBefore: false,
   browser: true,
   args: [
-    { name: 'security-id', required: true, help: 'Security ID from search results (securityId field)' },
+    { name: 'security-id', positional: true, required: true, help: 'Security ID from search results (securityId field)' },
   ],
   columns: [
     'name', 'salary', 'experience', 'degree', 'city', 'district',

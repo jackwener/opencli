@@ -430,7 +430,7 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'note-id', type: 'string', required: true, help: 'Note ID (from creator-notes or note-detail page URL)' },
+    { name: 'note-id', positional: true, type: 'string', required: true, help: 'Note ID (from creator-notes or note-detail page URL)' },
   ],
   columns: ['section', 'metric', 'value', 'extra'],
   func: async (page, kwargs) => {

@@ -8,7 +8,7 @@ cli({
   description: '获取 Bilibili 用户的关注列表',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'uid', required: false, help: '目标用户 ID（默认为当前登录用户）' },
+    { name: 'uid', positional: true, required: false, help: '目标用户 ID（默认为当前登录用户）' },
     { name: 'page', type: 'int', required: false, default: 1, help: '页码' },
     { name: 'limit', type: 'int', required: false, default: 50, help: '每页数量 (最大 50)' },
   ],

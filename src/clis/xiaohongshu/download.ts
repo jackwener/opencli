@@ -22,7 +22,7 @@ cli({
   domain: 'www.xiaohongshu.com',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'note-id', required: true, help: 'Note ID (from URL)' },
+    { name: 'note-id', positional: true, required: true, help: 'Note ID (from URL)' },
     { name: 'output', default: './xiaohongshu-downloads', help: 'Output directory' },
   ],
   columns: ['index', 'type', 'status', 'size'],

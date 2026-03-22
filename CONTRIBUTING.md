@@ -40,6 +40,11 @@ strategy: public      # public | cookie | header
 browser: false        # true if browser session is needed
 
 args:
+  query:
+    positional: true
+    type: str
+    required: true
+    description: Search keyword
   limit:
     type: int
     default: 20
@@ -76,7 +81,7 @@ cli({
   domain: 'www.mysite.com',
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'query', required: true, help: 'Search query' },
+    { name: 'query', positional: true, required: true, help: 'Search query' },
     { name: 'limit', type: 'int', default: 10, help: 'Max results' },
   ],
   columns: ['title', 'url', 'date'],
@@ -116,6 +121,37 @@ opencli <site> <command> --limit 3 -f json
 
 # Verbose mode for debugging
 opencli <site> <command> -v
+```
+
+## Arg Design Convention
+
+Use **positional** for the primary, required argument of a command (the "what" — query, symbol, id, url, username). Use **named options** (`--flag`) for secondary/optional configuration (limit, format, sort, page).
+
+**Rule of thumb**: Think about how the user will type the command. `opencli xueqiu stock SH600519` is more natural than `opencli xueqiu stock --symbol SH600519`.
+
+| Arg type | Positional? | Examples |
+|----------|-------------|----------|
+| Main target (query, symbol, id, url, username) | ✅ `positional: true` | `search '茅台'`, `stock SH600519`, `download BV1xxx` |
+| Configuration (limit, format, sort, page, type) | ❌ Named `--flag` | `--limit 10`, `--format json`, `--sort hot` |
+
+YAML example:
+```yaml
+args:
+  query:
+    positional: true     # ← primary arg, user types it directly
+    type: str
+    required: true
+  limit:
+    type: int            # ← config arg, user types --limit 10
+    default: 20
+```
+
+TS example:
+```typescript
+args: [
+  { name: 'query', positional: true, required: true, help: 'Search query' },
+  { name: 'limit', type: 'int', default: 10, help: 'Max results' },
+]
 ```
 
 ## Testing

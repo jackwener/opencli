@@ -6,6 +6,7 @@ browser: true
 
 args:
   slug:
+    positional: true
     type: str
     required: true
     description: Category slug (use 'categories' command to find)

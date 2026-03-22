@@ -16,7 +16,7 @@ cli({
   navigateBefore: false,
   browser: true,
   args: [
-    { name: 'uid', required: true, help: 'Encrypted UID of the candidate (from recommend)' },
+    { name: 'uid', positional: true, required: true, help: 'Encrypted UID of the candidate (from recommend)' },
     { name: 'security-id', required: true, help: 'Security ID of the candidate' },
     { name: 'job-id', required: true, help: 'Encrypted job ID' },
     { name: 'text', default: '', help: 'Custom greeting message (uses default template if empty)' },

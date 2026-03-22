@@ -22,7 +22,7 @@ cli({
   navigateBefore: false,
   browser: true,
   args: [
-    { name: 'uid', required: true, help: 'Encrypted UID of the candidate' },
+    { name: 'uid', positional: true, required: true, help: 'Encrypted UID of the candidate' },
     { name: 'label', required: true, help: 'Label name (新招呼/沟通中/已约面/已获取简历/已交换电话/已交换微信/不合适/收藏) or label ID' },
     { name: 'remove', type: 'boolean', default: false, help: 'Remove the label instead of adding' },
   ],

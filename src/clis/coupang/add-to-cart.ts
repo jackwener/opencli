@@ -102,7 +102,7 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   args: [
-    { name: 'product-id', required: false, help: 'Coupang product ID' },
+    { name: 'product-id', positional: true, required: false, help: 'Coupang product ID' },
     { name: 'url', required: false, help: 'Canonical product URL' },
   ],
   columns: ['ok', 'product_id', 'url', 'message'],
