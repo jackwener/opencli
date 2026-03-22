@@ -1,8 +1,11 @@
-import { cli, Strategy } from '../../registry.js';
 import { CliError } from '../../errors.js';
+import { cli, Strategy } from '../../registry.js';
 import { wikiFetch } from './utils.js';
 
-interface WikiSearchResult { title: string; snippet: string; }
+interface WikiSearchResult {
+  title: string;
+  snippet: string;
+}
 
 cli({
   site: 'wikipedia',
@@ -19,8 +22,11 @@ cli({
   func: async (_page, args) => {
     const limit = Math.max(1, Math.min(Number(args.limit), 50));
     const lang = args.lang || 'en';
-    const q = encodeURIComponent(args.keyword);
-    const data = await wikiFetch(lang, `/w/api.php?action=query&list=search&srsearch=${q}&srlimit=${limit}&format=json&utf8=1`) as { query?: { search?: WikiSearchResult[] } };
+    const q = encodeURIComponent(args.query);
+    const data = (await wikiFetch(
+      lang,
+      `/w/api.php?action=query&list=search&srsearch=${q}&srlimit=${limit}&format=json&utf8=1`,
+    )) as { query?: { search?: WikiSearchResult[] } };
     const results = data?.query?.search;
     if (!results?.length) throw new CliError('NOT_FOUND', 'No articles found', 'Try a different keyword');
     return results.map((r) => ({
