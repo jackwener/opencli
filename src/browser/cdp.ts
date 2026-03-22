@@ -20,6 +20,7 @@ import {
   scrollJs,
   autoScrollJs,
   networkRequestsJs,
+  waitForDomStableJs,
 } from './dom-helpers.js';
 
 export interface CDPTarget {
@@ -166,10 +167,11 @@ class CDPPage implements IPage {
       .catch(() => {}); // Don't fail if event times out
     await this.bridge.send('Page.navigate', { url });
     await loadPromise;
-    // Post-load settle: SPA frameworks need extra time to render after load event
+    // Smart settle: use DOM stability detection instead of fixed sleep.
+    // settleMs is now a timeout cap (default 1000ms), not a fixed wait.
     if (options?.waitUntil !== 'none') {
-      const settleMs = options?.settleMs ?? 1000;
-      await new Promise(resolve => setTimeout(resolve, settleMs));
+      const maxMs = options?.settleMs ?? 1000;
+      await this.evaluate(waitForDomStableJs(maxMs, Math.min(500, maxMs)));
     }
   }
 

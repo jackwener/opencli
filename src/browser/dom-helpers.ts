@@ -145,3 +145,37 @@ export function networkRequestsJs(includeStatic: boolean): string {
     })()
   `;
 }
+
+/**
+ * Generate JS to wait until the DOM stabilizes (no mutations for `quietMs`),
+ * with a hard cap at `maxMs`. Uses MutationObserver in the browser.
+ *
+ * Returns as soon as the page stops changing, avoiding unnecessary fixed waits.
+ * If document.body is not available, falls back to a fixed sleep of maxMs.
+ */
+export function waitForDomStableJs(maxMs: number, quietMs: number): string {
+  return `
+    new Promise(resolve => {
+      if (!document.body) {
+        setTimeout(() => resolve('nobody'), ${maxMs});
+        return;
+      }
+      let timer = null;
+      let cap = null;
+      const done = (reason) => {
+        clearTimeout(timer);
+        clearTimeout(cap);
+        obs.disconnect();
+        resolve(reason);
+      };
+      const resetQuiet = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => done('quiet'), ${quietMs});
+      };
+      const obs = new MutationObserver(resetQuiet);
+      obs.observe(document.body, { childList: true, subtree: true, attributes: true });
+      resetQuiet();
+      cap = setTimeout(() => done('capped'), ${maxMs});
+    })
+  `;
+}

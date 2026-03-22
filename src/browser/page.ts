@@ -23,6 +23,7 @@ import {
   scrollJs,
   autoScrollJs,
   networkRequestsJs,
+  waitForDomStableJs,
 } from './dom-helpers.js';
 
 /**
@@ -53,11 +54,15 @@ export class Page implements IPage {
     if (result?.tabId) {
       this._tabId = result.tabId;
     }
-    // Post-load settle: the extension already waits for tab.status === 'complete',
-    // but SPA frameworks (React/Vue) need extra time to render after DOM load.
+    // Smart settle: use DOM stability detection instead of fixed sleep.
+    // settleMs is now a timeout cap (default 1000ms), not a fixed wait.
     if (options?.waitUntil !== 'none') {
-      const settleMs = options?.settleMs ?? 1000;
-      await new Promise(resolve => setTimeout(resolve, settleMs));
+      const maxMs = options?.settleMs ?? 1000;
+      await sendCommand('exec', {
+        code: waitForDomStableJs(maxMs, Math.min(500, maxMs)),
+        ...this._workspaceOpt(),
+        ...this._tabOpt(),
+      });
     }
   }
 
