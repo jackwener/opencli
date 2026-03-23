@@ -46,11 +46,3 @@
   install:
     mac: "brew install gws"
     default: "npm install -g @nicholasgasior/gws"
-
-- name: xianyu
-  binary: xianyu
-  description: "闲鱼 CLI — 搜索、比价、消息收发、全自动 Agent Flow 比价闭环"
-  homepage: "https://github.com/Donquijote-coder/xianyu-cli"
-  tags: [xianyu, goofish, shopping, secondhand, china]
-  install:
-    default: "pip install git+https://github.com/Donquijote-coder/xianyu-cli.git"
