@@ -126,7 +126,7 @@ npm install -g @jackwener/opencli@latest
 | **devto** | `top` `tag` `user` | 公开 |
 | **arxiv** | `search` `paper` | 公开 |
 | **wikipedia** | `search` `summary` | 公开 |
-| **hackernews** | `top` | 公共 API |
+| **hackernews** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | 公共 API |
 | **linkedin** | `search` | 浏览器 |
 | **reuters** | `search` | 浏览器 |
 | **smzdm** | `search` | 浏览器 |

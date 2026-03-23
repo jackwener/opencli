@@ -124,7 +124,7 @@ Run `opencli list` for the live registry.
 | **devto** | `top` `tag` `user` | Public |
 | **arxiv** | `search` `paper` | Public |
 | **wikipedia** | `search` `summary` | Public |
-| **hackernews** | `top` | Public |
+| **hackernews** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | Public |
 | **linkedin** | `search` | Browser |
 | **reuters** | `search` | Browser |
 | **smzdm** | `search` | Browser |

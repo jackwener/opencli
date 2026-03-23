@@ -33,7 +33,7 @@ Run `opencli list` for the live registry.
 
 | Site | Commands | Mode |
 |------|----------|------|
-| **[hackernews](/adapters/browser/hackernews)** | `top` | 🌐 Public |
+| **[hackernews](/adapters/browser/hackernews)** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | 🌐 Public |
 | **[bbc](/adapters/browser/bbc)** | `news` | 🌐 Public |
 | **[devto](/adapters/browser/devto)** | `top` `tag` `user` | 🌐 Public |
 | **[apple-podcasts](/adapters/browser/apple-podcasts)** | `search` `episodes` `top` | 🌐 Public |
