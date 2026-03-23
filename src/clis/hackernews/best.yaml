@@ -1,6 +1,6 @@
 site: hackernews
-name: top
-description: Hacker News top stories
+name: best
+description: Hacker News best stories
 domain: news.ycombinator.com
 strategy: public
 browser: false
@@ -13,7 +13,7 @@ args:
 
 pipeline:
   - fetch:
-      url: https://hacker-news.firebaseio.com/v0/topstories.json
+      url: https://hacker-news.firebaseio.com/v0/beststories.json
 
   - limit: "${{ Math.min((args.limit ? args.limit : 20) + 10, 50) }}"
 
