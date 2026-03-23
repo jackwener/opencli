@@ -12,6 +12,10 @@ export const statusCommand = cli({
   args: [],
   columns: ['Status'],
   func: async (page: IPage | null) => {
+    if (process.platform !== 'darwin') {
+      throw new Error('ChatGPT Desktop integration requires macOS (osascript is not available on this platform)');
+    }
+
     try {
       const output = execSync("osascript -e 'application \"ChatGPT\" is running'", { encoding: 'utf-8' }).trim();
       return [{ Status: output === 'true' ? 'Running' : 'Stopped' }];

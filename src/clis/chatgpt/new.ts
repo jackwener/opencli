@@ -12,6 +12,10 @@ export const newCommand = cli({
   args: [],
   columns: ['Status'],
   func: async (page: IPage | null) => {
+    if (process.platform !== 'darwin') {
+      throw new Error('ChatGPT Desktop integration requires macOS (osascript is not available on this platform)');
+    }
+
     try {
       execSync("osascript -e 'tell application \"ChatGPT\" to activate'");
       execSync("osascript -e 'delay 0.5'");
