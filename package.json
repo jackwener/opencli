@@ -1,6 +1,13 @@
 {
   "name": "@jackwener/opencli",
   "version": "1.3.1",
+  "files": [
+    "dist/",
+    "extension/dist/",
+    "SKILL.md",
+    "LICENSE",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
