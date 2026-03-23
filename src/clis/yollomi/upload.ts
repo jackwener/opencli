@@ -38,8 +38,10 @@ cli({
     if (!mime) throw new CliError('INVALID_TYPE', `Unsupported file type: ${ext}`, 'Supported: jpg, png, gif, webp, mp4, mov');
 
     const data = fs.readFileSync(filePath);
-    const maxSize = mime.startsWith('video/') ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
-    if (data.length > maxSize) throw new CliError('FILE_TOO_LARGE', `File too large: ${fmtBytes(data.length)}`, `Max ${mime.startsWith('video/') ? '100MB' : '10MB'}`);
+    // Note: base64 encoding inflates size ~33%. Video cap is conservative to avoid
+    // OOM when the base64 string is injected into the browser JS engine via page.evaluate().
+    const maxSize = mime.startsWith('video/') ? 20 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (data.length > maxSize) throw new CliError('FILE_TOO_LARGE', `File too large: ${fmtBytes(data.length)}`, `Max ${mime.startsWith('video/') ? '20MB' : '10MB'} (upload larger videos from a URL)`);
 
     const b64 = data.toString('base64');
     const fileName = path.basename(filePath);

@@ -15,8 +15,8 @@ cli({
   domain: YOLLOMI_DOMAIN,
   strategy: Strategy.COOKIE,
   args: [
-    { name: 'image', required: true, help: 'Image URL' },
-    { name: 'mask', required: true, help: 'Mask image URL (white = area to remove)' },
+    { name: 'image', positional: true, required: true, help: 'Image URL' },
+    { name: 'mask', positional: true, required: true, help: 'Mask image URL (white = area to remove)' },
     { name: 'output', default: './yollomi-output', help: 'Output directory' },
     { name: 'no-download', type: 'boolean', default: false, help: 'Only show URL' },
   ],

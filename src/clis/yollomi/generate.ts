@@ -79,7 +79,8 @@ cli({
         continue;
       }
       try {
-        const ext = url.includes('.png') ? '.png' : '.jpg';
+        const urlPath = (() => { try { return new URL(url).pathname; } catch { return url; } })();
+        const ext = urlPath.endsWith('.png') || urlPath.endsWith('.webp') ? urlPath.slice(urlPath.lastIndexOf('.')) : '.jpg';
         const filename = `yollomi_${modelId}_${Date.now()}_${i + 1}${ext}`;
         const { path: fp, size } = await downloadOutput(url, outputDir, filename);
         results.push({ index: i + 1, status: 'saved', file: path.relative('.', fp), size: fmtBytes(size), url });

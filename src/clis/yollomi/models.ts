@@ -6,6 +6,7 @@ cli({
   name: 'models',
   description: 'List available Yollomi AI models (image, video, tools)',
   strategy: Strategy.PUBLIC,
+  browser: false,
   args: [
     { name: 'type', default: 'all', choices: ['all', 'image', 'video', 'tool'], help: 'Filter by model type' },
   ],

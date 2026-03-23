@@ -300,4 +300,29 @@ describe('public commands E2E', () => {
     expect(data[0]).toHaveProperty('readingCount');
     expect(data[0]).toHaveProperty('bookId');
   }, 30_000);
+
+  // ── yollomi (browser: false, hardcoded data) ──
+  it('yollomi models returns model list with all types', async () => {
+    const { stdout, code } = await runCli(['yollomi', 'models', '-f', 'json']);
+    expect(code).toBe(0);
+    const data = parseJsonOutput(stdout);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.length).toBeGreaterThan(10);
+    expect(data[0]).toHaveProperty('type');
+    expect(data[0]).toHaveProperty('model');
+    expect(data[0]).toHaveProperty('credits');
+    expect(data[0]).toHaveProperty('description');
+    const types = new Set(data.map((d: any) => d.type));
+    expect(types.has('image')).toBe(true);
+    expect(types.has('video')).toBe(true);
+    expect(types.has('tool')).toBe(true);
+  }, 30_000);
+
+  it('yollomi models --type image filters correctly', async () => {
+    const { stdout, code } = await runCli(['yollomi', 'models', '--type', 'image', '-f', 'json']);
+    expect(code).toBe(0);
+    const data = parseJsonOutput(stdout);
+    expect(data.length).toBeGreaterThan(0);
+    expect(data.every((d: any) => d.type === 'image')).toBe(true);
+  }, 30_000);
 });
