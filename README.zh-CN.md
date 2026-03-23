@@ -168,6 +168,7 @@ OpenCLI 也可以作为你现有命令行工具的统一入口，负责发现、
 | **docker** | Docker 命令行工具 | `opencli docker ps` |
 | **kubectl** | Kubernetes CLI | `opencli kubectl get pods` |
 | **readwise** | Readwise / Reader CLI | `opencli readwise login` |
+| **gws** | Google Workspace CLI — Docs, Sheets, Drive, Gmail, Calendar | `opencli gws docs list` |
 
 **零配置透传**：OpenCLI 会把你的输入原样转发给底层二进制，保留原生 stdout / stderr 行为。
 
