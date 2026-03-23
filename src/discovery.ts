@@ -16,7 +16,6 @@ import yaml from 'js-yaml';
 import { type CliCommand, type InternalCliCommand, type Arg, Strategy, registerCommand } from './registry.js';
 import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
-import { getErrorMessage } from './errors.js';
 import type { ManifestEntry } from './build-manifest.js';
 
 /** Plugins directory: ~/.opencli/plugins/ */
