@@ -109,7 +109,7 @@ Run `opencli list` for the live registry.
 | **doubao-app** | `status` `new` `send` `read` `ask` `screenshot` `dump` | Desktop |
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | Desktop |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | Desktop |
-| **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | Public / Browser |
+| **v2ex** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | Public / Browser |
 | **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | Browser |
 | **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` `serve` | Desktop |
 | **chatgpt** | `status` `new` `send` `read` `ask` | Desktop |

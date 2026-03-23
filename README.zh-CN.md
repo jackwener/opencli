@@ -111,7 +111,7 @@ npm install -g @jackwener/opencli@latest
 | **doubao-app** | `status` `new` `send` `read` `ask` `screenshot` `dump` | 桌面端 |
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | 桌面端 |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | 桌面端 |
-| **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | 公开 / 浏览器 |
+| **v2ex** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | 公开 / 浏览器 |
 | **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | 浏览器 |
 | **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` `serve` | 桌面端 |
 | **chatgpt** | `status` `new` `send` `read` `ask` | 桌面端 |

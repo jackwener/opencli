@@ -30,6 +30,9 @@ opencli v2ex node python
 # View topic replies
 opencli v2ex replies 1000
 
+# User's topics
+opencli v2ex user Livid
+
 # User profile
 opencli v2ex member Livid
 
