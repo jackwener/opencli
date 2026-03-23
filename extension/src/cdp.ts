@@ -144,10 +144,10 @@ export async function screenshot(
   }
 }
 
-export function detach(tabId: number): void {
+export async function detach(tabId: number): Promise<void> {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);
-  try { chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
+  try { await chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
 }
 
 export function registerListeners(): void {

@@ -327,7 +327,7 @@ async function handleNavigate(cmd: Command, workspace: string): Promise<Result> 
   // state and causes the next Runtime.evaluate to fail with
   // "Inspected target navigated or closed". Resetting here forces a clean
   // re-attach after navigation.
-  executor.detach(tabId);
+  await executor.detach(tabId);
 
   await chrome.tabs.update(tabId, { url: targetUrl });
 
@@ -406,12 +406,12 @@ async function handleTabs(cmd: Command, workspace: string): Promise<Result> {
         const target = tabs[cmd.index];
         if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
         await chrome.tabs.remove(target.id);
-        executor.detach(target.id);
+        await executor.detach(target.id);
         return { id: cmd.id, ok: true, data: { closed: target.id } };
       }
       const tabId = await resolveTabId(cmd.tabId, workspace);
       await chrome.tabs.remove(tabId);
-      executor.detach(tabId);
+      await executor.detach(tabId);
       return { id: cmd.id, ok: true, data: { closed: tabId } };
     }
     case 'select': {
