@@ -55,7 +55,7 @@ export function evalExpr(expr: string, ctx: RenderContext): unknown {
     const val = resolvePath(varName, { args, item, data, index });
     if (val !== null && val !== undefined) {
       const numVal = Number(val); const num = Number(numStr);
-      if (!isNaN(numVal)) {
+      if (!Number.isNaN(numVal)) {
         switch (op) {
           case '+': return numVal + num; case '-': return numVal - num;
           case '*': return numVal * num; case '/': return num !== 0 ? numVal / num : 0;
@@ -95,7 +95,7 @@ function applyFilter(filterExpr: string, value: unknown): unknown {
     case 'default': {
       if (value === null || value === undefined || value === '') {
         const intVal = parseInt(filterArg, 10);
-        if (!isNaN(intVal) && String(intVal) === filterArg.trim()) return intVal;
+        if (!Number.isNaN(intVal) && String(intVal) === filterArg.trim()) return intVal;
         return filterArg;
       }
       return value;
@@ -110,7 +110,7 @@ function applyFilter(filterExpr: string, value: unknown): unknown {
       return typeof value === 'string' ? value.trim() : value;
     case 'truncate': {
       const n = parseInt(filterArg, 10) || 50;
-      return typeof value === 'string' && value.length > n ? value.slice(0, n) + '...' : value;
+      return typeof value === 'string' && value.length > n ? `${value.slice(0, n)}...` : value;
     }
     case 'replace': {
       if (typeof value !== 'string') return value;
@@ -138,6 +138,7 @@ function applyFilter(filterExpr: string, value: unknown): unknown {
     case 'sanitize':
       // Remove invalid filename characters
       return typeof value === 'string'
+        // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional - strips C0 control chars from filenames
         ? value.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
         : value;
     case 'ext': {
