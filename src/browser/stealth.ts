@@ -103,9 +103,37 @@ export function generateStealthJs(): string {
       try {
         delete window.__playwright;
         delete window.__puppeteer;
-        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
-        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
-        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+        // ChromeDriver injects cdc_ prefixed globals; the suffix varies by version,
+        // so scan window for any matching property rather than hardcoding names.
+        for (const prop of Object.getOwnPropertyNames(window)) {
+          if (prop.startsWith('cdc_') || prop.startsWith('__cdc_')) {
+            try { delete window[prop]; } catch {}
+          }
+        }
+      } catch {}
+
+      // 7. CDP stack trace cleanup
+      //    Runtime.evaluate injects scripts whose source URLs appear in Error
+      //    stack traces (e.g. __puppeteer_evaluation_script__, pptr:, debugger://).
+      //    Websites detect automation by doing: new Error().stack and inspecting it.
+      //    We override the stack property getter on Error.prototype to filter them.
+      //    Note: Error.prepareStackTrace is V8/Node-only and not available in
+      //    browser page context, so we use a property descriptor approach instead.
+      try {
+        const _origDescriptor = Object.getOwnPropertyDescriptor(Error.prototype, 'stack');
+        const _cdpPatterns = ['puppeteer_evaluation_script', 'pptr:', 'debugger://', '__opencli'];
+        if (_origDescriptor && _origDescriptor.get) {
+          Object.defineProperty(Error.prototype, 'stack', {
+            get: function () {
+              const raw = _origDescriptor.get.call(this);
+              if (typeof raw !== 'string') return raw;
+              return raw.split('\\n').filter(line =>
+                !_cdpPatterns.some(p => line.includes(p))
+              ).join('\\n');
+            },
+            configurable: true,
+          });
+        }
       } catch {}
 
       return 'applied';

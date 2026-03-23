@@ -142,7 +142,7 @@ describe('stealth anti-detection', () => {
     expect(js.length).toBeGreaterThan(100);
   });
 
-  it('contains all 6 anti-detection patches', () => {
+  it('contains all 7 anti-detection patches', () => {
     const js = generateStealthJs();
     // 1. webdriver
     expect(js).toContain('navigator');
@@ -157,9 +157,15 @@ describe('stealth anti-detection', () => {
     // 5. permissions
     expect(js).toContain('Permissions');
     expect(js).toContain('notifications');
-    // 6. automation artifacts
+    // 6. automation artifacts (dynamic cdc_ scan)
     expect(js).toContain('__playwright');
     expect(js).toContain('__puppeteer');
+    expect(js).toContain('getOwnPropertyNames');
+    expect(js).toContain('cdc_');
+    // 7. CDP stack trace cleanup
+    expect(js).toContain('Error.prototype');
+    expect(js).toContain('puppeteer_evaluation_script');
+    expect(js).toContain('getOwnPropertyDescriptor');
   });
 
   it('includes guard flag to prevent double-injection', () => {
