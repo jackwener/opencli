@@ -105,6 +105,7 @@ Run `opencli list` for the live registry.
 | **bilibili** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` `download` | Browser |
 | **codex** | `status` `send` `read` `new` `dump` `extract-diff` `model` `ask` `screenshot` `history` `export` | Desktop |
 | **chatwise** | `status` `new` `send` `read` `ask` `model` `history` `export` `screenshot` | Desktop |
+| **doubao** | `status` `new` `send` `read` `ask` | Browser |
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | Desktop |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | Desktop |
 | **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | Public / Browser |

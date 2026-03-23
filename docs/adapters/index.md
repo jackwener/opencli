@@ -27,6 +27,7 @@ Run `opencli list` for the live registry.
 | **[linux-do](/adapters/browser/linux-do)** | `hot` `latest` `categories` `category` `search` `topic` | 🔐 Browser |
 | **[chaoxing](/adapters/browser/chaoxing)** | `assignments` `exams` | 🔐 Browser |
 | **[grok](/adapters/browser/grok)** | `ask` | 🔐 Browser |
+| **[doubao](/adapters/browser/doubao)** | `status` `new` `send` `read` `ask` | 🔐 Browser |
 | **[weread](/adapters/browser/weread)** | `shelf` `search` `book` `ranking` `notebooks` `highlights` `notes` | 🔐 Browser |
 
 ## Public API Adapters

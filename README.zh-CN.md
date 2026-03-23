@@ -107,6 +107,7 @@ npm install -g @jackwener/opencli@latest
 | **bilibili** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` `download` | 浏览器 |
 | **codex** | `status` `send` `read` `new` `dump` `extract-diff` `model` `ask` `screenshot` `history` `export` | 桌面端 |
 | **chatwise** | `status` `new` `send` `read` `ask` `model` `history` `export` `screenshot` | 桌面端 |
+| **doubao** | `status` `new` `send` `read` `ask` | 浏览器 |
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | 桌面端 |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | 桌面端 |
 | **v2ex** | `hot` `latest` `topic` `daily` `me` `notifications` | 公开 / 浏览器 |
