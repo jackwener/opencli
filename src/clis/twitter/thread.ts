@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError } from '../../errors.js';
 
 // ── Twitter GraphQL constants ──────────────────────────────────────────
 
@@ -139,7 +140,7 @@ cli({
     const ct0 = await page.evaluate(`() => {
       return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('ct0='))?.split('=')[1] || null;
     }`);
-    if (!ct0) throw new Error('Not logged into x.com (no ct0 cookie)');
+    if (!ct0) throw new AuthRequiredError('x.com', 'Not logged into x.com (no ct0 cookie)');
 
     // Build auth headers in TypeScript
     const headers = JSON.stringify({

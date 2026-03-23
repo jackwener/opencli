@@ -21,8 +21,9 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
+import { DEFAULT_DAEMON_PORT } from './constants.js';
 
-const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? '19825', 10);
+const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 // ─── State ───────────────────────────────────────────────────────────
@@ -150,11 +151,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         return;
       }
 
+      const timeoutMs = typeof body.timeout === 'number' && body.timeout > 0
+        ? body.timeout * 1000
+        : 120000;
       const result = await new Promise<unknown>((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(body.id);
-          reject(new Error('Command timeout (120s)'));
-        }, 120000);
+          reject(new Error(`Command timeout (${timeoutMs / 1000}s)`));
+        }, timeoutMs);
         pending.set(body.id, { resolve, reject, timer });
         extensionWs!.send(JSON.stringify(body));
       });

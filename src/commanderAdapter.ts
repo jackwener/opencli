@@ -16,11 +16,7 @@ import { type CliCommand, fullName, getRegistry } from './registry.js';
 import { formatRegistryHelpText } from './serialization.js';
 import { render as renderOutput } from './output.js';
 import { executeCommand } from './execution.js';
-import { CliError } from './errors.js';
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { CliError, ERROR_ICONS, getErrorMessage } from './errors.js';
 
 /**
  * Register a single CliCommand as a Commander subcommand.
@@ -90,8 +86,9 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       });
     } catch (err) {
       if (err instanceof CliError) {
-        console.error(chalk.red(`Error [${err.code}]: ${err.message}`));
-        if (err.hint) console.error(chalk.yellow(`Hint: ${err.hint}`));
+        const icon = ERROR_ICONS[err.code] ?? '⚠️';
+        console.error(chalk.red(`${icon} ${err.message}`));
+        if (err.hint) console.error(chalk.yellow(`→ ${err.hint}`));
       } else if (optionsRecord.verbose === true && err instanceof Error && err.stack) {
         console.error(chalk.red(err.stack));
       } else {

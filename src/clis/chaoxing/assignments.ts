@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError } from '../../errors.js';
 import {
   getCourses, initSession, enterCourse, getTabIframeUrl,
   parseAssignmentsFromDom, sleep,
@@ -33,7 +34,7 @@ cli({
 
     // 2. Get courses
     const courses = await getCourses(page);
-    if (!courses.length) throw new Error('未获取到课程列表，请确认已登录学习通');
+    if (!courses.length) throw new AuthRequiredError('mooc2-ans.chaoxing.com', '未获取到课程列表');
 
     const filtered = courseFilter
       ? courses.filter(c => c.title.includes(courseFilter))

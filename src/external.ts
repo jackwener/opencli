@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { spawnSync, execSync, execFileSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import yaml from 'js-yaml';
 import chalk from 'chalk';
 import { log } from './logger.js';
@@ -82,6 +82,60 @@ export function getInstallCmd(installConfig?: ExternalCliInstall): string | null
   return null;
 }
 
+/**
+ * Safely parses a command string into a binary and argument list.
+ * Rejects commands containing shell operators (&&, ||, |, ;, >, <, `) that
+ * cannot be safely expressed as execFileSync arguments.
+ *
+ * Args:
+ *   cmd: Raw command string from YAML config (e.g. "brew install gh")
+ *
+ * Returns:
+ *   Object with `binary` and `args` fields, or throws on unsafe input.
+ */
+export function parseCommand(cmd: string): { binary: string; args: string[] } {
+  const shellOperators = /&&|\|\|?|;|[><`]/;
+  if (shellOperators.test(cmd)) {
+    throw new Error(
+      `Install command contains unsafe shell operators and cannot be executed securely: "${cmd}". ` +
+        `Please install the tool manually.`
+    );
+  }
+
+  // Tokenise respecting single- and double-quoted segments (no variable expansion).
+  const tokens: string[] = [];
+  const re = /(?:"([^"]*)")|(?:'([^']*)')|(\S+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(cmd)) !== null) {
+    tokens.push(match[1] ?? match[2] ?? match[3]);
+  }
+
+  if (tokens.length === 0) {
+    throw new Error(`Install command is empty.`);
+  }
+
+  const [binary, ...args] = tokens;
+  return { binary, args };
+}
+
+function shouldRetryWithCmdShim(binary: string, err: NodeJS.ErrnoException): boolean {
+  return os.platform() === 'win32' && !path.extname(binary) && err.code === 'ENOENT';
+}
+
+function runInstallCommand(cmd: string): void {
+  const { binary, args } = parseCommand(cmd);
+
+  try {
+    execFileSync(binary, args, { stdio: 'inherit' });
+  } catch (err: any) {
+    if (shouldRetryWithCmdShim(binary, err)) {
+      execFileSync(`${binary}.cmd`, args, { stdio: 'inherit' });
+      return;
+    }
+    throw err;
+  }
+}
+
 export function installExternalCli(cli: ExternalCliConfig): boolean {
   if (!cli.install) {
     console.error(chalk.red(`No auto-install command configured for '${cli.name}'.`));
@@ -99,7 +153,7 @@ export function installExternalCli(cli: ExternalCliConfig): boolean {
   console.log(chalk.cyan(`🔹 '${cli.name}' is not installed. Auto-installing...`));
   console.log(chalk.dim(`$ ${cmd}`));
   try {
-    execSync(cmd, { stdio: 'inherit' });
+    runInstallCommand(cmd);
     console.log(chalk.green(`✅ Installed '${cli.name}' successfully.\n`));
     return true;
   } catch (err: any) {

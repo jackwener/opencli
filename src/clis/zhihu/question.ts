@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError } from '../../errors.js';
 
 cli({
   site: 'zhihu',
@@ -31,7 +32,7 @@ cli({
       }
     `);
 
-    if (!result || result.error) throw new Error('Failed to fetch question. Are you logged in?');
+    if (!result || result.error) throw new AuthRequiredError('www.zhihu.com', 'Failed to fetch question data from Zhihu');
 
     const answers = (result.answers ?? []).slice(0, Number(limit)).map((a: any, i: number) => ({
       rank: i + 1,

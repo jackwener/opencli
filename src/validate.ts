@@ -2,6 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import yaml from 'js-yaml';
+import { getErrorMessage } from './errors.js';
 
 /** All recognized pipeline step names */
 const KNOWN_STEP_NAMES = new Set([
@@ -37,9 +38,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function validateClisWithTarget(dirs: string[], target?: string): ValidationReport {
   const results: FileValidationResult[] = [];

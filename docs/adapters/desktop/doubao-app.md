@@ -1,40 +1,35 @@
-# Doubao App
+# Doubao App (豆包桌面版)
 
-Control the **Doubao AI desktop app** (豆包) directly from the terminal via Chrome DevTools Protocol (CDP).
+Control the **Doubao AI Desktop App** via Chrome DevTools Protocol (CDP).
 
 ## Prerequisites
 
-1. Install the official Doubao desktop app.
-2. Launch Doubao with the remote debugging port enabled:
-
-```bash
-# macOS
-/Applications/Doubao.app/Contents/MacOS/Doubao \
-  --remote-debugging-port=9226
-```
-
-3. Set the CDP endpoint:
-
-```bash
-export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9226"
-```
+1. Launch Doubao Desktop with remote debugging enabled:
+   ```bash
+   /Applications/Doubao.app/Contents/MacOS/Doubao --remote-debugging-port=9225
+   ```
+2. Set the CDP endpoint:
+   ```bash
+   export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9225"
+   ```
 
 ## Commands
 
-- `opencli doubao-app status`: Check if the Doubao app is running and accessible via CDP.
-- `opencli doubao-app new`: Start a new conversation.
-- `opencli doubao-app send "message"`: Send a message to the active conversation.
-- `opencli doubao-app read`: Read chat messages from the current conversation.
-- `opencli doubao-app ask "message"`: Send a prompt and wait for the assistant reply in one shot.
-- `opencli doubao-app screenshot`: Capture a screenshot of the current Doubao window.
-- `opencli doubao-app dump`: Dump the full conversation history from the current session.
+| Command | Description |
+|---------|-------------|
+| `opencli doubao-app status` | Check CDP connection status |
+| `opencli doubao-app new` | Start a new conversation |
+| `opencli doubao-app send "message"` | Send a message to the current chat |
+| `opencli doubao-app read` | Read the latest assistant reply |
+| `opencli doubao-app ask "message"` | Send a prompt and wait for the reply |
+| `opencli doubao-app screenshot` | Capture a screenshot of the app window |
+| `opencli doubao-app dump` | Export DOM and snapshot debug info |
 
 ## How It Works
 
-Doubao Desktop is an Electron app. OpenCLI connects via the Chrome DevTools Protocol to the Electron renderer process and interacts with the chat UI using `data-testid` selectors exposed by the app.
+Connects to the Doubao Electron app via CDP, injecting JavaScript into the renderer process to control the chat UI — sending messages, reading replies, and capturing screenshots.
 
 ## Limitations
 
-- Requires Doubao to be launched with `--remote-debugging-port=9226`
-- CDP endpoint must be reachable at the configured address
-- `read` returns only the visible messages in the current conversation
+- Requires Doubao Desktop to be launched with `--remote-debugging-port`
+- macOS / Linux / Windows (Electron-based, platform independent)

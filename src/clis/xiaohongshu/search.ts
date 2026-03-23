@@ -7,6 +7,7 @@
  */
 
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError } from '../../errors.js';
 
 cli({
   site: 'xiaohongshu',
@@ -86,10 +87,7 @@ cli({
     if (!payload || typeof payload !== 'object') return [];
 
     if ((payload as any).loginWall) {
-      throw new Error(
-        'Xiaohongshu search results are blocked behind a login wall for the current browser session. ' +
-        'Open https://www.xiaohongshu.com/search_result in Chrome and sign in, then retry.'
-      );
+      throw new AuthRequiredError('www.xiaohongshu.com', 'Xiaohongshu search results are blocked behind a login wall');
     }
 
     const data: any[] = Array.isArray((payload as any).results) ? (payload as any).results : [];
