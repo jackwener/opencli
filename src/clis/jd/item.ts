@@ -29,6 +29,7 @@ cli({
   columns: ['title', 'price', 'shop', 'specs', 'mainImages', 'detailImages'],
   func: async (page, kwargs) => {
     const sku = kwargs.sku;
+    const maxImages = kwargs.images as number;
     const url = `https://item.jd.com/${sku}.html`;
 
     await page.goto(url, { waitUntil: 'load' });
@@ -44,6 +45,7 @@ cli({
 
     const data = await page.evaluate(`
       (() => {
+        const maxImg = ${maxImages};
         // 尝试多种价格选择器
         const skuMatch = location.pathname.match(/(\\d+)\\.html/);
         const sku = skuMatch ? skuMatch[1] : '';
@@ -68,12 +70,12 @@ cli({
         // 主图
         const mainImgs = unique
           .filter(u => u.includes('/n1/') || u.includes('/n3/') || u.includes('/n4/') || u.includes('/img/'))
-          .slice(0, 10);
+          .slice(0, maxImg);
 
         // 详情图
         const detailImgs = unique
           .filter(u => u.includes('/babel/') || u.includes('/popshop/'))
-          .slice(0, 10);
+          .slice(0, maxImg);
 
         // 规格参数：从页面文本提取
         const text = document.body.innerText;
