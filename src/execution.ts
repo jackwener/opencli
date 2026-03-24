@@ -166,29 +166,35 @@ export async function executeCommand(
   await emitHook('onBeforeExecute', hookCtx);
 
   let result: unknown;
-
-  if (shouldUseBrowserSession(cmd)) {
-    const BrowserFactory = getBrowserFactory();
-    result = await browserSession(BrowserFactory, async (page) => {
-      // Pre-navigate to target domain for cookie/header context if needed.
-      // Each adapter controls this via `navigateBefore` (see CliCommand docs).
-      const preNavUrl = resolvePreNav(cmd);
-      if (preNavUrl) {
-        try { await page.goto(preNavUrl); await page.wait(2); } catch (err) {
-          if (debug) console.error(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
+  try {
+    if (shouldUseBrowserSession(cmd)) {
+      const BrowserFactory = getBrowserFactory();
+      result = await browserSession(BrowserFactory, async (page) => {
+        // Pre-navigate to target domain for cookie/header context if needed.
+        // Each adapter controls this via `navigateBefore` (see CliCommand docs).
+        const preNavUrl = resolvePreNav(cmd);
+        if (preNavUrl) {
+          try { await page.goto(preNavUrl); await page.wait(2); } catch (err) {
+            if (debug) console.error(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
+          }
         }
-      }
-      return runWithTimeout(runCommand(cmd, page, kwargs, debug), {
-        timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,
-        label: fullName(cmd),
-      });
-    }, { workspace: `site:${cmd.site}` });
-  } else {
-    // Non-browser commands run directly
-    result = await runCommand(cmd, null, kwargs, debug);
+        return runWithTimeout(runCommand(cmd, page, kwargs, debug), {
+          timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,
+          label: fullName(cmd),
+        });
+      }, { workspace: `site:${cmd.site}` });
+    } else {
+      // Non-browser commands run directly
+      result = await runCommand(cmd, null, kwargs, debug);
+    }
+  } catch (err) {
+    hookCtx.error = err;
+    hookCtx.finishedAt = Date.now();
+    await emitHook('onAfterExecute', hookCtx);
+    throw err;
   }
 
+  hookCtx.finishedAt = Date.now();
   await emitHook('onAfterExecute', hookCtx, result);
   return result;
 }
-

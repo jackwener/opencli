@@ -22,6 +22,10 @@ export interface HookContext {
   args: Record<string, unknown>;
   /** Epoch ms when execution started (set by executeCommand) */
   startedAt?: number;
+  /** Epoch ms when execution finished (set by executeCommand) */
+  finishedAt?: number;
+  /** Error thrown by the command, if execution failed */
+  error?: unknown;
   /** Plugins can attach arbitrary data here for cross-hook communication */
   [key: string]: unknown;
 }

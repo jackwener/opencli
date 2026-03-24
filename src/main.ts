@@ -28,7 +28,6 @@ const USER_CLIS = path.join(os.homedir(), '.opencli', 'clis');
 
 await discoverClis(BUILTIN_CLIS, USER_CLIS);
 await discoverPlugins();
-await emitHook('onStartup', { command: '__startup__', args: {} });
 
 // ── Fast-path: handle --get-completions before commander parses ─────────
 // Usage: opencli --get-completions --cursor <N> [word1 word2 ...]
@@ -51,4 +50,5 @@ if (getCompIdx !== -1) {
   process.exit(0);
 }
 
+await emitHook('onStartup', { command: '__startup__', args: {} });
 runCli(BUILTIN_CLIS, USER_CLIS);

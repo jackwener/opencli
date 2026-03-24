@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { discoverClis, discoverPlugins, PLUGINS_DIR } from './discovery.js';
 import { executeCommand } from './execution.js';
 import { getRegistry, cli, Strategy } from './registry.js';
+import { clearAllHooks, onAfterExecute } from './hooks.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -118,6 +119,10 @@ columns: [message]
 });
 
 describe('executeCommand', () => {
+  beforeEach(() => {
+    clearAllHooks();
+  });
+
   it('accepts kebab-case option names after Commander camelCases them', async () => {
     const cmd = cli({
       site: 'test-engine',
@@ -194,5 +199,29 @@ describe('executeCommand', () => {
 
     await executeCommand(cmd, {}, true);
     expect(receivedDebug).toBe(true);
+  });
+
+  it('fires onAfterExecute even when command execution throws', async () => {
+    const seen: Array<{ error?: unknown; finishedAt?: number }> = [];
+    onAfterExecute((ctx) => {
+      seen.push({ error: ctx.error, finishedAt: ctx.finishedAt });
+    });
+
+    const cmd = cli({
+      site: 'test-engine',
+      name: 'failing-test',
+      description: 'failing command',
+      browser: false,
+      strategy: Strategy.PUBLIC,
+      func: async () => {
+        throw new Error('boom');
+      },
+    });
+
+    await expect(executeCommand(cmd, {})).rejects.toThrow('boom');
+    expect(seen).toHaveLength(1);
+    expect(seen[0].error).toBeInstanceOf(Error);
+    expect((seen[0].error as Error).message).toBe('boom');
+    expect(typeof seen[0].finishedAt).toBe('number');
   });
 });
