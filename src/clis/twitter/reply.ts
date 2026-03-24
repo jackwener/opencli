@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError, SelectorError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 cli({
@@ -14,7 +15,7 @@ cli({
   ],
   columns: ['status', 'message', 'text'],
   func: async (page: IPage | null, kwargs: any) => {
-    if (!page) throw new Error('Requires browser');
+    if (!page) throw new CommandExecutionError('Browser session required');
 
     // 1. Navigate to the tweet page
     await page.goto(kwargs.url);

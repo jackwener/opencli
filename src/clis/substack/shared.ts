@@ -1,4 +1,5 @@
-import type { IPage } from '../../types.js';
+import type { IPage } from '../../types.js';import { CommandExecutionError } from '../../errors.js';
+
 
 export function buildSubstackBrowseUrl(category?: string): string {
   if (!category || category === 'all') return 'https://substack.com/';

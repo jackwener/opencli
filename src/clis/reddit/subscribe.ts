@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError } from '../../errors.js';
 
 cli({
   site: 'reddit',
@@ -13,7 +14,7 @@ cli({
   ],
   columns: ['status', 'message'],
   func: async (page, kwargs) => {
-    if (!page) throw new Error('Requires browser');
+    if (!page) throw new CommandExecutionError('Browser session required');
 
     await page.goto('https://www.reddit.com');
 

@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError } from '../../errors.js';
 
 cli({
   site: 'twitter',
@@ -29,7 +30,7 @@ cli({
     // Verify SPA navigation succeeded
     const currentUrl = await page.evaluate('() => window.location.pathname');
     if (currentUrl !== '/notifications') {
-        throw new Error('SPA navigation to notifications failed. Twitter may have changed its routing.');
+        throw new CommandExecutionError('SPA navigation to notifications failed. Twitter may have changed its routing.');
     }
 
     // 4. Scroll to trigger pagination

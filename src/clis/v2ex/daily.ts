@@ -2,6 +2,7 @@
  * V2EX Daily Check-in adapter.
  */
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 cli({
@@ -15,7 +16,7 @@ cli({
   args: [],
   columns: ['status', 'message'],
   func: async (page: IPage | null) => {
-    if (!page) throw new Error('Browser page required');
+    if (!page) throw new CommandExecutionError('Browser page required');
 
     if (process.env.OPENCLI_VERBOSE) {
       console.error('[opencli:v2ex] Navigating to /mission/daily');
@@ -60,7 +61,7 @@ cli({
         console.error(`[opencli:v2ex:debug] Page Title: ${checkResult.debug_title}`);
         console.error(`[opencli:v2ex:debug] Page Body: ${checkResult.debug_body}`);
       }
-      throw new Error(checkResult.error);
+      throw new CommandExecutionError(checkResult.error);
     }
 
     if (checkResult.claimed) {

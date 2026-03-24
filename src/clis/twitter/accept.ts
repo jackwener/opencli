@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 cli({
@@ -15,7 +16,7 @@ cli({
   ],
   columns: ['index', 'status', 'user', 'message'],
   func: async (page: IPage | null, kwargs: any) => {
-    if (!page) throw new Error('Requires browser');
+    if (!page) throw new CommandExecutionError('Browser session required');
 
     const keywords: string[] = kwargs.query.split(',').map((k: string) => k.trim()).filter(Boolean);
     const maxAccepts: number = kwargs.max ?? 20;

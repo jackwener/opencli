@@ -2,6 +2,7 @@
  * V2EX Notifications adapter.
  */
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 cli({
@@ -17,7 +18,7 @@ cli({
   ],
   columns: ['type', 'content', 'time'],
   func: async (page: IPage | null, kwargs) => {
-    if (!page) throw new Error('Browser page required');
+    if (!page) throw new CommandExecutionError('Browser page required');
 
     if (process.env.OPENCLI_VERBOSE) {
       console.error('[opencli:v2ex] Navigating to /notifications');

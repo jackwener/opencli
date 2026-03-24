@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
 
 // ── Twitter GraphQL constants ──────────────────────────────────────────
 
@@ -194,7 +195,7 @@ cli({
     const ct0 = await page.evaluate(`() => {
       return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('ct0='))?.split('=')[1] || null;
     }`);
-    if (!ct0) throw new Error('Not logged into x.com (no ct0 cookie)');
+    if (!ct0) throw new AuthRequiredError('x.com', 'Not logged into x.com (no ct0 cookie)');
 
     // Dynamically resolve queryId for the selected endpoint
     const resolved = await page.evaluate(`async () => {
@@ -236,7 +237,7 @@ cli({
 
       if (data?.error) {
         if (allTweets.length === 0)
-          throw new Error(`HTTP ${data.error}: Failed to fetch timeline. queryId may have expired.`);
+          throw new CommandExecutionError(`HTTP ${data.error}: Failed to fetch timeline. queryId may have expired.`);
         break;
       }
 

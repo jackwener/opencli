@@ -1,5 +1,6 @@
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
+import { CommandExecutionError } from '../../errors.js';
 
 /**
  * Trigger Twitter search SPA navigation and retry once on transient failures.
