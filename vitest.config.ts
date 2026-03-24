@@ -22,6 +22,7 @@ export default defineConfig({
             'src/clis/twitter/**/*.test.ts',
             'src/clis/reddit/**/*.test.ts',
             'src/clis/bilibili/**/*.test.ts',
+            'src/clis/linkedin/**/*.test.ts',
           ],
           sequence: {
             groupOrder: 1,
