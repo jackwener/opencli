@@ -9,9 +9,6 @@
  * Inspired by puppeteer-extra-plugin-stealth.
  */
 
-/** Guard flag set on `window` to prevent double-injection. */
-export const STEALTH_GUARD = '__opencli_stealth_applied';
-
 /**
  * Return a self-contained JS string that, when evaluated in a page context,
  * applies all stealth patches. Safe to call multiple times — the guard flag
@@ -20,16 +17,25 @@ export const STEALTH_GUARD = '__opencli_stealth_applied';
 export function generateStealthJs(): string {
   return `
     (() => {
-      // Guard: skip if already applied
-      if (window.${STEALTH_GUARD}) return 'skipped';
-      // Use defineProperty so the guard flag is non-enumerable (not a detection vector).
-      Object.defineProperty(window, '${STEALTH_GUARD}', { value: true, configurable: true });
+      // Guard: prevent double-injection across separate CDP evaluations.
+      // We cannot use a closure variable (each eval is a fresh scope), and
+      // window properties / Symbols are discoverable by anti-bot scripts.
+      // Instead, stash the flag in a non-enumerable getter on a built-in
+      // prototype that fingerprinters are unlikely to scan.
+      const _gProto = EventTarget.prototype;
+      const _gKey = '__lsn';  // looks like an internal listener cache
+      if (_gProto[_gKey]) return 'skipped';
+      try {
+        Object.defineProperty(_gProto, _gKey, { value: true, enumerable: false, configurable: true });
+      } catch {}
 
-      // 1. navigator.webdriver → undefined
+      // 1. navigator.webdriver → false
       //    Most common check; Playwright/Puppeteer/CDP set this to true.
+      //    Real Chrome returns false (not undefined) — returning undefined is
+      //    itself a detection signal for advanced fingerprinters.
       try {
         Object.defineProperty(navigator, 'webdriver', {
-          get: () => undefined,
+          get: () => false,
           configurable: true,
         });
       } catch {}
@@ -119,9 +125,17 @@ export function generateStealthJs(): string {
       //    We override the stack property getter on Error.prototype to filter them.
       //    Note: Error.prepareStackTrace is V8/Node-only and not available in
       //    browser page context, so we use a property descriptor approach instead.
+      //    We use generic protocol patterns instead of product-specific names to
+      //    also catch our own injected code frames without leaking identifiers.
       try {
         const _origDescriptor = Object.getOwnPropertyDescriptor(Error.prototype, 'stack');
-        const _cdpPatterns = ['puppeteer_evaluation_script', 'pptr:', 'debugger://', '__opencli'];
+        const _cdpPatterns = [
+          'puppeteer_evaluation_script',
+          'pptr:',
+          'debugger://',
+          '__playwright',
+          '__puppeteer',
+        ];
         if (_origDescriptor && _origDescriptor.get) {
           Object.defineProperty(Error.prototype, 'stack', {
             get: function () {

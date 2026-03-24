@@ -10,6 +10,44 @@
  */
 
 /**
+ * Helper: define a non-enumerable property on window.
+ * Avoids detection via Object.keys(window) or for..in loops.
+ */
+const DEFINE_HIDDEN = `
+      function __defHidden(obj, key, val) {
+        try {
+          Object.defineProperty(obj, key, { value: val, writable: true, enumerable: false, configurable: true });
+        } catch { obj[key] = val; }
+      }`;
+
+/**
+ * Helper: disguise a patched function so toString() returns native code signature.
+ */
+const DISGUISE_FN = `
+      function __disguise(fn, name) {
+        const nativeStr = 'function ' + name + '() { [native code] }';
+        // Override toString on the instance AND patch Function.prototype.toString
+        // to handle Function.prototype.toString.call(fn) bypasses.
+        const _origToString = Function.prototype.toString;
+        const _patchedFns = window.__dFns || (function() {
+          const m = new Map();
+          Object.defineProperty(window, '__dFns', { value: m, enumerable: false, configurable: true });
+          // Patch Function.prototype.toString once to consult the map
+          Object.defineProperty(Function.prototype, 'toString', {
+            value: function() {
+              const override = m.get(this);
+              return override !== undefined ? override : _origToString.call(this);
+            },
+            writable: true, configurable: true
+          });
+          return m;
+        })();
+        _patchedFns.set(fn, nativeStr);
+        try { Object.defineProperty(fn, 'name', { value: name, configurable: true }); } catch {}
+        return fn;
+      }`;
+
+/**
  * Generate JavaScript source that installs a fetch/XHR interceptor.
  * Captured responses are pushed to `window.__opencli_intercepted`.
  *
@@ -30,15 +68,18 @@ export function generateInterceptorJs(
 
   return `
     () => {
-      window.${arr} = window.${arr} || [];
-      window.${arr}_errors = window.${arr}_errors || [];
-      window.${patternVar} = ${patternExpr};
+      ${DEFINE_HIDDEN}
+      ${DISGUISE_FN}
+
+      if (!window.${arr}) __defHidden(window, '${arr}', []);
+      if (!window.${arr}_errors) __defHidden(window, '${arr}_errors', []);
+      __defHidden(window, '${patternVar}', ${patternExpr});
       const __checkMatch = (url) => window.${patternVar} && url.includes(window.${patternVar});
 
       if (!window.${guard}) {
         // ── Patch fetch ──
         const __origFetch = window.fetch;
-        window.fetch = async function(...args) {
+        window.fetch = __disguise(async function(...args) {
           const reqUrl = typeof args[0] === 'string' ? args[0]
             : (args[0] && args[0].url) || '';
           const response = await __origFetch.apply(this, args);
@@ -50,28 +91,28 @@ export function generateInterceptorJs(
             } catch(e) { window.${arr}_errors.push({ url: reqUrl, error: String(e) }); }
           }
           return response;
-        };
+        }, 'fetch');
 
         // ── Patch XMLHttpRequest ──
         const __XHR = XMLHttpRequest.prototype;
         const __origOpen = __XHR.open;
         const __origSend = __XHR.send;
-        __XHR.open = function(method, url) {
-          this.__opencli_url = String(url);
+        __XHR.open = __disguise(function(method, url) {
+          Object.defineProperty(this, '__iurl', { value: String(url), writable: true, enumerable: false, configurable: true });
           return __origOpen.apply(this, arguments);
-        };
-        __XHR.send = function() {
-          if (__checkMatch(this.__opencli_url)) {
+        }, 'open');
+        __XHR.send = __disguise(function() {
+          if (__checkMatch(this.__iurl)) {
             this.addEventListener('load', function() {
               try {
                 window.${arr}.push(JSON.parse(this.responseText));
-              } catch(e) { window.${arr}_errors.push({ url: this.__opencli_url, error: String(e) }); }
+              } catch(e) { window.${arr}_errors.push({ url: this.__iurl, error: String(e) }); }
             });
           }
           return __origSend.apply(this, arguments);
-        };
+        }, 'send');
 
-        window.${guard} = true;
+        __defHidden(window, '${guard}', true);
       }
     }
   `;
@@ -112,13 +153,19 @@ export function generateTapInterceptorJs(patternExpr: string): {
       let captureResolve;
       const capturePromise = new Promise(r => { captureResolve = r; });
       const capturePattern = ${patternExpr};
+      function __disguise(fn, name) {
+        const s = 'function ' + name + '() { [native code] }';
+        Object.defineProperty(fn, 'toString', { value: function() { return s; }, writable: true, configurable: true, enumerable: false });
+        try { Object.defineProperty(fn, 'name', { value: name, configurable: true }); } catch {}
+        return fn;
+      }
     `,
     capturedVar: 'captured',
     promiseVar: 'capturePromise',
     resolveVar: 'captureResolve',
     fetchPatch: `
       const origFetch = window.fetch;
-      window.fetch = async function(...fetchArgs) {
+      window.fetch = __disguise(async function(...fetchArgs) {
         const resp = await origFetch.apply(this, fetchArgs);
         try {
           const url = typeof fetchArgs[0] === 'string' ? fetchArgs[0]
@@ -128,17 +175,17 @@ export function generateTapInterceptorJs(patternExpr: string): {
           }
         } catch {}
         return resp;
-      };
+      }, 'fetch');
     `,
     xhrPatch: `
       const origXhrOpen = XMLHttpRequest.prototype.open;
       const origXhrSend = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function(method, url) {
-        this.__tapUrl = String(url);
+      XMLHttpRequest.prototype.open = __disguise(function(method, url) {
+        Object.defineProperty(this, '__iurl', { value: String(url), writable: true, enumerable: false, configurable: true });
         return origXhrOpen.apply(this, arguments);
-      };
-      XMLHttpRequest.prototype.send = function(body) {
-        if (capturePattern && this.__tapUrl?.includes(capturePattern)) {
+      }, 'open');
+      XMLHttpRequest.prototype.send = __disguise(function(body) {
+        if (capturePattern && this.__iurl?.includes(capturePattern)) {
           this.addEventListener('load', function() {
             if (!captured) {
               try { captured = JSON.parse(this.responseText); captureResolve(); } catch {}
@@ -146,7 +193,7 @@ export function generateTapInterceptorJs(patternExpr: string): {
           });
         }
         return origXhrSend.apply(this, arguments);
-      };
+      }, 'send');
     `,
     restorePatch: `
       window.fetch = origFetch;

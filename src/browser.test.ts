@@ -1,6 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { BrowserBridge, __test__, generateStealthJs } from './browser/index.js';
-import { STEALTH_GUARD } from './browser/stealth.js';
 import * as daemonClient from './browser/daemon-client.js';
 
 describe('browser helpers', () => {
@@ -170,7 +169,8 @@ describe('stealth anti-detection', () => {
 
   it('includes guard flag to prevent double-injection', () => {
     const js = generateStealthJs();
-    expect(js).toContain(STEALTH_GUARD);
+    // Guard uses a non-enumerable property on a built-in prototype
+    expect(js).toContain("EventTarget.prototype");
     // Guard should check early and return 'skipped'
     expect(js).toContain("return 'skipped'");
     // Normal path returns 'applied'
