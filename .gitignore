@@ -22,3 +22,4 @@ docs/.vitepress/cache
 
 # Database files
 *.db
+.worktrees/
