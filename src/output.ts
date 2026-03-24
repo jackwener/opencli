@@ -15,6 +15,14 @@ export interface RenderOptions {
   footerExtra?: string;
 }
 
+function normalizeRows(data: unknown): Record<string, unknown>[] {
+  return Array.isArray(data) ? data : [data as Record<string, unknown>];
+}
+
+function resolveColumns(rows: Record<string, unknown>[], opts: RenderOptions): string[] {
+  return opts.columns ?? Object.keys(rows[0] ?? {});
+}
+
 export function render(data: unknown, opts: RenderOptions = {}): void {
   const fmt = opts.fmt ?? 'table';
   if (data === null || data === undefined) {
@@ -31,9 +39,9 @@ export function render(data: unknown, opts: RenderOptions = {}): void {
 }
 
 function renderTable(data: unknown, opts: RenderOptions): void {
-  const rows = Array.isArray(data) ? data : [data as Record<string, unknown>];
+  const rows = normalizeRows(data);
   if (!rows.length) { console.log(chalk.dim('(no data)')); return; }
-  const columns = opts.columns ?? Object.keys(rows[0]);
+  const columns = resolveColumns(rows, opts);
 
   const header = columns.map(c => capitalize(c));
   const table = new Table({
@@ -66,9 +74,9 @@ function renderJson(data: unknown): void {
 }
 
 function renderMarkdown(data: unknown, opts: RenderOptions): void {
-  const rows = Array.isArray(data) ? data : [data as Record<string, unknown>];
+  const rows = normalizeRows(data);
   if (!rows.length) return;
-  const columns = opts.columns ?? Object.keys(rows[0]);
+  const columns = resolveColumns(rows, opts);
   console.log('| ' + columns.join(' | ') + ' |');
   console.log('| ' + columns.map(() => '---').join(' | ') + ' |');
   for (const row of rows) {
@@ -77,9 +85,9 @@ function renderMarkdown(data: unknown, opts: RenderOptions): void {
 }
 
 function renderCsv(data: unknown, opts: RenderOptions): void {
-  const rows = Array.isArray(data) ? data : [data as Record<string, unknown>];
+  const rows = normalizeRows(data);
   if (!rows.length) return;
-  const columns = opts.columns ?? Object.keys(rows[0]);
+  const columns = resolveColumns(rows, opts);
   console.log(columns.join(','));
   for (const row of rows) {
     console.log(columns.map(c => {

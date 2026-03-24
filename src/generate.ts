@@ -12,30 +12,13 @@ import { exploreUrl } from './explore.js';
 import type { IBrowserFactory } from './runtime.js';
 import { synthesizeFromExplore, type SynthesizeCandidateSummary, type SynthesizeResult } from './synthesize.js';
 
-// Registration is a no-op stub — candidates are written to disk by synthesize,
-// but not yet auto-copied into the user clis dir.
-interface RegisterCandidatesOptions {
-  target: string;
-  builtinClis?: string;
-  userClis?: string;
-  name?: string;
-}
-
-interface RegisterCandidatesResult {
-  ok: boolean;
-  count: number;
-}
-
 export interface GenerateCliOptions {
   url: string;
   BrowserFactory: new () => IBrowserFactory;
-  builtinClis?: string;
-  userClis?: string;
   goal?: string | null;
   site?: string;
   waitSeconds?: number;
   top?: number;
-  register?: boolean;
   workspace?: string;
 }
 
@@ -57,11 +40,6 @@ export interface GenerateCliResult {
     candidate_count: number;
     candidates: Array<Pick<SynthesizeCandidateSummary, 'name' | 'strategy' | 'confidence'>>;
   };
-  register: RegisterCandidatesResult | null;
-}
-
-function registerCandidates(_opts: RegisterCandidatesOptions): RegisterCandidatesResult {
-  return { ok: true, count: 0 };
 }
 
 const CAPABILITY_ALIASES: Record<string, string[]> = {
@@ -128,19 +106,6 @@ export async function generateCliFromUrl(opts: GenerateCliOptions): Promise<Gene
   const selected = selectCandidate(synthesizeResult.candidates ?? [], opts.goal);
   const selectedSite = synthesizeResult.site ?? exploreResult.site;
 
-  // Step 4: Register (if requested)
-  let registerResult: RegisterCandidatesResult | null = null;
-  if (opts.register !== false && synthesizeResult.candidate_count > 0) {
-    try {
-      registerResult = registerCandidates({
-        target: synthesizeResult.out_dir,
-        builtinClis: opts.builtinClis,
-        userClis: opts.userClis,
-        name: selected?.name,
-      });
-    } catch {}
-  }
-
   const ok = exploreResult.endpoint_count > 0 && synthesizeResult.candidate_count > 0;
 
   return {
@@ -165,7 +130,6 @@ export async function generateCliFromUrl(opts: GenerateCliOptions): Promise<Gene
         confidence: c.confidence,
       })),
     },
-    register: registerResult,
   };
 }
 
@@ -188,8 +152,6 @@ export function renderGenerateSummary(r: GenerateCliResult): string {
   for (const c of r.synthesize?.candidates ?? []) {
     lines.push(`    • ${c.name} (${c.strategy}, ${((c.confidence ?? 0) * 100).toFixed(0)}%)`);
   }
-
-  if (r.register) lines.push(`\nRegistered: ${r.register.count ?? 0}`);
 
   const fw = r.explore?.framework ?? {};
   const fwNames = Object.entries(fw).filter(([, v]) => v).map(([k]) => k);

@@ -5,26 +5,9 @@
 import type { IPage } from '../../types.js';
 import { render } from '../template.js';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord, mapConcurrent } from '../../utils.js';
 
-/** Simple async concurrency limiter */
-async function mapConcurrent<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let index = 0;
 
-  async function worker() {
-    while (index < items.length) {
-      const i = index++;
-      results[i] = await fn(items[i], i);
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
-  await Promise.all(workers);
-  return results;
-}
 
 /** Single URL fetch helper */
 async function fetchSingle(

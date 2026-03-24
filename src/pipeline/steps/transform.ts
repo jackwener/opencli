@@ -5,9 +5,7 @@
 import type { IPage } from '../../types.js';
 import { render, evalExpr } from '../template.js';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from '../../utils.js';
 
 export async function stepSelect(_page: IPage | null, params: unknown, data: unknown, args: Record<string, unknown>): Promise<unknown> {
   const pathStr = String(render(params, { args, data }));

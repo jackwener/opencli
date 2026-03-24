@@ -34,9 +34,7 @@ interface ValidatedYamlCliDefinition {
   args?: Record<string, unknown>;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from './utils.js';
 
 
 export function validateClisWithTarget(dirs: string[], target?: string): ValidationReport {

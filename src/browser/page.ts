@@ -14,6 +14,7 @@ import { formatSnapshot } from '../snapshotFormatter.js';
 import type { BrowserCookie, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
 import { sendCommand } from './daemon-client.js';
 import { wrapForEval } from './utils.js';
+import { saveBase64ToFile } from '../utils.js';
 import { generateSnapshotJs, scrollToRefJs, getFormStateJs } from './dom-snapshot.js';
 import { generateStealthJs } from './stealth.js';
 import {
@@ -36,20 +37,23 @@ export class Page implements IPage {
   /** Active tab ID, set after navigate and used in all subsequent commands */
   private _tabId: number | undefined;
 
-  /** Helper: spread tabId into command params if we have one */
-  private _tabOpt(): { tabId: number } | Record<string, never> {
-    return this._tabId !== undefined ? { tabId: this._tabId } : {};
+  /** Helper: spread workspace into command params */
+  private _wsOpt(): { workspace: string } {
+    return { workspace: this.workspace };
   }
 
-  private _workspaceOpt(): { workspace: string } {
-    return { workspace: this.workspace };
+  /** Helper: spread workspace + tabId into command params */
+  private _cmdOpts(): Record<string, unknown> {
+    return {
+      workspace: this.workspace,
+      ...(this._tabId !== undefined && { tabId: this._tabId }),
+    };
   }
 
   async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
     const result = await sendCommand('navigate', {
       url,
-      ...this._workspaceOpt(),
-      ...this._tabOpt(),
+      ...this._cmdOpts(),
     }) as { tabId?: number };
     // Remember the tabId for subsequent exec calls
     if (result?.tabId) {
@@ -59,8 +63,7 @@ export class Page implements IPage {
     try {
       await sendCommand('exec', {
         code: generateStealthJs(),
-        ...this._workspaceOpt(),
-        ...this._tabOpt(),
+        ...this._cmdOpts(),
       });
     } catch {
       // Non-fatal: stealth is best-effort
@@ -71,8 +74,7 @@ export class Page implements IPage {
       const maxMs = options?.settleMs ?? 1000;
       await sendCommand('exec', {
         code: waitForDomStableJs(maxMs, Math.min(500, maxMs)),
-        ...this._workspaceOpt(),
-        ...this._tabOpt(),
+        ...this._cmdOpts(),
       });
     }
   }
@@ -80,7 +82,7 @@ export class Page implements IPage {
   /** Close the automation window in the extension */
   async closeWindow(): Promise<void> {
     try {
-      await sendCommand('close-window', { ...this._workspaceOpt() });
+      await sendCommand('close-window', { ...this._wsOpt() });
     } catch {
       // Window may already be closed or daemon may be down
     }
@@ -88,11 +90,11 @@ export class Page implements IPage {
 
   async evaluate(js: string): Promise<unknown> {
     const code = wrapForEval(js);
-    return sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    return sendCommand('exec', { code, ...this._cmdOpts() });
   }
 
   async getCookies(opts: { domain?: string; url?: string } = {}): Promise<BrowserCookie[]> {
-    const result = await sendCommand('cookies', { ...this._workspaceOpt(), ...opts });
+    const result = await sendCommand('cookies', { ...this._wsOpt(), ...opts });
     return Array.isArray(result) ? result : [];
   }
 
@@ -108,7 +110,7 @@ export class Page implements IPage {
     });
 
     try {
-      const result = await sendCommand('exec', { code: snapshotJs, ...this._workspaceOpt(), ...this._tabOpt() });
+      const result = await sendCommand('exec', { code: snapshotJs, ...this._cmdOpts() });
       // The advanced engine already produces a clean, pruned, LLM-friendly output.
       // Do NOT pass through formatSnapshot — its format is incompatible.
       return result;
@@ -148,7 +150,7 @@ export class Page implements IPage {
         return buildTree(document.body, 0);
       })()
     `;
-    const raw = await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    const raw = await sendCommand('exec', { code, ...this._cmdOpts() });
     if (opts.raw) return raw;
     if (typeof raw === 'string') return formatSnapshot(raw, opts);
     return raw;
@@ -156,27 +158,27 @@ export class Page implements IPage {
 
   async click(ref: string): Promise<void> {
     const code = clickJs(ref);
-    await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    await sendCommand('exec', { code, ...this._cmdOpts() });
   }
 
   async typeText(ref: string, text: string): Promise<void> {
     const code = typeTextJs(ref, text);
-    await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    await sendCommand('exec', { code, ...this._cmdOpts() });
   }
 
   async pressKey(key: string): Promise<void> {
     const code = pressKeyJs(key);
-    await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    await sendCommand('exec', { code, ...this._cmdOpts() });
   }
 
   async scrollTo(ref: string): Promise<unknown> {
     const code = scrollToRefJs(ref);
-    return sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    return sendCommand('exec', { code, ...this._cmdOpts() });
   }
 
   async getFormState(): Promise<Record<string, unknown>> {
     const code = getFormStateJs();
-    return (await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() })) as Record<string, unknown>;
+    return (await sendCommand('exec', { code, ...this._cmdOpts() })) as Record<string, unknown>;
   }
 
   async wait(options: number | WaitOptions): Promise<void> {
@@ -191,35 +193,35 @@ export class Page implements IPage {
     if (options.text) {
       const timeout = (options.timeout ?? 30) * 1000;
       const code = waitForTextJs(options.text, timeout);
-      await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+      await sendCommand('exec', { code, ...this._cmdOpts() });
     }
   }
 
   async tabs(): Promise<unknown[]> {
-    const result = await sendCommand('tabs', { op: 'list', ...this._workspaceOpt() });
+    const result = await sendCommand('tabs', { op: 'list', ...this._wsOpt() });
     return Array.isArray(result) ? result : [];
   }
 
   async closeTab(index?: number): Promise<void> {
-    await sendCommand('tabs', { op: 'close', ...this._workspaceOpt(), ...(index !== undefined ? { index } : {}) });
+    await sendCommand('tabs', { op: 'close', ...this._wsOpt(), ...(index !== undefined ? { index } : {}) });
     // Invalidate cached tabId — the closed tab might have been our active one.
     // We can't know for sure (close-by-index doesn't return tabId), so reset.
     this._tabId = undefined;
   }
 
   async newTab(): Promise<void> {
-    const result = await sendCommand('tabs', { op: 'new', ...this._workspaceOpt() }) as { tabId?: number };
+    const result = await sendCommand('tabs', { op: 'new', ...this._wsOpt() }) as { tabId?: number };
     if (result?.tabId) this._tabId = result.tabId;
   }
 
   async selectTab(index: number): Promise<void> {
-    const result = await sendCommand('tabs', { op: 'select', index, ...this._workspaceOpt() }) as { selected?: number };
+    const result = await sendCommand('tabs', { op: 'select', index, ...this._wsOpt() }) as { selected?: number };
     if (result?.selected) this._tabId = result.selected;
   }
 
   async networkRequests(includeStatic: boolean = false): Promise<unknown[]> {
     const code = networkRequestsJs(includeStatic);
-    const result = await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    const result = await sendCommand('exec', { code, ...this._cmdOpts() });
     return Array.isArray(result) ? result : [];
   }
 
@@ -241,19 +243,14 @@ export class Page implements IPage {
    */
   async screenshot(options: ScreenshotOptions = {}): Promise<string> {
     const base64 = await sendCommand('screenshot', {
-      ...this._workspaceOpt(),
+      ...this._cmdOpts(),
       format: options.format,
       quality: options.quality,
       fullPage: options.fullPage,
-      ...this._tabOpt(),
     }) as string;
 
     if (options.path) {
-      const fs = await import('node:fs');
-      const path = await import('node:path');
-      const dir = path.dirname(options.path);
-      await fs.promises.mkdir(dir, { recursive: true });
-      await fs.promises.writeFile(options.path, Buffer.from(base64, 'base64'));
+      await saveBase64ToFile(base64, options.path);
     }
 
     return base64;
@@ -261,14 +258,14 @@ export class Page implements IPage {
 
   async scroll(direction: string = 'down', amount: number = 500): Promise<void> {
     const code = scrollJs(direction, amount);
-    await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    await sendCommand('exec', { code, ...this._cmdOpts() });
   }
 
   async autoScroll(options: { times?: number; delayMs?: number } = {}): Promise<void> {
     const times = options.times ?? 3;
     const delayMs = options.delayMs ?? 2000;
     const code = autoScrollJs(times, delayMs);
-    await sendCommand('exec', { code, ...this._workspaceOpt(), ...this._tabOpt() });
+    await sendCommand('exec', { code, ...this._cmdOpts() });
   }
 
   async installInterceptor(pattern: string): Promise<void> {

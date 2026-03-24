@@ -11,9 +11,7 @@ export interface RenderContext {
   index?: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from '../utils.js';
 
 export function render(template: unknown, ctx: RenderContext): unknown {
   if (typeof template !== 'string') return template;

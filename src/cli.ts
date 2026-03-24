@@ -173,8 +173,6 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       const r = await generateCliFromUrl({
         url,
         BrowserFactory: getBrowserFactory(),
-        builtinClis: BUILTIN_CLIS,
-        userClis: USER_CLIS,
         goal: opts.goal,
         site: opts.site,
         workspace,

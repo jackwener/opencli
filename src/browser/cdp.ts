@@ -292,11 +292,7 @@ class CDPPage implements IPage {
     });
     const base64 = isRecord(result) && typeof result.data === 'string' ? result.data : '';
     if (options.path) {
-      const fs = await import('node:fs');
-      const path = await import('node:path');
-      const dir = path.dirname(options.path);
-      await fs.promises.mkdir(dir, { recursive: true });
-      await fs.promises.writeFile(options.path, Buffer.from(base64, 'base64'));
+      await saveBase64ToFile(base64, options.path);
     }
     return base64;
   }
@@ -341,9 +337,7 @@ class CDPPage implements IPage {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord, saveBase64ToFile } from '../utils.js';
 
 function isCookie(value: unknown): value is BrowserCookie {
   return isRecord(value)
