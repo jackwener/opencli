@@ -190,7 +190,7 @@ export function resolvePath(pathStr: string, ctx: RenderContext): unknown {
  * Evaluate arbitrary JS expressions as a last-resort fallback.
  * Runs inside a `node:vm` sandbox with dynamic code generation disabled.
  */
-const FORBIDDEN_EXPR_PATTERNS = /\b(__proto__|prototype|globalThis|process|require|import)\b/;
+const FORBIDDEN_EXPR_PATTERNS = /\b(constructor|__proto__|prototype|globalThis|process|require|import|eval)\b/;
 
 /**
  * Deep-copy plain data to sever prototype chains, preventing sandbox escape
@@ -222,10 +222,10 @@ function evalJsExpr(expr: string, ctx: RenderContext): unknown {
     return vm.runInNewContext(
       `(${expr})`,
       {
-      args,
-      item,
-      data,
-      index,
+        args,
+        item,
+        data,
+        index,
         encodeURIComponent,
         decodeURIComponent,
         JSON,
