@@ -83,4 +83,31 @@ describe('twitter search command', () => {
     expect(page.installInterceptor).toHaveBeenCalledWith('SearchTimeline');
     expect(evaluate).toHaveBeenCalledTimes(4);
   });
+
+  it('throws with the final path after both attempts fail', async () => {
+    const command = getRegistry().get('twitter/search');
+    expect(command?.func).toBeTypeOf('function');
+
+    const evaluate = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce('/explore')
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce('/login');
+
+    const page = {
+      goto: vi.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
+      installInterceptor: vi.fn().mockResolvedValue(undefined),
+      evaluate,
+      autoScroll: vi.fn().mockResolvedValue(undefined),
+      getInterceptedRequests: vi.fn(),
+    };
+
+    await expect(command!.func!(page as any, { query: 'from:alice', limit: 5 }))
+      .rejects
+      .toThrow('Final path: /login');
+    expect(page.autoScroll).not.toHaveBeenCalled();
+    expect(page.getInterceptedRequests).not.toHaveBeenCalled();
+    expect(evaluate).toHaveBeenCalledTimes(4);
+  });
 });
