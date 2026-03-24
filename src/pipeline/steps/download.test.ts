@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IPage } from '../../types.js';
 
-const { mockHttpDownload } = vi.hoisted(() => ({
+const { mockHttpDownload, mockYtdlpDownload, mockExportCookiesToNetscape } = vi.hoisted(() => ({
   mockHttpDownload: vi.fn(),
+  mockYtdlpDownload: vi.fn(),
+  mockExportCookiesToNetscape: vi.fn(),
 }));
 
 vi.mock('../../download/index.js', async () => {
@@ -10,6 +12,8 @@ vi.mock('../../download/index.js', async () => {
   return {
     ...actual,
     httpDownload: mockHttpDownload,
+    ytdlpDownload: mockYtdlpDownload,
+    exportCookiesToNetscape: mockExportCookiesToNetscape,
   };
 });
 
@@ -45,6 +49,9 @@ describe('stepDownload', () => {
   beforeEach(() => {
     mockHttpDownload.mockReset();
     mockHttpDownload.mockResolvedValue({ success: true, size: 2 });
+    mockYtdlpDownload.mockReset();
+    mockYtdlpDownload.mockResolvedValue({ success: true, size: 2 });
+    mockExportCookiesToNetscape.mockReset();
   });
 
   it('scopes browser cookies to each direct-download target domain', async () => {
@@ -81,5 +88,47 @@ describe('stepDownload', () => {
       '/tmp/opencli-download-test/1.txt',
       expect.objectContaining({ cookies: 'sid=b.example' }),
     );
+  });
+
+  it('builds yt-dlp cookies from all target domains instead of only the first item', async () => {
+    const getCookies = vi.fn().mockImplementation(async (opts?: { domain?: string }) => {
+      const domain = opts?.domain ?? 'unknown';
+      return [{
+        name: `sid-${domain}`,
+        value: domain,
+        domain,
+        path: '/',
+        secure: false,
+        httpOnly: false,
+      }];
+    });
+    const page = createMockPage(getCookies);
+
+    await stepDownload(
+      page,
+      {
+        url: '${{ item.url }}',
+        dir: '/tmp/opencli-download-test',
+        filename: '${{ index }}.mp4',
+        progress: false,
+        concurrency: 1,
+      },
+      [
+        { url: 'https://www.youtube.com/watch?v=one' },
+        { url: 'https://www.bilibili.com/video/BV1xx411c7mD' },
+      ],
+      {},
+    );
+
+    expect(getCookies).toHaveBeenCalledWith({ domain: 'www.youtube.com' });
+    expect(getCookies).toHaveBeenCalledWith({ domain: 'www.bilibili.com' });
+    expect(mockExportCookiesToNetscape).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'sid-www.youtube.com', domain: 'www.youtube.com' }),
+        expect.objectContaining({ name: 'sid-www.bilibili.com', domain: 'www.bilibili.com' }),
+      ]),
+      expect.any(String),
+    );
+    expect(mockYtdlpDownload).toHaveBeenCalledTimes(2);
   });
 });
