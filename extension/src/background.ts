@@ -239,14 +239,13 @@ function normalizeUrlForComparison(url?: string): string {
   if (!url) return '';
   try {
     const parsed = new URL(url);
-    parsed.hash = '';
     if ((parsed.protocol === 'https:' && parsed.port === '443') || (parsed.protocol === 'http:' && parsed.port === '80')) {
       parsed.port = '';
     }
-    const pathname = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, '');
-    return `${parsed.protocol}//${parsed.host}${pathname}${parsed.search}`;
+    const pathname = parsed.pathname === '/' ? '' : parsed.pathname;
+    return `${parsed.protocol}//${parsed.host}${pathname}${parsed.search}${parsed.hash}`;
   } catch {
-    return url.replace(/#.*$/, '').replace(/\/+$/, '');
+    return url;
   }
 }
 
@@ -520,6 +519,7 @@ async function handleSessions(cmd: Command): Promise<Result> {
 
 export const __test__ = {
   handleNavigate,
+  isTargetUrl,
   handleTabs,
   handleSessions,
   getAutomationWindowId: (workspace: string = 'default') => automationSessions.get(workspace)?.windowId ?? null,

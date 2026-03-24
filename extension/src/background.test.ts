@@ -167,6 +167,17 @@ describe('background tab isolation', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('keeps hash routes distinct when comparing target URLs', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+
+    expect(mod.__test__.isTargetUrl('https://example.com/', 'https://example.com')).toBe(true);
+    expect(mod.__test__.isTargetUrl('https://example.com/#feed', 'https://example.com/#settings')).toBe(false);
+    expect(mod.__test__.isTargetUrl('https://example.com/app/', 'https://example.com/app')).toBe(false);
+  });
+
   it('reports sessions per workspace', async () => {
     const { chrome } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
