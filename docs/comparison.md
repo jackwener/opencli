@@ -6,10 +6,10 @@ OpenCLI occupies a specific niche in the browser automation ecosystem. This guid
 
 | Tool | Approach | Best for |
 |------|----------|----------|
-| **opencli** | Pre-built adapters (YAML/TS) | Deterministic site commands, Chinese platforms, desktop apps |
+| **opencli** | Pre-built adapters (YAML/TS) | Deterministic site commands, broad platform coverage, desktop apps |
 | **Browser-Use** | LLM-driven browser control | General-purpose AI browser automation |
 | **Crawl4AI** | Async web crawler | Large-scale data crawling |
-| **Firecrawl** | Scraping API service | Clean markdown extraction, managed infrastructure |
+| **Firecrawl** | Scraping API / self-hosted | Clean markdown extraction, managed or self-hosted infrastructure |
 | **agent-browser** | Browser primitive CLI | Token-efficient AI agent browsing |
 | **Stagehand** | AI browser framework | Developer-friendly browser automation |
 | **Skyvern** | Visual AI automation | Cross-site generalized workflows |
@@ -35,12 +35,12 @@ OpenCLI occupies a specific niche in the browser automation ecosystem. This guid
 
 | Tool | Fit | Notes |
 |------|-----|-------|
-| **opencli** | Best | Structured JSON output, sub-second execution, 300+ commands ready to use. |
+| **opencli** | Best | Structured JSON output, fast deterministic execution, hundreds of commands ready to use. |
 | agent-browser | Good | Token-efficient browser primitives, but requires LLM reasoning for every step. |
 | Browser-Use | Viable | General-purpose, but each operation costs tokens and takes 10-60s. |
 | Stagehand | Viable | Good DX, but same LLM-per-action cost model. |
 
-**Why opencli wins here:** When your agent needs `twitter search "AI news" -f json`, a deterministic command that returns in milliseconds is strictly better than an LLM clicking through a webpage. The agent saves tokens for reasoning, not navigation.
+**Why opencli wins here:** When your agent needs `twitter search "AI news" -f json`, a deterministic command that returns in seconds is strictly better than an LLM clicking through a webpage. The agent saves tokens for reasoning, not navigation.
 
 ### 3. Authenticated Operations (Login-Required Sites)
 
@@ -87,8 +87,9 @@ OpenCLI occupies a specific niche in the browser automation ecosystem. This guid
 - **Zero LLM cost** — No tokens consumed at runtime. Run 10,000 times for free.
 - **Deterministic output** — Same command always returns the same schema. Pipeable, scriptable, CI-friendly.
 - **Speed** — Adapter commands return in seconds, not minutes.
-- **Chinese platform coverage** — 20+ Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Douban, Weibo, Xueqiu, BOSS Zhipin...) with adapters that understand local anti-bot patterns.
+- **Broad platform coverage** — 50+ sites spanning global platforms (Reddit, HackerNews, Twitter, YouTube) and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Douban, Weibo) with adapters that understand local anti-bot patterns.
 - **Desktop app control** — CDP adapters for Cursor, Codex, Notion, ChatGPT, Discord, and more.
+- **Easy to extend** — Drop a `.yaml` or `.ts` adapter into the `clis/` folder for auto-registration. Contributing a new site adapter is straightforward.
 
 ### opencli's Limitations
 
@@ -119,4 +120,6 @@ Recurring?    ──yes──▶  Write an opencli adapter, then use opencli
 - [Architecture Overview](./developer/architecture.md)
 - [Writing a YAML Adapter](./developer/yaml-adapter.md)
 - [Writing a TypeScript Adapter](./developer/ts-adapter.md)
+- [Testing Guide](./developer/testing.md)
+- [AI Workflow](./developer/ai-workflow.md)
 - [Contributing Guide](./developer/contributing.md)

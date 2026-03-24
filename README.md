@@ -35,7 +35,7 @@ There are many great browser automation tools. Here's when opencli is the right 
 | Your need | Best tool | Why |
 |-----------|-----------|-----|
 | Scheduled data extraction from specific sites | **opencli** | Pre-built adapters, deterministic JSON, zero LLM cost |
-| AI agent needs reliable site operations | **opencli** | 300+ commands, structured output, sub-second response |
+| AI agent needs reliable site operations | **opencli** | Hundreds of commands, structured output, fast deterministic response |
 | Explore an unknown website ad-hoc | Browser-Use, Stagehand | LLM-driven general browsing for one-off tasks |
 | Large-scale web crawling | Crawl4AI, Scrapy | Purpose-built for throughput and scale |
 | Control desktop Electron apps from terminal | **opencli** | CDP + AppleScript — the only CLI tool that does this |
@@ -43,9 +43,8 @@ There are many great browser automation tools. Here's when opencli is the right 
 **What makes opencli different:**
 
 - **Zero LLM cost** — No tokens consumed at runtime. Run 10,000 times and pay nothing.
-- **Deterministic** — 55 sites, 300+ commands. Same command, same output schema, every time.
-- **20+ Chinese platforms** — Bilibili, Zhihu, Xiaohongshu, Douban, Weibo, and more — unmatched coverage.
-- **8 desktop apps** — Cursor, Codex, Notion, ChatGPT, Discord via CDP — unique in the ecosystem.
+- **Deterministic** — Same command, same output schema, every time. Pipeable, scriptable, CI-friendly.
+- **Broad coverage** — 50+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
 
 > For a detailed comparison with Browser-Use, Crawl4AI, Firecrawl, and others, see the [Comparison Guide](./docs/comparison.md).
 
