@@ -82,7 +82,8 @@ async function fetchBatchInBrowser(
             }
             results[i] = await resp.json();
           } catch (e) {
-            results[i] = { error: e.message };
+            const message = e instanceof Error ? e.message : String(e);
+            results[i] = { error: message };
           }
         }
       }
@@ -129,7 +130,11 @@ export async function stepFetch(page: IPage | null, params: unknown, data: unkno
     // Non-browser: use concurrent pool (already optimized)
     return mapConcurrent(data, concurrency, async (item, index) => {
       const itemUrl = String(render(urlTemplate, { args, data, item, index }));
-      return fetchSingle(null, itemUrl, method, queryParams, headers, args, data);
+      try {
+        return await fetchSingle(null, itemUrl, method, queryParams, headers, args, data);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
     });
   }
   const url = render(urlOrObj, { args, data });

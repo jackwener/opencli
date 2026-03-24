@@ -39,9 +39,30 @@ describe('stepFetch', () => {
       evaluate: vi.fn(async (js: string) => Function(`return (${js})`)()()),
     } as unknown as IPage;
 
-    await expect(stepFetch(page, { url: 'https://api.example.com/items' }, null, {})).rejects.toThrow(
-      'HTTP 401 Unauthorized',
-    );
+    await expect(stepFetch(page, { url: 'https://api.example.com/items' }, null, {})).rejects.toMatchObject({
+      message: 'HTTP 401 Unauthorized from https://api.example.com/items',
+    });
+    expect(jsonMock).not.toHaveBeenCalled();
+  });
+
+  it('returns per-item HTTP errors for batch fetches without a browser session', async () => {
+    const jsonMock = vi.fn().mockResolvedValue({ error: 'upstream unavailable' });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: jsonMock,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(stepFetch(
+      null,
+      { url: 'https://api.example.com/items/${{ item.id }}' },
+      [{ id: 1 }],
+      {},
+    )).resolves.toEqual([
+      { error: 'HTTP 503 Service Unavailable from https://api.example.com/items/1' },
+    ]);
     expect(jsonMock).not.toHaveBeenCalled();
   });
 
@@ -68,5 +89,35 @@ describe('stepFetch', () => {
       { error: 'HTTP 503 Service Unavailable from https://api.example.com/items/1' },
     ]);
     expect(jsonMock).not.toHaveBeenCalled();
+  });
+
+  it('stringifies non-Error batch browser failures consistently', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('socket hang up'));
+
+    const page = {
+      evaluate: vi.fn(async (js: string) => Function(`return (${js})`)()()),
+    } as unknown as IPage;
+
+    await expect(stepFetch(
+      page,
+      { url: 'https://api.example.com/items/${{ item.id }}' },
+      [{ id: 1 }],
+      {},
+    )).resolves.toEqual([
+      { error: 'socket hang up' },
+    ]);
+  });
+
+  it('stringifies non-Error batch non-browser failures consistently', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('socket hang up'));
+
+    await expect(stepFetch(
+      null,
+      { url: 'https://api.example.com/items/${{ item.id }}' },
+      [{ id: 1 }],
+      {},
+    )).resolves.toEqual([
+      { error: 'socket hang up' },
+    ]);
   });
 });
