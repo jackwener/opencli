@@ -15,6 +15,12 @@ tags: [cli, browser, web, chrome-extension, cdp, bilibili, zhihu, twitter, githu
 > 该文档包含完整的 API 发现工作流（必须使用浏览器探索）、5 级认证策略决策树、平台 SDK 速查表、`tap` 步骤调试流程、分页 API 模板、级联请求模式、以及常见陷阱。
 > **本文件（SKILL.md）仅提供命令参考和简化模板，不足以正确开发适配器。**
 
+> [!IMPORTANT]
+> 创建或修改 adapter 时，再额外遵守 3 条收口规则：
+> 1. 主参数优先用 positional arg，不要把 `query` / `id` / `url` 默认做成 `--query` / `--id` / `--url`
+> 2. 预期中的 adapter 失败优先抛 `CliError` 子类，不要直接 throw 原始 `Error`
+> 3. 新增 adapter 或新增用户可发现命令时，同步更新 adapter docs、`docs/adapters/index.md`、sidebar，以及 README/README.zh-CN 中受影响的入口
+
 ## Install & Run
 
 ```bash

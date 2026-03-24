@@ -24,8 +24,10 @@ Related issue:
 - [ ] Added doc page under `docs/adapters/` (if new adapter)
 - [ ] Updated `docs/adapters/index.md` table (if new adapter)
 - [ ] Updated sidebar in `docs/.vitepress/config.mts` (if new adapter)
+- [ ] Updated `README.md` / `README.zh-CN.md` when command discoverability changed
+- [ ] Used positional args for the command's primary subject unless a named flag is clearly better
+- [ ] Normalized expected adapter failures to `CliError` subclasses instead of raw `Error`
 
 ## Screenshots / Output
 
 <!-- If applicable, paste CLI output or screenshots here. -->
-

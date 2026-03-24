@@ -2,6 +2,8 @@
 
 YAML adapters are the recommended way to add new commands when the site offers a straightforward API. They use a declarative pipeline approach — no TypeScript required.
 
+Use YAML only when the command stays mostly declarative. If you find yourself embedding long JavaScript expressions, many fallbacks, or multi-step browser logic, move the command to a TypeScript adapter instead of growing an opaque template blob.
+
 ## Basic Structure
 
 ::: v-pre
@@ -32,6 +34,14 @@ pipeline:             # Data processing steps
 columns: [rank, title, score, url]
 ```
 :::
+
+For most commands, keep the primary subject positional. Good examples:
+
+- `opencli mysite search "rust"`
+- `opencli mysite topic 123`
+- `opencli mysite download "https://example.com/post/1"`
+
+Prefer named flags only for optional modifiers such as `--limit`, `--sort`, `--lang`, or `--output`.
 
 ## Pipeline Steps
 
@@ -106,3 +116,9 @@ Use `${{ ... }}` for dynamic values:
 ## Real Example
 
 See [`src/clis/hackernews/top.yaml`](https://github.com/jackwener/opencli/blob/main/src/clis/hackernews/top.yaml).
+
+## Guardrails
+
+- Add fallbacks for optional fields in `map` expressions when upstream payloads may be sparse.
+- Keep template expressions short and readable. If the expression starts looking like a mini program, switch to TypeScript.
+- If you add a new adapter, also add the matching doc page plus index/sidebar entries so `doc-coverage` stays green.
