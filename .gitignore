@@ -19,3 +19,4 @@ docs/.vitepress/cache
 .windsurf
 .claude
 .cortex
+contract-snapshots/

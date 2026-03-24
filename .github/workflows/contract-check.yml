@@ -1,0 +1,64 @@
+name: Contract Check
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: contract-check
+  cancel-in-progress: true
+
+jobs:
+  contract-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+
+      # Download previous snapshot (first run: skipped)
+      - uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc
+        with:
+          name: contract-snapshots
+          path: contract-snapshots
+          workflow: contract-check.yml
+          branch: main
+          workflow_conclusion: ''
+          if_no_artifact_found: ignore
+
+      # Run schema unit tests before checker
+      - run: npx vitest run tests/contract/
+
+      # Run contract checker
+      - id: checker
+        run: npx tsx tests/contract/checker.ts
+        env:
+          SNAPSHOT_DIR: contract-snapshots
+
+      # Always upload snapshots + failure metadata
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: contract-snapshots
+          path: |
+            contract-snapshots/*.json
+            contract-snapshots/_failures/*.json
+          retention-days: 90
+          overwrite: true
+
+      # Upload drift report only when checker detected drift (not on other failures)
+      - uses: actions/upload-artifact@v7
+        if: failure() && hashFiles('contract-snapshots/drift-report.json') != ''
+        with:
+          name: drift-report
+          path: contract-snapshots/drift-report.json
+          retention-days: 90
