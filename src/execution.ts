@@ -99,8 +99,10 @@ async function runCommand(
     // After loading, the module's cli() call will have updated the registry.
     const updated = getRegistry().get(fullName(cmd));
     if (updated?.func) {
-      if (!page) throw new CommandExecutionError(`Command ${fullName(cmd)} requires a browser session but none was provided`);
-      return updated.func(page, kwargs, debug);
+      if (!page && updated.browser !== false) {
+        throw new CommandExecutionError(`Command ${fullName(cmd)} requires a browser session but none was provided`);
+      }
+      return updated.func(page as IPage, kwargs, debug);
     }
     if (updated?.pipeline) return executePipeline(page, updated.pipeline, { args: kwargs, debug });
   }

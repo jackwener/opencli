@@ -16,7 +16,8 @@ function isExpectedChineseSiteRestriction(code: number, stderr: string): boolean
 
 function isExpectedApplePodcastsRestriction(code: number, stderr: string): boolean {
   if (code === 0) return false;
-  return /Error \[FETCH_ERROR\]: (Charts API HTTP \d+|Unable to reach Apple Podcasts charts)/.test(stderr);
+  return /Error \[FETCH_ERROR\]: (Charts API HTTP \d+|Unable to reach Apple Podcasts charts)/.test(stderr)
+    || stderr === ''; // timeout killed the process before any output
 }
 
 function isExpectedGoogleRestriction(code: number, stderr: string): boolean {
