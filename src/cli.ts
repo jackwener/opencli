@@ -283,13 +283,57 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
 
   pluginCmd
     .command('update')
-    .description('Update a plugin to the latest version')
-    .argument('<name>', 'Plugin name')
-    .action(async (name: string) => {
-      const { updatePlugin } = await import('./plugin.js');
+    .description('Update a plugin (or all plugins) to the latest version')
+    .argument('[name]', 'Plugin name (required unless --all is passed)')
+    .option('--all', 'Update all installed plugins')
+    .action(async (name: string | undefined, opts: { all?: boolean }) => {
+      if (!name && !opts.all) {
+        console.error(chalk.red('Error: Please specify a plugin name or use the --all flag.'));
+        process.exitCode = 1;
+        return;
+      }
+      if (name && opts.all) {
+        console.error(chalk.red('Error: Cannot specify both a plugin name and --all.'));
+        process.exitCode = 1;
+        return;
+      }
+
+      const { updatePlugin, updateAllPlugins } = await import('./plugin.js');
       const { discoverPlugins } = await import('./discovery.js');
+      if (opts.all) {
+        const results = updateAllPlugins();
+        if (results.length > 0) {
+          await discoverPlugins();
+        }
+
+        let hasErrors = false;
+        console.log(chalk.bold('  Update Results:'));
+        for (const result of results) {
+          if (result.success) {
+            console.log(`  ${chalk.green('✓')} ${result.name}`);
+            continue;
+          }
+          hasErrors = true;
+          console.log(`  ${chalk.red('✗')} ${result.name} — ${chalk.dim(result.error)}`);
+        }
+
+        if (results.length === 0) {
+          console.log(chalk.dim('  No plugins installed.'));
+          return;
+        }
+
+        console.log();
+        if (hasErrors) {
+          console.error(chalk.red('Completed with some errors.'));
+          process.exitCode = 1;
+        } else {
+          console.log(chalk.green('✅ All plugins updated successfully.'));
+        }
+        return;
+      }
+
       try {
-        updatePlugin(name);
+        updatePlugin(name!);
         await discoverPlugins();
         console.log(chalk.green(`✅ Plugin "${name}" updated successfully.`));
       } catch (err: any) {

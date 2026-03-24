@@ -11,6 +11,12 @@ opencli plugin install github:ByteYue/opencli-plugin-github-trending
 # List installed plugins
 opencli plugin list
 
+# Update one plugin
+opencli plugin update github-trending
+
+# Update all installed plugins
+opencli plugin update --all
+
 # Use the plugin (it's just a regular command)
 opencli github-trending repos --limit 10
 

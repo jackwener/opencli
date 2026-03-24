@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execSync, execFileSync } from 'node:child_process';
 import { PLUGINS_DIR } from './discovery.js';
+import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
 
 export interface PluginInfo {
@@ -174,6 +175,31 @@ export function updatePlugin(name: string): void {
   postInstallLifecycle(targetDir);
 }
 
+export interface UpdateResult {
+  name: string;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Update all installed plugins.
+ * Continues even if individual plugin updates fail.
+ */
+export function updateAllPlugins(): UpdateResult[] {
+  return listPlugins().map((plugin): UpdateResult => {
+    try {
+      updatePlugin(plugin.name);
+      return { name: plugin.name, success: true };
+    } catch (err) {
+      return {
+        name: plugin.name,
+        success: false,
+        error: getErrorMessage(err),
+      };
+    }
+  });
+}
+
 /**
  * List all installed plugins.
  */
@@ -334,4 +360,8 @@ function transpilePluginTs(pluginDir: string): void {
   }
 }
 
-export { parseSource as _parseSource, validatePluginStructure as _validatePluginStructure };
+export {
+  parseSource as _parseSource,
+  updateAllPlugins as _updateAllPlugins,
+  validatePluginStructure as _validatePluginStructure,
+};

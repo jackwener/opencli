@@ -2,11 +2,20 @@
  * Tests for plugin management: install, uninstall, list.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PLUGINS_DIR } from './discovery.js';
-import { listPlugins, uninstallPlugin, updatePlugin, _parseSource, _validatePluginStructure } from './plugin.js';
+import * as pluginModule from './plugin.js';
+
+const {
+  listPlugins,
+  uninstallPlugin,
+  updatePlugin,
+  _parseSource,
+  _updateAllPlugins,
+  _validatePluginStructure,
+} = pluginModule;
 
 describe('parseSource', () => {
   it('parses github:user/repo format', () => {
@@ -149,5 +158,57 @@ describe('uninstallPlugin', () => {
 describe('updatePlugin', () => {
   it('throws for non-existent plugin', () => {
     expect(() => updatePlugin('__nonexistent__')).toThrow('not installed');
+  });
+});
+
+vi.mock('node:child_process', () => {
+  return {
+    execFileSync: vi.fn((_cmd, _args, opts) => {
+      if (opts && opts.cwd && String(opts.cwd).endsWith('plugin-b')) {
+        throw new Error('Network error');
+      }
+      return '';
+    }),
+    execSync: vi.fn(() => ''),
+  };
+});
+
+describe('updateAllPlugins', () => {
+  const testDirA = path.join(PLUGINS_DIR, 'plugin-a');
+  const testDirB = path.join(PLUGINS_DIR, 'plugin-b');
+  const testDirC = path.join(PLUGINS_DIR, 'plugin-c');
+
+  beforeEach(() => {
+    fs.mkdirSync(testDirA, { recursive: true });
+    fs.mkdirSync(testDirB, { recursive: true });
+    fs.mkdirSync(testDirC, { recursive: true });
+    fs.writeFileSync(path.join(testDirA, 'cmd.yaml'), 'site: a');
+    fs.writeFileSync(path.join(testDirB, 'cmd.yaml'), 'site: b');
+    fs.writeFileSync(path.join(testDirC, 'cmd.yaml'), 'site: c');
+  });
+
+  afterEach(() => {
+    try { fs.rmSync(testDirA, { recursive: true }); } catch {}
+    try { fs.rmSync(testDirB, { recursive: true }); } catch {}
+    try { fs.rmSync(testDirC, { recursive: true }); } catch {}
+    vi.clearAllMocks();
+  });
+
+  it('collects successes and failures without throwing', () => {
+    const results = _updateAllPlugins();
+
+    const resA = results.find(r => r.name === 'plugin-a');
+    const resB = results.find(r => r.name === 'plugin-b');
+    const resC = results.find(r => r.name === 'plugin-c');
+
+    expect(resA).toBeDefined();
+    expect(resA!.success).toBe(true);
+
+    expect(resB).toBeDefined();
+    expect(resB!.success).toBe(false);
+    expect(resB!.error).toContain('Network error');
+
+    expect(resC).toBeDefined();
+    expect(resC!.success).toBe(true);
   });
 });

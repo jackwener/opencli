@@ -290,6 +290,7 @@ Extend OpenCLI with community-contributed adapters. Plugins use the same YAML/TS
 opencli plugin install github:user/opencli-plugin-my-tool  # Install
 opencli plugin list                                         # List installed
 opencli plugin update my-tool                               # Update to latest
+opencli plugin update --all                                 # Update all installed plugins
 opencli plugin uninstall my-tool                            # Remove
 ```
 

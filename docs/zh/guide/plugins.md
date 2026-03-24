@@ -11,6 +11,12 @@ opencli plugin install github:ByteYue/opencli-plugin-github-trending
 # 列出已安装插件
 opencli plugin list
 
+# 更新单个插件
+opencli plugin update github-trending
+
+# 更新全部已安装插件
+opencli plugin update --all
+
 # 使用插件（本质上就是普通 command）
 opencli github-trending today
 
