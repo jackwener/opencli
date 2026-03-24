@@ -8,6 +8,7 @@
  * - Verbose logging
  */
 import type { IPage } from '../../types.js';
+import { AuthRequiredError, CommandExecutionError, SelectorError } from '../../errors.js';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ export interface FetchOptions {
  * Assert that page is available (non-null).
  */
 export function requirePage(page: IPage | null): asserts page is IPage {
-  if (!page) throw new Error('Browser page required');
+  if (!page) throw new CommandExecutionError('Browser page required');
 }
 
 /**
@@ -69,7 +70,7 @@ export async function navigateTo(page: IPage, url: string, waitSeconds = 1): Pro
  */
 export function checkAuth(data: BossApiResponse): void {
   if (COOKIE_EXPIRED_CODES.has(data.code)) {
-    throw new Error(COOKIE_EXPIRED_MSG);
+    throw new AuthRequiredError('www.zhipin.com', COOKIE_EXPIRED_MSG);
   }
 }
 
@@ -81,7 +82,7 @@ export function assertOk(data: BossApiResponse, errorPrefix?: string): void {
   if (data.code === 0) return;
   checkAuth(data);
   const prefix = errorPrefix ? `${errorPrefix}: ` : '';
-  throw new Error(`${prefix}${data.message || 'Unknown error'} (code=${data.code})`);
+  throw new CommandExecutionError(`${prefix}${data.message || 'Unknown error'} (code=${data.code})`);
 }
 
 /**

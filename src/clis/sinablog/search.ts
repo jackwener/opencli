@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError } from '../../errors.js';
 
 function normalize(value: unknown): string {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
@@ -23,7 +24,7 @@ async function searchSinaBlog(keyword: string, limit: number): Promise<any[]> {
       Accept: 'application/json',
     },
   });
-  if (!resp.ok) throw new Error(`Sina blog search failed: HTTP ${resp.status}`);
+  if (!resp.ok) throw new CommandExecutionError(`Sina blog search failed: HTTP ${resp.status}`);
 
   const data = await resp.json() as { data?: { list?: any[] } };
   const list = Array.isArray(data?.data?.list) ? data.data.list : [];

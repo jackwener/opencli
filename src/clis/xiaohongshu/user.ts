@@ -1,5 +1,6 @@
 import { cli, Strategy } from '../../registry.js';
 import { extractXhsUserNotes, normalizeXhsUserId } from './user-helpers.js';
+import { EmptyResultError } from '../../errors.js';
 
 async function readUserSnapshot(page: any) {
   return await page.evaluate(`
@@ -56,7 +57,7 @@ cli({
     }
 
     if (results.length === 0) {
-      throw new Error('No public notes found for this Xiaohongshu user.');
+      throw new EmptyResultError('xiaohongshu user notes', 'Are you logged into xiaohongshu.com?');
     }
 
     return results.slice(0, limit);

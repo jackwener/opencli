@@ -2,6 +2,7 @@
  * BOSS直聘 greet — send greeting to a new candidate (initiate chat).
  */
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError, EmptyResultError, SelectorError } from '../../errors.js';
 import {
   requirePage, navigateToChat, findFriendByUid,
   clickCandidateInList, typeAndSendMessage, verbose,
@@ -35,7 +36,7 @@ cli({
     });
 
     if (!friend) {
-      throw new Error('未找到该候选人，请确认 uid 是否正确（可从 recommend 命令获取）');
+      throw new EmptyResultError('未找到该候选人，请确认 uid 是否正确（可从 recommend 命令获取）');
     }
 
     const numericUid = friend.uid;
@@ -43,7 +44,7 @@ cli({
 
     const clicked = await clickCandidateInList(page, numericUid);
     if (!clicked) {
-      throw new Error('无法在聊天列表中找到该用户，候选人可能不在当前列表中');
+      throw new SelectorError('candidate in chat list', '无法在聊天列表中找到该用户，候选人可能不在当前列表中');
     }
 
     await page.wait({ time: 2 });
@@ -51,7 +52,7 @@ cli({
     const msgText = kwargs.text || '你好，请问您对这个职位感兴趣吗？';
     const sent = await typeAndSendMessage(page, msgText);
     if (!sent) {
-      throw new Error('找不到消息输入框');
+      throw new SelectorError('message input box', '找不到消息输入框');
     }
 
     await page.wait({ time: 1 });

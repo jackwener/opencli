@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { ArgumentError, AuthRequiredError, CommandExecutionError, SelectorError } from '../../errors.js';
 import { canonicalizeProductUrl, normalizeProductId } from './utils.js';
 
 function escapeJsString(value: string): string {
@@ -112,7 +113,7 @@ cli({
     const targetUrl = canonicalizeProductUrl(kwargs.url, productId);
 
     if (!productId && !targetUrl) {
-      throw new Error('Either --product-id or --url is required');
+      throw new ArgumentError('Either --product-id or --url is required');
     }
 
     const finalUrl = targetUrl || canonicalizeProductUrl('', productId);
@@ -121,21 +122,21 @@ cli({
     const result = await page.evaluate(buildAddToCartEvaluate(productId));
     const loginHints = result?.loginHints ?? {};
     if (loginHints.hasLoginLink && !loginHints.hasMyCoupang) {
-      throw new Error('Coupang login required. Please log into Coupang in Chrome and retry.');
+      throw new AuthRequiredError('www.coupang.com', 'Coupang login required. Please log into Coupang in Chrome and retry.');
     }
 
     const actualProductId = normalizeProductId(result?.currentProductId || productId);
     if (result?.reason === 'PRODUCT_MISMATCH') {
-      throw new Error(`Product mismatch: expected ${productId}, got ${actualProductId || 'unknown'}`);
+      throw new CommandExecutionError(`Product mismatch: expected ${productId}, got ${actualProductId || 'unknown'}`);
     }
     if (result?.reason === 'OPTION_REQUIRED') {
-      throw new Error('This product requires option selection and is not supported in v1.');
+      throw new CommandExecutionError('This product requires option selection and is not supported in v1.');
     }
     if (result?.reason === 'ADD_TO_CART_BUTTON_NOT_FOUND') {
-      throw new Error('Could not find an add-to-cart button on the product page.');
+      throw new SelectorError('add-to-cart button', 'Could not find an add-to-cart button on the product page.');
     }
     if (!result?.ok) {
-      throw new Error('Failed to confirm add-to-cart success.');
+      throw new CommandExecutionError('Failed to confirm add-to-cart success.');
     }
 
     return [{

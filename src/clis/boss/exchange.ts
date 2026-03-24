@@ -2,6 +2,7 @@
  * BOSS直聘 exchange — request phone/wechat exchange with a candidate.
  */
 import { cli, Strategy } from '../../registry.js';
+import { EmptyResultError } from '../../errors.js';
 import { requirePage, navigateToChat, bossFetch, findFriendByUid, verbose } from './utils.js';
 
 cli({
@@ -26,7 +27,7 @@ cli({
     await navigateToChat(page);
 
     const friend = await findFriendByUid(page, kwargs.uid, { checkGreetList: true });
-    if (!friend) throw new Error('未找到该候选人');
+    if (!friend) throw new EmptyResultError('未找到该候选人');
 
     const friendName = friend.name || '候选人';
     const typeId = exchangeType === 'wechat' ? 2 : 1;

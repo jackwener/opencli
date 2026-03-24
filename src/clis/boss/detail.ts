@@ -2,6 +2,7 @@
  * BOSS直聘 job detail — fetch full job posting details via browser cookie API.
  */
 import { cli, Strategy } from '../../registry.js';
+import { EmptyResultError } from '../../errors.js';
 import { requirePage, navigateTo, bossFetch, verbose } from './utils.js';
 
 cli({
@@ -40,7 +41,7 @@ cli({
     const brandComInfo = zpData.brandComInfo || {};
 
     if (!jobInfo.jobName) {
-      throw new Error('该职位信息不存在或已下架');
+      throw new EmptyResultError('该职位信息不存在或已下架');
     }
 
     return [{

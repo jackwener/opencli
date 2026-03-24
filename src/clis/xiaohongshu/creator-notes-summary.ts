@@ -8,6 +8,7 @@
 import { cli, Strategy } from '../../registry.js';
 import { fetchCreatorNotes, type CreatorNoteRow } from './creator-notes.js';
 import { fetchCreatorNoteDetailRows, type CreatorNoteDetailRow } from './creator-note-detail.js';
+import { EmptyResultError } from '../../errors.js';
 
 type CreatorNoteSummaryRow = {
   rank: number;
@@ -84,7 +85,7 @@ cli({
     const notes = await fetchCreatorNotes(page, limit);
 
     if (!notes.length) {
-      throw new Error('No notes found. Are you logged into creator.xiaohongshu.com?');
+      throw new EmptyResultError('xiaohongshu creator notes summary', 'Are you logged into creator.xiaohongshu.com?');
     }
 
     const results: CreatorNoteSummaryRow[] = [];

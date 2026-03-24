@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { SelectorError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 export const searchCommand = cli({
@@ -19,16 +20,23 @@ export const searchCommand = cli({
     await page.wait(0.5);
 
     // Type query into search box
-    await page.evaluate(`
-      (function(q) {
-        const input = document.querySelector('[aria-label*="Search"], [class*="searchBar"] input, [placeholder*="Search"]');
-        if (!input) throw new Error('Search input not found');
-        input.focus();
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(input, q);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      })(${JSON.stringify(query)})
-    `);
+    try {
+      await page.evaluate(`
+        (function(q) {
+          const input = document.querySelector('[aria-label*="Search"], [class*="searchBar"] input, [placeholder*="Search"]');
+          if (!input) throw new Error('Search input not found');
+          input.focus();
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          setter.call(input, q);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        })(${JSON.stringify(query)})
+      `);
+    } catch (e: any) {
+      if (e.message?.includes('Search input not found')) {
+        throw new SelectorError('Discord search input', 'Search input not found in Discord UI');
+      }
+      throw e;
+    }
 
     await page.pressKey('Enter');
     await page.wait(2);

@@ -4,6 +4,7 @@
  * Auth: CSRF token from <meta name="csrf-token"> + session cookies.
  */
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError } from '../../errors.js';
 
 cli({
   site: 'barchart',
@@ -100,7 +101,7 @@ cli({
     if (!data) return [];
 
     if (data.error === 'no-csrf') {
-      throw new Error('Could not extract CSRF token from barchart.com. Make sure you are logged in.');
+      throw new AuthRequiredError('barchart.com', 'Could not extract CSRF token. Make sure you are logged in.');
     }
 
     if (!Array.isArray(data)) return [];

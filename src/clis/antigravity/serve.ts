@@ -13,6 +13,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { CDPBridge } from '../../browser/cdp.js';
 import type { IPage } from '../../types.js';
+import { SelectorError, ArgumentError, TimeoutError, ConfigError, BrowserConnectError } from '../../errors.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -255,47 +256,64 @@ async function getLastAssistantReply(page: IPage, userText?: string): Promise<st
 async function sendMessage(page: IPage, message: string, bridge?: CDPBridge): Promise<void> {
   if (!bridge) {
     // Fallback: use JS-based approach
-    await page.evaluate(`
-      (() => {
-        const container = document.getElementById('antigravity.agentSidePanelInputBox');
-        const editor = container?.querySelector('[data-lexical-editor="true"]');
-        if (!editor) throw new Error('Could not find input box');
-        editor.focus();
-        document.execCommand('insertText', false, ${JSON.stringify(message)});
-      })()
-    `);
+    try {
+      await page.evaluate(`
+        (() => {
+          const container = document.getElementById('antigravity.agentSidePanelInputBox');
+          const editor = container?.querySelector('[data-lexical-editor="true"]');
+          if (!editor) throw new Error('Could not find input box');
+          editor.focus();
+          document.execCommand('insertText', false, ${JSON.stringify(message)});
+        })()
+      `);
+    } catch (e: any) {
+      if (e.message?.includes('Could not find input box')) {
+        throw new SelectorError('Antigravity input box', 'Could not find Antigravity input box (Lexical editor) in UI');
+      }
+      throw e;
+    }
     await sleep(500);
     await page.pressKey('Enter');
     return;
   }
 
   // Get the bounding box of the Lexical editor for a physical mouse click
-  const rect = await page.evaluate(`
-    (() => {
-      const container = document.getElementById('antigravity.agentSidePanelInputBox');
-      if (!container) throw new Error('Could not find antigravity.agentSidePanelInputBox');
-      const editor = container.querySelector('[data-lexical-editor="true"]');
-      if (!editor) throw new Error('Could not find Antigravity input box');
-      const r = editor.getBoundingClientRect();
-      return JSON.stringify({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-    })()
-  `);
-  const { x, y } = JSON.parse(String(rect));
+  try {
+    const rect = await page.evaluate(`
+      (() => {
+        const container = document.getElementById('antigravity.agentSidePanelInputBox');
+        if (!container) throw new Error('Could not find antigravity.agentSidePanelInputBox');
+        const editor = container.querySelector('[data-lexical-editor="true"]');
+        if (!editor) throw new Error('Could not find Antigravity input box');
+        const r = editor.getBoundingClientRect();
+        return JSON.stringify({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+      })()
+    `);
+    const { x, y } = JSON.parse(String(rect));
 
-  // Physical mouse click to give the element real browser focus
-  await bridge.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-  await sleep(50);
-  await bridge.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
-  await sleep(200);
+    // Physical mouse click to give the element real browser focus
+    await bridge.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+    await sleep(50);
+    await bridge.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    await sleep(200);
 
-  // Inject text at the CDP level (no deprecated execCommand)
-  await bridge.send('Input.insertText', { text: message });
-  await sleep(300);
+    // Inject text at the CDP level (no deprecated execCommand)
+    await bridge.send('Input.insertText', { text: message });
+    await sleep(300);
 
-  // Send Enter via native CDP key event
-  await bridge.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
-  await sleep(50);
-  await bridge.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+    // Send Enter via native CDP key event
+    await bridge.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+    await sleep(50);
+    await bridge.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+  } catch (e: any) {
+    if (e.message?.includes('Could not find antigravity.agentSidePanelInputBox')) {
+      throw new SelectorError('#antigravity.agentSidePanelInputBox', 'Could not find Antigravity input container in UI');
+    }
+    if (e.message?.includes('Could not find Antigravity input box')) {
+      throw new SelectorError('Antigravity input box', 'Could not find Antigravity input box (Lexical editor) in UI');
+    }
+    throw e;
+  }
 }
 
 async function waitForReply(
@@ -349,7 +367,7 @@ async function waitForReply(
     await sleep(pollInterval);
   }
 
-  throw new Error('Timeout waiting for Antigravity reply');
+  throw new TimeoutError('Antigravity reply', timeout / 1000);
 }
 
 // ─── Request Handlers ────────────────────────────────────────────────
@@ -362,13 +380,13 @@ async function handleMessages(
   // Extract the last user message
   const userMessages = body.messages.filter(m => m.role === 'user');
   if (userMessages.length === 0) {
-    throw new Error('No user message found in request');
+    throw new ArgumentError('No user message found in request');
   }
   const lastUserMsg = userMessages[userMessages.length - 1];
   const userText = extractTextContent(lastUserMsg.content);
 
   if (!userText.trim()) {
-    throw new Error('Empty user message');
+    throw new ArgumentError('Empty user message');
   }
 
   // Optimization 1: New conversation if this is the first message in the session
@@ -437,7 +455,7 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
 
     const endpoint = process.env.OPENCLI_CDP_ENDPOINT;
     if (!endpoint) {
-      throw new Error(
+      throw new ConfigError(
         'OPENCLI_CDP_ENDPOINT is not set.\n' +
         'Usage: OPENCLI_CDP_ENDPOINT=http://127.0.0.1:9224 opencli antigravity serve'
       );
@@ -464,7 +482,7 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
     } catch (err: any) {
       cdp = null;
       const isRefused = err?.cause?.code === 'ECONNREFUSED' || err?.message?.includes('ECONNREFUSED');
-      throw new Error(
+      throw new BrowserConnectError(
         isRefused
           ? `Cannot connect to Antigravity at ${endpoint}.\n` +
             '  1. Make sure Antigravity is running\n' +

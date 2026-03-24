@@ -20,6 +20,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { cli, Strategy } from '../../registry.js';
+import { ArgumentError, AuthRequiredError, CommandExecutionError, SelectorError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 const PUBLISH_URL = 'https://creator.xiaohongshu.com/publish/publish?from=menu_left';
@@ -35,7 +36,7 @@ type ImagePayload = { name: string; mimeType: string; base64: string };
  */
 function readImageFile(filePath: string): ImagePayload {
   const absPath = path.resolve(filePath);
-  if (!fs.existsSync(absPath)) throw new Error(`Image file not found: ${absPath}`);
+  if (!fs.existsSync(absPath)) throw new ArgumentError(`Image file not found: ${absPath}`);
   const ext = path.extname(absPath).toLowerCase();
   const mimeMap: Record<string, string> = {
     '.jpg': 'image/jpeg',
@@ -45,7 +46,7 @@ function readImageFile(filePath: string): ImagePayload {
     '.webp': 'image/webp',
   };
   const mimeType = mimeMap[ext];
-  if (!mimeType) throw new Error(`Unsupported image format "${ext}". Supported: jpg, png, gif, webp`);
+  if (!mimeType) throw new ArgumentError(`Unsupported image format "${ext}". Supported: jpg, png, gif, webp`);
   const base64 = fs.readFileSync(absPath).toString('base64');
   return { name: path.basename(absPath), mimeType, base64 };
 }
@@ -145,7 +146,8 @@ async function fillField(page: IPage, selectors: string[], text: string, fieldNa
   `);
   if (!result.ok) {
     await page.screenshot({ path: `/tmp/xhs_publish_${fieldName}_debug.png` });
-    throw new Error(
+    throw new SelectorError(
+      fieldName,
       `Could not find ${fieldName} input. Debug screenshot: /tmp/xhs_publish_${fieldName}_debug.png`
     );
   }
@@ -167,7 +169,7 @@ cli({
   ],
   columns: ['status', 'detail'],
   func: async (page: IPage | null, kwargs) => {
-    if (!page) throw new Error('Browser page required');
+    if (!page) throw new CommandExecutionError('Browser page required');
 
     const title = String(kwargs.title ?? '').trim();
     const content = String(kwargs.content ?? '').trim();
@@ -180,12 +182,12 @@ cli({
     const isDraft = Boolean(kwargs.draft);
 
     // ── Validate inputs ────────────────────────────────────────────────────────
-    if (!title) throw new Error('--title is required');
+    if (!title) throw new ArgumentError('--title is required');
     if (title.length > MAX_TITLE_LEN)
-      throw new Error(`Title is ${title.length} chars — must be ≤ ${MAX_TITLE_LEN}`);
-    if (!content) throw new Error('Positional argument <content> is required');
+      throw new ArgumentError(`Title is ${title.length} chars — must be ≤ ${MAX_TITLE_LEN}`);
+    if (!content) throw new ArgumentError('Positional argument <content> is required');
     if (imagePaths.length > MAX_IMAGES)
-      throw new Error(`Too many images: ${imagePaths.length} (max ${MAX_IMAGES})`);
+      throw new ArgumentError(`Too many images: ${imagePaths.length} (max ${MAX_IMAGES})`);
 
     // Read images in Node.js context before navigating (fast-fail on bad paths)
     const imageData: ImagePayload[] = imagePaths.map(readImageFile);
@@ -197,7 +199,8 @@ cli({
     // Verify we landed on the creator site (not redirected to login)
     const pageUrl: string = await page.evaluate('() => location.href');
     if (!pageUrl.includes('creator.xiaohongshu.com')) {
-      throw new Error(
+      throw new AuthRequiredError(
+        'creator.xiaohongshu.com',
         'Redirected away from creator center — session may have expired. ' +
         'Re-capture browser login via: opencli xiaohongshu creator-profile'
       );
@@ -224,7 +227,7 @@ cli({
       const upload = await injectImages(page, imageData);
       if (!upload.ok) {
         await page.screenshot({ path: '/tmp/xhs_publish_upload_debug.png' });
-        throw new Error(
+        throw new CommandExecutionError(
           `Image injection failed: ${upload.error ?? 'unknown'}. ` +
           'Debug screenshot: /tmp/xhs_publish_upload_debug.png'
         );
@@ -348,7 +351,8 @@ cli({
 
     if (!btnClicked) {
       await page.screenshot({ path: '/tmp/xhs_publish_submit_debug.png' });
-      throw new Error(
+      throw new SelectorError(
+        actionLabel,
         `Could not find "${actionLabel}" button. ` +
         'Debug screenshot: /tmp/xhs_publish_submit_debug.png'
       );

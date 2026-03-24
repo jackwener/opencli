@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { EmptyResultError } from '../../errors.js';
 import { requirePage, navigateToChat, bossFetch, findFriendByUid } from './utils.js';
 
 cli({
@@ -19,7 +20,7 @@ cli({
     await navigateToChat(page);
 
     const friend = await findFriendByUid(page, kwargs.uid);
-    if (!friend) throw new Error('未找到该候选人');
+    if (!friend) throw new EmptyResultError('未找到该候选人');
 
     const gid = friend.uid;
     const securityId = encodeURIComponent(friend.securityId);

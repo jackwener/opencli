@@ -1,5 +1,6 @@
 import { cli, Strategy } from '../../registry.js';
-import { SEL, injectTextScript, clickSendScript, pollResponseScript } from './utils.js';
+import { SelectorError } from '../../errors.js';
+import { SEL, injectTextScript, clickSendScript, pollResponseScript } from './common.js';
 
 export const askCommand = cli({
   site: 'doubao-app',
@@ -24,7 +25,7 @@ export const askCommand = cli({
 
     // Inject text + send
     const injected = await page.evaluate(injectTextScript(text));
-    if (!injected?.ok) throw new Error('Could not find chat input.');
+    if (!injected?.ok) throw new SelectorError('Doubao chat input', 'Could not find chat input');
     await page.wait(0.5);
 
     const clicked = await page.evaluate(clickSendScript());

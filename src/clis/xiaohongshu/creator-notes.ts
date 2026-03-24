@@ -10,6 +10,7 @@
 
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
+import { EmptyResultError } from '../../errors.js';
 
 const DATE_LINE_RE = /^发布于 (\d{4}年\d{2}月\d{2}日 \d{2}:\d{2})$/;
 const METRIC_LINE_RE = /^\d+$/;
@@ -275,7 +276,7 @@ cli({
     const notes = await fetchCreatorNotes(page, limit);
 
     if (!Array.isArray(notes) || notes.length === 0) {
-      throw new Error('No notes found. Are you logged into creator.xiaohongshu.com?');
+      throw new EmptyResultError('xiaohongshu creator notes', 'Are you logged into creator.xiaohongshu.com?');
     }
 
     return notes

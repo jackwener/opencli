@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { SelectorError } from '../../errors.js';
 
 export const readCommand = cli({
   site: 'antigravity',
@@ -12,25 +13,33 @@ export const readCommand = cli({
   ],
   columns: ['role', 'content'],
   func: async (page, kwargs) => {
-    // We execute a script inside Antigravity's Chromium environment to extract the text 
+    // We execute a script inside Antigravity's Chromium environment to extract the text
     // of the entire conversation pane.
-    const rawText = await page.evaluate(`
-      async () => {
-        const container = document.getElementById('conversation');
-        if (!container) throw new Error('Could not find conversation container');
-        
-        // Extract the full visible text of the conversation
-        // In Electron/Chromium, innerText preserves basic visual line breaks nicely
-        return container.innerText;
+    let rawText: string;
+    try {
+      rawText = await page.evaluate(`
+        async () => {
+          const container = document.getElementById('conversation');
+          if (!container) throw new Error('Could not find conversation container');
+
+          // Extract the full visible text of the conversation
+          // In Electron/Chromium, innerText preserves basic visual line breaks nicely
+          return container.innerText;
+        }
+      `);
+    } catch (e: any) {
+      if (e.message?.includes('Could not find conversation container')) {
+        throw new SelectorError('#conversation element', 'Could not find conversation container in Antigravity UI');
       }
-    `);
-    
+      throw e;
+    }
+
     // We can do simple heuristic parsing based on typical visual markers if needed.
     // For now, we return the entire text blob, or just the last 2000 characters if it's too long.
     const cleanText = String(rawText).trim();
-    return [{ 
-      role: 'history', 
-      content: cleanText 
+    return [{
+      role: 'history',
+      content: cleanText
     }];
   },
 });

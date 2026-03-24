@@ -11,6 +11,7 @@
 
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
+import { EmptyResultError } from '../../errors.js';
 
 type CreatorNoteDetailRow = {
   section: string;
@@ -439,7 +440,7 @@ cli({
 
     const hasCoreMetric = rows.some((row) => row.section !== '笔记信息' && row.value);
     if (!hasCoreMetric) {
-      throw new Error('No note detail data found. Check note_id and login status for creator.xiaohongshu.com.');
+      throw new EmptyResultError('xiaohongshu creator note detail', 'Check note_id and login status for creator.xiaohongshu.com.');
     }
 
     return rows;

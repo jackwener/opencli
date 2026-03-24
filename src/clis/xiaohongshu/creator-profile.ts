@@ -9,6 +9,7 @@
  */
 
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
 
 cli({
   site: 'xiaohongshu',
@@ -37,10 +38,10 @@ cli({
     `);
 
     if (data?.error) {
-      throw new Error(data.error + '. Are you logged into creator.xiaohongshu.com?');
+      throw new AuthRequiredError('creator.xiaohongshu.com', data.error + '. Are you logged into creator.xiaohongshu.com?');
     }
     if (!data?.data) {
-      throw new Error('Unexpected response structure');
+      throw new CommandExecutionError('Unexpected response structure');
     }
 
     const d = data.data;

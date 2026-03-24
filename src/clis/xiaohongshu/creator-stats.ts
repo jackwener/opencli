@@ -9,6 +9,7 @@
  */
 
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError, ArgumentError, CommandExecutionError } from '../../errors.js';
 
 cli({
   site: 'xiaohongshu',
@@ -48,15 +49,15 @@ cli({
     `);
 
     if (data?.error) {
-      throw new Error(data.error + '. Are you logged into creator.xiaohongshu.com?');
+      throw new AuthRequiredError('creator.xiaohongshu.com', data.error + '. Are you logged into creator.xiaohongshu.com?');
     }
     if (!data?.data) {
-      throw new Error('Unexpected response structure');
+      throw new CommandExecutionError('Unexpected response structure');
     }
 
     const stats = data.data[period];
     if (!stats) {
-      throw new Error(`No data for period "${period}". Available: ${Object.keys(data.data).join(', ')}`);
+      throw new ArgumentError(`No data for period "${period}". Available: ${Object.keys(data.data).join(', ')}`);
     }
 
     // Format daily trend as sparkline-like summary

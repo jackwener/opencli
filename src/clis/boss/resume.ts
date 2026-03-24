@@ -10,6 +10,7 @@
  *  .position-content → job being discussed + expectation
  */
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError, EmptyResultError, SelectorError } from '../../errors.js';
 import { requirePage, navigateToChat, findFriendByUid, clickCandidateInList } from './utils.js';
 
 cli({
@@ -34,13 +35,13 @@ cli({
     await navigateToChat(page, 3);
 
     const friend = await findFriendByUid(page, kwargs.uid, { maxPages: 5 });
-    if (!friend) throw new Error('未找到该候选人，请确认 uid 是否正确');
+    if (!friend) throw new EmptyResultError('未找到该候选人，请确认 uid 是否正确');
 
     const numericUid = friend.uid;
 
     const clicked = await clickCandidateInList(page, numericUid);
     if (!clicked) {
-      throw new Error('无法在聊天列表中找到该用户，请确认聊天列表中有此人');
+      throw new SelectorError('candidate in chat list', '无法在聊天列表中找到该用户，请确认聊天列表中有此人');
     }
 
     await page.wait({ time: 2 });
@@ -138,7 +139,7 @@ cli({
     `);
 
     if (resumeInfo.error) {
-      throw new Error('无法获取简历面板: ' + resumeInfo.error);
+      throw new CommandExecutionError('无法获取简历面板: ' + resumeInfo.error);
     }
 
     return [{

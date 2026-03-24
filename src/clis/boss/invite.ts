@@ -2,6 +2,7 @@
  * BOSS直聘 invite — send interview invitation to a candidate.
  */
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError, EmptyResultError } from '../../errors.js';
 import { requirePage, navigateToChat, bossFetch, findFriendByUid, verbose } from './utils.js';
 
 cli({
@@ -26,7 +27,7 @@ cli({
     await navigateToChat(page);
 
     const friend = await findFriendByUid(page, kwargs.uid, { checkGreetList: true });
-    if (!friend) throw new Error('未找到该候选人');
+    if (!friend) throw new EmptyResultError('未找到该候选人');
 
     const friendName = friend.name || '候选人';
 
@@ -52,7 +53,7 @@ cli({
     // Parse interview time
     const interviewTime = new Date(kwargs.time).getTime();
     if (isNaN(interviewTime)) {
-      throw new Error(`时间格式错误: ${kwargs.time}，请使用格式如 2025-04-01 14:00`);
+      throw new CommandExecutionError(`时间格式错误: ${kwargs.time}，请使用格式如 2025-04-01 14:00`);
     }
 
     const params = new URLSearchParams({

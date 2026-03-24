@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { ArgumentError, AuthRequiredError, CommandExecutionError } from '../../errors.js';
 import { mergeSearchItems, normalizeSearchItem, sanitizeSearchItems } from './utils.js';
 
 function escapeJsString(value: string): string {
@@ -420,7 +421,7 @@ cli({
     const pageNumber = Math.max(Number(kwargs.page || 1), 1);
     const limit = Math.min(Math.max(Number(kwargs.limit || 20), 1), 50);
     const filter = String(kwargs.filter || '').trim().toLowerCase();
-    if (!query) throw new Error('Query is required');
+    if (!query) throw new ArgumentError('Query is required');
 
     const initialPage = filter ? 1 : pageNumber;
     const url = `https://www.coupang.com/np/search?q=${encodeURIComponent(query)}&channel=user&page=${initialPage}`;
@@ -428,7 +429,7 @@ cli({
     if (filter) {
       const filterResult = await page.evaluate(buildApplyFilterEvaluate(filter));
       if (!filterResult?.ok) {
-        throw new Error(`Unsupported or unavailable filter: ${filter}`);
+        throw new CommandExecutionError(`Unsupported or unavailable filter: ${filter}`);
       }
       await page.wait(3);
       if (pageNumber > 1) {
@@ -457,7 +458,7 @@ cli({
       : mergeSearchItems(normalizedBase, normalizedDom, limit);
 
     if (!normalized.length && loginHints.hasLoginLink && !loginHints.hasMyCoupang) {
-      throw new Error('Coupang login required. Please log into Coupang in Chrome and retry.');
+      throw new AuthRequiredError('www.coupang.com', 'Coupang login required. Please log into Coupang in Chrome and retry.');
     }
     return normalized;
   },
