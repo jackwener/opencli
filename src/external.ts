@@ -94,7 +94,7 @@ export function getInstallCmd(installConfig?: ExternalCliInstall): string | null
  *   Object with `binary` and `args` fields, or throws on unsafe input.
  */
 export function parseCommand(cmd: string): { binary: string; args: string[] } {
-  const shellOperators = /&&|\|\|?|;|[><`]/;
+  const shellOperators = /&&|\|\|?|;|[><`$#\n\r]|\$\(/;
   if (shellOperators.test(cmd)) {
     throw new Error(
       `Install command contains unsafe shell operators and cannot be executed securely: "${cmd}". ` +

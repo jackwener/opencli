@@ -408,29 +408,17 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
   registerAllCommands(program, siteGroups);
 
   // ── Unknown command fallback ──────────────────────────────────────────────
-
-  const DENY_LIST = new Set([
-    'rm', 'sudo', 'dd', 'mkfs', 'fdisk', 'shutdown', 'reboot',
-    'kill', 'killall', 'chmod', 'chown', 'passwd', 'su', 'mount',
-    'umount', 'format', 'diskutil',
-  ]);
+  // Security: do NOT auto-discover and register arbitrary system binaries.
+  // Only explicitly registered external CLIs (via `opencli register`) are allowed.
 
   program.on('command:*', (operands: string[]) => {
     const binary = operands[0];
-    if (DENY_LIST.has(binary)) {
-      console.error(chalk.red(`Refusing to register system command '${binary}'.`));
-      process.exitCode = 1;
-      return;
-    }
+    console.error(chalk.red(`error: unknown command '${binary}'`));
     if (isBinaryInstalled(binary)) {
-      console.log(chalk.cyan(`🔹 Auto-discovered local CLI '${binary}'. Registering...`));
-      registerExternalCli(binary);
-      passthroughExternal(binary);
-    } else {
-      console.error(chalk.red(`error: unknown command '${binary}'`));
-      program.outputHelp();
-      process.exitCode = 1;
+      console.error(chalk.dim(`  Tip: '${binary}' exists on your PATH. Use 'opencli register ${binary}' to add it as an external CLI.`));
     }
+    program.outputHelp();
+    process.exitCode = 1;
   });
 
   program.parse();

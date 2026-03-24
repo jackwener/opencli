@@ -195,13 +195,33 @@ export function resolvePath(pathStr: string, ctx: RenderContext): unknown {
  * If opencli ever loads untrusted third-party adapters, this MUST be replaced
  * with a proper sandboxed evaluator.
  */
+/** Keywords that could be used to escape the Function sandbox via prototype chain traversal. */
+const FORBIDDEN_EXPR_PATTERNS = /\b(constructor|__proto__|prototype|globalThis|process|require|import|eval)\b/;
+
+/**
+ * Deep-copy plain data to sever prototype chains, preventing sandbox escape
+ * via `args.constructor.constructor('return process')()` etc.
+ */
+function sanitizeContext(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object' && typeof obj !== 'function') return obj;
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch {
+    return {};
+  }
+}
+
 function evalJsExpr(expr: string, ctx: RenderContext): unknown {
   // Guard against absurdly long expressions that could indicate injection.
   if (expr.length > 2000) return undefined;
 
-  const args = ctx.args ?? {};
-  const item = ctx.item ?? {};
-  const data = ctx.data;
+  // Block expressions that attempt prototype chain traversal or sandbox escape.
+  if (FORBIDDEN_EXPR_PATTERNS.test(expr)) return undefined;
+
+  const args = sanitizeContext(ctx.args ?? {});
+  const item = sanitizeContext(ctx.item ?? {});
+  const data = sanitizeContext(ctx.data);
   const index = ctx.index ?? 0;
 
   try {
