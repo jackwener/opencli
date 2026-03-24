@@ -26,7 +26,7 @@ cli({
       help: '详情图数量（默认10）',
     },
   ],
-  columns: ['title', 'price', 'shop', 'specs', 'mainImages', 'detailImages'],
+  columns: ['title', 'price', 'shop', 'specs', 'avifImages'],
   func: async (page, kwargs) => {
     const sku = kwargs.sku;
     const maxImages = kwargs.images as number;
@@ -67,14 +67,9 @@ cli({
         const srcs = allImgs.map(img => img.src).filter(Boolean);
         const unique = [...new Set(srcs)];
 
-        // 主图
-        const mainImgs = unique
-          .filter(u => u.includes('/n1/') || u.includes('/n3/') || u.includes('/n4/') || u.includes('/img/'))
-          .slice(0, maxImg);
-
-        // 详情图
-        const detailImgs = unique
-          .filter(u => u.includes('/babel/') || u.includes('/popshop/'))
+        // 所有 avif 图片（去重，只保留 pcpubliccms CDN）
+        const avifImages = unique
+          .filter(u => u.includes('.avif') && u.includes('pcpubliccms'))
           .slice(0, maxImg);
 
         // 规格参数：从页面文本提取
@@ -92,7 +87,7 @@ cli({
           }
         }
 
-        return { title, price, shop, specs, mainImages: mainImgs, detailImages: detailImgs, totalImages: unique.length };
+        return { title, price, shop, specs, avifImages, totalImages: unique.length };
       })()
     `);
 
