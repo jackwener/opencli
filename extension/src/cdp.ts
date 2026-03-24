@@ -144,10 +144,10 @@ export async function screenshot(
   }
 }
 
-export function detach(tabId: number): void {
+export async function detach(tabId: number): Promise<void> {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);
-  try { chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
+  try { await chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
 }
 
 export function registerListeners(): void {
@@ -158,12 +158,9 @@ export function registerListeners(): void {
     if (source.tabId) attached.delete(source.tabId);
   });
   // Invalidate attached cache when tab URL changes to non-debuggable
-  chrome.tabs.onUpdated.addListener((tabId, info) => {
+  chrome.tabs.onUpdated.addListener(async (tabId, info) => {
     if (info.url && !isDebuggableUrl(info.url)) {
-      if (attached.has(tabId)) {
-        attached.delete(tabId);
-        try { chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
-      }
+      await detach(tabId);
     }
   });
 }

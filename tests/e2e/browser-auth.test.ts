@@ -112,4 +112,13 @@ describe('login-required commands — graceful failure', () => {
   it('xiaohongshu notifications fails gracefully without login', async () => {
     await expectGracefulAuthFailure(['xiaohongshu', 'notifications', '--limit', '3', '-f', 'json'], 'xiaohongshu notifications');
   }, 60_000);
+
+  // ── yollomi (requires login session) ──
+  it('yollomi generate fails gracefully without login', async () => {
+    await expectGracefulAuthFailure(['yollomi', 'generate', 'a cute cat', '--no-download', '-f', 'json'], 'yollomi generate');
+  }, 60_000);
+
+  it('yollomi video fails gracefully without login', async () => {
+    await expectGracefulAuthFailure(['yollomi', 'video', 'a sunset over the ocean', '--no-download', '-f', 'json'], 'yollomi video');
+  }, 60_000);
 });

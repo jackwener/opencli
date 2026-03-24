@@ -1,0 +1,79 @@
+import { describe, it, expect } from 'vitest';
+import {
+  CliError,
+  BrowserConnectError,
+  AdapterLoadError,
+  CommandExecutionError,
+  ConfigError,
+  AuthRequiredError,
+  TimeoutError,
+  ArgumentError,
+  EmptyResultError,
+  SelectorError,
+} from './errors.js';
+
+describe('Error type hierarchy', () => {
+  it('all error types extend CliError', () => {
+    const errors = [
+      new BrowserConnectError('test'),
+      new AdapterLoadError('test'),
+      new CommandExecutionError('test'),
+      new ConfigError('test'),
+      new AuthRequiredError('example.com'),
+      new TimeoutError('test', 30),
+      new ArgumentError('test'),
+      new EmptyResultError('test/cmd'),
+      new SelectorError('.btn'),
+    ];
+
+    for (const err of errors) {
+      expect(err).toBeInstanceOf(CliError);
+      expect(err).toBeInstanceOf(Error);
+    }
+  });
+
+  it('AuthRequiredError has correct code, domain, and auto-generated hint', () => {
+    const err = new AuthRequiredError('bilibili.com');
+    expect(err.code).toBe('AUTH_REQUIRED');
+    expect(err.domain).toBe('bilibili.com');
+    expect(err.message).toBe('Not logged in to bilibili.com');
+    expect(err.hint).toContain('https://bilibili.com');
+  });
+
+  it('AuthRequiredError accepts custom message', () => {
+    const err = new AuthRequiredError('x.com', 'No ct0 cookie found');
+    expect(err.message).toBe('No ct0 cookie found');
+    expect(err.hint).toContain('https://x.com');
+  });
+
+  it('TimeoutError has correct code and hint', () => {
+    const err = new TimeoutError('bilibili/hot', 60);
+    expect(err.code).toBe('TIMEOUT');
+    expect(err.message).toBe('bilibili/hot timed out after 60s');
+    expect(err.hint).toContain('timeout');
+  });
+
+  it('ArgumentError has correct code', () => {
+    const err = new ArgumentError('Argument "limit" must be a valid number');
+    expect(err.code).toBe('ARGUMENT');
+  });
+
+  it('EmptyResultError has default hint', () => {
+    const err = new EmptyResultError('hackernews/top');
+    expect(err.code).toBe('EMPTY_RESULT');
+    expect(err.message).toBe('hackernews/top returned no data');
+    expect(err.hint).toBeTruthy();
+  });
+
+  it('SelectorError has default hint about page changes', () => {
+    const err = new SelectorError('.submit-btn');
+    expect(err.code).toBe('SELECTOR');
+    expect(err.message).toContain('.submit-btn');
+    expect(err.hint).toContain('report');
+  });
+
+  it('BrowserConnectError has correct code', () => {
+    const err = new BrowserConnectError('Cannot connect');
+    expect(err.code).toBe('BROWSER_CONNECT');
+  });
+});

@@ -101,7 +101,7 @@ npm install -g @jackwener/opencli@latest
 
 | 站点 | 命令 | 模式 |
 |------|------|------|
-| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` `accept` `reply-dm` | 浏览器 |
+| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` `accept` `reply-dm` `block` `unblock` `hide-reply` | 浏览器 |
 | **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `read` `user` `user-posts` `user-comments` `upvote` `save` `comment` `subscribe` `saved` `upvoted` | 浏览器 |
 | **cursor** | `status` `send` `read` `new` `dump` `composer` `model` `extract-code` `ask` `screenshot` `history` `export` | 桌面端 |
 | **bilibili** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` `download` | 浏览器 |
@@ -113,7 +113,7 @@ npm install -g @jackwener/opencli@latest
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | 桌面端 |
 | **v2ex** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | 公开 / 浏览器 |
 | **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | 浏览器 |
-| **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` `serve` | 桌面端 |
+| **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` | 桌面端 |
 | **chatgpt** | `status` `new` `send` `read` `ask` | 桌面端 |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | 浏览器 |
 | **apple-podcasts** | `search` `episodes` `top` | 公开 |
@@ -128,7 +128,7 @@ npm install -g @jackwener/opencli@latest
 | **ctrip** | `search` | 浏览器 |
 | **devto** | `top` `tag` `user` | 公开 |
 | **arxiv** | `search` `paper` | 公开 |
-| **wikipedia** | `search` `summary` | 公开 |
+| **wikipedia** | `search` `summary` `random` `trending` | 公开 |
 | **hackernews** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | 公共 API |
 | **linkedin** | `search` | 浏览器 |
 | **reuters** | `search` | 浏览器 |
@@ -142,18 +142,19 @@ npm install -g @jackwener/opencli@latest
 | **hf** | `top` | 公开 |
 | **jike** | `feed` `search` `create` `like` `comment` `repost` `notifications` `post` `topic` `user` | 浏览器 |
 | **jimeng** | `generate` `history` | 浏览器 |
+| **yollomi** | `generate` `video` `edit` `upload` `models` `remove-bg` `upscale` `face-swap` `restore` `try-on` `background` `object-remover` | 浏览器 |
 | **linux-do** | `hot` `latest` `search` `categories` `category` `topic` | 公开 |
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | 公开 |
 | **steam** | `top-sellers` | 公开 |
 | **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | 浏览器 |
-| **douban** | `search` `top250` `subject` `marks` `reviews` | 浏览器 |
+| **douban** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | 浏览器 |
 | **facebook** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | 浏览器 |
 | **google** | `news` `search` `suggest` `trends` | 公开 |
 | **instagram** | `explore` `profile` `search` `user` `followers` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `saved` | 浏览器 |
 | **lobsters** | `hot` `newest` `active` `tag` | 公开 |
-| **medium** | `feed` `search` `user` `shared` | 浏览器 |
-| **sinablog** | `hot` `search` `article` `user` `shared` | 浏览器 |
-| **substack** | `feed` `search` `publication` `shared` | 浏览器 |
+| **medium** | `feed` `search` `user` | 浏览器 |
+| **sinablog** | `hot` `search` `article` `user` | 浏览器 |
+| **substack** | `feed` `search` `publication` | 浏览器 |
 | **tiktok** | `explore` `search` `profile` `user` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `live` `notifications` `friends` | 浏览器 |
 
 
@@ -263,6 +264,25 @@ opencli bilibili hot -f csv     # CSV
 opencli bilibili hot -v         # 详细模式：展示管线执行步骤调试信息
 ```
 
+## 插件
+
+通过社区贡献的插件扩展 OpenCLI。插件使用与内置命令相同的 YAML/TS 格式，启动时自动发现。
+
+```bash
+opencli plugin install github:user/opencli-plugin-my-tool  # 安装
+opencli plugin list                                         # 查看已安装
+opencli plugin update my-tool                               # 更新到最新
+opencli plugin uninstall my-tool                            # 卸载
+```
+
+| 插件 | 类型 | 描述 |
+|------|------|------|
+| [opencli-plugin-github-trending](https://github.com/ByteYue/opencli-plugin-github-trending) | YAML | GitHub Trending 仓库 |
+| [opencli-plugin-hot-digest](https://github.com/ByteYue/opencli-plugin-hot-digest) | TS | 多平台热榜聚合 |
+| [opencli-plugin-juejin](https://github.com/Astro-Han/opencli-plugin-juejin) | YAML | 稀土掘金热门文章 |
+
+详见 [插件指南](./docs/zh/guide/plugins.md) 了解如何创建自己的插件。
+
 ## 致 AI Agent（开发者指南）
 
 如果你是一个被要求查阅代码并编写新 `opencli` 适配器的 AI，请遵守以下工作流。
@@ -306,7 +326,7 @@ opencli cascade https://api.example.com/data
 
 [![Star History Chart](https://api.star-history.com/svg?repos=jackwener/opencli&type=Date)](https://star-history.com/#jackwener/opencli&Date)
 
-发版完成后，记得也要去 Chrome Web Store 更新浏览器插件，保持插件版本和 CLI 版本同步。
+
 
 ## License
 

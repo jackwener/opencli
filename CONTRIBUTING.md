@@ -17,7 +17,8 @@ npm run build
 
 # 4. Run a few checks
 npx tsc --noEmit
-npx vitest run src/
+npm test
+npm run test:adapter
 
 # 5. Link globally (optional, for testing `opencli` command)
 npm link
@@ -161,7 +162,8 @@ args: [
 See [TESTING.md](./TESTING.md) for the full guide and exact test locations.
 
 ```bash
-npx vitest run src/           # Unit tests
+npm test                      # Core unit tests (non-adapter)
+npm run test:adapter         # Focused adapter tests: zhihu/twitter/reddit/bilibili
 npx vitest run tests/e2e/     # E2E tests
 npx vitest run                # All tests
 ```
@@ -194,7 +196,8 @@ Common scopes: site name (`twitter`, `reddit`) or module name (`browser`, `pipel
 3. Run the checks that apply:
    ```bash
    npx tsc --noEmit           # Type check
-   npx vitest run src/        # Unit tests
+   npm test                   # Core unit tests
+   npm run test:adapter       # Focused adapter tests (if you touched adapter logic)
    opencli validate           # YAML validation (if applicable)
    ```
 4. Commit using conventional commit format

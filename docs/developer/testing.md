@@ -30,12 +30,14 @@ tests/
 ├── smoke/
 │   └── api-health.test.ts         # 外部 API、adapter 定义、命令注册健康检查
 src/
-└── **/*.test.ts                   # 单元测试（当前 31 个文件）
+├── **/*.test.ts                   # 核心单元测试（默认 `unit` project）
+└── clis/{zhihu,twitter,reddit,bilibili}/**/*.test.ts  # 聚焦 adapter tests
 ```
 
 | 层 | 位置 | 当前文件数 | 运行方式 | 用途 |
 |---|---|---:|---|---|
-| 单元测试 | `src/**/*.test.ts` | 31 | `npx vitest run src/` | 内部模块、pipeline、adapter 工具函数 |
+| 单元测试 | `src/**/*.test.ts`（排除 `src/clis/**`） | - | `npm test` | 内部模块、pipeline、runtime |
+| Adapter 测试 | `src/clis/{zhihu,twitter,reddit,bilibili}/**/*.test.ts` | - | `npm run test:adapter` | 保留 4 个重点站点的 adapter 覆盖 |
 | E2E 测试 | `tests/e2e/*.test.ts` | 5 | `npx vitest run tests/e2e/` | 真实 CLI 命令执行 |
 | 烟雾测试 | `tests/smoke/*.test.ts` | 1 | `npx vitest run tests/smoke/` | 外部 API 与注册完整性 |
 
@@ -43,13 +45,13 @@ src/
 
 ## 当前覆盖范围
 
-### 单元测试（31 个文件）
+### 单元测试与 Adapter 测试
 
 | 领域 | 文件 |
 |---|---|
 | 核心运行时与输出 | `src/browser.test.ts`, `src/browser/dom-snapshot.test.ts`, `src/build-manifest.test.ts`, `src/capabilityRouting.test.ts`, `src/doctor.test.ts`, `src/engine.test.ts`, `src/interceptor.test.ts`, `src/output.test.ts`, `src/plugin.test.ts`, `src/registry.test.ts`, `src/snapshotFormatter.test.ts` |
 | pipeline 与下载 | `src/download/index.test.ts`, `src/pipeline/executor.test.ts`, `src/pipeline/template.test.ts`, `src/pipeline/transform.test.ts` |
-| 站点 / adapter 逻辑 | `src/clis/apple-podcasts/commands.test.ts`, `src/clis/apple-podcasts/utils.test.ts`, `src/clis/bloomberg/utils.test.ts`, `src/clis/chaoxing/utils.test.ts`, `src/clis/coupang/utils.test.ts`, `src/clis/google/utils.test.ts`, `src/clis/grok/ask.test.ts`, `src/clis/twitter/timeline.test.ts`, `src/clis/weread/utils.test.ts`, `src/clis/xiaohongshu/creator-note-detail.test.ts`, `src/clis/xiaohongshu/creator-notes-summary.test.ts`, `src/clis/xiaohongshu/creator-notes.test.ts`, `src/clis/xiaohongshu/user-helpers.test.ts`, `src/clis/xiaoyuzhou/utils.test.ts`, `src/clis/youtube/transcript-group.test.ts`, `src/clis/zhihu/download.test.ts` |
+| 聚焦 adapter 逻辑 | `src/clis/zhihu/download.test.ts`, `src/clis/twitter/timeline.test.ts`, `src/clis/reddit/read.test.ts`, `src/clis/bilibili/dynamic.test.ts` |
 
 这些测试覆盖的重点包括：
 
@@ -99,8 +101,11 @@ npm run build         # 编译（E2E / smoke 测试需要 dist/main.js）
 ### 运行命令
 
 ```bash
-# 全部单元测试
-npx vitest run src/
+# 默认核心单元测试（不含大多数 adapter tests）
+npm test
+
+# 聚焦 adapter tests（只保留 4 个重点站点）
+npm run test:adapter
 
 # 全部 E2E 测试（会真实调用外部 API / 浏览器）
 npx vitest run tests/e2e/
@@ -192,7 +197,8 @@ it('producthunt me fails gracefully without login', async () => {
 | Job | 触发条件 | 内容 |
 |---|---|---|
 | `build` | push/PR 到 `main`,`dev` | `tsc --noEmit` + `npm run build` |
-| `unit-test` | push/PR 到 `main`,`dev` | Node `20` 与 `22` 双版本运行 `src/` 单元测试，按 `2` shard 并行 |
+| `unit-test` | push/PR 到 `main`,`dev` | Node `20` 与 `22` 双版本运行核心 `unit` tests，按 `2` shard 并行 |
+| `adapter-test` | push/PR 到 `main`,`dev` | Node `22` 运行聚焦的 `zhihu/twitter/reddit/bilibili` adapter tests |
 | `smoke-test` | `schedule` 或 `workflow_dispatch` | 安装真实 Chrome，`xvfb-run` 执行 `tests/smoke/` |
 
 ### `e2e-headed.yml`
@@ -214,7 +220,7 @@ strategy:
     node-version: ['20', '22']
     shard: [1, 2]
 steps:
-  - run: npx vitest run src/ --reporter=verbose --shard=${{ matrix.shard }}/2
+  - run: npm test -- --reporter=verbose --shard=${{ matrix.shard }}/2
 ```
 :::
 

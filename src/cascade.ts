@@ -145,9 +145,10 @@ export async function cascadeProbe(
   url: string,
   opts: { maxStrategy?: Strategy; timeout?: number } = {},
 ): Promise<CascadeResult> {
-  const maxIdx = opts.maxStrategy
+  const rawIdx = opts.maxStrategy
     ? CASCADE_ORDER.indexOf(opts.maxStrategy)
     : CASCADE_ORDER.indexOf(Strategy.HEADER); // Don't auto-try INTERCEPT/UI
+  const maxIdx = rawIdx === -1 ? CASCADE_ORDER.indexOf(Strategy.HEADER) : rawIdx;
 
   const probes: ProbeResult[] = [];
 

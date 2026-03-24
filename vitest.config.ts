@@ -7,9 +7,24 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['src/**/*.test.ts'],
+          exclude: ['src/clis/**/*.test.ts'],
           // Run unit tests before e2e tests to avoid project-level contention in CI.
           sequence: {
             groupOrder: 0,
+          },
+        },
+      },
+      {
+        test: {
+          name: 'adapter',
+          include: [
+            'src/clis/zhihu/**/*.test.ts',
+            'src/clis/twitter/**/*.test.ts',
+            'src/clis/reddit/**/*.test.ts',
+            'src/clis/bilibili/**/*.test.ts',
+          ],
+          sequence: {
+            groupOrder: 1,
           },
         },
       },
@@ -19,7 +34,7 @@ export default defineConfig({
           include: ['tests/**/*.test.ts'],
           maxWorkers: 2,
           sequence: {
-            groupOrder: 1,
+            groupOrder: 2,
           },
         },
       },

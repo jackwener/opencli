@@ -99,7 +99,7 @@ Run `opencli list` for the live registry.
 
 | Site | Commands | Mode |
 |------|----------|------|
-| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` `accept` `reply-dm` | Browser |
+| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` `accept` `reply-dm` `block` `unblock` `hide-reply` | Browser |
 | **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `read` `user` `user-posts` `user-comments` `upvote` `save` `comment` `subscribe` `saved` `upvoted` | Browser |
 | **cursor** | `status` `send` `read` `new` `dump` `composer` `model` `extract-code` `ask` `screenshot` `history` `export` | Desktop |
 | **bilibili** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` `download` | Browser |
@@ -111,7 +111,7 @@ Run `opencli list` for the live registry.
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | Desktop |
 | **v2ex** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | Public / Browser |
 | **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | Browser |
-| **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` `serve` | Desktop |
+| **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` | Desktop |
 | **chatgpt** | `status` `new` `send` `read` `ask` | Desktop |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | Browser |
 | **apple-podcasts** | `search` `episodes` `top` | Public |
@@ -126,7 +126,7 @@ Run `opencli list` for the live registry.
 | **ctrip** | `search` | Browser |
 | **devto** | `top` `tag` `user` | Public |
 | **arxiv** | `search` `paper` | Public |
-| **wikipedia** | `search` `summary` | Public |
+| **wikipedia** | `search` `summary` `random` `trending` | Public |
 | **hackernews** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | Public |
 | **linkedin** | `search` | Browser |
 | **reuters** | `search` | Browser |
@@ -140,18 +140,19 @@ Run `opencli list` for the live registry.
 | **hf** | `top` | Public |
 | **jike** | `feed` `search` `create` `like` `comment` `repost` `notifications` `post` `topic` `user` | Browser |
 | **jimeng** | `generate` `history` | Browser |
+| **yollomi** | `generate` `video` `edit` `upload` `models` `remove-bg` `upscale` `face-swap` `restore` `try-on` `background` `object-remover` | Browser |
 | **linux-do** | `hot` `latest` `search` `categories` `category` `topic` | Public |
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | Public |
 | **steam** | `top-sellers` | Public |
 | **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | Browser |
-| **douban** | `search` `top250` `subject` `marks` `reviews` | Browser |
+| **douban** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | Browser |
 | **facebook** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | Browser |
 | **google** | `news` `search` `suggest` `trends` | Public |
 | **instagram** | `explore` `profile` `search` `user` `followers` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `saved` | Browser |
 | **lobsters** | `hot` `newest` `active` `tag` | Public |
-| **medium** | `feed` `search` `user` `shared` | Browser |
-| **sinablog** | `hot` `search` `article` `user` `shared` | Browser |
-| **substack** | `feed` `search` `publication` `shared` | Browser |
+| **medium** | `feed` `search` `user` | Browser |
+| **sinablog** | `hot` `search` `article` `user` | Browser |
+| **substack** | `feed` `search` `publication` | Browser |
 | **tiktok** | `explore` `search` `profile` `user` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `live` `notifications` `friends` | Browser |
 
 
@@ -261,6 +262,25 @@ opencli bilibili hot -f csv     # CSV
 opencli bilibili hot -v         # Verbose: show pipeline debug steps
 ```
 
+## Plugins
+
+Extend OpenCLI with community-contributed adapters. Plugins use the same YAML/TS format as built-in commands and are automatically discovered at startup.
+
+```bash
+opencli plugin install github:user/opencli-plugin-my-tool  # Install
+opencli plugin list                                         # List installed
+opencli plugin update my-tool                               # Update to latest
+opencli plugin uninstall my-tool                            # Remove
+```
+
+| Plugin | Type | Description |
+|--------|------|-------------|
+| [opencli-plugin-github-trending](https://github.com/ByteYue/opencli-plugin-github-trending) | YAML | GitHub Trending repositories |
+| [opencli-plugin-hot-digest](https://github.com/ByteYue/opencli-plugin-hot-digest) | TS | Multi-platform trending aggregator |
+| [opencli-plugin-juejin](https://github.com/Astro-Han/opencli-plugin-juejin) | YAML | 稀土掘金 (Juejin) hot articles |
+
+See [Plugins Guide](./docs/guide/plugins.md) for creating your own plugin.
+
 ## For AI Agents (Developer Guide)
 
 If you are an AI assistant tasked with creating a new command adapter for `opencli`, please follow the AI Agent workflow below:
@@ -308,7 +328,7 @@ See **[TESTING.md](./TESTING.md)** for how to run and write tests.
 
 [![Star History Chart](https://api.star-history.com/svg?repos=jackwener/opencli&type=Date)](https://star-history.com/#jackwener/opencli&Date)
 
-After publishing the new version, remember to update the browser extension in the Chrome Web Store as well, so the extension release stays in sync with the CLI release.
+
 
 ## License
 

@@ -17,7 +17,8 @@ npm run build
 
 # 4. Run a few checks
 npx tsc --noEmit
-npx vitest run src/
+npm test
+npm run test:adapter
 
 # 5. Link globally (optional, for testing `opencli` command)
 npm link
@@ -129,7 +130,8 @@ chore: bump vitest to v4
 3. Run the checks:
    ```bash
    npx tsc --noEmit           # Type check
-   npx vitest run src/        # Unit tests
+   npm test                   # Core unit tests
+   npm run test:adapter       # Focused adapter tests (if adapter logic changed)
    opencli validate           # YAML validation (if applicable)
    ```
 4. Commit using conventional commit format

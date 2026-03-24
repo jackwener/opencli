@@ -45,6 +45,36 @@ cli({
       await fs.promises.rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('falls back to filesystem discovery when the manifest is invalid', async () => {
+    const tempBuildRoot = await fs.promises.mkdtemp(path.join('/tmp', 'opencli-manifest-fallback-'));
+    const distDir = path.join(tempBuildRoot, 'dist');
+    const siteDir = path.join(distDir, 'fallback-site');
+    const commandPath = path.join(siteDir, 'hello.ts');
+    const manifestPath = path.join(tempBuildRoot, 'cli-manifest.json');
+
+    try {
+      await fs.promises.mkdir(siteDir, { recursive: true });
+      await fs.promises.writeFile(manifestPath, '{ invalid json');
+      await fs.promises.writeFile(commandPath, `
+import { cli, Strategy } from '${path.join(process.cwd(), 'src', 'registry.ts')}';
+cli({
+  site: 'fallback-site',
+  name: 'hello',
+  description: 'hello command',
+  strategy: Strategy.PUBLIC,
+  browser: false,
+  func: async () => [{ ok: true }],
+});
+`);
+
+      await discoverClis(distDir);
+
+      expect(getRegistry().get('fallback-site/hello')).toBeDefined();
+    } finally {
+      await fs.promises.rm(tempBuildRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('discoverPlugins', () => {

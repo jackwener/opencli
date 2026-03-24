@@ -24,15 +24,18 @@ export function generateInterceptorJs(
   const arr = opts.arrayName ?? '__opencli_intercepted';
   const guard = opts.patchGuard ?? '__opencli_interceptor_patched';
 
+  // Store the current pattern in a separate global so it can be updated
+  // without re-patching fetch/XHR (the patchGuard only prevents double-patching).
+  const patternVar = `${guard}_pattern`;
+
   return `
     () => {
       window.${arr} = window.${arr} || [];
       window.${arr}_errors = window.${arr}_errors || [];
-      const __pattern = ${patternExpr};
+      window.${patternVar} = ${patternExpr};
+      const __checkMatch = (url) => window.${patternVar} && url.includes(window.${patternVar});
 
       if (!window.${guard}) {
-        const __checkMatch = (url) => __pattern && url.includes(__pattern);
-
         // ── Patch fetch ──
         const __origFetch = window.fetch;
         window.fetch = async function(...args) {

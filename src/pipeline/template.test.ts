@@ -66,6 +66,9 @@ describe('evalExpr', () => {
   it('evaluates method calls on values', () => {
     expect(evalExpr("args.username.startsWith('@') ? args.username : '@' + args.username", { args: { username: 'alice' } })).toBe('@alice');
   });
+  it('rejects constructor-based sandbox escapes', () => {
+    expect(evalExpr("args['cons' + 'tructor']['constructor']('return process')()", { args: {} })).toBeUndefined();
+  });
   it('applies join filter', () => {
     expect(evalExpr('item.tags | join(,)', { item: { tags: ['a', 'b', 'c'] } })).toBe('a,b,c');
   });

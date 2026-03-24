@@ -13,7 +13,7 @@ import { type CliCommand, type InternalCliCommand, type Arg, Strategy, getRegist
 import type { IPage } from './types.js';
 import { pathToFileURL } from 'node:url';
 import { executePipeline } from './pipeline/index.js';
-import { AdapterLoadError } from './errors.js';
+import { AdapterLoadError, ArgumentError, CommandExecutionError, getErrorMessage } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
 import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMMAND_TIMEOUT } from './runtime.js';
 
@@ -21,9 +21,6 @@ import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMM
 const _loadedModules = new Set<string>();
 type CommandArgs = Record<string, unknown>;
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * Validates and coerces arguments based on the command's Arg definitions.
@@ -36,7 +33,10 @@ export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): Comm
     
     // 1. Check required
     if (argDef.required && (val === undefined || val === null || val === '')) {
-      throw new Error(`Argument "${argDef.name}" is required.\n${argDef.help ? `Hint: ${argDef.help}` : ''}`);
+      throw new ArgumentError(
+        `Argument "${argDef.name}" is required.`,
+        argDef.help ?? `Provide a value for --${argDef.name}`,
+      );
     }
 
     if (val !== undefined && val !== null) {
@@ -44,7 +44,7 @@ export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): Comm
       if (argDef.type === 'int' || argDef.type === 'number') {
         const num = Number(val);
         if (Number.isNaN(num)) {
-          throw new Error(`Argument "${argDef.name}" must be a valid number. Received: "${val}"`);
+          throw new ArgumentError(`Argument "${argDef.name}" must be a valid number. Received: "${val}"`);
         }
         result[argDef.name] = num;
       } else if (argDef.type === 'boolean' || argDef.type === 'bool') {
@@ -52,7 +52,7 @@ export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): Comm
           const lower = val.toLowerCase();
           if (lower === 'true' || lower === '1') result[argDef.name] = true;
           else if (lower === 'false' || lower === '0') result[argDef.name] = false;
-          else throw new Error(`Argument "${argDef.name}" must be a boolean (true/false). Received: "${val}"`);
+          else throw new ArgumentError(`Argument "${argDef.name}" must be a boolean (true/false). Received: "${val}"`);
         } else {
           result[argDef.name] = Boolean(val);
         }
@@ -62,7 +62,7 @@ export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): Comm
       const coercedVal = result[argDef.name];
       if (argDef.choices && argDef.choices.length > 0) {
         if (!argDef.choices.map(String).includes(String(coercedVal))) {
-          throw new Error(`Argument "${argDef.name}" must be one of: ${argDef.choices.join(', ')}. Received: "${coercedVal}"`);
+          throw new ArgumentError(`Argument "${argDef.name}" must be one of: ${argDef.choices.join(', ')}. Received: "${coercedVal}"`);
         }
       }
     } else if (argDef.default !== undefined) {
@@ -98,13 +98,19 @@ async function runCommand(
     }
     // After loading, the module's cli() call will have updated the registry.
     const updated = getRegistry().get(fullName(cmd));
-    if (updated?.func) return updated.func(page!, kwargs, debug);
+    if (updated?.func) {
+      if (!page) throw new CommandExecutionError(`Command ${fullName(cmd)} requires a browser session but none was provided`);
+      return updated.func(page, kwargs, debug);
+    }
     if (updated?.pipeline) return executePipeline(page, updated.pipeline, { args: kwargs, debug });
   }
 
-  if (cmd.func) return cmd.func(page!, kwargs, debug);
+  if (cmd.func) return cmd.func(page as IPage, kwargs, debug);
   if (cmd.pipeline) return executePipeline(page, cmd.pipeline, { args: kwargs, debug });
-  throw new Error(`Command ${fullName(cmd)} has no func or pipeline`);
+  throw new CommandExecutionError(
+    `Command ${fullName(cmd)} has no func or pipeline`,
+    'This is likely a bug in the adapter definition. Please report this issue.',
+  );
 }
 
 /**
@@ -140,7 +146,8 @@ export async function executeCommand(
   try {
     kwargs = coerceAndValidateArgs(cmd.args, rawKwargs);
   } catch (err) {
-    throw new Error(`[Argument Validation Error]\n${getErrorMessage(err)}`);
+    if (err instanceof ArgumentError) throw err;
+    throw new ArgumentError(getErrorMessage(err));
   }
 
   if (shouldUseBrowserSession(cmd)) {
@@ -150,7 +157,9 @@ export async function executeCommand(
       // Each adapter controls this via `navigateBefore` (see CliCommand docs).
       const preNavUrl = resolvePreNav(cmd);
       if (preNavUrl) {
-        try { await page.goto(preNavUrl); await page.wait(2); } catch {}
+        try { await page.goto(preNavUrl); await page.wait(2); } catch (err) {
+          if (debug) console.error(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
+        }
       }
       return runWithTimeout(runCommand(cmd, page, kwargs, debug), {
         timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,

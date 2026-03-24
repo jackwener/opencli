@@ -12,6 +12,7 @@ import { WebSocket, type RawData } from 'ws';
 import type { BrowserCookie, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
 import { wrapForEval } from './utils.js';
 import { generateSnapshotJs, scrollToRefJs, getFormStateJs } from './dom-snapshot.js';
+import { generateStealthJs } from './stealth.js';
 import {
   clickJs,
   typeTextJs,
@@ -50,6 +51,8 @@ export class CDPBridge {
   private _eventListeners = new Map<string, Set<(params: unknown) => void>>();
 
   async connect(opts?: { timeout?: number; workspace?: string }): Promise<IPage> {
+    if (this._ws) throw new Error('CDPBridge is already connected. Call close() before reconnecting.');
+
     const endpoint = process.env.OPENCLI_CDP_ENDPOINT;
     if (!endpoint) throw new Error('OPENCLI_CDP_ENDPOINT is not set');
 
@@ -71,9 +74,16 @@ export class CDPBridge {
       const timeoutMs = (opts?.timeout ?? 10) * 1000; // opts.timeout is in seconds
       const timeout = setTimeout(() => reject(new Error('CDP connect timeout')), timeoutMs);
 
-      ws.on('open', () => {
+      ws.on('open', async () => {
         clearTimeout(timeout);
         this._ws = ws;
+        // Register stealth script to run before any page JS on every navigation.
+        try {
+          await this.send('Page.enable');
+          await this.send('Page.addScriptToEvaluateOnNewDocument', { source: generateStealthJs() });
+        } catch {
+          // Non-fatal: stealth is best-effort
+        }
         resolve(new CDPPage(this));
       });
 
@@ -169,13 +179,17 @@ export class CDPBridge {
 }
 
 class CDPPage implements IPage {
+  private _pageEnabled = false;
   constructor(private bridge: CDPBridge) {}
 
   /** Navigate with proper load event waiting (P1 fix #3) */
   async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
-    await this.bridge.send('Page.enable');
+    if (!this._pageEnabled) {
+      await this.bridge.send('Page.enable');
+      this._pageEnabled = true;
+    }
     const loadPromise = this.bridge.waitForEvent('Page.loadEventFired', 30_000)
-      .catch(() => {}); // Don't fail if event times out
+      .catch(() => {}); // Don't fail if load event times out — page may be an SPA
     await this.bridge.send('Page.navigate', { url });
     await loadPromise;
     // Smart settle: use DOM stability detection instead of fixed sleep.

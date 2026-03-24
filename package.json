@@ -1,6 +1,6 @@
 {
   "name": "@jackwener/opencli",
-  "version": "1.3.1",
+  "version": "1.3.3",
   "files": [
     "dist/",
     "extension/dist/",
@@ -37,6 +37,7 @@
     "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "test": "vitest run --project unit",
+    "test:adapter": "vitest run --project adapter",
     "test:all": "vitest run",
     "test:e2e": "vitest run --project e2e",
     "docs:dev": "vitepress dev docs",
@@ -57,7 +58,6 @@
     "url": "git+https://github.com/jackwener/opencli.git"
   },
   "dependencies": {
-    "@types/turndown": "^5.0.6",
     "chalk": "^5.3.0",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
@@ -68,6 +68,7 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.10",
+    "@types/turndown": "^5.0.6",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",

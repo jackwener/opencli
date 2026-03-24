@@ -2,6 +2,8 @@
  * Pipeline template engine: ${{ ... }} expression rendering.
  */
 
+import vm from 'node:vm';
+
 export interface RenderContext {
   args?: Record<string, unknown>;
   data?: unknown;
@@ -186,58 +188,61 @@ export function resolvePath(pathStr: string, ctx: RenderContext): unknown {
 
 /**
  * Evaluate arbitrary JS expressions as a last-resort fallback.
- *
- * ⚠️  SECURITY NOTE: Uses `new Function()` to execute the expression.
- * This is acceptable here because:
- *   1. YAML adapters are authored by trusted repo contributors only.
- *   2. The expression runs in the same Node.js process (no sandbox).
- *   3. Only a curated set of globals is exposed (no require/import/process/fs).
- * If opencli ever loads untrusted third-party adapters, this MUST be replaced
- * with a proper sandboxed evaluator.
+ * Runs inside a `node:vm` sandbox with dynamic code generation disabled.
  */
+const FORBIDDEN_EXPR_PATTERNS = /\b(constructor|__proto__|prototype|globalThis|process|require|import|eval)\b/;
+
+/**
+ * Deep-copy plain data to sever prototype chains, preventing sandbox escape
+ * via `args.constructor.constructor('return process')()` etc.
+ */
+function sanitizeContext(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object' && typeof obj !== 'function') return obj;
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch {
+    return {};
+  }
+}
+
 function evalJsExpr(expr: string, ctx: RenderContext): unknown {
   // Guard against absurdly long expressions that could indicate injection.
   if (expr.length > 2000) return undefined;
 
-  const args = ctx.args ?? {};
-  const item = ctx.item ?? {};
-  const data = ctx.data;
+  // Block obvious sandbox escape attempts.
+  if (FORBIDDEN_EXPR_PATTERNS.test(expr)) return undefined;
+
+  const args = sanitizeContext(ctx.args ?? {});
+  const item = sanitizeContext(ctx.item ?? {});
+  const data = sanitizeContext(ctx.data);
   const index = ctx.index ?? 0;
 
   try {
-    const fn = new Function(
-      'args',
-      'item',
-      'data',
-      'index',
-      'encodeURIComponent',
-      'decodeURIComponent',
-      'JSON',
-      'Math',
-      'Number',
-      'String',
-      'Boolean',
-      'Array',
-      'Object',
-      'Date',
-      `"use strict"; return (${expr});`,
-    );
-
-    return fn(
-      args,
-      item,
-      data,
-      index,
-      encodeURIComponent,
-      decodeURIComponent,
-      JSON,
-      Math,
-      Number,
-      String,
-      Boolean,
-      Array,
-      Object,
-      Date,
+    return vm.runInNewContext(
+      `(${expr})`,
+      {
+        args,
+        item,
+        data,
+        index,
+        encodeURIComponent,
+        decodeURIComponent,
+        JSON,
+        Math,
+        Number,
+        String,
+        Boolean,
+        Array,
+        Date,
+      },
+      {
+        timeout: 50,
+        contextCodeGeneration: {
+          strings: false,
+          wasm: false,
+        },
+      },
     );
   } catch {
     return undefined;

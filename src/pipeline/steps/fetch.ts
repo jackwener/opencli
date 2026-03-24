@@ -72,10 +72,11 @@ async function fetchBatchInBrowser(
 ): Promise<unknown[]> {
   const headersJs = JSON.stringify(headers);
   const urlsJs = JSON.stringify(urls);
+  const methodJs = JSON.stringify(method);
   return (await page.evaluate(`
     async () => {
       const urls = ${urlsJs};
-      const method = "${method}";
+      const method = ${methodJs};
       const headers = ${headersJs};
       const concurrency = ${concurrency};
 

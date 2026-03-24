@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import type { IPage } from '../types.js';
 import { Page } from './page.js';
 import { isDaemonRunning, isExtensionConnected } from './daemon-client.js';
+import { DEFAULT_DAEMON_PORT } from '../constants.js';
 
 const DAEMON_SPAWN_TIMEOUT = 10000; // 10s to wait for daemon + extension
 
@@ -112,7 +113,7 @@ export class BrowserBridge {
     throw new Error(
       'Failed to start opencli daemon. Try running manually:\n' +
       `  node ${daemonPath}\n` +
-      'Make sure port 19825 is available.',
+      `Make sure port ${DEFAULT_DAEMON_PORT} is available.`,
     );
   }
 }

@@ -397,10 +397,9 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
     const stop = () => { stopped = true; };
 
     const { promise: enterPromise, cleanup: cleanupEnter } = waitForEnter();
-    const enterRace = enterPromise.then(stop);
+    enterPromise.then(stop);
     const timeoutPromise = new Promise<void>(r => setTimeout(() => {
       stop();
-      cleanupEnter(); // close readline to prevent process from hanging
       r();
     }, timeoutMs));
 
@@ -428,6 +427,7 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
     }, pollMs);
 
     await Promise.race([enterPromise, timeoutPromise]);
+    cleanupEnter(); // Always clean up readline to prevent process from hanging
     clearInterval(pollInterval);
 
     // Final drain from all known tabs
