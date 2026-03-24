@@ -66,12 +66,12 @@ export async function discoverClis(...dirs: string[]): Promise<void> {
     const manifestPath = path.resolve(dir, '..', 'cli-manifest.json');
     try {
       await fs.promises.access(manifestPath);
-      await loadFromManifest(manifestPath, dir);
-      continue; // Skip filesystem scan for this directory
+      const loaded = await loadFromManifest(manifestPath, dir);
+      if (loaded) continue; // Skip filesystem scan only when manifest is usable
     } catch {
-      // Fallback: runtime filesystem scan (development)
-      await discoverClisFromFs(dir);
+      // Fall through to filesystem scan
     }
+    await discoverClisFromFs(dir);
   }
 }
 
@@ -80,7 +80,7 @@ export async function discoverClis(...dirs: string[]): Promise<void> {
  * YAML pipelines are inlined — zero YAML parsing at runtime.
  * TS modules are deferred — loaded lazily on first execution.
  */
-async function loadFromManifest(manifestPath: string, clisDir: string): Promise<void> {
+async function loadFromManifest(manifestPath: string, clisDir: string): Promise<boolean> {
   try {
     const raw = await fs.promises.readFile(manifestPath, 'utf-8');
     const manifest = JSON.parse(raw) as ManifestEntry[];
@@ -126,8 +126,10 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         registerCommand(cmd);
       }
     }
+    return true;
   } catch (err) {
     log.warn(`Failed to load manifest ${manifestPath}: ${getErrorMessage(err)}`);
+    return false;
   }
 }
 

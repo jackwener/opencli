@@ -17,6 +17,7 @@ export interface DownloadOptions {
   headers?: Record<string, string>;
   timeout?: number;
   onProgress?: (received: number, total: number) => void;
+  maxRedirects?: number;
 }
 
 export interface YtdlpOptions {
@@ -92,8 +93,9 @@ export async function httpDownload(
   url: string,
   destPath: string,
   options: DownloadOptions = {},
+  redirectCount = 0,
 ): Promise<{ success: boolean; size: number; error?: string }> {
-  const { cookies, headers = {}, timeout = 30000, onProgress } = options;
+  const { cookies, headers = {}, timeout = 30000, onProgress, maxRedirects = 10 } = options;
 
   return new Promise((resolve) => {
     const parsedUrl = new URL(url);
@@ -120,7 +122,16 @@ export async function httpDownload(
       if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         file.close();
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        httpDownload(resolveRedirectUrl(url, response.headers.location), destPath, options).then(resolve);
+        if (redirectCount >= maxRedirects) {
+          resolve({ success: false, size: 0, error: `Too many redirects (> ${maxRedirects})` });
+          return;
+        }
+        httpDownload(
+          resolveRedirectUrl(url, response.headers.location),
+          destPath,
+          options,
+          redirectCount + 1,
+        ).then(resolve);
         return;
       }
 
