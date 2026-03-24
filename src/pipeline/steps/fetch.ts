@@ -2,6 +2,8 @@
  * Pipeline step: fetch — HTTP API requests.
  */
 
+import { CliError } from '../../errors.js';
+import { log } from '../../logger.js';
 import type { IPage } from '../../types.js';
 import { render } from '../template.js';
 
@@ -29,7 +31,7 @@ async function fetchSingle(
   if (page === null) {
     const resp = await fetch(finalUrl, { method: method.toUpperCase(), headers: renderedHeaders });
     if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status} ${resp.statusText} from ${finalUrl}`);
+      throw new CliError('FETCH_ERROR', `HTTP ${resp.status} ${resp.statusText} from ${finalUrl}`);
     }
     return resp.json();
   }
@@ -37,17 +39,23 @@ async function fetchSingle(
   const headersJs = JSON.stringify(renderedHeaders);
   const urlJs = JSON.stringify(finalUrl);
   const methodJs = JSON.stringify(method.toUpperCase());
-  return page.evaluate(`
+  // Return error status instead of throwing inside evaluate to avoid CDP wrapper rewriting the message
+  const result = await page.evaluate(`
     async () => {
       const resp = await fetch(${urlJs}, {
         method: ${methodJs}, headers: ${headersJs}, credentials: "include"
       });
       if (!resp.ok) {
-        throw new Error('HTTP ' + resp.status + ' ' + resp.statusText + ' from ' + ${urlJs});
+        return { __fetchError: true, status: resp.status, statusText: resp.statusText, url: ${urlJs} };
       }
       return await resp.json();
     }
   `);
+  if (result && typeof result === 'object' && '__fetchError' in result) {
+    const { status, statusText, url: errorUrl } = result as { status: number; statusText: string; url: string };
+    throw new CliError('FETCH_ERROR', `HTTP ${status} ${statusText} from ${errorUrl}`);
+  }
+  return result;
 }
 
 /**
@@ -124,7 +132,14 @@ export async function stepFetch(page: IPage | null, params: unknown, data: unkno
 
     // BATCH IPC: if browser is available, batch all fetches into a single evaluate() call
     if (page !== null) {
-      return fetchBatchInBrowser(page, urls, method.toUpperCase(), renderedHeaders, concurrency);
+      const results = await fetchBatchInBrowser(page, urls, method.toUpperCase(), renderedHeaders, concurrency);
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        if (r && typeof r === 'object' && 'error' in r) {
+          log.warn(`Batch fetch failed for ${urls[i]}: ${(r as { error: string }).error}`);
+        }
+      }
+      return results;
     }
 
     // Non-browser: use concurrent pool (already optimized)
@@ -133,7 +148,9 @@ export async function stepFetch(page: IPage | null, params: unknown, data: unkno
       try {
         return await fetchSingle(null, itemUrl, method, queryParams, headers, args, data);
       } catch (error) {
-        return { error: error instanceof Error ? error.message : String(error) };
+        const message = error instanceof Error ? error.message : String(error);
+        log.warn(`Batch fetch failed for ${itemUrl}: ${message}`);
+        return { error: message };
       }
     });
   }
