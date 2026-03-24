@@ -444,6 +444,85 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       await startServe({ port: parseInt(opts.port) });
     });
 
+  // ── Built-in: channel ─────────────────────────────────────────────────────
+  const channelCmd = program.command('channel').description('Platform event notification channel');
+
+  channelCmd
+    .command('start')
+    .description('Start the MCP channel server (launched by Claude Code)')
+    .action(async () => {
+      const { startChannelServer } = await import('./channel/server.js');
+      await startChannelServer();
+    });
+
+  channelCmd
+    .command('status')
+    .description('Show channel server status')
+    .action(async () => {
+      const { readLockInfo } = await import('./channel/lock.js');
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const os = await import('node:os');
+
+      const lock = readLockInfo();
+      if (!lock) {
+        console.log('Channel: not running');
+        return;
+      }
+
+      const statePath = path.join(os.homedir(), '.opencli', 'channel-state.json');
+      try {
+        const state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+        const uptime = Math.floor(state.uptime / 60);
+        console.log(`Channel Status:`);
+        console.log(`  Lock: active (PID ${lock.pid}, uptime: ${uptime}m)`);
+        console.log(`  Sources:`);
+        for (const s of state.sources ?? []) {
+          const ago = s.lastPoll ? `${Math.floor((Date.now() - s.lastPoll) / 1000)}s ago` : 'never';
+          console.log(`    ${s.source}  last: ${ago}  errors: ${s.errors}`);
+        }
+        console.log(`  Queue: ${state.pendingEvents} events pending`);
+      } catch {
+        console.log(`Channel: running (PID ${lock.pid}) but no state available`);
+      }
+    });
+
+  channelCmd
+    .command('stop')
+    .description('Stop the running channel server')
+    .action(async () => {
+      const { readLockInfo } = await import('./channel/lock.js');
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const os = await import('node:os');
+
+      const lock = readLockInfo();
+      if (!lock) {
+        console.log('Channel: not running');
+        return;
+      }
+      try {
+        process.kill(lock.pid, 'SIGTERM');
+        console.log(`Sent SIGTERM to channel server (PID ${lock.pid})`);
+
+        // Wait up to 3 seconds for graceful shutdown
+        const deadline = Date.now() + 3000;
+        while (Date.now() < deadline) {
+          await new Promise(r => setTimeout(r, 200));
+          try { process.kill(lock.pid, 0); } catch {
+            console.log('Channel server stopped.');
+            // Clean up lock file if still present
+            const lockPath = path.join(os.homedir(), '.opencli', 'channel.lock');
+            try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+            return;
+          }
+        }
+        console.log('Channel server did not exit within 3s. You may need to kill it manually.');
+      } catch (err) {
+        console.error(`Failed to stop: ${err instanceof Error ? err.message : err}`);
+      }
+    });
+
   // ── Dynamic adapter commands ──────────────────────────────────────────────
 
   const siteGroups = new Map<string, Command>();
