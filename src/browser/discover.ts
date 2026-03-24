@@ -6,8 +6,7 @@
  */
 
 import { DEFAULT_DAEMON_PORT } from '../constants.js';
-import { readToken, TOKEN_HEADER } from '../token.js';
-import { isDaemonRunning } from './daemon-client.js';
+import { isDaemonRunning, authHeaders } from './daemon-client.js';
 
 export { isDaemonRunning };
 
@@ -21,13 +20,10 @@ export async function checkDaemonStatus(opts?: { timeout?: number }): Promise<{
 }> {
   try {
     const port = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
-    const headers: Record<string, string> = { 'X-OpenCLI': '1' };
-    const token = readToken();
-    if (token) headers[TOKEN_HEADER] = token;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), opts?.timeout ?? 2000);
     const res = await fetch(`http://127.0.0.1:${port}/status`, {
-      headers,
+      headers: authHeaders(),
       signal: controller.signal,
     });
     const data = await res.json() as { ok: boolean; extensionConnected: boolean; extensionVersion?: string };

@@ -23,7 +23,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { DEFAULT_DAEMON_PORT } from './constants.js';
-import { getOrCreateToken, TOKEN_HEADER } from './token.js';
+import { getOrCreateToken, verifyToken, TOKEN_HEADER } from './token.js';
 
 const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 const DAEMON_TOKEN = getOrCreateToken();
@@ -118,7 +118,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // This blocks local processes that don't have filesystem access to the
   // token file, even if they know the port and X-OpenCLI header.
   const clientToken = req.headers[TOKEN_HEADER] as string | undefined;
-  if (clientToken !== DAEMON_TOKEN) {
+  if (!verifyToken(clientToken, DAEMON_TOKEN)) {
     jsonResponse(res, 401, { ok: false, error: 'Unauthorized: invalid or missing token' });
     return;
   }
@@ -213,7 +213,7 @@ const wss = new WebSocketServer({
     const tokenFromQuery = url.searchParams.get('token');
     const tokenFromProtocol = req.headers['sec-websocket-protocol'] as string | undefined;
     const clientToken = tokenFromQuery ?? tokenFromProtocol;
-    if (clientToken !== DAEMON_TOKEN) return false;
+    if (!verifyToken(clientToken, DAEMON_TOKEN)) return false;
 
     return true;
   },
