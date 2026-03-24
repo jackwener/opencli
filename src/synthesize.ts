@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import yaml from 'js-yaml';
 import { VOLATILE_PARAMS, SEARCH_PARAMS, LIMIT_PARAMS, PAGINATION_PARAMS } from './constants.js';
-import type { ExploreAuthSummary, ExploreEndpointArtifact, ExploreManifest } from './explore.js';
+import type { ExploreAuthSummary, ExploreEndpointArtifact, ExploreManifest } from './explore/index.js';
 
 /** Renamed aliases for backward compatibility with local references */
 const SEARCH_PARAM_NAMES = SEARCH_PARAMS;

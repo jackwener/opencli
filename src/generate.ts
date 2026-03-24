@@ -8,7 +8,7 @@
  * automatically downgrades and retries.
  */
 
-import { exploreUrl } from './explore.js';
+import { exploreUrl } from './explore/index.js';
 import type { IBrowserFactory } from './runtime.js';
 import { synthesizeFromExplore, type SynthesizeCandidateSummary, type SynthesizeResult } from './synthesize.js';
 

@@ -134,7 +134,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .option('--auto', 'Enable interactive fuzzing')
     .option('--click <labels>', 'Comma-separated labels to click before fuzzing')
     .action(async (url, opts) => {
-      const { exploreUrl, renderExploreSummary } = await import('./explore.js');
+      const { exploreUrl, renderExploreSummary } = await import('./explore/index.js');
       const clickLabels = opts.click
         ? opts.click.split(',').map((s: string) => s.trim())
         : undefined;
