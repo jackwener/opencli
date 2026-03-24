@@ -11,7 +11,7 @@ const config: PollingSourceConfig = {
 
 describe('PollingSource', () => {
   let source: PollingSource
-  let executeFn: ReturnType<typeof vi.fn>
+  let executeFn: ReturnType<typeof vi.fn<() => Promise<unknown>>>
   let events: ChannelEvent[]
 
   beforeEach(() => {
