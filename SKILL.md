@@ -47,8 +47,8 @@ Browser commands require:
 
 OpenCLI platform command skill is located at:
 
-- `skills/opencli-skill/SKILL.md`
-- `skills/opencli-skill/references/commands/*.md`
+- `skills/opencli-platform-router/SKILL.md`
+- `skills/opencli-platform-router/references/commands/*.md`
 
 Use this skill when an agent needs per-platform command usage + args reference.
 
