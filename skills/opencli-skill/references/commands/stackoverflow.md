@@ -3,26 +3,26 @@
 ## Commands
 
 ### bounties
-- 用途：Active bounties on Stack Overflow
-- 参数：
-  - `limit`（可选）：类型 int；默认值 10；Max number of results
-- 用法：`opencli stackoverflow bounties [options] -f json`
+- Purpose: Active bounties on Stack Overflow
+- Args:
+  - `limit`(optional): type: int; default: 10; Max number of results
+- Usage: `opencli stackoverflow bounties [options] -f json`
 
 ### hot
-- 用途：Hot Stack Overflow questions
-- 参数：
-  - `limit`（可选）：类型 int；默认值 10；Max number of results
-- 用法：`opencli stackoverflow hot [options] -f json`
+- Purpose: Hot Stack Overflow questions
+- Args:
+  - `limit`(optional): type: int; default: 10; Max number of results
+- Usage: `opencli stackoverflow hot [options] -f json`
 
 ### search
-- 用途：Search Stack Overflow questions
-- 参数：
-  - `query`（必填）：类型 string；Search query
-  - `limit`（可选）：类型 int；默认值 10；Max number of results
-- 用法：`opencli stackoverflow search [options] -f json`
+- Purpose: Search Stack Overflow questions
+- Args:
+  - `query`(required): type: string; Search query
+  - `limit`(optional): type: int; default: 10; Max number of results
+- Usage: `opencli stackoverflow search [options] -f json`
 
 ### unanswered
-- 用途：Top voted unanswered questions on Stack Overflow
-- 参数：
-  - `limit`（可选）：类型 int；默认值 10；Max number of results
-- 用法：`opencli stackoverflow unanswered [options] -f json`
+- Purpose: Top voted unanswered questions on Stack Overflow
+- Args:
+  - `limit`(optional): type: int; default: 10; Max number of results
+- Usage: `opencli stackoverflow unanswered [options] -f json`

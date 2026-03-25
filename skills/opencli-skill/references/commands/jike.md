@@ -3,66 +3,66 @@
 ## Commands
 
 ### comment
-- 用途：评论即刻帖子
-- 参数：
-  - `id`（必填）：类型 string；帖子 ID
-  - `text`（必填）：类型 string；评论内容
-- 用法：`opencli jike comment [options] -f json`
+- Purpose: Comment on a Jike post
+- Args:
+  - `id`(required): type: string; Post ID
+  - `text`(required): type: string; Comment content
+- Usage: `opencli jike comment [options] -f json`
 
 ### create
-- 用途：发布即刻动态
-- 参数：
-  - `text`（必填）：类型 string；动态正文内容
-- 用法：`opencli jike create [options] -f json`
+- Purpose: Create a Jike post
+- Args:
+  - `text`(required): type: string; Post body content
+- Usage: `opencli jike create [options] -f json`
 
 ### feed
-- 用途：即刻首页动态流
-- 参数：
-  - `limit`（可选）：类型 int；默认值 20
-- 用法：`opencli jike feed [options] -f json`
+- Purpose: Jike home feed
+- Args:
+  - `limit`(optional): type: int; default: 20
+- Usage: `opencli jike feed [options] -f json`
 
 ### like
-- 用途：点赞即刻帖子
-- 参数：
-  - `id`（必填）：类型 string；帖子 ID
-- 用法：`opencli jike like [options] -f json`
+- Purpose: Like a Jike post
+- Args:
+  - `id`(required): type: string; Post ID
+- Usage: `opencli jike like [options] -f json`
 
 ### notifications
-- 用途：即刻通知
-- 参数：
-  - `limit`（可选）：类型 int；默认值 20
-- 用法：`opencli jike notifications [options] -f json`
+- Purpose: Jike notifications
+- Args:
+  - `limit`(optional): type: int; default: 20
+- Usage: `opencli jike notifications [options] -f json`
 
 ### post
-- 用途：即刻帖子详情及评论
-- 参数：
-  - `id`（必填）：类型 string；Post ID (from post URL)
-- 用法：`opencli jike post [options] -f json`
+- Purpose: Jike post detail with comments
+- Args:
+  - `id`(required): type: string; Post ID (from post URL)
+- Usage: `opencli jike post [options] -f json`
 
 ### repost
-- 用途：转发即刻帖子
-- 参数：
-  - `id`（必填）：类型 string；帖子 ID
-  - `text`（可选）：类型 string；转发附言（可选）
-- 用法：`opencli jike repost [options] -f json`
+- Purpose: Repost a Jike post
+- Args:
+  - `id`(required): type: string; Post ID
+  - `text`(optional): type: string; Repost message (optional)
+- Usage: `opencli jike repost [options] -f json`
 
 ### search
-- 用途：搜索即刻帖子
-- 参数：
-  - `query`（必填）：类型 string
-  - `limit`（可选）：类型 int；默认值 20
-- 用法：`opencli jike search [options] -f json`
+- Purpose: Search Jike posts
+- Args:
+  - `query`(required): type: string
+  - `limit`(optional): type: int; default: 20
+- Usage: `opencli jike search [options] -f json`
 
 ### topic
-- 用途：即刻话题/圈子帖子
-- 参数：
-  - `id`（必填）：类型 string；Topic ID (from topic URL, e.g. 553870e8e4b0cafb0a1bef68)
-  - `limit`（可选）：类型 int；默认值 20；Number of posts
-- 用法：`opencli jike topic [options] -f json`
+- Purpose: Jike topic/circle posts
+- Args:
+  - `id`(required): type: string; Topic ID (from topic URL, e.g. 553870e8e4b0cafb0a1bef68)
+  - `limit`(optional): type: int; default: 20; Number of posts
+- Usage: `opencli jike topic [options] -f json`
 
 ### user
-- 用途：即刻用户动态
-- 参数：
-  - `username`（必填）：类型 string；Username from profile URL (e.g. wenhao1996)
-  - `limit`（可选）：类型 int；默认值 20；Number of posts
-- 用法：`opencli jike user [options] -f json`
+- Purpose: Jike user posts
+- Args:
+  - `username`(required): type: string; Username from profile URL (e.g. wenhao1996)
+  - `limit`(optional): type: int; default: 20; Number of posts
+- Usage: `opencli jike user [options] -f json`

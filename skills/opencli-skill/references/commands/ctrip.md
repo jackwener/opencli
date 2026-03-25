@@ -3,8 +3,8 @@
 ## Commands
 
 ### search
-- 用途：携程旅行搜索
-- 参数：
-  - `query`（必填）：Search keyword (city or attraction)
-  - `limit`（可选）：类型 int；默认值 15；Number of results
-- 用法：`opencli ctrip search [options] -f json`
+- Purpose: Ctrip travel search
+- Args:
+  - `query`(required): Search keyword (city or attraction)
+  - `limit`(optional): type: int; default: 15; Number of results
+- Usage: `opencli ctrip search [options] -f json`

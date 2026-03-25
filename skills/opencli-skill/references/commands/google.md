@@ -3,32 +3,32 @@
 ## Commands
 
 ### news
-- 用途：Get Google News headlines
-- 参数：
-  - `keyword`（可选）：Search query (omit for top stories)
-  - `limit`（可选）：类型 int；默认值 10；Number of results
-  - `lang`（可选）：默认值 'en'；Language short code (e.g. en, zh)
-  - `region`（可选）：默认值 'US'；Region code (e.g. US, CN)
-- 用法：`opencli google news [options] -f json`
+- Purpose: Get Google News headlines
+- Args:
+  - `keyword`(optional): Search query (omit for top stories)
+  - `limit`(optional): type: int; default: 10; Number of results
+  - `lang`(optional): default: 'en'; Language short code (e.g. en, zh)
+  - `region`(optional): default: 'US'; Region code (e.g. US, CN)
+- Usage: `opencli google news [options] -f json`
 
 ### search
-- 用途：Search Google
-- 参数：
-  - `keyword`（必填）：Search query
-  - `limit`（可选）：类型 int；默认值 10；Number of results (1-100)
-  - `lang`（可选）：默认值 'en'；Language short code (e.g. en, zh)
-- 用法：`opencli google search [options] -f json`
+- Purpose: Search Google
+- Args:
+  - `keyword`(required): Search query
+  - `limit`(optional): type: int; default: 10; Number of results (1-100)
+  - `lang`(optional): default: 'en'; Language short code (e.g. en, zh)
+- Usage: `opencli google search [options] -f json`
 
 ### suggest
-- 用途：Get Google search suggestions
-- 参数：
-  - `keyword`（必填）：Search query
-  - `lang`（可选）：默认值 'zh-CN'；Language code
-- 用法：`opencli google suggest [options] -f json`
+- Purpose: Get Google search suggestions
+- Args:
+  - `keyword`(required): Search query
+  - `lang`(optional): default: 'zh-CN'; Language code
+- Usage: `opencli google suggest [options] -f json`
 
 ### trends
-- 用途：Get Google Trends daily trending searches
-- 参数：
-  - `region`（可选）：默认值 'US'；Region code (e.g. US, CN, JP)
-  - `limit`（可选）：类型 int；默认值 20；Number of results
-- 用法：`opencli google trends [options] -f json`
+- Purpose: Get Google Trends daily trending searches
+- Args:
+  - `region`(optional): default: 'US'; Region code (e.g. US, CN, JP)
+  - `limit`(optional): type: int; default: 20; Number of results
+- Usage: `opencli google trends [options] -f json`
