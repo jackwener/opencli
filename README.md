@@ -226,7 +226,7 @@ OpenCLI supports downloading images, videos, and articles from supported platfor
 | **xiaohongshu** | Images, Videos | Downloads all media from a note |
 | **bilibili** | Videos | Requires `yt-dlp` installed |
 | **twitter** | Images, Videos | Downloads from user media tab or single tweet |
-| **pixiv** | Images | Downloads original-quality images (requires `Referer` header) |
+| **pixiv** | Images | Downloads original-quality illustrations, supports multi-page works |
 | **zhihu** | Articles (Markdown) | Exports articles with optional image download |
 | **weixin** | Articles (Markdown) | Exports WeChat Official Account articles |
 
