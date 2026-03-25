@@ -16,10 +16,25 @@ Start the Antigravity desktop app with the Chrome DevTools `remote-debugging-por
 
 > Depending on your installation, the executable might be named differently, e.g., `Antigravity` instead of `Electron`.
 
-Then set the target port:
+Then either set the target port globally:
 
 ```bash
 export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
+```
+
+Or pass it per command, which is usually better when you switch between multiple desktop apps or multiple CDP ports:
+
+```bash
+opencli antigravity status --cdp-endpoint http://127.0.0.1:9224
+opencli antigravity send "hello" --cdp-endpoint http://127.0.0.1:9224
+```
+
+If the endpoint exposes multiple inspectable windows, prefer the correct one per command:
+
+```bash
+opencli antigravity status \
+  --cdp-endpoint http://127.0.0.1:9224 \
+  --cdp-target antigravity
 ```
 
 ## Commands

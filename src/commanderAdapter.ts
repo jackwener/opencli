@@ -17,6 +17,7 @@ import { formatRegistryHelpText } from './serialization.js';
 import { render as renderOutput } from './output.js';
 import { executeCommand } from './execution.js';
 import { CliError, ERROR_ICONS, getErrorMessage } from './errors.js';
+import { extractBrowserEnvOverrides, withBrowserEnvOverrides } from './runtime.js';
 
 /**
  * Register a single CliCommand as a Commander subcommand.
@@ -43,6 +44,11 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
   subCmd
     .option('-f, --format <fmt>', 'Output format: table, json, yaml, md, csv', 'table')
     .option('-v, --verbose', 'Debug output', false);
+  if (cmd.browser) {
+    subCmd
+      .option('--cdp-endpoint <url>', 'Override the CDP endpoint for this command')
+      .option('--cdp-target <pattern>', 'Prefer a CDP target whose title or URL matches this pattern');
+  }
 
   subCmd.addHelpText('after', formatRegistryHelpText(cmd));
 
@@ -69,8 +75,8 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       const verbose = optionsRecord.verbose === true;
       const format = typeof optionsRecord.format === 'string' ? optionsRecord.format : 'table';
       if (verbose) process.env.OPENCLI_VERBOSE = '1';
-
-      const result = await executeCommand(cmd, kwargs, verbose);
+      const browserEnv = extractBrowserEnvOverrides(optionsRecord);
+      const result = await withBrowserEnvOverrides(browserEnv, async () => executeCommand(cmd, kwargs, verbose));
 
       if (verbose && (!result || (Array.isArray(result) && result.length === 0))) {
         console.error(chalk.yellow('[Verbose] Warning: Command returned an empty result.'));

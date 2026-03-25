@@ -2,12 +2,53 @@ import { BrowserBridge, CDPBridge } from './browser/index.js';
 import type { IPage } from './types.js';
 import { TimeoutError } from './errors.js';
 
+export type BrowserEnvOverrides = {
+  cdpEndpoint?: string;
+  cdpTarget?: string;
+};
+
 /**
  * Returns the appropriate browser factory based on environment config.
  * Uses CDPBridge when OPENCLI_CDP_ENDPOINT is set, otherwise BrowserBridge.
  */
 export function getBrowserFactory(): new () => IBrowserFactory {
   return (process.env.OPENCLI_CDP_ENDPOINT ? CDPBridge : BrowserBridge) as unknown as new () => IBrowserFactory;
+}
+
+export function extractBrowserEnvOverrides(options?: Record<string, unknown> | null): BrowserEnvOverrides {
+  const input = options ?? {};
+  return {
+    cdpEndpoint: readStringOption(input['cdp-endpoint'] ?? input.cdpEndpoint),
+    cdpTarget: readStringOption(input['cdp-target'] ?? input.cdpTarget),
+  };
+}
+
+export async function withBrowserEnvOverrides<T>(
+  overrides: BrowserEnvOverrides,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const pairs: Array<[key: 'OPENCLI_CDP_ENDPOINT' | 'OPENCLI_CDP_TARGET', value: string | undefined]> = [
+    ['OPENCLI_CDP_ENDPOINT', overrides.cdpEndpoint],
+    ['OPENCLI_CDP_TARGET', overrides.cdpTarget],
+  ];
+  const previous = new Map<string, string | undefined>();
+
+  for (const [key, value] of pairs) {
+    if (value === undefined) continue;
+    previous.set(key, process.env[key]);
+    process.env[key] = value;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of pairs) {
+      if (value === undefined) continue;
+      const prior = previous.get(key);
+      if (prior === undefined) delete process.env[key];
+      else process.env[key] = prior;
+    }
+  }
 }
 
 function parseEnvTimeout(envVar: string, fallback: number): number {
@@ -19,6 +60,12 @@ function parseEnvTimeout(envVar: string, fallback: number): number {
     return fallback;
   }
   return parsed;
+}
+
+function readStringOption(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 export const DEFAULT_BROWSER_CONNECT_TIMEOUT = parseEnvTimeout('OPENCLI_BROWSER_CONNECT_TIMEOUT', 30);

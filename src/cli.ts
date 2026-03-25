@@ -10,7 +10,7 @@ import chalk from 'chalk';
 import { type CliCommand, fullName, getRegistry, strategyLabel } from './registry.js';
 import { serializeCommand, formatArgSummary } from './serialization.js';
 import { render as renderOutput } from './output.js';
-import { getBrowserFactory, browserSession } from './runtime.js';
+import { extractBrowserEnvOverrides, getBrowserFactory, browserSession, withBrowserEnvOverrides } from './runtime.js';
 import { PKG_VERSION } from './version.js';
 import { printCompletionScript } from './completion.js';
 import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
@@ -133,22 +133,26 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .option('--wait <s>', '', '3')
     .option('--auto', 'Enable interactive fuzzing')
     .option('--click <labels>', 'Comma-separated labels to click before fuzzing')
+    .option('--cdp-endpoint <url>', 'Override the CDP endpoint for this command')
+    .option('--cdp-target <pattern>', 'Prefer a CDP target whose title or URL matches this pattern')
     .action(async (url, opts) => {
-      const { exploreUrl, renderExploreSummary } = await import('./explore.js');
-      const clickLabels = opts.click
-        ? opts.click.split(',').map((s: string) => s.trim())
-        : undefined;
-      const workspace = `explore:${inferHost(url, opts.site)}`;
-      const result = await exploreUrl(url, {
-        BrowserFactory: getBrowserFactory(),
-        site: opts.site,
-        goal: opts.goal,
-        waitSeconds: parseFloat(opts.wait),
-        auto: opts.auto,
-        clickLabels,
-        workspace,
+      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+        const { exploreUrl, renderExploreSummary } = await import('./explore.js');
+        const clickLabels = opts.click
+          ? opts.click.split(',').map((s: string) => s.trim())
+          : undefined;
+        const workspace = `explore:${inferHost(url, opts.site)}`;
+        const result = await exploreUrl(url, {
+          BrowserFactory: getBrowserFactory(),
+          site: opts.site,
+          goal: opts.goal,
+          waitSeconds: parseFloat(opts.wait),
+          auto: opts.auto,
+          clickLabels,
+          workspace,
+        });
+        console.log(renderExploreSummary(result));
       });
-      console.log(renderExploreSummary(result));
     });
 
   program
@@ -167,18 +171,22 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .argument('<url>')
     .option('--goal <text>')
     .option('--site <name>')
+    .option('--cdp-endpoint <url>', 'Override the CDP endpoint for this command')
+    .option('--cdp-target <pattern>', 'Prefer a CDP target whose title or URL matches this pattern')
     .action(async (url, opts) => {
-      const { generateCliFromUrl, renderGenerateSummary } = await import('./generate.js');
-      const workspace = `generate:${inferHost(url, opts.site)}`;
-      const r = await generateCliFromUrl({
-        url,
-        BrowserFactory: getBrowserFactory(),
-        goal: opts.goal,
-        site: opts.site,
-        workspace,
+      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+        const { generateCliFromUrl, renderGenerateSummary } = await import('./generate.js');
+        const workspace = `generate:${inferHost(url, opts.site)}`;
+        const r = await generateCliFromUrl({
+          url,
+          BrowserFactory: getBrowserFactory(),
+          goal: opts.goal,
+          site: opts.site,
+          workspace,
+        });
+        console.log(renderGenerateSummary(r));
+        process.exitCode = r.ok ? 0 : 1;
       });
-      console.log(renderGenerateSummary(r));
-      process.exitCode = r.ok ? 0 : 1;
     });
 
   // ── Built-in: record ─────────────────────────────────────────────────────
@@ -191,18 +199,22 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .option('--out <dir>', 'Output directory for candidates')
     .option('--poll <ms>', 'Poll interval in milliseconds', '2000')
     .option('--timeout <ms>', 'Auto-stop after N milliseconds (default: 60000)', '60000')
+    .option('--cdp-endpoint <url>', 'Override the CDP endpoint for this command')
+    .option('--cdp-target <pattern>', 'Prefer a CDP target whose title or URL matches this pattern')
     .action(async (url, opts) => {
-      const { recordSession, renderRecordSummary } = await import('./record.js');
-      const result = await recordSession({
-        BrowserFactory: getBrowserFactory(),
-        url,
-        site: opts.site,
-        outDir: opts.out,
-        pollMs: parseInt(opts.poll, 10),
-        timeoutMs: parseInt(opts.timeout, 10),
+      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+        const { recordSession, renderRecordSummary } = await import('./record.js');
+        const result = await recordSession({
+          BrowserFactory: getBrowserFactory(),
+          url,
+          site: opts.site,
+          outDir: opts.out,
+          pollMs: parseInt(opts.poll, 10),
+          timeoutMs: parseInt(opts.timeout, 10),
+        });
+        console.log(renderRecordSummary(result));
+        process.exitCode = result.candidateCount > 0 ? 0 : 1;
       });
-      console.log(renderRecordSummary(result));
-      process.exitCode = result.candidateCount > 0 ? 0 : 1;
     });
 
   program
@@ -210,18 +222,22 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .description('Strategy cascade: find simplest working strategy')
     .argument('<url>')
     .option('--site <name>')
+    .option('--cdp-endpoint <url>', 'Override the CDP endpoint for this command')
+    .option('--cdp-target <pattern>', 'Prefer a CDP target whose title or URL matches this pattern')
     .action(async (url, opts) => {
-      const { cascadeProbe, renderCascadeResult } = await import('./cascade.js');
-      const workspace = `cascade:${inferHost(url, opts.site)}`;
-      const result = await browserSession(getBrowserFactory(), async (page) => {
-        try {
-          const siteUrl = new URL(url);
-          await page.goto(`${siteUrl.protocol}//${siteUrl.host}`);
-          await page.wait(2);
-        } catch {}
-        return cascadeProbe(page, url);
-      }, { workspace });
-      console.log(renderCascadeResult(result));
+      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+        const { cascadeProbe, renderCascadeResult } = await import('./cascade.js');
+        const workspace = `cascade:${inferHost(url, opts.site)}`;
+        const result = await browserSession(getBrowserFactory(), async (page) => {
+          try {
+            const siteUrl = new URL(url);
+            await page.goto(`${siteUrl.protocol}//${siteUrl.host}`);
+            await page.wait(2);
+          } catch {}
+          return cascadeProbe(page, url);
+        }, { workspace });
+        console.log(renderCascadeResult(result));
+      });
     });
 
   // ── Built-in: doctor / completion ──────────────────────────────────────────
@@ -439,9 +455,13 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .command('serve')
     .description('Start Anthropic-compatible API proxy for Antigravity')
     .option('--port <port>', 'Server port (default: 8082)', '8082')
+    .option('--cdp-endpoint <url>', 'Override the CDP endpoint for this command')
+    .option('--cdp-target <pattern>', 'Prefer a CDP target whose title or URL matches this pattern')
     .action(async (opts) => {
-      const { startServe } = await import('./clis/antigravity/serve.js');
-      await startServe({ port: parseInt(opts.port) });
+      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+        const { startServe } = await import('./clis/antigravity/serve.js');
+        await startServe({ port: parseInt(opts.port) });
+      });
     });
 
   // ── Dynamic adapter commands ──────────────────────────────────────────────

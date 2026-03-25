@@ -12,14 +12,21 @@ The target Electron application MUST be launched with the remote-debugging-port 
 /Applications/Antigravity.app/Contents/MacOS/Electron --remote-debugging-port=9224
 \`\`\`
 
-The agent must configure the endpoint environment variable locally before invoking standard commands:
+The agent can either configure the endpoint environment variable locally once:
 \`\`\`bash
 export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
 \`\`\`
 
-If the endpoint exposes multiple inspectable targets, also set:
+Or pass it per command, which is better when switching between multiple apps:
+\`\`\`bash
+opencli antigravity status --cdp-endpoint http://127.0.0.1:9224
+\`\`\`
+
+If the endpoint exposes multiple inspectable targets, also set or pass:
 \`\`\`bash
 export OPENCLI_CDP_TARGET="antigravity"
+# or:
+opencli antigravity status --cdp-endpoint http://127.0.0.1:9224 --cdp-target antigravity
 \`\`\`
 
 ## High-Level Capabilities
@@ -37,6 +44,12 @@ export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
 opencli antigravity send "Write a python script to fetch HN top stories"
 # wait ~10-15 seconds for output to render
 opencli antigravity extract-code > hn_fetcher.py
+\`\`\`
+
+Equivalent per-command form:
+\`\`\`bash
+opencli antigravity send "Write a python script to fetch HN top stories" --cdp-endpoint http://127.0.0.1:9224
+opencli antigravity extract-code --cdp-endpoint http://127.0.0.1:9224 > hn_fetcher.py
 \`\`\`
 
 ### Reading Real-time Logs

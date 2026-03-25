@@ -7,6 +7,7 @@
  *
  * Usage:
  *   OPENCLI_CDP_ENDPOINT=http://127.0.0.1:9224 opencli antigravity serve --port 8082
+ *   opencli antigravity serve --port 8082 --cdp-endpoint http://127.0.0.1:9224 --cdp-target antigravity
  *   ANTHROPIC_BASE_URL=http://localhost:8082 claude
  */
 
@@ -439,7 +440,8 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
     if (!endpoint) {
       throw new Error(
         'OPENCLI_CDP_ENDPOINT is not set.\n' +
-        'Usage: OPENCLI_CDP_ENDPOINT=http://127.0.0.1:9224 opencli antigravity serve'
+        'Usage: OPENCLI_CDP_ENDPOINT=http://127.0.0.1:9224 opencli antigravity serve\n' +
+        '   or: opencli antigravity serve --cdp-endpoint http://127.0.0.1:9224'
       );
     }
 
