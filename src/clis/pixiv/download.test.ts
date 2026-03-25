@@ -35,20 +35,26 @@ describe('pixiv download', () => {
     mockMkdirSync.mockReset();
   });
 
+  it('throws CommandExecutionError on invalid illust ID', async () => {
+    const page = createPageMock([]);
+
+    await expect(cmd.func!(page, { 'illust-id': 'abc', output: '/tmp/test' })).rejects.toThrow(CommandExecutionError);
+  });
+
   it('throws AuthRequiredError on 403', async () => {
-    const page = createPageMock([{ error: 403 }]);
+    const page = createPageMock([{ __httpError: 403 }]);
 
     await expect(cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })).rejects.toThrow(AuthRequiredError);
   });
 
   it('throws CommandExecutionError on 404', async () => {
-    const page = createPageMock([{ error: 404 }]);
+    const page = createPageMock([{ __httpError: 404 }]);
 
     await expect(cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })).rejects.toThrow(CommandExecutionError);
   });
 
   it('throws CommandExecutionError on non-auth HTTP failure', async () => {
-    const page = createPageMock([{ error: 500 }]);
+    const page = createPageMock([{ __httpError: 500 }]);
 
     await expect(cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })).rejects.toThrow(CommandExecutionError);
   });

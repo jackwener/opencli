@@ -10,7 +10,8 @@ import * as path from 'node:path';
 import { cli, Strategy } from '../../registry.js';
 import { formatCookieHeader, httpDownload } from '../../download/index.js';
 import { formatBytes } from '../../download/progress.js';
-import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
+import { CommandExecutionError } from '../../errors.js';
+import { pixivFetch } from './utils.js';
 
 cli({
   site: 'pixiv',
@@ -32,32 +33,11 @@ cli({
       throw new CommandExecutionError(`Invalid illustration ID: ${illustId}`);
     }
 
-    await page.goto('https://www.pixiv.net');
+    // pixivFetch handles navigate + error checking; returns the response body directly
+    const pages: any[] = await pixivFetch(page, `/ajax/illust/${illustId}/pages`, {
+      notFoundMsg: `Illustration not found: ${illustId}`,
+    }) || [];
 
-    // Fetch all page URLs for this illustration
-    const data: any = await page.evaluate(`
-      (async () => {
-        const illustId = ${JSON.stringify(illustId)};
-        const res = await fetch(
-          'https://www.pixiv.net/ajax/illust/' + illustId + '/pages',
-          { credentials: 'include' }
-        );
-        if (!res.ok) return { error: res.status };
-        return await res.json();
-      })()
-    `);
-
-    if (data?.error) {
-      if (data.error === 401 || data.error === 403) {
-        throw new AuthRequiredError('www.pixiv.net', 'Authentication required — please log in to Pixiv in Chrome');
-      }
-      if (data.error === 404) {
-        throw new CommandExecutionError(`Illustration not found: ${illustId}`);
-      }
-      throw new CommandExecutionError(`Pixiv request failed (HTTP ${data.error})`);
-    }
-
-    const pages: any[] = data?.body || [];
     if (pages.length === 0) {
       return [{ index: 0, type: '-', status: 'failed', size: 'No images found' }];
     }

@@ -3,11 +3,12 @@
  *
  * Two-step process:
  * 1. Fetch all illust IDs from the user's profile
- * 2. Batch-fetch details for the most recent ones
+ * 2. Batch-fetch details for the most recent ones (max 48 IDs per request)
  */
 
 import { cli, Strategy } from '../../registry.js';
-import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
+import { CommandExecutionError } from '../../errors.js';
+import { pixivFetch, BATCH_SIZE } from './utils.js';
 
 cli({
   site: 'pixiv',
@@ -22,66 +23,44 @@ cli({
   columns: ['rank', 'title', 'illust_id', 'pages', 'bookmarks', 'tags', 'created'],
 
   func: async (page, kwargs) => {
-    const userId = kwargs['user-id'];
+    const userId = String(kwargs['user-id'] ?? '');
     const limit = Number(kwargs.limit) || 20;
 
-    await page.goto('https://www.pixiv.net');
-
-    // Step 1: get all illust IDs
-    const profileData: any = await page.evaluate(`
-      (async () => {
-        const userId = ${JSON.stringify(userId)};
-        const res = await fetch(
-          'https://www.pixiv.net/ajax/user/' + userId + '/profile/all',
-          { credentials: 'include' }
-        );
-        if (!res.ok) return { error: res.status };
-        return await res.json();
-      })()
-    `);
-
-    if (profileData?.error) {
-      if (profileData.error === 401 || profileData.error === 403) {
-        throw new AuthRequiredError('www.pixiv.net', 'Authentication required — please log in to Pixiv in Chrome');
-      }
-      throw new CommandExecutionError(`Pixiv request failed (HTTP ${profileData.error})`);
+    if (!/^\d+$/.test(userId)) {
+      throw new CommandExecutionError(`Invalid user ID: ${userId}`);
     }
 
-    const allIds = Object.keys(profileData?.body?.illusts || {})
+    // Step 1: get all illust IDs
+    const profileBody = await pixivFetch(page, `/ajax/user/${userId}/profile/all`, {
+      notFoundMsg: `User not found: ${userId}`,
+    });
+
+    const allIds = Object.keys(profileBody?.illusts || {})
       .sort((a, b) => Number(b) - Number(a))
       .slice(0, limit);
 
     if (allIds.length === 0) return [];
 
     // Step 2: batch fetch details (Pixiv supports up to ~48 IDs per request)
-    const idsParam = allIds.map(id => 'ids[]=' + id).join('&');
-    const detailData: any = await page.evaluate(`
-      (async () => {
-        const userId = ${JSON.stringify(userId)};
-        const idsParam = ${JSON.stringify(idsParam)};
-        const res = await fetch(
-          'https://www.pixiv.net/ajax/user/' + userId + '/profile/illusts?' +
-          idsParam +
-          '&work_category=illustManga&is_first_page=1',
-          { credentials: 'include' }
-        );
-        if (!res.ok) return { error: res.status };
-        return await res.json();
-      })()
-    `);
+    const allWorks: Record<string, any> = {};
 
-    if (detailData?.error) {
-      if (detailData.error === 401 || detailData.error === 403) {
-        throw new AuthRequiredError('www.pixiv.net', 'Authentication required — please log in to Pixiv in Chrome');
-      }
-      throw new CommandExecutionError(`Pixiv batch detail request failed (HTTP ${detailData.error})`);
+    for (let offset = 0; offset < allIds.length; offset += BATCH_SIZE) {
+      const batch = allIds.slice(offset, offset + BATCH_SIZE);
+      const idsParam = batch.map(id => `ids[]=${id}`).join('&');
+
+      // pixivFetch navigates on each call; for subsequent batches we re-navigate,
+      // which is fine — the cookie is already attached.
+      const detailBody = await pixivFetch(
+        page,
+        `/ajax/user/${userId}/profile/illusts?${idsParam}&work_category=illustManga&is_first_page=${offset === 0 ? 1 : 0}`,
+      );
+
+      Object.assign(allWorks, detailBody?.works || {});
     }
-
-    const works = detailData?.body?.works || {};
 
     return allIds
       .map((id, i) => {
-        const w = works[id];
+        const w = allWorks[id];
         if (!w) return null;
         return {
           rank: i + 1,

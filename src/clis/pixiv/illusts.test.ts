@@ -13,14 +13,20 @@ beforeAll(() => {
 });
 
 describe('pixiv illusts', () => {
+  it('throws CommandExecutionError on invalid user ID', async () => {
+    const page = createPageMock([]);
+
+    await expect(cmd.func!(page, { 'user-id': 'abc', limit: 5 })).rejects.toThrow(CommandExecutionError);
+  });
+
   it('throws AuthRequiredError on 401', async () => {
-    const page = createPageMock([{ error: 401 }]);
+    const page = createPageMock([{ __httpError: 401 }]);
 
     await expect(cmd.func!(page, { 'user-id': '11', limit: 5 })).rejects.toThrow(AuthRequiredError);
   });
 
   it('throws generic error on non-auth HTTP failure', async () => {
-    const page = createPageMock([{ error: 500 }]);
+    const page = createPageMock([{ __httpError: 500 }]);
 
     await expect(cmd.func!(page, { 'user-id': '11', limit: 5 })).rejects.toThrow(CommandExecutionError);
   });

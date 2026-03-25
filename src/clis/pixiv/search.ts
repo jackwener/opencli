@@ -5,7 +5,7 @@
  */
 
 import { cli, Strategy } from '../../registry.js';
-import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
+import { pixivFetch } from './utils.js';
 
 cli({
   site: 'pixiv',
@@ -24,40 +24,16 @@ cli({
 
   func: async (page, kwargs) => {
     const { query, limit = 20, order = 'date_d', mode = 'all', page: pageNum = 1 } = kwargs;
+    const encoded = encodeURIComponent(query);
 
-    await page.goto('https://www.pixiv.net');
+    // Pixiv search API requires the keyword in BOTH the URL path and the `word` query param.
+    const body = await pixivFetch(
+      page,
+      `/ajax/search/illustrations/${encoded}`,
+      { params: { word: query, order, mode, p: pageNum, s_mode: 's_tag_full', type: 'illust_and_ugoira' } },
+    );
 
-    const data: any = await page.evaluate(`
-      (async () => {
-        const keyword = ${JSON.stringify(query)};
-        const encoded = encodeURIComponent(keyword);
-        const order = ${JSON.stringify(order)};
-        const mode = ${JSON.stringify(mode)};
-        const pageNum = ${JSON.stringify(pageNum)};
-        const res = await fetch(
-          'https://www.pixiv.net/ajax/search/illustrations/' +
-          encoded +
-          '?word=' + encoded +
-          '&order=' + order +
-          '&mode=' + mode +
-          '&p=' + pageNum +
-          '&s_mode=s_tag_full' +
-          '&type=illust_and_ugoira',
-          { credentials: 'include' }
-        );
-        if (!res.ok) return { error: res.status };
-        return await res.json();
-      })()
-    `);
-
-    if (data?.error) {
-      if (data.error === 401 || data.error === 403) {
-        throw new AuthRequiredError('www.pixiv.net', 'Authentication required — please log in to Pixiv in Chrome');
-      }
-      throw new CommandExecutionError(`Pixiv request failed (HTTP ${data.error})`);
-    }
-
-    const items: any[] = data?.body?.illust?.data || [];
+    const items: any[] = body?.illust?.data || [];
 
     return items
       .filter((item: any) => item.id)
