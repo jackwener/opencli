@@ -16,6 +16,10 @@ import { LINUX_DO_CATEGORIES, type LinuxDoCategoryRecord } from './categories.da
 import { LINUX_DO_TAGS, type LinuxDoTagRecord } from './tags.data.js';
 
 const LINUX_DO_HOME = 'https://linux.do';
+let liveTagsPromise: Promise<LinuxDoTagRecord[]> | null = null;
+let liveCategoriesPromise: Promise<ResolvedLinuxDoCategory[]> | null = null;
+let testTagOverride: LinuxDoTagRecord[] | null = null;
+let testCategoryOverride: ResolvedLinuxDoCategory[] | null = null;
 
 type FeedView = 'latest' | 'hot' | 'top';
 
@@ -43,6 +47,10 @@ interface FetchJsonResult {
   error?: string;
 }
 
+interface FetchJsonOptions {
+  skipNavigate?: boolean;
+}
+
 /**
  * 统一清洗名称和 slug，避免大小写与多空格影响匹配。
  */
@@ -50,11 +58,17 @@ function normalizeLookupValue(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-async function fetchLinuxDoJson(page: IPage | null, apiPath: string): Promise<any> {
+async function ensureLinuxDoHome(page: IPage | null): Promise<void> {
   if (!page) throw new CommandExecutionError('Browser page required');
-
   await page.goto(LINUX_DO_HOME);
   await page.wait(2);
+}
+
+async function fetchLinuxDoJson(page: IPage | null, apiPath: string, options: FetchJsonOptions = {}): Promise<any> {
+  if (!options.skipNavigate) {
+    await ensureLinuxDoHome(page);
+  }
+  if (!page) throw new CommandExecutionError('Browser page required');
 
   const escapedPath = JSON.stringify(apiPath);
   const result = await page.evaluate(`(async () => {
@@ -97,6 +111,92 @@ async function fetchLinuxDoJson(page: IPage | null, apiPath: string): Promise<an
   return result.data;
 }
 
+function findMatchingTag(records: LinuxDoTagRecord[], value: string): LinuxDoTagRecord | null {
+  const raw = value.trim();
+  const normalized = normalizeLookupValue(value);
+  return /^\d+$/.test(raw)
+    ? records.find((item) => item.id === Number(raw)) ?? null
+    : records.find((item) => normalizeLookupValue(item.name) === normalized)
+      ?? records.find((item) => normalizeLookupValue(item.slug) === normalized)
+      ?? null;
+}
+
+function findMatchingCategory(records: ResolvedLinuxDoCategory[], value: string): ResolvedLinuxDoCategory | null {
+  const raw = value.trim();
+  const normalized = normalizeLookupValue(value);
+  return /^\d+$/.test(raw)
+    ? records.find((item) => item.id === Number(raw)) ?? null
+    : records.find((item) => normalizeLookupValue(item.name) === normalized)
+      ?? records.find((item) => normalizeLookupValue(item.slug) === normalized)
+      ?? null;
+}
+
+function toCategoryRecord(raw: any, parent: LinuxDoCategoryRecord | null): ResolvedLinuxDoCategory {
+  return {
+    id: raw.id,
+    name: raw.name ?? '',
+    description: raw.description_text ?? raw.description ?? '',
+    slug: raw.slug ?? '',
+    parentCategoryId: parent?.id ?? null,
+    parent,
+  };
+}
+
+async function fetchLiveTags(page: IPage | null): Promise<LinuxDoTagRecord[]> {
+  if (testTagOverride) return testTagOverride;
+  if (!liveTagsPromise) {
+    liveTagsPromise = fetchLinuxDoJson(page, '/tags.json', { skipNavigate: true })
+      .then((data) => {
+        const tags = Array.isArray(data?.tags) ? data.tags : [];
+        return tags
+          .filter((tag): tag is any => tag && typeof tag.id === 'number')
+          .map((tag) => ({
+            id: tag.id,
+            slug: tag.slug ?? `${tag.id}-tag`,
+            name: tag.name ?? String(tag.id),
+          }));
+      })
+      .catch((error) => {
+        liveTagsPromise = null;
+        throw error;
+      });
+  }
+  return liveTagsPromise;
+}
+
+async function fetchLiveCategories(page: IPage | null): Promise<ResolvedLinuxDoCategory[]> {
+  if (testCategoryOverride) return testCategoryOverride;
+  if (!liveCategoriesPromise) {
+    liveCategoriesPromise = (async () => {
+      const data = await fetchLinuxDoJson(page, '/categories.json', { skipNavigate: true });
+      const topCategories = Array.isArray(data?.category_list?.categories) ? data.category_list.categories : [];
+
+      const resolvedTop = topCategories.map((category) => toCategoryRecord(category, null));
+      const parentById = new Map<number, LinuxDoCategoryRecord>(resolvedTop.map((item) => [item.id, item]));
+
+      const subcategoryGroups = await Promise.allSettled(
+        topCategories
+          .filter((category) => Array.isArray(category?.subcategory_ids) && category.subcategory_ids.length > 0)
+          .map(async (category) => {
+            const subData = await fetchLinuxDoJson(page, `/categories.json?parent_category_id=${category.id}`, { skipNavigate: true });
+            const subCategories = Array.isArray(subData?.category_list?.categories) ? subData.category_list.categories : [];
+            const parent = parentById.get(category.id) ?? null;
+            return subCategories.map((subCategory) => toCategoryRecord(subCategory, parent));
+          }),
+      );
+
+      return [
+        ...resolvedTop,
+        ...subcategoryGroups.flatMap((result) => result.status === 'fulfilled' ? result.value : []),
+      ];
+    })().catch((error) => {
+      liveCategoriesPromise = null;
+      throw error;
+    });
+  }
+  return liveCategoriesPromise;
+}
+
 function toLocalTime(utcStr: string): string {
   if (!utcStr) return '';
   const d = new Date(utcStr);
@@ -119,30 +219,30 @@ function topicListRichFromJson(data: any, limit: number): TopicListItem[] {
 /**
  * 解析标签，支持 id、name、slug 三种输入。
  */
-function resolveTag(value: string): LinuxDoTagRecord {
-  const raw = value.trim();
-  const normalized = normalizeLookupValue(value);
-  const tag = /^\d+$/.test(raw)
-    ? LINUX_DO_TAGS.find((item) => item.id === Number(raw))
-    : LINUX_DO_TAGS.find((item) => normalizeLookupValue(item.name) === normalized)
-    ?? LINUX_DO_TAGS.find((item) => normalizeLookupValue(item.slug) === normalized);
+async function resolveTag(page: IPage | null, value: string): Promise<LinuxDoTagRecord> {
+  try {
+    const liveTag = findMatchingTag(await fetchLiveTags(page), value);
+    if (liveTag) return liveTag;
+  } catch {
+    // Fall back to the bundled snapshot if live metadata is temporarily unavailable.
+  }
 
-  if (!tag) throw new ArgumentError(`Unknown tag: ${value}`, 'Use "opencli linux-do tags" to list available tags');
-  return tag;
+  const snapshotTag = findMatchingTag(LINUX_DO_TAGS, value);
+  if (snapshotTag) return snapshotTag;
+
+  throw new ArgumentError(`Unknown tag: ${value}`, 'Use "opencli linux-do tags" to list available tags');
 }
 
 /**
  * 解析分类，并补齐父分类信息。
  */
-function resolveCategory(value: string): ResolvedLinuxDoCategory {
-  const raw = value.trim();
-  const normalized = normalizeLookupValue(value);
-  const category = /^\d+$/.test(raw)
-    ? LINUX_DO_CATEGORIES.find((item) => item.id === Number(raw))
-    : LINUX_DO_CATEGORIES.find((item) => normalizeLookupValue(item.name) === normalized)
-    ?? LINUX_DO_CATEGORIES.find((item) => normalizeLookupValue(item.slug) === normalized);
+function resolveSnapshotCategory(value: string): ResolvedLinuxDoCategory | null {
+  const category = /^\d+$/.test(value.trim())
+    ? LINUX_DO_CATEGORIES.find((item) => item.id === Number(value.trim()))
+    : LINUX_DO_CATEGORIES.find((item) => normalizeLookupValue(item.name) === normalizeLookupValue(value))
+      ?? LINUX_DO_CATEGORIES.find((item) => normalizeLookupValue(item.slug) === normalizeLookupValue(value));
 
-  if (!category) throw new ArgumentError(`Unknown category: ${value}`, 'Use "opencli linux-do categories" to list available categories');
+  if (!category) return null;
 
   const parent = category.parentCategoryId == null
     ? null
@@ -155,10 +255,24 @@ function resolveCategory(value: string): ResolvedLinuxDoCategory {
   return { ...category, parent };
 }
 
+async function resolveCategory(page: IPage | null, value: string): Promise<ResolvedLinuxDoCategory> {
+  try {
+    const liveCategory = findMatchingCategory(await fetchLiveCategories(page), value);
+    if (liveCategory) return liveCategory;
+  } catch {
+    // Fall back to the bundled snapshot if live metadata is temporarily unavailable.
+  }
+
+  const snapshotCategory = resolveSnapshotCategory(value);
+  if (snapshotCategory) return snapshotCategory;
+
+  throw new ArgumentError(`Unknown category: ${value}`, 'Use "opencli linux-do categories" to list available categories');
+}
+
 /**
  * 将命令参数转换为最终请求地址
  */
-function resolveFeedRequest(kwargs: Record<string, any>): FeedRequest {
+async function resolveFeedRequest(page: IPage | null, kwargs: Record<string, any>): Promise<FeedRequest> {
   const view = (kwargs.view || 'latest') as FeedView;
   const period = (kwargs.period || 'weekly') as string;
 
@@ -182,8 +296,8 @@ function resolveFeedRequest(kwargs: Record<string, any>): FeedRequest {
     };
   }
 
-  const tag = tagValue ? resolveTag(tagValue) : null;
-  const category = categoryValue ? resolveCategory(categoryValue) : null;
+  const tag = tagValue ? await resolveTag(page, tagValue) : null;
+  const category = categoryValue ? await resolveCategory(page, categoryValue) : null;
 
   const categorySegments = category
     ? (category.parent
@@ -263,8 +377,31 @@ cli({
   ],
   func: async (page, kwargs) => {
     const limit = (kwargs.limit || 20) as number;
-    const request = resolveFeedRequest(kwargs);
-    const data = await fetchLinuxDoJson(page, request.url);
+    await ensureLinuxDoHome(page);
+    const request = await resolveFeedRequest(page, kwargs);
+    const data = await fetchLinuxDoJson(page, request.url, { skipNavigate: true });
     return topicListRichFromJson(data, limit);
   },
 });
+
+export const __test__ = {
+  resetMetadataCaches(): void {
+    liveTagsPromise = null;
+    liveCategoriesPromise = null;
+    testTagOverride = null;
+    testCategoryOverride = null;
+  },
+  setLiveMetadataForTests({
+    tags,
+    categories,
+  }: {
+    tags?: LinuxDoTagRecord[] | null;
+    categories?: ResolvedLinuxDoCategory[] | null;
+  }): void {
+    liveTagsPromise = null;
+    liveCategoriesPromise = null;
+    testTagOverride = tags ?? null;
+    testCategoryOverride = categories ?? null;
+  },
+  resolveFeedRequest,
+};

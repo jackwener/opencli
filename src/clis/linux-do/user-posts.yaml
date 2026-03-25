@@ -27,6 +27,20 @@ pipeline:
           const date = new Date(utcStr);
           return Number.isNaN(date.getTime()) ? utcStr : date.toLocaleString();
         };
+        const strip = (html) => (html || '')
+          .replace(/<br\s*\/?>/gi, ' ')
+          .replace(/<\/(p|div|li|blockquote|h[1-6])>/gi, ' ')
+          .replace(/<[^>]+>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#(?:(\d+)|x([0-9a-fA-F]+));/g, (_, dec, hex) => {
+            try { return String.fromCodePoint(dec !== undefined ? Number(dec) : parseInt(hex, 16)); } catch { return ''; }
+          })
+          .replace(/\s+/g, ' ')
+          .trim();
         const res = await fetch('/user_actions.json?username=' + encodeURIComponent(username) + '&filter=' + ${{ args.limit | default(20) }}+'&offset=0', { credentials: 'include' });
         if (!res.ok) throw new Error('HTTP ' + res.status + ' - 请先登录 linux.do');
         let data;
