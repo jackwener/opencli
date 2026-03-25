@@ -74,6 +74,10 @@ export function evalExpr(expr: string, ctx: RenderContext): unknown {
     return evalExpr(orMatch[2].trim(), ctx);
   }
 
+  // Fast path for quoted string literals – avoids VM overhead from evalJsExpr
+  const strLit = expr.match(/^(['"])(.*)\1$/);
+  if (strLit) return strLit[2];
+
   const resolved = resolvePath(expr, { args, item, data, index });
   if (resolved !== null && resolved !== undefined) return resolved;
 
