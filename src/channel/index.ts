@@ -137,9 +137,9 @@ export function registerChannelCommand(program: Command): void {
       }
 
       const registry = new SubscriptionRegistry();
-      await registry.load();
-      const sub = registry.add(origin, opts.sink, sinkConfig, intervalMs);
-      await registry.save();
+      const sub = await registry.withLock(() =>
+        registry.add(origin, opts.sink, sinkConfig, intervalMs),
+      );
 
       console.log(`✅ Subscribed to ${origin}`);
       console.log(`   ID: ${sub.id}`);
@@ -154,9 +154,7 @@ export function registerChannelCommand(program: Command): void {
     .description('Remove subscription for an origin')
     .action(async (origin: string) => {
       const registry = new SubscriptionRegistry();
-      await registry.load();
-      const removed = registry.remove(origin);
-      await registry.save();
+      const removed = await registry.withLock(() => registry.remove(origin));
 
       if (removed) {
         console.log(`✅ Unsubscribed from ${origin}`);

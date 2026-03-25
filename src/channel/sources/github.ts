@@ -10,7 +10,8 @@
  *   github:owner/repo/issues   — all issue activity
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type {
   ChannelEvent,
   ChannelSource,
@@ -18,6 +19,8 @@ import type {
   SourcePollConfig,
   SubscribableItem,
 } from '../types.js';
+
+const execFileAsync = promisify(execFile);
 
 // ── Origin parsing ──────────────────────────────────────────────────
 
@@ -50,17 +53,15 @@ type GitHubPollConfig = RepoPollConfig | IssuePollConfig | PullsPollConfig | Iss
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function ghJson<T>(endpoint: string): { data: T; pollInterval?: number } {
-  // Use execFileSync to avoid shell injection — origin strings are user-supplied.
-  const raw = execFileSync('gh', ['api', '--include', endpoint], {
+async function ghJson<T>(endpoint: string): Promise<{ data: T; pollInterval?: number }> {
+  const { stdout } = await execFileAsync('gh', ['api', '--include', endpoint], {
     encoding: 'utf8',
     timeout: 30_000,
   });
 
-  // Find the start of JSON body — first '[' or '{' that starts a line
-  const jsonStart = raw.search(/^\s*[\[{]/m);
-  const headers = jsonStart > 0 ? raw.slice(0, jsonStart) : '';
-  const body = jsonStart >= 0 ? raw.slice(jsonStart) : raw;
+  const jsonStart = stdout.search(/^\s*[\[{]/m);
+  const headers = jsonStart > 0 ? stdout.slice(0, jsonStart) : '';
+  const body = jsonStart >= 0 ? stdout.slice(jsonStart) : stdout;
 
   const data = JSON.parse(body) as T;
 
@@ -80,7 +81,7 @@ export class GitHubSource implements ChannelSource {
   async listSubscribable(_config: Record<string, unknown>): Promise<SubscribableItem[]> {
     // List user's repos as subscribable items
     try {
-      const { data } = ghJson<Array<{ full_name: string; description: string | null }>>(
+      const { data } = await ghJson<Array<{ full_name: string; description: string | null }>>(
         '/user/repos?per_page=30&sort=updated',
       );
       return data.map(r => ({
@@ -132,9 +133,9 @@ export class GitHubSource implements ChannelSource {
 
   // ── Poll strategies ─────────────────────────────────────────────
 
-  private pollRepoEvents(c: RepoPollConfig, cursor: string | null): PollResult {
+  private async pollRepoEvents(c: RepoPollConfig, cursor: string | null): Promise<PollResult> {
     const endpoint = `/repos/${c.owner}/${c.repo}/events?per_page=100`;
-    const { data, pollInterval } = ghJson<Array<{
+    const { data, pollInterval } = await ghJson<Array<{
       id: string;
       type: string;
       created_at: string;
@@ -167,10 +168,10 @@ export class GitHubSource implements ChannelSource {
     };
   }
 
-  private pollIssueComments(c: IssuePollConfig, cursor: string | null): PollResult {
+  private async pollIssueComments(c: IssuePollConfig, cursor: string | null): Promise<PollResult> {
     const sinceParam = cursor ? `?since=${cursor}` : '';
     const endpoint = `/repos/${c.owner}/${c.repo}/issues/${c.number}/comments${sinceParam}`;
-    const { data, pollInterval } = ghJson<Array<{
+    const { data, pollInterval } = await ghJson<Array<{
       id: number;
       created_at: string;
       updated_at: string;
@@ -210,10 +211,10 @@ export class GitHubSource implements ChannelSource {
     };
   }
 
-  private pollPullRequests(c: PullsPollConfig, cursor: string | null): PollResult {
+  private async pollPullRequests(c: PullsPollConfig, cursor: string | null): Promise<PollResult> {
     const sinceParam = cursor ? `&since=${cursor}` : '';
     const endpoint = `/repos/${c.owner}/${c.repo}/pulls?state=all&sort=updated&direction=desc&per_page=30${sinceParam}`;
-    const { data, pollInterval } = ghJson<Array<{
+    const { data, pollInterval } = await ghJson<Array<{
       id: number;
       number: number;
       title: string;
@@ -253,10 +254,10 @@ export class GitHubSource implements ChannelSource {
     };
   }
 
-  private pollIssues(c: IssuesPollConfig, cursor: string | null): PollResult {
+  private async pollIssues(c: IssuesPollConfig, cursor: string | null): Promise<PollResult> {
     const sinceParam = cursor ? `&since=${cursor}` : '';
     const endpoint = `/repos/${c.owner}/${c.repo}/issues?state=all&sort=updated&direction=desc&per_page=30${sinceParam}`;
-    const { data, pollInterval } = ghJson<Array<{
+    const { data, pollInterval } = await ghJson<Array<{
       id: number;
       number: number;
       title: string;
