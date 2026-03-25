@@ -1,3 +1,4 @@
+import { AuthRequiredError, SelectorError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 
 cli({
@@ -26,7 +27,7 @@ cli({
         }`);
 
         if (!href) {
-            throw new Error('Could not find logged-in user profile link. Are you logged in?');
+            throw new AuthRequiredError('x.com', 'Could not find logged-in user profile link. Are you logged in?');
         }
         targetUser = href.replace('/', '');
     }
@@ -55,7 +56,7 @@ cli({
         return false;
     }`);
     if (!clicked) {
-        throw new Error('Could not find followers link on profile page. Twitter may have changed the layout.');
+        throw new SelectorError('Twitter followers link', 'Twitter may have changed the layout.');
     }
     await page.wait(5);
 

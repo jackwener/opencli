@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 cli({
@@ -13,7 +14,7 @@ cli({
   ],
   columns: ['status', 'message', 'text'],
   func: async (page: IPage | null, kwargs: any) => {
-    if (!page) throw new Error('Requires browser');
+    if (!page) throw new CommandExecutionError('Browser session required for twitter post');
 
     // 1. Navigate directly to the compose tweet modal
     await page.goto('https://x.com/compose/tweet');

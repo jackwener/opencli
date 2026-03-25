@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError, CommandExecutionError, EmptyResultError, SelectorError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 import { apiGet } from './utils.js';
 
@@ -13,7 +14,7 @@ cli({
   ],
   columns: ['index', 'from', 'to', 'content'],
   func: async (page: IPage | null, kwargs: any) => {
-    if (!page) throw new Error('Requires browser');
+    if (!page) throw new CommandExecutionError('Browser session required for bilibili subtitle');
     // 1. 先前往视频详情页 (建立有鉴权的 Session，且这里不需要加载完整个视频)
     await page.goto(`https://www.bilibili.com/video/${kwargs.bvid}/`);
 
@@ -24,7 +25,7 @@ cli({
     })()`);
 
     if (!cid) {
-      throw new Error('无法在页面中提取到当前视频的 CID，请检查页面是否正常加载。');
+      throw new SelectorError('videoData.cid', '无法在页面中提取到当前视频的 CID，请检查页面是否正常加载。');
     }
 
     // 3. 在 Node 端使用 apiGet 获取带 Wbi 签名的字幕列表
@@ -35,12 +36,12 @@ cli({
     });
 
     if (payload.code !== 0) {
-      throw new Error(`获取视频播放信息失败: ${payload.message} (${payload.code})`);
+      throw new CommandExecutionError(`获取视频播放信息失败: ${payload.message} (${payload.code})`);
     }
 
     const subtitles = payload.data?.subtitle?.subtitles || [];
     if (subtitles.length === 0) {
-      throw new Error('此视频没有发现外挂或智能字幕。');
+      throw new EmptyResultError('bilibili subtitle', '此视频没有发现外挂或智能字幕。');
     }
 
     // 4. 选择目标字幕语言
@@ -50,7 +51,7 @@ cli({
 
     const targetSubUrl = target.subtitle_url;
     if (!targetSubUrl || targetSubUrl === '') {
-      throw new Error('[风控拦截/未登录] 获取到的 subtitle_url 为空！请确保 CLI 已成功登录且风控未封锁此账号。');
+      throw new AuthRequiredError('bilibili.com', '[风控拦截/未登录] 获取到的 subtitle_url 为空！请确保 CLI 已成功登录且风控未封锁此账号。');
     }
 
     const finalUrl = targetSubUrl.startsWith('//') ? 'https:' + targetSubUrl : targetSubUrl;
@@ -81,12 +82,12 @@ cli({
     const items = await page.evaluate(fetchJs);
 
     if (items?.error) {
-      throw new Error(`字幕获取失败: ${items.error}${items.text ? ' — ' + items.text : ''}`);
+      throw new CommandExecutionError(`字幕获取失败: ${items.error}${items.text ? ' — ' + items.text : ''}`);
     }
 
     const finalItems = items?.data || [];
     if (!Array.isArray(finalItems)) {
-      throw new Error('解析到的字幕列表对象不符合数组格式');
+      throw new CommandExecutionError('解析到的字幕列表对象不符合数组格式');
     }
 
     // 6. 数据映射

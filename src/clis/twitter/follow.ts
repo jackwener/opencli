@@ -1,3 +1,4 @@
+import { CommandExecutionError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
 
@@ -13,7 +14,7 @@ cli({
   ],
   columns: ['status', 'message'],
   func: async (page: IPage | null, kwargs: any) => {
-    if (!page) throw new Error('Requires browser');
+    if (!page) throw new CommandExecutionError('Browser session required for twitter follow');
     const username = kwargs.username.replace(/^@/, '');
 
     await page.goto(`https://x.com/${username}`);

@@ -1,5 +1,6 @@
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
+import { ArgumentError, CommandExecutionError } from '../../errors.js';
 
 // ── Filter value mappings ──────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ function mapFilterValues(input: unknown, mapping: Record<string, string>, label:
   const resolved = values.map(value => {
     const key = value.toLowerCase();
     const mapped = mapping[key];
-    if (!mapped) throw new Error(`Unsupported ${label}: ${value}`);
+    if (!mapped) throw new ArgumentError(`Unsupported ${label}: ${value}`);
     return mapped;
   });
   return [...new Set(resolved)];
@@ -214,7 +215,7 @@ async function resolveCompanyIds(page: IPage, input: unknown): Promise<string[]>
   }
 
   if (unresolved.length) {
-    throw new Error(`Could not resolve LinkedIn company filter: ${unresolved.join(', ')}`);
+    throw new ArgumentError(`Could not resolve LinkedIn company filter: ${unresolved.join(', ')}`);
   }
 
   return [...ids];
@@ -252,7 +253,7 @@ async function fetchJobCards(
     })()`);
 
     if (!batch || batch.error) {
-      throw new Error(batch?.error || 'LinkedIn search returned an unexpected response');
+      throw new CommandExecutionError(batch?.error || 'LinkedIn search returned an unexpected response');
     }
 
     const elements: any[] = Array.isArray(batch?.elements) ? batch.elements : [];
@@ -387,7 +388,7 @@ cli({
     const location = (kwargs.location ?? '').trim();
     const keywords = String(kwargs.query ?? '').trim();
 
-    if (!keywords) throw new Error('query is required');
+    if (!keywords) throw new ArgumentError('query is required');
 
     const searchParams = new URLSearchParams({ keywords });
     if (location) searchParams.set('location', location);

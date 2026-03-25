@@ -2,17 +2,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { discoverClis, discoverPlugins, PLUGINS_DIR } from './discovery.js';
 import { executeCommand } from './execution.js';
 import { getRegistry, cli, Strategy } from './registry.js';
+import { clearAllHooks, onAfterExecute } from './hooks.js';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 describe('discoverClis', () => {
   it('handles non-existent directories gracefully', async () => {
     // Should not throw for missing directories
-    await expect(discoverClis('/tmp/nonexistent-opencli-test-dir')).resolves.not.toThrow();
+    await expect(discoverClis(path.join(os.tmpdir(), 'nonexistent-opencli-test-dir'))).resolves.not.toThrow();
   });
 
   it('imports only CLI command modules during filesystem discovery', async () => {
-    const tempRoot = await fs.promises.mkdtemp(path.join('/tmp', 'opencli-discovery-'));
+    const tempRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-discovery-'));
     const siteDir = path.join(tempRoot, 'temp-site');
     const helperPath = path.join(siteDir, 'helper.ts');
     const commandPath = path.join(siteDir, 'hello.ts');
@@ -24,7 +27,7 @@ globalThis.__opencli_helper_loaded__ = true;
 export const helper = true;
 `);
       await fs.promises.writeFile(commandPath, `
-import { cli, Strategy } from '${path.join(process.cwd(), 'src', 'registry.ts')}';
+import { cli, Strategy } from '${pathToFileURL(path.join(process.cwd(), 'src', 'registry.ts')).href}';
 cli({
   site: 'temp-site',
   name: 'hello',
@@ -43,6 +46,36 @@ cli({
     } finally {
       delete (globalThis as any).__opencli_helper_loaded__;
       await fs.promises.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to filesystem discovery when the manifest is invalid', async () => {
+    const tempBuildRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-manifest-fallback-'));
+    const distDir = path.join(tempBuildRoot, 'dist');
+    const siteDir = path.join(distDir, 'fallback-site');
+    const commandPath = path.join(siteDir, 'hello.ts');
+    const manifestPath = path.join(tempBuildRoot, 'cli-manifest.json');
+
+    try {
+      await fs.promises.mkdir(siteDir, { recursive: true });
+      await fs.promises.writeFile(manifestPath, '{ invalid json');
+      await fs.promises.writeFile(commandPath, `
+import { cli, Strategy } from '${pathToFileURL(path.join(process.cwd(), 'src', 'registry.ts')).href}';
+cli({
+  site: 'fallback-site',
+  name: 'hello',
+  description: 'hello command',
+  strategy: Strategy.PUBLIC,
+  browser: false,
+  func: async () => [{ ok: true }],
+});
+`);
+
+      await discoverClis(distDir);
+
+      expect(getRegistry().get('fallback-site/hello')).toBeDefined();
+    } finally {
+      await fs.promises.rm(tempBuildRoot, { recursive: true, force: true });
     }
   });
 });
@@ -88,6 +121,11 @@ columns: [message]
 });
 
 describe('executeCommand', () => {
+  beforeEach(() => {
+    clearAllHooks();
+    vi.unstubAllEnvs();
+  });
+
   it('accepts kebab-case option names after Commander camelCases them', async () => {
     const cmd = cli({
       site: 'test-engine',
@@ -164,5 +202,48 @@ describe('executeCommand', () => {
 
     await executeCommand(cmd, {}, true);
     expect(receivedDebug).toBe(true);
+  });
+
+  it('fires onAfterExecute even when command execution throws', async () => {
+    const seen: Array<{ error?: unknown; finishedAt?: number }> = [];
+    onAfterExecute((ctx) => {
+      seen.push({ error: ctx.error, finishedAt: ctx.finishedAt });
+    });
+
+    const cmd = cli({
+      site: 'test-engine',
+      name: 'failing-test',
+      description: 'failing command',
+      browser: false,
+      strategy: Strategy.PUBLIC,
+      func: async () => {
+        throw new Error('boom');
+      },
+    });
+
+    await expect(executeCommand(cmd, {})).rejects.toThrow('boom');
+    expect(seen).toHaveLength(1);
+    expect(seen[0].error).toBeInstanceOf(Error);
+    expect((seen[0].error as Error).message).toBe('boom');
+    expect(typeof seen[0].finishedAt).toBe('number');
+  });
+
+  it('fails fast for chatwise commands when OPENCLI_CDP_ENDPOINT is missing', async () => {
+    const cmd = cli({
+      site: 'chatwise',
+      name: 'status',
+      description: 'chatwise status',
+      browser: true,
+      strategy: Strategy.PUBLIC,
+      requiredEnv: [
+        {
+          name: 'OPENCLI_CDP_ENDPOINT',
+          help: 'Set OPENCLI_CDP_ENDPOINT before running chatwise commands.',
+        },
+      ],
+      func: async () => [{ ok: true }],
+    });
+
+    await expect(executeCommand(cmd, {})).rejects.toThrow('requires environment variable OPENCLI_CDP_ENDPOINT');
   });
 });

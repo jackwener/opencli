@@ -2,29 +2,14 @@
  * Pipeline step: fetch — HTTP API requests.
  */
 
+import { CliError, getErrorMessage } from '../../errors.js';
+import { log } from '../../logger.js';
 import type { IPage } from '../../types.js';
 import { render } from '../template.js';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord, mapConcurrent } from '../../utils.js';
 
-/** Simple async concurrency limiter */
-async function mapConcurrent<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let index = 0;
 
-  async function worker() {
-    while (index < items.length) {
-      const i = index++;
-      results[i] = await fn(items[i], i);
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
-  await Promise.all(workers);
-  return results;
-}
 
 /** Single URL fetch helper */
 async function fetchSingle(
@@ -45,20 +30,33 @@ async function fetchSingle(
 
   if (page === null) {
     const resp = await fetch(finalUrl, { method: method.toUpperCase(), headers: renderedHeaders });
+    if (!resp.ok) {
+      throw new CliError('FETCH_ERROR', `HTTP ${resp.status} ${resp.statusText} from ${finalUrl}`);
+    }
     return resp.json();
   }
 
   const headersJs = JSON.stringify(renderedHeaders);
   const urlJs = JSON.stringify(finalUrl);
   const methodJs = JSON.stringify(method.toUpperCase());
-  return page.evaluate(`
+  // Return error status instead of throwing inside evaluate to avoid CDP wrapper
+  // rewriting the message (CDP prepends "Evaluate error: " to thrown errors).
+  const result = await page.evaluate(`
     async () => {
       const resp = await fetch(${urlJs}, {
         method: ${methodJs}, headers: ${headersJs}, credentials: "include"
       });
+      if (!resp.ok) {
+        return { __httpError: resp.status, statusText: resp.statusText };
+      }
       return await resp.json();
     }
   `);
+  if (result && typeof result === 'object' && '__httpError' in result) {
+    const { __httpError: status, statusText } = result as { __httpError: number; statusText: string };
+    throw new CliError('FETCH_ERROR', `HTTP ${status} ${statusText} from ${finalUrl}`);
+  }
+  return result;
 }
 
 /**
@@ -72,10 +70,11 @@ async function fetchBatchInBrowser(
 ): Promise<unknown[]> {
   const headersJs = JSON.stringify(headers);
   const urlsJs = JSON.stringify(urls);
+  const methodJs = JSON.stringify(method);
   return (await page.evaluate(`
     async () => {
       const urls = ${urlsJs};
-      const method = "${method}";
+      const method = ${methodJs};
       const headers = ${headersJs};
       const concurrency = ${concurrency};
 
@@ -87,9 +86,13 @@ async function fetchBatchInBrowser(
           const i = idx++;
           try {
             const resp = await fetch(urls[i], { method, headers, credentials: "include" });
+            if (!resp.ok) {
+              throw new Error('HTTP ' + resp.status + ' ' + resp.statusText + ' from ' + urls[i]);
+            }
             results[i] = await resp.json();
           } catch (e) {
-            results[i] = { error: e.message };
+            results[i] = { error: e instanceof Error ? e.message : String(e) };
+            // Note: getErrorMessage() is a Node.js utility — can't use it inside evaluate()
           }
         }
       }
@@ -130,13 +133,26 @@ export async function stepFetch(page: IPage | null, params: unknown, data: unkno
 
     // BATCH IPC: if browser is available, batch all fetches into a single evaluate() call
     if (page !== null) {
-      return fetchBatchInBrowser(page, urls, method.toUpperCase(), renderedHeaders, concurrency);
+      const results = await fetchBatchInBrowser(page, urls, method.toUpperCase(), renderedHeaders, concurrency);
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        if (r && typeof r === 'object' && 'error' in r) {
+          log.warn(`Batch fetch failed for ${urls[i]}: ${(r as { error: string }).error}`);
+        }
+      }
+      return results;
     }
 
     // Non-browser: use concurrent pool (already optimized)
     return mapConcurrent(data, concurrency, async (item, index) => {
       const itemUrl = String(render(urlTemplate, { args, data, item, index }));
-      return fetchSingle(null, itemUrl, method, queryParams, headers, args, data);
+      try {
+        return await fetchSingle(null, itemUrl, method, queryParams, headers, args, data);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        log.warn(`Batch fetch failed for ${itemUrl}: ${message}`);
+        return { error: message };
+      }
     });
   }
   const url = render(urlOrObj, { args, data });

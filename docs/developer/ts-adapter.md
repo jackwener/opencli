@@ -6,6 +6,7 @@ Use TypeScript adapters when you need browser-side logic, multi-step flows, DOM 
 
 ```typescript
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError, EmptyResultError } from '../../errors.js';
 
 cli({
   site: 'mysite',
@@ -33,6 +34,9 @@ cli({
         return (await res.json()).results;
       })()
     `);
+
+    if (!Array.isArray(data)) throw new CommandExecutionError('MySite returned an unexpected response');
+    if (!data.length) throw new EmptyResultError('mysite search', 'Try a different keyword');
 
     return data.slice(0, Number(limit)).map((item: any) => ({
       title: item.title,
@@ -68,6 +72,20 @@ Contains parsed CLI arguments as key-value pairs. Always destructure with defaul
 ```typescript
 const { query, limit = 10, format = 'json' } = kwargs;
 ```
+
+For most search/read/detail commands, the main subject should be positional (`opencli mysite search "rust"`, `opencli mysite article 123`) instead of a named flag such as `--query` or `--id`. Keep named flags for optional modifiers.
+
+## Error Handling
+
+Prefer throwing `CliError` subclasses from `src/errors.ts` for expected adapter failures:
+
+- `AuthRequiredError` for missing login / cookies
+- `EmptyResultError` for empty but valid responses
+- `CommandExecutionError` for unexpected API or browser failures
+- `TimeoutError` for site timeouts
+- `ArgumentError` for invalid user input
+
+Avoid raw `Error` for normal adapter control flow. This keeps top-level CLI output consistent and preserves hints for users.
 
 ## AI-Assisted Development
 

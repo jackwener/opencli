@@ -8,7 +8,8 @@ import { cli, Strategy } from '../../registry.js';
 import {
   requirePage, navigateToChat, findFriendByUid,
   clickCandidateInList, typeAndSendMessage,
-} from './common.js';
+} from './utils.js';
+import { EmptyResultError, SelectorError } from '../../errors.js';
 
 cli({
   site: 'boss',
@@ -29,21 +30,21 @@ cli({
     await navigateToChat(page, 3);
 
     const friend = await findFriendByUid(page, kwargs.uid, { maxPages: 5 });
-    if (!friend) throw new Error('未找到该候选人，请确认 uid 是否正确');
+    if (!friend) throw new EmptyResultError('boss candidate search', '请确认 uid 是否正确');
 
     const numericUid = friend.uid;
     const friendName = friend.name || '候选人';
 
     const clicked = await clickCandidateInList(page, numericUid);
     if (!clicked) {
-      throw new Error('无法在聊天列表中找到该用户，请确认聊天列表中有此人');
+      throw new SelectorError('聊天列表中的用户', '请确认聊天列表中有此人');
     }
 
     await page.wait({ time: 2 });
 
     const sent = await typeAndSendMessage(page, kwargs.text);
     if (!sent) {
-      throw new Error('找不到消息输入框');
+      throw new SelectorError('消息输入框', '聊天页面 UI 可能已改变');
     }
 
     await page.wait({ time: 1 });

@@ -1,5 +1,6 @@
 import { execSync, spawnSync } from 'node:child_process';
 import { cli, Strategy } from '../../registry.js';
+import { ConfigError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 import { getVisibleChatMessages } from './ax.js';
 
@@ -16,6 +17,10 @@ export const askCommand = cli({
   ],
   columns: ['Role', 'Text'],
   func: async (page: IPage | null, kwargs: any) => {
+    if (process.platform !== 'darwin') {
+      throw new ConfigError('ChatGPT Desktop integration requires macOS (osascript is not available on this platform)');
+    }
+
     const text = kwargs.text as string;
     const timeout = parseInt(kwargs.timeout as string, 10) || 30;
 

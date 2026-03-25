@@ -8,10 +8,13 @@
 
 const attached = new Set<number>();
 
-/** Check if a URL can be attached via CDP */
+/** Internal blank page used when no user URL is provided. */
+const BLANK_PAGE = 'data:text/html,<html></html>';
+
+/** Check if a URL can be attached via CDP — only allow http(s) and our internal blank page. */
 function isDebuggableUrl(url?: string): boolean {
   if (!url) return true;  // empty/undefined = tab still loading, allow it
-  return !url.startsWith('chrome://') && !url.startsWith('chrome-extension://');
+  return url.startsWith('http://') || url.startsWith('https://') || url === BLANK_PAGE;
 }
 
 async function ensureAttached(tabId: number): Promise<void> {
@@ -144,10 +147,10 @@ export async function screenshot(
   }
 }
 
-export function detach(tabId: number): void {
+export async function detach(tabId: number): Promise<void> {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);
-  try { chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
+  try { await chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
 }
 
 export function registerListeners(): void {
@@ -158,12 +161,9 @@ export function registerListeners(): void {
     if (source.tabId) attached.delete(source.tabId);
   });
   // Invalidate attached cache when tab URL changes to non-debuggable
-  chrome.tabs.onUpdated.addListener((tabId, info) => {
+  chrome.tabs.onUpdated.addListener(async (tabId, info) => {
     if (info.url && !isDebuggableUrl(info.url)) {
-      if (attached.has(tabId)) {
-        attached.delete(tabId);
-        try { chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
-      }
+      await detach(tabId);
     }
   });
 }

@@ -1,5 +1,7 @@
 import { cli, Strategy } from '../../registry.js';
+import { SelectorError } from '../../errors.js';
 import type { IPage } from '../../types.js';
+import { chatwiseRequiredEnv } from './shared.js';
 
 export const sendCommand = cli({
   site: 'chatwise',
@@ -8,12 +10,13 @@ export const sendCommand = cli({
   domain: 'localhost',
   strategy: Strategy.UI,
   browser: true,
+  requiredEnv: chatwiseRequiredEnv,
   args: [{ name: 'text', required: true, positional: true, help: 'Message to send' }],
   columns: ['Status', 'InjectedText'],
   func: async (page: IPage, kwargs: any) => {
     const text = kwargs.text as string;
 
-    await page.evaluate(`
+    const injected = await page.evaluate(`
       (function(text) {
         // ChatWise input can be textarea or contenteditable
         let composer = document.querySelector('textarea');
@@ -22,7 +25,7 @@ export const sendCommand = cli({
           composer = editables.length > 0 ? editables[editables.length - 1] : null;
         }
 
-        if (!composer) throw new Error('Could not find ChatWise input element');
+        if (!composer) return false;
 
         composer.focus();
         
@@ -34,8 +37,10 @@ export const sendCommand = cli({
         } else {
           document.execCommand('insertText', false, text);
         }
+        return true;
       })(${JSON.stringify(text)})
     `);
+    if (!injected) throw new SelectorError('ChatWise input element');
 
     await page.wait(0.5);
     await page.pressKey('Enter');

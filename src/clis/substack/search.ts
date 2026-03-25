@@ -1,3 +1,4 @@
+import { CommandExecutionError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 
 type SubstackPostResult = {
@@ -32,7 +33,7 @@ async function searchPosts(keyword: string, limit: number): Promise<SubstackPost
   url.searchParams.set('includePlatformResults', 'true');
 
   const resp = await fetch(url, { headers: headers() });
-  if (!resp.ok) throw new Error(`Substack post search failed: HTTP ${resp.status}`);
+  if (!resp.ok) throw new CommandExecutionError(`Substack post search failed: HTTP ${resp.status}`);
 
   const data = await resp.json() as { results?: any[] };
   const results = Array.isArray(data?.results) ? data.results : [];
@@ -52,7 +53,7 @@ async function searchPublications(keyword: string, limit: number): Promise<Subst
   url.searchParams.set('page', '0');
 
   const resp = await fetch(url, { headers: headers() });
-  if (!resp.ok) throw new Error(`Substack publication search failed: HTTP ${resp.status}`);
+  if (!resp.ok) throw new CommandExecutionError(`Substack publication search failed: HTTP ${resp.status}`);
 
   const data = await resp.json() as { results?: any[] };
   const results = Array.isArray(data?.results) ? data.results : [];

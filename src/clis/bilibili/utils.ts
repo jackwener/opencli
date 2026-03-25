@@ -3,7 +3,7 @@
  */
 
 import type { IPage } from '../../types.js';
-import { AuthRequiredError } from '../../errors.js';
+import { AuthRequiredError, EmptyResultError } from '../../errors.js';
 
 const MIXIN_KEY_ENC_TAB = [
   46,47,18,2,53,8,23,32,15,50,10,31,58,3,45,35,27,43,5,49,
@@ -112,5 +112,5 @@ export async function resolveUid(page: IPage, input: string): Promise<string> {
   });
   const results = payload?.data?.result ?? [];
   if (results.length > 0) return String(results[0].mid);
-  throw new Error(`Cannot resolve UID for: ${input}`);
+  throw new EmptyResultError(`bilibili user search: ${input}`, 'User may not exist or username may have changed.');
 }

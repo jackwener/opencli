@@ -64,13 +64,14 @@ function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
+    let aborted = false;
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > MAX_BODY) { req.destroy(); reject(new Error('Body too large')); return; }
+      if (size > MAX_BODY) { aborted = true; req.destroy(); reject(new Error('Body too large')); return; }
       chunks.push(c);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    req.on('error', reject);
+    req.on('end', () => { if (!aborted) resolve(Buffer.concat(chunks).toString('utf-8')); });
+    req.on('error', (err) => { if (!aborted) reject(err); });
   });
 }
 
@@ -271,7 +272,7 @@ httpServer.listen(PORT, '127.0.0.1', () => {
 httpServer.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`[daemon] Port ${PORT} already in use — another daemon is likely running. Exiting.`);
-    process.exit(0);
+    process.exit(1);
   }
   console.error('[daemon] Server error:', err.message);
   process.exit(1);

@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 cli({
@@ -13,7 +14,7 @@ cli({
   ],
   columns: ['status', 'message'],
   func: async (page: IPage | null, kwargs: any) => {
-    if (!page) throw new Error('Requires browser');
+    if (!page) throw new CommandExecutionError('Browser session required for twitter delete');
 
     await page.goto(kwargs.url);
     await page.wait(5); // Wait for tweet to load completely

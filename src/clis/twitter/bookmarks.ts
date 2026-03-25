@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
 
 const BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 const BOOKMARKS_QUERY_ID = 'Fy0QMy4q_aZCpkO0PnyLYw';
@@ -137,7 +138,7 @@ cli({
     const ct0 = await page.evaluate(`() => {
       return document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('ct0='))?.split('=')[1] || null;
     }`);
-    if (!ct0) throw new Error('Not logged into x.com (no ct0 cookie)');
+    if (!ct0) throw new AuthRequiredError('x.com', 'Not logged into x.com (no ct0 cookie)');
 
     const queryId = await page.evaluate(`async () => {
       try {
@@ -185,7 +186,7 @@ cli({
       }`);
 
       if (data?.error) {
-        if (allTweets.length === 0) throw new Error(`HTTP ${data.error}: Failed to fetch bookmarks. queryId may have expired.`);
+        if (allTweets.length === 0) throw new CommandExecutionError(`HTTP ${data.error}: Failed to fetch bookmarks. queryId may have expired.`);
         break;
       }
 

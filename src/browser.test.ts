@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { BrowserBridge, __test__ } from './browser/index.js';
+import { BrowserBridge, __test__, generateStealthJs } from './browser/index.js';
 import * as daemonClient from './browser/daemon-client.js';
 
 describe('browser helpers', () => {
@@ -131,5 +131,55 @@ describe('BrowserBridge state', () => {
     const mcp = new BrowserBridge();
 
     await expect(mcp.connect()).rejects.toThrow('Browser Extension is not connected');
+  });
+});
+
+describe('stealth anti-detection', () => {
+  it('generates non-empty JS string', () => {
+    const js = generateStealthJs();
+    expect(typeof js).toBe('string');
+    expect(js.length).toBeGreaterThan(100);
+  });
+
+  it('contains all 7 anti-detection patches', () => {
+    const js = generateStealthJs();
+    // 1. webdriver
+    expect(js).toContain('navigator');
+    expect(js).toContain('webdriver');
+    // 2. chrome stub
+    expect(js).toContain('window.chrome');
+    // 3. plugins
+    expect(js).toContain('plugins');
+    expect(js).toContain('PDF Viewer');
+    // 4. languages
+    expect(js).toContain('languages');
+    // 5. permissions
+    expect(js).toContain('Permissions');
+    expect(js).toContain('notifications');
+    // 6. automation artifacts (dynamic cdc_ scan)
+    expect(js).toContain('__playwright');
+    expect(js).toContain('__puppeteer');
+    expect(js).toContain('getOwnPropertyNames');
+    expect(js).toContain('cdc_');
+    // 7. CDP stack trace cleanup
+    expect(js).toContain('Error.prototype');
+    expect(js).toContain('puppeteer_evaluation_script');
+    expect(js).toContain('getOwnPropertyDescriptor');
+  });
+
+  it('includes guard flag to prevent double-injection', () => {
+    const js = generateStealthJs();
+    // Guard uses a non-enumerable property on a built-in prototype
+    expect(js).toContain("EventTarget.prototype");
+    // Guard should check early and return 'skipped'
+    expect(js).toContain("return 'skipped'");
+    // Normal path returns 'applied'
+    expect(js).toContain("return 'applied'");
+  });
+
+  it('generates syntactically valid JS', () => {
+    const js = generateStealthJs();
+    // Should not throw when parsed
+    expect(() => new Function(js)).not.toThrow();
   });
 });

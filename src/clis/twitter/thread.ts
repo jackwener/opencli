@@ -1,5 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
-import { AuthRequiredError } from '../../errors.js';
+import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
 
 // ── Twitter GraphQL constants ──────────────────────────────────────────
 
@@ -165,7 +165,7 @@ cli({
       }`);
 
       if (data?.error) {
-        if (allTweets.length === 0) throw new Error(`HTTP ${data.error}: Tweet not found or queryId expired`);
+        if (allTweets.length === 0) throw new CommandExecutionError(`HTTP ${data.error}: Tweet not found or queryId expired`);
         break;
       }
 

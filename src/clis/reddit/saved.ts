@@ -1,3 +1,4 @@
+import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 
 cli({
@@ -12,7 +13,7 @@ cli({
   ],
   columns: ['title', 'subreddit', 'score', 'comments', 'url'],
   func: async (page, kwargs) => {
-    if (!page) throw new Error('Requires browser');
+    if (!page) throw new CommandExecutionError('Browser session required');
 
     await page.goto('https://www.reddit.com');
 
@@ -41,7 +42,10 @@ cli({
       }
     })()`);
 
-    if (result?.error) throw new Error(result.error);
+    if (result?.error) {
+      if (String(result.error).includes('Not logged in')) throw new AuthRequiredError('reddit.com', result.error);
+      throw new CommandExecutionError(result.error);
+    }
     return (result || []).slice(0, kwargs.limit);
   }
 });

@@ -2,6 +2,8 @@
  * Pipeline template engine: ${{ ... }} expression rendering.
  */
 
+import vm from 'node:vm';
+
 export interface RenderContext {
   args?: Record<string, unknown>;
   data?: unknown;
@@ -9,9 +11,7 @@ export interface RenderContext {
   index?: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from '../utils.js';
 
 export function render(template: unknown, ctx: RenderContext): unknown {
   if (typeof template !== 'string') return template;
@@ -37,45 +37,29 @@ export function evalExpr(expr: string, ctx: RenderContext): unknown {
   const index = ctx.index ?? 0;
 
   // ── Pipe filters: expr | filter1(arg) | filter2 ──
-  // Supports: default(val), join(sep), upper, lower, truncate(n), trim, replace(old,new)
-  if (expr.includes('|') && !expr.includes('||')) {
-    const segments = expr.split('|').map(s => s.trim());
-    const mainExpr = segments[0];
-    let result = resolvePath(mainExpr, { args, item, data, index });
-    for (let i = 1; i < segments.length; i++) {
-      result = applyFilter(segments[i], result);
+  // Split on single | (not ||) so "item.a || item.b | upper" works correctly.
+  const pipeSegments = expr.split(/(?<!\|)\|(?!\|)/).map(s => s.trim());
+  if (pipeSegments.length > 1) {
+    let result = evalExpr(pipeSegments[0], ctx);
+    for (let i = 1; i < pipeSegments.length; i++) {
+      result = applyFilter(pipeSegments[i], result);
     }
     return result;
   }
 
-  // Arithmetic: index + 1
-  const arithMatch = expr.match(/^([\w][\w.]*)\s*([+\-*/])\s*(\d+)$/);
-  if (arithMatch) {
-    const [, varName, op, numStr] = arithMatch;
-    const val = resolvePath(varName, { args, item, data, index });
-    if (val !== null && val !== undefined) {
-      const numVal = Number(val); const num = Number(numStr);
-      if (!isNaN(numVal)) {
-        switch (op) {
-          case '+': return numVal + num; case '-': return numVal - num;
-          case '*': return numVal * num; case '/': return num !== 0 ? numVal / num : 0;
-        }
-      }
-    }
-  }
+  // Fast path: quoted string literal — skip VM overhead
+  const strLit = expr.match(/^(['"])(.*)\1$/);
+  if (strLit) return strLit[2];
 
-  // JS-like fallback expression: item.tweetCount || 'N/A'
-  const orMatch = expr.match(/^(.+?)\s*\|\|\s*(.+)$/);
-  if (orMatch) {
-    const left = evalExpr(orMatch[1].trim(), ctx);
-    if (left) return left;
-    const right = orMatch[2].trim();
-    return right.replace(/^['"]|['"]$/g, '');
-  }
+  // Fast path: numeric literal
+  if (/^\d+(\.\d+)?$/.test(expr)) return Number(expr);
 
+  // Try resolving as a simple dotted path (item.foo.bar, args.limit, index)
   const resolved = resolvePath(expr, { args, item, data, index });
   if (resolved !== null && resolved !== undefined) return resolved;
 
+  // Fallback: evaluate as JS in a sandboxed VM.
+  // Handles ||, ??, arithmetic, ternary, method calls, etc. natively.
   return evalJsExpr(expr, { args, item, data, index });
 }
 
@@ -95,7 +79,7 @@ function applyFilter(filterExpr: string, value: unknown): unknown {
     case 'default': {
       if (value === null || value === undefined || value === '') {
         const intVal = parseInt(filterArg, 10);
-        if (!isNaN(intVal) && String(intVal) === filterArg.trim()) return intVal;
+        if (!Number.isNaN(intVal) && String(intVal) === filterArg.trim()) return intVal;
         return filterArg;
       }
       return value;
@@ -110,7 +94,7 @@ function applyFilter(filterExpr: string, value: unknown): unknown {
       return typeof value === 'string' ? value.trim() : value;
     case 'truncate': {
       const n = parseInt(filterArg, 10) || 50;
-      return typeof value === 'string' && value.length > n ? value.slice(0, n) + '...' : value;
+      return typeof value === 'string' && value.length > n ? `${value.slice(0, n)}...` : value;
     }
     case 'replace': {
       if (typeof value !== 'string') return value;
@@ -138,6 +122,7 @@ function applyFilter(filterExpr: string, value: unknown): unknown {
     case 'sanitize':
       // Remove invalid filename characters
       return typeof value === 'string'
+        // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional - strips C0 control chars from filenames
         ? value.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
         : value;
     case 'ext': {
@@ -186,58 +171,61 @@ export function resolvePath(pathStr: string, ctx: RenderContext): unknown {
 
 /**
  * Evaluate arbitrary JS expressions as a last-resort fallback.
- *
- * ⚠️  SECURITY NOTE: Uses `new Function()` to execute the expression.
- * This is acceptable here because:
- *   1. YAML adapters are authored by trusted repo contributors only.
- *   2. The expression runs in the same Node.js process (no sandbox).
- *   3. Only a curated set of globals is exposed (no require/import/process/fs).
- * If opencli ever loads untrusted third-party adapters, this MUST be replaced
- * with a proper sandboxed evaluator.
+ * Runs inside a `node:vm` sandbox with dynamic code generation disabled.
  */
+const FORBIDDEN_EXPR_PATTERNS = /\b(constructor|__proto__|prototype|globalThis|process|require|import|eval)\b/;
+
+/**
+ * Deep-copy plain data to sever prototype chains, preventing sandbox escape
+ * via `args.constructor.constructor('return process')()` etc.
+ */
+function sanitizeContext(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object' && typeof obj !== 'function') return obj;
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch {
+    return {};
+  }
+}
+
 function evalJsExpr(expr: string, ctx: RenderContext): unknown {
   // Guard against absurdly long expressions that could indicate injection.
   if (expr.length > 2000) return undefined;
 
-  const args = ctx.args ?? {};
-  const item = ctx.item ?? {};
-  const data = ctx.data;
+  // Block obvious sandbox escape attempts.
+  if (FORBIDDEN_EXPR_PATTERNS.test(expr)) return undefined;
+
+  const args = sanitizeContext(ctx.args ?? {});
+  const item = sanitizeContext(ctx.item ?? {});
+  const data = sanitizeContext(ctx.data);
   const index = ctx.index ?? 0;
 
   try {
-    const fn = new Function(
-      'args',
-      'item',
-      'data',
-      'index',
-      'encodeURIComponent',
-      'decodeURIComponent',
-      'JSON',
-      'Math',
-      'Number',
-      'String',
-      'Boolean',
-      'Array',
-      'Object',
-      'Date',
-      `"use strict"; return (${expr});`,
-    );
-
-    return fn(
-      args,
-      item,
-      data,
-      index,
-      encodeURIComponent,
-      decodeURIComponent,
-      JSON,
-      Math,
-      Number,
-      String,
-      Boolean,
-      Array,
-      Object,
-      Date,
+    return vm.runInNewContext(
+      `(${expr})`,
+      {
+        args,
+        item,
+        data,
+        index,
+        encodeURIComponent,
+        decodeURIComponent,
+        JSON,
+        Math,
+        Number,
+        String,
+        Boolean,
+        Array,
+        Date,
+      },
+      {
+        timeout: 50,
+        contextCodeGeneration: {
+          strings: false,
+          wasm: false,
+        },
+      },
     );
   } catch {
     return undefined;

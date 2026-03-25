@@ -247,3 +247,45 @@ describe('getFormStateJs', () => {
     expect(js).toContain('data-opencli-ref');
   });
 });
+
+describe('Search Element Detection', () => {
+  it('includes SEARCH_INDICATORS set', () => {
+    const js = generateSnapshotJs();
+    expect(js).toContain('SEARCH_INDICATORS');
+    expect(js).toContain('search');
+    expect(js).toContain('magnify');
+    expect(js).toContain('glass');
+  });
+
+  it('includes hasFormControlDescendant function', () => {
+    const js = generateSnapshotJs();
+    expect(js).toContain('hasFormControlDescendant');
+    expect(js).toContain('input');
+    expect(js).toContain('select');
+    expect(js).toContain('textarea');
+  });
+
+  it('includes isSearchElement function', () => {
+    const js = generateSnapshotJs();
+    expect(js).toContain('isSearchElement');
+    expect(js).toContain('className');
+    expect(js).toContain('data-');
+  });
+
+  it('checks label wrapper detection in isInteractive', () => {
+    const js = generateSnapshotJs();
+    // Label elements without "for" attribute should check for form control descendants
+    expect(js).toContain('hasFormControlDescendant(el, 2)');
+  });
+
+  it('checks span wrapper detection in isInteractive', () => {
+    const js = generateSnapshotJs();
+    // Span elements should check for form control descendants
+    expect(js).toContain("tag === 'span'");
+  });
+
+  it('integrates search element detection into isInteractive', () => {
+    const js = generateSnapshotJs();
+    expect(js).toContain('isSearchElement(el)');
+  });
+});

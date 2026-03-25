@@ -17,7 +17,8 @@ npm run build
 
 # 4. Run a few checks
 npx tsc --noEmit
-npx vitest run src/
+npm test
+npm run test:adapter
 
 # 5. Link globally (optional, for testing `opencli` command)
 npm link
@@ -26,6 +27,12 @@ npm link
 ## Adding a New Site Adapter
 
 This is the most common type of contribution. Start with YAML when possible, and use TypeScript only when you need browser-side logic or multi-step flows.
+
+Before you start:
+
+- Prefer positional args for the command's primary subject (`search <query>`, `topic <id>`, `download <url>`). Reserve named flags for optional modifiers such as `--limit`, `--sort`, `--lang`, and `--output`.
+- Normalize expected adapter failures to `CliError` subclasses instead of raw `Error` whenever possible. Prefer `AuthRequiredError`, `EmptyResultError`, `CommandExecutionError`, `TimeoutError`, and `ArgumentError` so the top-level CLI can render better messages and hints.
+- If you add a new adapter or make a command newly discoverable, update the matching doc page and the user-facing indexes that expose it.
 
 ### YAML Adapter (Recommended for data-fetching commands)
 
@@ -70,6 +77,7 @@ Create a file like `src/clis/<site>/<command>.ts`:
 
 ```typescript
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError, EmptyResultError } from '../../errors.js';
 
 cli({
   site: 'mysite',
@@ -86,6 +94,8 @@ cli({
   func: async (page, kwargs) => {
     const { query, limit = 10 } = kwargs;
     // ... browser automation logic
+    if (!Array.isArray(data)) throw new CommandExecutionError('MySite returned an unexpected response');
+    if (!data.length) throw new EmptyResultError('mysite search', 'Try a different keyword');
     return data.slice(0, Number(limit)).map((item: any) => ({
       title: item.title,
       url: item.url,
@@ -109,6 +119,7 @@ opencli <site> <command> -v    # Verbose mode for debugging
 - **ES Modules** — use `.js` extensions in imports (TypeScript output).
 - **Naming**: `kebab-case` for files, `camelCase` for variables/functions, `PascalCase` for types/classes.
 - **No default exports** — use named exports.
+- **Errors** — throw `CliError` subclasses for expected adapter failures; avoid raw `Error` for normal adapter control flow.
 
 ## Commit Convention
 
@@ -129,8 +140,16 @@ chore: bump vitest to v4
 3. Run the checks:
    ```bash
    npx tsc --noEmit           # Type check
-   npx vitest run src/        # Unit tests
+   npm test                   # Core unit tests
+   npm run test:adapter       # Focused adapter tests (if adapter logic changed)
    opencli validate           # YAML validation (if applicable)
    ```
 4. Commit using conventional commit format
 5. Push and open a PR
+
+If your PR adds a new adapter or changes user-facing commands, also verify:
+
+- Adapter docs exist under `docs/adapters/`
+- `docs/adapters/index.md` is updated for new adapters
+- VitePress sidebar includes the new doc page
+- `README.md` / `README.zh-CN.md` stay aligned when command discoverability changes

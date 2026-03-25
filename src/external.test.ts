@@ -33,6 +33,15 @@ describe('parseCommand', () => {
       'Install command contains unsafe shell operators',
     );
   });
+
+  it('rejects command substitution and multiline input', () => {
+    expect(() => parseCommand('brew install $(whoami)')).toThrow(
+      'Install command contains unsafe shell operators',
+    );
+    expect(() => parseCommand('brew install gh\nrm -rf /')).toThrow(
+      'Install command contains unsafe shell operators',
+    );
+  });
 });
 
 describe('installExternalCli', () => {

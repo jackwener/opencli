@@ -1,3 +1,4 @@
+import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 
 cli({
@@ -153,7 +154,8 @@ cli({
     `);
 
     if (result?.error) {
-      throw new Error(result.error + (result.hint ? ` (${result.hint})` : ''));
+      if (String(result.error).includes('No ct0 cookie')) throw new AuthRequiredError('x.com', result.error);
+      throw new CommandExecutionError(result.error + (result.hint ? ` (${result.hint})` : ''));
     }
 
     return result || [];

@@ -11,6 +11,12 @@ opencli plugin install github:ByteYue/opencli-plugin-github-trending
 # 列出已安装插件
 opencli plugin list
 
+# 更新单个插件
+opencli plugin update github-trending
+
+# 更新全部已安装插件
+opencli plugin update --all
+
 # 使用插件（本质上就是普通 command）
 opencli github-trending today
 
@@ -30,6 +36,10 @@ opencli plugin install https://github.com/user/repo
 ```
 
 如果仓库名带 `opencli-plugin-` 前缀，本地目录会自动去掉这个前缀。例如 `opencli-plugin-hot-digest` 会变成 `hot-digest`。
+
+## 版本追踪
+
+OpenCLI 会把已安装 plugin 的版本记录到 `~/.opencli/plugins.lock.json`。每条记录会保存 plugin source、当前 git commit hash、安装时间，以及最近一次更新时间。只要有这份元数据，`opencli plugin list` 就会显示对应的短 commit hash。
 
 ## YAML plugin 示例
 

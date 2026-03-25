@@ -17,6 +17,7 @@ import {
   type RawSegment,
   type Chapter,
 } from './transcript-group.js';
+import { CommandExecutionError, EmptyResultError } from '../../errors.js';
 
 cli({
   site: 'youtube',
@@ -91,10 +92,10 @@ cli({
     `);
 
     if (!captionData || typeof captionData === 'string') {
-      throw new Error(`Failed to get caption info: ${typeof captionData === 'string' ? captionData : 'null response'}`);
+      throw new CommandExecutionError(`Failed to get caption info: ${typeof captionData === 'string' ? captionData : 'null response'}`);
     }
     if (captionData.error) {
-      throw new Error(`${captionData.error}${captionData.available ? ' (available: ' + captionData.available.join(', ') + ')' : ''}`);
+      throw new CommandExecutionError(`${captionData.error}${captionData.available ? ' (available: ' + captionData.available.join(', ') + ')' : ''}`);
     }
 
     // Warn if --lang was specified but not matched
@@ -176,10 +177,10 @@ cli({
     `);
 
     if (!Array.isArray(segments)) {
-      throw new Error((segments as any)?.error || 'Failed to parse caption segments');
+      throw new CommandExecutionError((segments as any)?.error || 'Failed to parse caption segments');
     }
     if (segments.length === 0) {
-      throw new Error('No caption segments found');
+      throw new EmptyResultError('youtube transcript');
     }
 
     // Step 3: Fetch chapters (for grouped mode)

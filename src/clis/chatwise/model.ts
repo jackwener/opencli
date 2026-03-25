@@ -1,5 +1,7 @@
 import { cli, Strategy } from '../../registry.js';
+import { SelectorError } from '../../errors.js';
 import type { IPage } from '../../types.js';
+import { chatwiseRequiredEnv } from './shared.js';
 
 export const modelCommand = cli({
   site: 'chatwise',
@@ -8,6 +10,7 @@ export const modelCommand = cli({
   domain: 'localhost',
   strategy: Strategy.UI,
   browser: true,
+  requiredEnv: chatwiseRequiredEnv,
   args: [
     { name: 'model-name', required: false, positional: true, help: 'Model to switch to (e.g. gpt-4, claude-3)' },
   ],
@@ -44,7 +47,7 @@ export const modelCommand = cli({
       return [{ Status: 'Active', Model: currentModel }];
     } else {
       // Try to switch model
-      await page.evaluate(`
+      const opened = await page.evaluate(`
         (function(target) {
           const selectors = [
             '[class*="model"]',
@@ -54,11 +57,12 @@ export const modelCommand = cli({
           
           for (const sel of selectors) {
             const el = document.querySelector(sel);
-            if (el) { el.click(); return; }
+            if (el) { el.click(); return true; }
           }
-          throw new Error('Could not find model selector');
+          return false;
         })(${JSON.stringify(desiredModel)})
       `);
+      if (!opened) throw new SelectorError('ChatWise model selector');
 
       await page.wait(0.5);
 

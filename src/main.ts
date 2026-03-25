@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { discoverClis, discoverPlugins } from './discovery.js';
 import { getCompletions } from './completion.js';
 import { runCli } from './cli.js';
+import { emitHook } from './hooks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,4 +50,5 @@ if (getCompIdx !== -1) {
   process.exit(0);
 }
 
+await emitHook('onStartup', { command: '__startup__', args: {} });
 runCli(BUILTIN_CLIS, USER_CLIS);

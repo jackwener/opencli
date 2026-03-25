@@ -1,4 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
+import { AuthRequiredError, EmptyResultError } from '../../errors.js';
 
 // ── Twitter GraphQL constants ──────────────────────────────────────────
 
@@ -37,7 +38,7 @@ cli({
     const ct0 = await page.evaluate(`(() => {
       return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('ct0='))?.split('=')[1] || null;
     })()`);
-    if (!ct0) throw new Error('Not logged into x.com (no ct0 cookie)');
+    if (!ct0) throw new AuthRequiredError('x.com', 'Not logged into x.com (no ct0 cookie)');
 
     // Try legacy guide.json API first (faster than DOM scraping)
     let trends: TrendItem[] = [];
@@ -105,7 +106,7 @@ cli({
     }
 
     if (trends.length === 0) {
-      throw new Error('No trending data found. API may have changed or login may be required.');
+      throw new EmptyResultError('twitter trending', 'API may have changed or login may be required.');
     }
 
     return trends.slice(0, limit);

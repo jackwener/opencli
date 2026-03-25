@@ -1,6 +1,7 @@
 /**
  * V2EX Me (Profile/Balance) adapter.
  */
+import { CommandExecutionError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
 
@@ -15,7 +16,7 @@ cli({
   args: [],
   columns: ['username', 'balance', 'unread_notifications', 'daily_reward_ready'],
   func: async (page: IPage | null) => {
-    if (!page) throw new Error('Browser page required');
+    if (!page) throw new CommandExecutionError('Browser page required');
 
     if (process.env.OPENCLI_VERBOSE) {
       console.error('[opencli:v2ex] Navigating to /');
@@ -95,7 +96,7 @@ cli({
         console.error(`[opencli:v2ex:debug] Page Title: ${data.debug_title}`);
         console.error(`[opencli:v2ex:debug] Page Body: ${data.debug_body}`);
       }
-      throw new Error(data.error);
+      throw new CommandExecutionError(data.error);
     }
 
     return [data];

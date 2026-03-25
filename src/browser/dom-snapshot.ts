@@ -26,7 +26,7 @@
 
 // ─── Types ───────────────────────────────────────────────────────────
 
-export interface SnapshotOptions {
+export interface DomSnapshotOptions {
   /** Extra pixels beyond viewport to include (default 800) */
   viewportExpand?: number;
   /** Maximum DOM depth to traverse (default 50) */
@@ -175,7 +175,7 @@ export function getFormStateJs(): string {
  * - `|iframe|` — iframe content
  * - `|table|` — markdown table rendering
  */
-export function generateSnapshotJs(opts: SnapshotOptions = {}): string {
+export function generateSnapshotJs(opts: DomSnapshotOptions = {}): string {
   const viewportExpand = opts.viewportExpand ?? 800;
   const maxDepth = Math.max(1, Math.min(opts.maxDepth ?? 50, 200));
   const interactiveOnly = opts.interactiveOnly ?? false;
@@ -271,6 +271,13 @@ export function generateSnapshotJs(opts: SnapshotOptions = {}): string {
 
   const AD_SELECTOR_RE = /\\b(ad[_-]?(?:banner|container|wrapper|slot|unit|block|frame|leaderboard|sidebar)|google[_-]?ad|sponsored|adsbygoogle|banner[_-]?ad)\\b/i;
 
+  // Search element indicators for heuristic detection
+  const SEARCH_INDICATORS = new Set([
+    'search', 'magnify', 'glass', 'lookup', 'find', 'query',
+    'search-icon', 'search-btn', 'search-button', 'searchbox',
+    'fa-search', 'icon-search', 'btn-search',
+  ]);
+
   // ── Viewport & Layout Helpers ──────────────────────────────────────
 
   const vw = window.innerWidth;
@@ -339,12 +346,32 @@ export function generateSnapshotJs(opts: SnapshotOptions = {}): string {
 
   // ── Interactivity Detection ────────────────────────────────────────
 
+  // Check if element contains a form control within limited depth (handles label/span wrappers)
+  function hasFormControlDescendant(el, maxDepth = 2) {
+    if (maxDepth <= 0) return false;
+    for (const child of el.children || []) {
+      const tag = child.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return true;
+      if (hasFormControlDescendant(child, maxDepth - 1)) return true;
+    }
+    return false;
+  }
+
   function isInteractive(el) {
     const tag = el.tagName.toLowerCase();
     if (INTERACTIVE_TAGS.has(tag)) {
-      if (tag === 'label' && el.hasAttribute('for')) return false;
+      // Skip labels that proxy via "for" to avoid double-activating external inputs
+      if (tag === 'label') {
+        if (el.hasAttribute('for')) return false;
+        // Detect labels that wrap form controls up to two levels deep (label > span > input)
+        if (hasFormControlDescendant(el, 2)) return true;
+      }
       if (el.disabled && (tag === 'button' || tag === 'input')) return false;
       return true;
+    }
+    // Span wrappers for UI components - check if they contain form controls
+    if (tag === 'span') {
+      if (hasFormControlDescendant(el, 2)) return true;
     }
     const role = el.getAttribute('role');
     if (role && INTERACTIVE_ROLES.has(role)) return true;
@@ -352,6 +379,32 @@ export function generateSnapshotJs(opts: SnapshotOptions = {}): string {
     if (el.hasAttribute('tabindex') && el.getAttribute('tabindex') !== '-1') return true;
     try { if (window.getComputedStyle(el).cursor === 'pointer') return true; } catch {}
     if (el.isContentEditable && el.getAttribute('contenteditable') !== 'false') return true;
+    // Search element heuristic detection
+    if (isSearchElement(el)) return true;
+    return false;
+  }
+
+  function isSearchElement(el) {
+    // Check class names for search indicators
+    const className = el.className?.toLowerCase() || '';
+    const classes = className.split(/\\s+/).filter(Boolean);
+    for (const cls of classes) {
+      const cleaned = cls.replace(/[^a-z0-9-]/g, '');
+      if (SEARCH_INDICATORS.has(cleaned)) return true;
+    }
+    // Check id for search indicators
+    const id = el.id?.toLowerCase() || '';
+    const cleanedId = id.replace(/[^a-z0-9-]/g, '');
+    if (SEARCH_INDICATORS.has(cleanedId)) return true;
+    // Check data-* attributes for search functionality
+    for (const attr of el.attributes || []) {
+      if (attr.name.startsWith('data-')) {
+        const value = attr.value.toLowerCase();
+        for (const kw of SEARCH_INDICATORS) {
+          if (value.includes(kw)) return true;
+        }
+      }
+    }
     return false;
   }
 

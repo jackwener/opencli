@@ -1,4 +1,41 @@
+import { CommandExecutionError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
+import type { IPage } from '../../types.js';
+
+/**
+ * Trigger Twitter search SPA navigation and retry once on transient failures.
+ *
+ * Twitter/X sometimes keeps the page on /explore for a short period even after
+ * pushState + popstate. A second attempt is enough for the intermittent cases
+ * reported in issue #353 while keeping the flow narrowly scoped.
+ */
+async function navigateToSearch(page: Pick<IPage, 'evaluate' | 'wait'>, query: string, filter: string): Promise<void> {
+  const searchUrl = JSON.stringify(`/search?q=${encodeURIComponent(query)}&f=${filter}`);
+  let lastPath = '';
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await page.evaluate(`
+      (() => {
+        window.history.pushState({}, '', ${searchUrl});
+        window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+      })()
+    `);
+    await page.wait(5);
+
+    lastPath = String(await page.evaluate('() => window.location.pathname') || '');
+    if (lastPath.startsWith('/search')) {
+      return;
+    }
+
+    if (attempt < 2) {
+      await page.wait(1);
+    }
+  }
+
+  throw new CommandExecutionError(
+    `SPA navigation to /search failed. Final path: ${lastPath || '(empty)'}. Twitter may have changed its routing.`,
+  );
+}
 
 cli({
   site: 'twitter',
@@ -9,11 +46,13 @@ cli({
   browser: true,
   args: [
     { name: 'query', type: 'string', required: true, positional: true },
+    { name: 'filter', type: 'string', default: 'top', choices: ['top', 'live'] },
     { name: 'limit', type: 'int', default: 15 },
   ],
   columns: ['id', 'author', 'text', 'likes', 'views', 'url'],
   func: async (page, kwargs) => {
     const query = kwargs.query;
+    const filter = kwargs.filter === 'live' ? 'live' : 'top';
 
     // 1. Navigate to x.com/explore (has a search input at the top)
     await page.goto('https://x.com/explore');
@@ -29,20 +68,7 @@ cli({
     //    a full page reload, so the interceptor stays alive.
     //    Note: the previous approach (nativeSetter + Enter keydown on the
     //    search input) does not reliably trigger Twitter's form submission.
-    const searchUrl = JSON.stringify(`/search?q=${encodeURIComponent(query)}&f=top`);
-    await page.evaluate(`
-      (() => {
-        window.history.pushState({}, '', ${searchUrl});
-        window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
-      })()
-    `);
-    await page.wait(5);
-
-    // Verify SPA navigation succeeded
-    const currentPath = await page.evaluate('() => window.location.pathname');
-    if (!currentPath?.startsWith('/search')) {
-        throw new Error('SPA navigation to /search failed. Twitter may have changed its routing.');
-    }
+    await navigateToSearch(page, query, filter);
 
     // 4. Scroll to trigger additional pagination
     await page.autoScroll({ times: 3, delayMs: 2000 });

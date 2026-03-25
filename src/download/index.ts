@@ -11,12 +11,17 @@ import * as os from 'node:os';
 import { URL } from 'node:url';
 import type { ProgressBar } from './progress.js';
 import { isBinaryInstalled } from '../external.js';
+import type { BrowserCookie } from '../types.js';
+import { getErrorMessage } from '../errors.js';
+
+export type { BrowserCookie } from '../types.js';
 
 export interface DownloadOptions {
   cookies?: string;
   headers?: Record<string, string>;
   timeout?: number;
   onProgress?: (received: number, total: number) => void;
+  maxRedirects?: number;
 }
 
 export interface YtdlpOptions {
@@ -27,24 +32,9 @@ export interface YtdlpOptions {
   onProgress?: (percent: number) => void;
 }
 
-export interface BrowserCookie {
-  name: string;
-  value: string;
-  domain: string;
-  path?: string;
-  secure?: boolean;
-  httpOnly?: boolean;
-  expirationDate?: number;
-}
-
 /** Check if yt-dlp is available in PATH. */
 export function checkYtdlp(): boolean {
   return isBinaryInstalled('yt-dlp');
-}
-
-/** Check if ffmpeg is available in PATH. */
-export function checkFfmpeg(): boolean {
-  return isBinaryInstalled('ffmpeg');
 }
 
 /** Domains that host video content and can be downloaded via yt-dlp. */
@@ -92,15 +82,16 @@ export async function httpDownload(
   url: string,
   destPath: string,
   options: DownloadOptions = {},
+  redirectCount = 0,
 ): Promise<{ success: boolean; size: number; error?: string }> {
-  const { cookies, headers = {}, timeout = 30000, onProgress } = options;
+  const { cookies, headers = {}, timeout = 30000, onProgress, maxRedirects = 10 } = options;
 
   return new Promise((resolve) => {
     const parsedUrl = new URL(url);
     const protocol = parsedUrl.protocol === 'https:' ? https : http;
 
     const requestHeaders: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
       ...headers,
     };
 
@@ -120,7 +111,23 @@ export async function httpDownload(
       if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         file.close();
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        httpDownload(resolveRedirectUrl(url, response.headers.location), destPath, options).then(resolve);
+        if (redirectCount >= maxRedirects) {
+          resolve({ success: false, size: 0, error: `Too many redirects (> ${maxRedirects})` });
+          return;
+        }
+        const redirectUrl = resolveRedirectUrl(url, response.headers.location);
+        const originalHost = new URL(url).hostname;
+        const redirectHost = new URL(redirectUrl).hostname;
+        // Do not forward cookies when a redirect crosses host boundaries.
+        const redirectOptions = originalHost === redirectHost
+          ? options
+          : { ...options, cookies: undefined, headers: stripCookieHeaders(options.headers) };
+        httpDownload(
+          redirectUrl,
+          destPath,
+          redirectOptions,
+          redirectCount + 1,
+        ).then(resolve);
         return;
       }
 
@@ -168,6 +175,13 @@ export function resolveRedirectUrl(currentUrl: string, location: string): string
   return new URL(location, currentUrl).toString();
 }
 
+function stripCookieHeaders(headers?: Record<string, string>): Record<string, string> | undefined {
+  if (!headers) return headers;
+  return Object.fromEntries(
+    Object.entries(headers).filter(([key]) => key.toLowerCase() !== 'cookie'),
+  );
+}
+
 /**
  * Export cookies to Netscape format for yt-dlp.
  */
@@ -188,7 +202,9 @@ export function exportCookiesToNetscape(
     const cookiePath = cookie.path || '/';
     const secure = cookie.secure ? 'TRUE' : 'FALSE';
     const expiry = Math.floor(Date.now() / 1000) + 86400 * 365; // 1 year from now
-    lines.push(`${domain}\t${includeSubdomains}\t${cookiePath}\t${secure}\t${expiry}\t${cookie.name}\t${cookie.value}`);
+    const safeName = cookie.name.replace(/[\t\n\r]/g, '');
+    const safeValue = cookie.value.replace(/[\t\n\r]/g, '');
+    lines.push(`${domain}\t${includeSubdomains}\t${cookiePath}\t${secure}\t${expiry}\t${safeName}\t${safeValue}`);
   }
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -226,8 +242,13 @@ export async function ytdlpDownload(
       '--progress',
     ];
 
-    if (cookiesFile && fs.existsSync(cookiesFile)) {
-      args.push('--cookies', cookiesFile);
+    if (cookiesFile) {
+      if (fs.existsSync(cookiesFile)) {
+        args.push('--cookies', cookiesFile);
+      } else {
+        console.error(`[download] Cookies file not found: ${cookiesFile}, falling back to browser cookies`);
+        args.push('--cookies-from-browser', 'chrome');
+      }
     } else {
       // Try to use browser cookies
       args.push('--cookies-from-browser', 'chrome');
@@ -319,8 +340,8 @@ export async function saveDocument(
 
     fs.writeFileSync(destPath, output, 'utf-8');
     return { success: true, size: Buffer.byteLength(output, 'utf-8') };
-  } catch (err: any) {
-    return { success: false, size: 0, error: err.message };
+  } catch (err) {
+    return { success: false, size: 0, error: getErrorMessage(err) };
   }
 }
 

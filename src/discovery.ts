@@ -20,31 +20,10 @@ import type { ManifestEntry } from './build-manifest.js';
 
 /** Plugins directory: ~/.opencli/plugins/ */
 export const PLUGINS_DIR = path.join(os.homedir(), '.opencli', 'plugins');
-const CLI_MODULE_PATTERN = /\bcli\s*\(/;
+/** Matches files that register commands via cli() or lifecycle hooks */
+const PLUGIN_MODULE_PATTERN = /\b(?:cli|onStartup|onBeforeExecute|onAfterExecute)\s*\(/;
 
-interface YamlArgDefinition {
-  type?: string;
-  default?: unknown;
-  required?: boolean;
-  positional?: boolean;
-  description?: string;
-  help?: string;
-  choices?: string[];
-}
-
-interface YamlCliDefinition {
-  site?: string;
-  name?: string;
-  description?: string;
-  domain?: string;
-  strategy?: string;
-  browser?: boolean;
-  args?: Record<string, YamlArgDefinition>;
-  columns?: string[];
-  pipeline?: Record<string, unknown>[];
-  timeout?: number;
-  navigateBefore?: boolean | string;
-}
+import type { YamlCliDefinition } from './yaml-schema.js';
 
 function parseStrategy(rawStrategy: string | undefined, fallback: Strategy = Strategy.COOKIE): Strategy {
   if (!rawStrategy) return fallback;
@@ -52,9 +31,7 @@ function parseStrategy(rawStrategy: string | undefined, fallback: Strategy = Str
   return Strategy[key] ?? fallback;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from './utils.js';
 
 /**
  * Discover and register CLI commands.
@@ -66,12 +43,12 @@ export async function discoverClis(...dirs: string[]): Promise<void> {
     const manifestPath = path.resolve(dir, '..', 'cli-manifest.json');
     try {
       await fs.promises.access(manifestPath);
-      await loadFromManifest(manifestPath, dir);
-      continue; // Skip filesystem scan for this directory
+      const loaded = await loadFromManifest(manifestPath, dir);
+      if (loaded) continue; // Skip filesystem scan only when manifest is usable
     } catch {
-      // Fallback: runtime filesystem scan (development)
-      await discoverClisFromFs(dir);
+      // Fall through to filesystem scan
     }
+    await discoverClisFromFs(dir);
   }
 }
 
@@ -80,7 +57,7 @@ export async function discoverClis(...dirs: string[]): Promise<void> {
  * YAML pipelines are inlined — zero YAML parsing at runtime.
  * TS modules are deferred — loaded lazily on first execution.
  */
-async function loadFromManifest(manifestPath: string, clisDir: string): Promise<void> {
+async function loadFromManifest(manifestPath: string, clisDir: string): Promise<boolean> {
   try {
     const raw = await fs.promises.readFile(manifestPath, 'utf-8');
     const manifest = JSON.parse(raw) as ManifestEntry[];
@@ -126,8 +103,10 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         registerCommand(cmd);
       }
     }
+    return true;
   } catch (err) {
     log.warn(`Failed to load manifest ${manifestPath}: ${getErrorMessage(err)}`);
+    return false;
   }
 }
 
@@ -136,7 +115,6 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
  */
 async function discoverClisFromFs(dir: string): Promise<void> {
   try { await fs.promises.access(dir); } catch { return; }
-  const promises: Promise<unknown>[] = [];
   const entries = await fs.promises.readdir(dir, { withFileTypes: true });
   
   const sitePromises = entries
@@ -269,7 +247,7 @@ async function discoverPluginDir(dir: string, site: string): Promise<void> {
 async function isCliModule(filePath: string): Promise<boolean> {
   try {
     const source = await fs.promises.readFile(filePath, 'utf-8');
-    return CLI_MODULE_PATTERN.test(source);
+    return PLUGIN_MODULE_PATTERN.test(source);
   } catch (err) {
     log.warn(`Failed to inspect module ${filePath}: ${getErrorMessage(err)}`);
     return false;

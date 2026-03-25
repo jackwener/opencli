@@ -4,8 +4,14 @@ on:
   push:
     branches: [ "main" ]
     tags: [ "v*.*.*" ]
+    paths:
+      - 'extension/**'
+      - '.github/workflows/build-extension.yml'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'extension/**'
+      - '.github/workflows/build-extension.yml'
 
 permissions:
   contents: write
@@ -46,7 +52,7 @@ jobs:
           zip -r ../opencli-extension.zip .
 
       - name: Upload Artifacts (Action Run)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opencli-extension-build
           path: |

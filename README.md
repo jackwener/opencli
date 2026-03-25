@@ -23,10 +23,30 @@ Turn ANY Electron application into a CLI tool! Recombine, script, and extend app
 - **CLI All Electron** — CLI-ify apps like Antigravity Ultra! Now AI can control itself natively using cc/openclaw!
 - **Account-safe** — Reuses Chrome's logged-in state; your credentials never leave the browser.
 - **AI Agent ready** — `explore` discovers APIs, `synthesize` generates adapters, `cascade` finds auth strategies.
-- **External CLI Hub** — Discover, auto-install, and passthrough commands to any external CLI (gh, obsidian, docker, kubectl, etc). Zero setup.
+- **External CLI Hub** — Discover, auto-install, and passthrough commands to any external CLI (gh, obsidian, docker, etc). Zero setup.
 - **Self-healing setup** — `opencli doctor` diagnoses and auto-starts the daemon, extension, and live browser connectivity.
 - **Dynamic Loader** — Simply drop `.ts` or `.yaml` adapters into the `clis/` folder for auto-registration.
 - **Dual-Engine Architecture** — Supports both YAML declarative data pipelines and robust browser runtime TypeScript injections.
+
+## Why opencli?
+
+There are many great browser automation tools. Here's when opencli is the right choice:
+
+| Your need | Best tool | Why |
+|-----------|-----------|-----|
+| Scheduled data extraction from specific sites | **opencli** | Pre-built adapters, deterministic JSON, zero LLM cost |
+| AI agent needs reliable site operations | **opencli** | Hundreds of commands, structured output, fast deterministic response |
+| Explore an unknown website ad-hoc | Browser-Use, Stagehand | LLM-driven general browsing for one-off tasks |
+| Large-scale web crawling | Crawl4AI, Scrapy | Purpose-built for throughput and scale |
+| Control desktop Electron apps from terminal | **opencli** | CDP + AppleScript — the only CLI tool that does this |
+
+**What makes opencli different:**
+
+- **Zero LLM cost** — No tokens consumed at runtime. Run 10,000 times and pay nothing.
+- **Deterministic** — Same command, same output schema, every time. Pipeable, scriptable, CI-friendly.
+- **Broad coverage** — 50+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
+
+> For a detailed comparison with Browser-Use, Crawl4AI, Firecrawl, and others, see the [Comparison Guide](./docs/comparison.md).
 
 ## Prerequisites
 
@@ -118,7 +138,7 @@ Run `opencli list` for the live registry.
 
 | Site | Commands | Mode |
 |------|----------|------|
-| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` `accept` `reply-dm` | Browser |
+| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` `accept` `reply-dm` `block` `unblock` `hide-reply` | Browser |
 | **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `read` `user` `user-posts` `user-comments` `upvote` `save` `comment` `subscribe` `saved` `upvoted` | Browser |
 | **cursor** | `status` `send` `read` `new` `dump` `composer` `model` `extract-code` `ask` `screenshot` `history` `export` | Desktop |
 | **bilibili** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` `download` | Browser |
@@ -129,8 +149,8 @@ Run `opencli list` for the live registry.
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | Desktop |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | Desktop |
 | **v2ex** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | Public / Browser |
-| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | Browser |
-| **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` `serve` | Desktop |
+| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` `fund-holdings` `fund-snapshot` | Browser |
+| **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` | Desktop |
 | **chatgpt** | `status` `new` `send` `read` `ask` | Desktop |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | Browser |
 | **apple-podcasts** | `search` `episodes` `top` | Public |
@@ -144,12 +164,15 @@ Run `opencli list` for the live registry.
 | **bloomberg** | `main` `markets` `economics` `industries` `tech` `politics` `businessweek` `opinions` `feeds` `news` | Public / Browser |
 | **ctrip** | `search` | Browser |
 | **devto** | `top` `tag` `user` | Public |
+| **dictionary** | `search` `synonyms` `examples` | Public |
 | **arxiv** | `search` `paper` | Public |
-| **wikipedia** | `search` `summary` | Public |
+| **wikipedia** | `search` `summary` `random` `trending` | Public |
 | **hackernews** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | Public |
-| **linkedin** | `search` | Browser |
+| **jd** | `item` | Browser |
+| **linkedin** | `search` `timeline` | Browser |
 | **reuters** | `search` | Browser |
 | **smzdm** | `search` | Browser |
+| **web** | `read` | Browser |
 | **weibo** | `hot` `search` | Browser |
 | **yahoo-finance** | `quote` | Browser |
 | **sinafinance** | `news` | 🌐 Public |
@@ -164,14 +187,15 @@ Run `opencli list` for the live registry.
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | Public |
 | **steam** | `top-sellers` | Public |
 | **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | Browser |
-| **douban** | `search` `top250` `subject` `marks` `reviews` | Browser |
+| **douban** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | Browser |
 | **facebook** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | Browser |
 | **google** | `news` `search` `suggest` `trends` | Public |
 | **instagram** | `explore` `profile` `search` `user` `followers` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `saved` | Browser |
 | **lobsters** | `hot` `newest` `active` `tag` | Public |
-| **medium** | `feed` `search` `user` `shared` | Browser |
-| **sinablog** | `hot` `search` `article` `user` `shared` | Browser |
-| **substack** | `feed` `search` `publication` `shared` | Browser |
+| **medium** | `feed` `search` `user` | Browser |
+| **sinablog** | `hot` `search` `article` `user` | Browser |
+| **substack** | `feed` `search` `publication` | Browser |
+| **pixiv** | `ranking` `search` `user` `illusts` `detail` `download` | Browser |
 | **tiktok** | `explore` `search` `profile` `user` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `live` `notifications` `friends` | Browser |
 
 
@@ -184,7 +208,6 @@ OpenCLI acts as a universal hub for your existing command-line tools. It provide
 | **gh** | GitHub CLI | `opencli gh pr list --limit 5` |
 | **obsidian** | Obsidian vault management | `opencli obsidian search query="AI"` |
 | **docker** | Docker command-line interface | `opencli docker ps` |
-| **kubectl** | Kubernetes command-line tool | `opencli kubectl get pods` |
 | **readwise** | Readwise & Reader CLI | `opencli readwise login` |
 | **gws** | Google Workspace CLI — Docs, Sheets, Drive, Gmail, Calendar | `opencli gws docs list` |
 
@@ -201,6 +224,8 @@ opencli register mycli
 ### Desktop App Adapters
 
 Each desktop adapter has its own detailed documentation with commands reference, setup guide, and examples:
+
+If you want to add support for a new Electron desktop app, start with [docs/guide/electron-app-cli.md](./docs/guide/electron-app-cli.md) and the deeper [Electron guide](./docs/advanced/electron.md).
 
 | App | Description | Doc |
 |-----|-------------|-----|
@@ -224,6 +249,7 @@ OpenCLI supports downloading images, videos, and articles from supported platfor
 | **xiaohongshu** | Images, Videos | Downloads all media from a note |
 | **bilibili** | Videos | Requires `yt-dlp` installed |
 | **twitter** | Images, Videos | Downloads from user media tab or single tweet |
+| **pixiv** | Images | Downloads original-quality illustrations, supports multi-page works |
 | **zhihu** | Articles (Markdown) | Exports articles with optional image download |
 | **weixin** | Articles (Markdown) | Exports WeChat Official Account articles |
 
@@ -289,8 +315,11 @@ Extend OpenCLI with community-contributed adapters. Plugins use the same YAML/TS
 opencli plugin install github:user/opencli-plugin-my-tool  # Install
 opencli plugin list                                         # List installed
 opencli plugin update my-tool                               # Update to latest
+opencli plugin update --all                                 # Update all installed plugins
 opencli plugin uninstall my-tool                            # Remove
 ```
+
+`opencli plugin list` also shows the tracked short commit hash when a plugin version is recorded in `~/.opencli/plugins.lock.json`.
 
 | Plugin | Type | Description |
 |--------|------|-------------|

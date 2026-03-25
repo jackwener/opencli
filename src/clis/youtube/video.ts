@@ -3,6 +3,7 @@
  */
 import { cli, Strategy } from '../../registry.js';
 import { parseVideoId } from './utils.js';
+import { CommandExecutionError } from '../../errors.js';
 
 cli({
   site: 'youtube',
@@ -104,8 +105,8 @@ cli({
       })()
     `);
 
-    if (!data || typeof data !== 'object') throw new Error('Failed to extract video metadata from page');
-    if (data.error) throw new Error(data.error);
+    if (!data || typeof data !== 'object') throw new CommandExecutionError('Failed to extract video metadata from page');
+    if (data.error) throw new CommandExecutionError(data.error);
 
     // Return as field/value pairs for table display
     return Object.entries(data).map(([field, value]) => ({

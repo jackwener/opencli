@@ -1,5 +1,7 @@
 import { cli, Strategy } from '../../registry.js';
+import { SelectorError } from '../../errors.js';
 import type { IPage } from '../../types.js';
+import { chatwiseRequiredEnv } from './shared.js';
 
 export const askCommand = cli({
   site: 'chatwise',
@@ -8,6 +10,7 @@ export const askCommand = cli({
   domain: 'localhost',
   strategy: Strategy.UI,
   browser: true,
+  requiredEnv: chatwiseRequiredEnv,
   args: [
     { name: 'text', required: true, positional: true, help: 'Prompt to send' },
     { name: 'timeout', required: false, help: 'Max seconds to wait (default: 30)', default: '30' },
@@ -26,14 +29,14 @@ export const askCommand = cli({
     `);
 
     // Send message
-    await page.evaluate(`
+    const injected = await page.evaluate(`
       (function(text) {
         let composer = document.querySelector('textarea');
         if (!composer) {
           const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
           composer = editables.length > 0 ? editables[editables.length - 1] : null;
         }
-        if (!composer) throw new Error('Could not find input');
+        if (!composer) return false;
         composer.focus();
         if (composer.tagName === 'TEXTAREA') {
           const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
@@ -42,8 +45,10 @@ export const askCommand = cli({
         } else {
           document.execCommand('insertText', false, text);
         }
+        return true;
       })(${JSON.stringify(text)})
     `);
+    if (!injected) throw new SelectorError('ChatWise input element');
 
     await page.wait(0.5);
     await page.pressKey('Enter');

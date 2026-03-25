@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import { cli, Strategy } from '../../registry.js';
+import { CommandExecutionError, ConfigError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 export const statusCommand = cli({
@@ -12,11 +13,15 @@ export const statusCommand = cli({
   args: [],
   columns: ['Status'],
   func: async (page: IPage | null) => {
+    if (process.platform !== 'darwin') {
+      throw new ConfigError('ChatGPT Desktop integration requires macOS (osascript is not available on this platform)');
+    }
+
     try {
       const output = execSync("osascript -e 'application \"ChatGPT\" is running'", { encoding: 'utf-8' }).trim();
       return [{ Status: output === 'true' ? 'Running' : 'Stopped' }];
     } catch {
-      return [{ Status: 'Error querying application state' }];
+      throw new CommandExecutionError('Error querying ChatGPT application state');
     }
   },
 });

@@ -1,3 +1,4 @@
+import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 
 cli({
@@ -22,7 +23,7 @@ cli({
         const link = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
         return link ? link.getAttribute('href') : null;
       }`);
-      if (!href) throw new Error('Could not detect logged-in user. Are you logged in?');
+      if (!href) throw new AuthRequiredError('x.com', 'Could not detect logged-in user. Are you logged in?');
       username = href.replace('/', '');
     }
 
@@ -121,7 +122,8 @@ cli({
     `);
 
     if (result?.error) {
-      throw new Error(result.error + (result.hint ? ` (${result.hint})` : ''));
+      if (String(result.error).includes('No ct0 cookie')) throw new AuthRequiredError('x.com', result.error);
+      throw new CommandExecutionError(result.error + (result.hint ? ` (${result.hint})` : ''));
     }
 
     return result || [];

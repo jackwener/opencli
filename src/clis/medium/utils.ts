@@ -1,3 +1,4 @@
+import { CommandExecutionError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
 export function buildMediumTagUrl(topic?: string): string {
@@ -13,7 +14,7 @@ export function buildMediumUserUrl(username: string): string {
 }
 
 export async function loadMediumPosts(page: IPage, url: string, limit: number): Promise<any[]> {
-  if (!page) throw new Error('Requires browser session');
+  if (!page) throw new CommandExecutionError('Browser session required for medium posts');
   await page.goto(url);
   await page.wait(5);
   const data = await page.evaluate(`

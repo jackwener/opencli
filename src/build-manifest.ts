@@ -46,34 +46,9 @@ export interface ManifestEntry {
   navigateBefore?: boolean | string;
 }
 
-interface YamlArgDefinition {
-  type?: string;
-  default?: unknown;
-  required?: boolean;
-  positional?: boolean;
-  description?: string;
-  help?: string;
-  choices?: string[];
-}
+import type { YamlCliDefinition } from './yaml-schema.js';
 
-interface YamlCliDefinition {
-  site?: string;
-  name?: string;
-  description?: string;
-  domain?: string;
-  strategy?: string;
-  browser?: boolean;
-  args?: Record<string, YamlArgDefinition>;
-  columns?: string[];
-  pipeline?: Record<string, unknown>[];
-  timeout?: number;
-  navigateBefore?: boolean | string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
+import { isRecord } from './utils.js';
 
 function extractBalancedBlock(
   source: string,
@@ -179,7 +154,8 @@ export function parseTsArgsBlock(argsBlock: string): ManifestEntry['args'] {
       choices: parseInlineChoices(body),
     });
 
-    cursor = objectStart + body.length + 2;
+    cursor = objectStart + body.length;
+    if (cursor <= objectStart) break; // safety: prevent infinite loop
   }
 
   return args;
@@ -283,9 +259,14 @@ export function scanTs(filePath: string, site: string): ManifestEntry | null {
       entry.args = parseTsArgsBlock(argsBlock);
     }
 
-    // Extract navigateBefore: false
-    const navMatch = src.match(/navigateBefore\s*:\s*(true|false)/);
-    if (navMatch) entry.navigateBefore = navMatch[1] === 'true' ? true : false;
+    // Extract navigateBefore: false / true / 'https://...'
+    const navBoolMatch = src.match(/navigateBefore\s*:\s*(true|false)/);
+    if (navBoolMatch) {
+      entry.navigateBefore = navBoolMatch[1] === 'true';
+    } else {
+      const navStringMatch = src.match(/navigateBefore\s*:\s*['"`]([^'"`]+)['"`]/);
+      if (navStringMatch) entry.navigateBefore = navStringMatch[1];
+    }
 
     return entry;
   } catch (err) {
@@ -300,7 +281,7 @@ export function scanTs(filePath: string, site: string): ManifestEntry | null {
  * prefer the TS version (it self-registers and typically has richer logic).
  */
 export function shouldReplaceManifestEntry(current: ManifestEntry, next: ManifestEntry): boolean {
-  if (current.type === next.type) return true;
+  if (current.type === next.type) return false;
   return current.type === 'yaml' && next.type === 'ts';
 }
 

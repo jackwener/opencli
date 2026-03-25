@@ -28,6 +28,8 @@ total=0
 
 for adapter_dir in "$SRC_DIR"/*/; do
   adapter_name="$(basename "$adapter_dir")"
+  # Skip internal directories (e.g., _shared)
+  [[ "$adapter_name" == _* ]] && continue
   total=$((total + 1))
 
   # Check if doc exists in browser/ or desktop/ subdirectories
