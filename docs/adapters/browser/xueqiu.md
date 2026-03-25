@@ -13,9 +13,8 @@
 | `opencli xueqiu search` | 搜索雪球股票（代码或名称） |
 | `opencli xueqiu stock` | 获取雪球股票实时行情 |
 | `opencli xueqiu watchlist` | 获取雪球自选股列表 |
-| `opencli xueqiu fund-accounts` | 获取雪球基金（蛋卷）子账户汇总信息 |
-| `opencli xueqiu fund-holdings --account <nameOrId>` | 获取雪球基金（蛋卷）全部子账户持仓与份额信息，可按子账户过滤 |
-| `opencli xueqiu fund-snapshot` | 获取雪球基金（蛋卷）当前快照（总资产、子账户、持仓明细） |
+| `opencli xueqiu fund-holdings` | 获取蛋卷基金持仓明细（可用 `--account` 按子账户过滤） |
+| `opencli xueqiu fund-snapshot` | 获取蛋卷基金快照（总资产、子账户、持仓，推荐 `-f json`） |
 
 ## Usage Examples
 
@@ -32,15 +31,11 @@ opencli xueqiu stock SH600519
 # Upcoming earnings dates
 opencli xueqiu earnings-date SH600519 --next
 
-# Danjuan / fund account overview
-opencli xueqiu fund-accounts
-
-# Danjuan all holdings with shares
+# Danjuan all holdings
 opencli xueqiu fund-holdings
 
 # Filter one Danjuan sub-account
 opencli xueqiu fund-holdings --account 默认账户
-opencli xueqiu fund-holdings --account T020XXXXXXX
 
 # Full Danjuan snapshot as JSON
 opencli xueqiu fund-snapshot -f json
@@ -55,11 +50,11 @@ opencli xueqiu feed -v
 ## Prerequisites
 
 - Chrome running and **logged into** `xueqiu.com`
-- For fund account commands, Chrome must also be logged into `danjuanfunds.com` and able to open `https://danjuanfunds.com/my-money`
+- For fund commands, Chrome must also be logged into `danjuanfunds.com` and able to open `https://danjuanfunds.com/my-money`
 - [Browser Bridge extension](/guide/browser-bridge) installed
 
 ## Notes
 
-- `fund-holdings` exposes both market value and share fields, including `volume` and `usableRemainShare`
+- `fund-holdings` exposes both market value and share fields (`volume`, `usableRemainShare`)
 - `fund-snapshot -f json` is the easiest way to persist a full account snapshot for later analysis or diffing
 - If the commands return empty data, first confirm the logged-in browser can directly see the Danjuan asset page

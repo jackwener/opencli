@@ -1,8 +1,9 @@
 /**
  * Shared helpers for Danjuan (蛋卷基金) adapters.
  *
- * Provides cookie-authenticated API access via browser page.evaluate,
- * asset/gain data fetching, and holdings collection.
+ * Core design: a single page.evaluate call fetches the gain overview AND
+ * all per-account holdings in parallel (Promise.all), minimising Node↔Browser
+ * round-trips to exactly one.
  */
 
 import type { IPage } from '../../types.js';
@@ -10,92 +11,139 @@ import type { IPage } from '../../types.js';
 export const DANJUAN_DOMAIN = 'danjuanfunds.com';
 export const DANJUAN_ASSET_PAGE = `https://${DANJUAN_DOMAIN}/my-money`;
 
-/** Safe numeric coercion — returns null for non-finite values. */
-export function num(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+const GAIN_URL = `https://${DANJUAN_DOMAIN}/djapi/fundx/profit/assets/gain?gains=%5B%22private%22%5D`;
+const SUMMARY_URL = `https://${DANJUAN_DOMAIN}/djapi/fundx/profit/assets/summary?invest_account_id=`;
+
+// ---------------------------------------------------------------------------
+// Types — keep everything explicit so TS consumers get autocomplete.
+// ---------------------------------------------------------------------------
+
+export interface DanjuanAccount {
+  accountId: string;
+  accountName: string;
+  accountType: string;
+  accountCode: string;
+  marketValue: number | null;
+  dailyGain: number | null;
+  mainFlag: boolean;
 }
 
-/** Fetch JSON from a Danjuan API endpoint via browser page.evaluate. */
-export async function fetchDanjuanApi(page: IPage, url: string): Promise<any> {
-  const data = await page.evaluate(`
+export interface DanjuanHolding {
+  accountId: string;
+  accountName: string;
+  accountType: string;
+  fdCode: string;
+  fdName: string;
+  category: string;
+  marketValue: number | null;
+  volume: number | null;
+  usableRemainShare: number | null;
+  dailyGain: number | null;
+  holdGain: number | null;
+  holdGainRate: number | null;
+  totalGain: number | null;
+  nav: number | null;
+  marketPercent: number | null;
+}
+
+export interface DanjuanSnapshot {
+  asOf: string | null;
+  totalAssetAmount: number | null;
+  totalAssetDailyGain: number | null;
+  totalAssetHoldGain: number | null;
+  totalAssetTotalGain: number | null;
+  totalFundMarketValue: number | null;
+  accounts: DanjuanAccount[];
+  holdings: DanjuanHolding[];
+}
+
+// ---------------------------------------------------------------------------
+// Single-evaluate fetcher
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the complete Danjuan fund picture in ONE browser round-trip.
+ *
+ * Inside the browser context we:
+ *   1. Fetch the gain/assets overview (contains account list)
+ *   2. Promise.all → fetch every account's holdings in parallel
+ *   3. Return the combined result to Node
+ */
+export async function fetchDanjuanAll(page: IPage): Promise<DanjuanSnapshot> {
+  const raw: any = await page.evaluate(`
     (async () => {
-      const resp = await fetch(${JSON.stringify(url)}, { credentials: 'include' });
-      if (!resp.ok) return { _httpError: resp.status };
-      try { return await resp.json(); }
-      catch { return { _httpError: 'JSON parse error (status ' + resp.status + ')' }; }
+      const f = async (u) => {
+        const r = await fetch(u, { credentials: 'include' });
+        if (!r.ok) return { _err: r.status };
+        try { return await r.json(); } catch { return { _err: 'parse' }; }
+      };
+      const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
+
+      const gain = await f(${JSON.stringify(GAIN_URL)});
+      if (gain._err) return { _httpError: gain._err };
+
+      const root = gain.data || {};
+      const fundSec = (root.items || []).find(i => i && i.summary_type === 'FUND');
+      const rawAccs = fundSec && Array.isArray(fundSec.invest_account_list)
+        ? fundSec.invest_account_list : [];
+
+      const accounts = rawAccs.map(a => ({
+        accountId:   String(a.invest_account_id || ''),
+        accountName: a.invest_account_name || '',
+        accountType: a.invest_account_type || '',
+        accountCode: a.invest_account_code || '',
+        marketValue: n(a.market_value),
+        dailyGain:   n(a.daily_gain),
+        mainFlag:    !!a.main_flag,
+      }));
+
+      const details = await Promise.all(
+        accounts.map(a => f(${JSON.stringify(SUMMARY_URL)} + encodeURIComponent(a.accountId)))
+      );
+
+      const holdings = [];
+      for (let i = 0; i < accounts.length; i++) {
+        const d = details[i];
+        if (d._err) continue;
+        const data = d.data || {};
+        const funds = Array.isArray(data.items) ? data.items : [];
+        const acc = accounts[i];
+        for (const fd of funds) {
+          holdings.push({
+            accountId:        acc.accountId,
+            accountName:      data.invest_account_name || acc.accountName,
+            accountType:      data.invest_account_type || acc.accountType,
+            fdCode:           fd.fd_code || '',
+            fdName:           fd.fd_name || '',
+            category:         fd.category_text || fd.category || '',
+            marketValue:      n(fd.market_value),
+            volume:           n(fd.volume),
+            usableRemainShare:n(fd.usable_remain_share),
+            dailyGain:        n(fd.daily_gain),
+            holdGain:         n(fd.hold_gain),
+            holdGainRate:     n(fd.hold_gain_rate),
+            totalGain:        n(fd.total_gain),
+            nav:              n(fd.nav),
+            marketPercent:    n(fd.market_percent),
+          });
+        }
+      }
+
+      return {
+        asOf:                root.daily_gain_date || null,
+        totalAssetAmount:    n(root.amount),
+        totalAssetDailyGain: n(root.daily_gain),
+        totalAssetHoldGain:  n(root.hold_gain),
+        totalAssetTotalGain: n(root.total_gain),
+        totalFundMarketValue:n(fundSec && fundSec.amount),
+        accounts,
+        holdings,
+      };
     })()
   `);
-  if (data?._httpError) {
-    throw new Error(`HTTP ${data._httpError} — Hint: not logged in to ${DANJUAN_DOMAIN}?`);
+
+  if (raw?._httpError) {
+    throw new Error(`HTTP ${raw._httpError} — Hint: not logged in to ${DANJUAN_DOMAIN}?`);
   }
-  return data;
-}
-
-/** Fetch the top-level asset/gain data and extract fund accounts list. */
-export async function fetchAssetGain(page: IPage) {
-  const gain = await fetchDanjuanApi(
-    page,
-    `https://${DANJUAN_DOMAIN}/djapi/fundx/profit/assets/gain?gains=%5B%22private%22%5D`,
-  );
-  const root = gain?.data ?? {};
-  const fundSection = (Array.isArray(root.items) ? root.items : [])
-    .find((item: any) => item?.summary_type === 'FUND');
-  const accounts: any[] = Array.isArray(fundSection?.invest_account_list)
-    ? fundSection.invest_account_list
-    : [];
-  return { root, fundSection, accounts };
-}
-
-/** Fetch per-account holdings detail. */
-export async function fetchAccountSummary(page: IPage, accountId: string): Promise<any> {
-  return fetchDanjuanApi(
-    page,
-    `https://${DANJUAN_DOMAIN}/djapi/fundx/profit/assets/summary?invest_account_id=${encodeURIComponent(accountId)}`,
-  );
-}
-
-/** Map a raw fund item + account context into a standardised holdings row. */
-export function toHoldingRow(fund: any, accountId: string, accountName: string, accountType: string) {
-  return {
-    accountId,
-    accountName,
-    accountType,
-    fdCode: fund.fd_code ?? '',
-    fdName: fund.fd_name ?? '',
-    category: fund.category ?? '',
-    categoryText: fund.category_text ?? '',
-    marketValue: num(fund.market_value),
-    volume: num(fund.volume),
-    usableRemainShare: num(fund.usable_remain_share),
-    dailyGain: num(fund.daily_gain),
-    dailyGainDate: fund.daily_gain_date ?? null,
-    holdGain: num(fund.hold_gain),
-    holdGainRate: num(fund.hold_gain_rate),
-    totalGain: num(fund.total_gain),
-    totalGainRate: num(fund.total_gain_rate),
-    nav: num(fund.nav),
-    navDate: fund.nav_date ?? null,
-    marketPercent: num(fund.market_percent),
-  };
-}
-
-/** Collect holdings for a set of accounts. */
-export async function collectHoldings(page: IPage, accounts: any[]) {
-  const rows: ReturnType<typeof toHoldingRow>[] = [];
-  for (const acc of accounts) {
-    const accountId = String(acc?.invest_account_id ?? '');
-    const detail = await fetchAccountSummary(page, accountId);
-    const data = detail?.data ?? {};
-    const funds: any[] = Array.isArray(data.items) ? data.items : [];
-    for (const fund of funds) {
-      rows.push(toHoldingRow(
-        fund,
-        accountId,
-        data.invest_account_name || acc.invest_account_name || '',
-        data.invest_account_type || acc.invest_account_type || '',
-      ));
-    }
-  }
-  return rows;
+  return raw as DanjuanSnapshot;
 }
