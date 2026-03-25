@@ -54,7 +54,10 @@ pipeline:
           const mainPost = posts.find(p => p.post_number === 1);
           if (!mainPost) return [];
           return [{
+            author: mainPost.username || '',
             content: mainPost.cooked || '',
+            likes: mainPost.like_count || 0,
+            created_at: toLocalTime(mainPost.created_at),
           }];
         }
         return posts.slice(0, ${{ args.limit }}).map(p => ({

@@ -9,6 +9,8 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   columns: ['title', 'replies', 'created', 'likes', 'views', 'url'],
+  deprecated: 'opencli linux-do hot is kept for backward compatibility.',
+  replacedBy: 'opencli linux-do feed --view top --period <period>',
   args: [
     { name: 'limit', type: 'int', default: 20, help: 'Number of items (per_page)' },
     {

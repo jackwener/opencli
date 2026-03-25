@@ -24,7 +24,8 @@ import { CliError, ERROR_ICONS, getErrorMessage } from './errors.js';
 export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): void {
   if (siteCmd.commands.some((c: Command) => c.name() === cmd.name)) return;
 
-  const subCmd = siteCmd.command(cmd.name).description(cmd.description);
+  const deprecatedSuffix = cmd.deprecated ? ' [deprecated]' : '';
+  const subCmd = siteCmd.command(cmd.name).description(`${cmd.description}${deprecatedSuffix}`);
 
   // Register positional args first, then named options
   const positionalArgs: typeof cmd.args = [];
@@ -69,6 +70,11 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       const verbose = optionsRecord.verbose === true;
       const format = typeof optionsRecord.format === 'string' ? optionsRecord.format : 'table';
       if (verbose) process.env.OPENCLI_VERBOSE = '1';
+      if (cmd.deprecated) {
+        const message = typeof cmd.deprecated === 'string' ? cmd.deprecated : `${fullName(cmd)} is deprecated.`;
+        const replacement = cmd.replacedBy ? ` Use ${cmd.replacedBy} instead.` : '';
+        console.error(chalk.yellow(`Deprecated: ${message}${replacement}`));
+      }
 
       const result = await executeCommand(cmd, kwargs, verbose);
 

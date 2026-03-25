@@ -156,7 +156,7 @@ opencli linux-do topic 1234 --main_only -f json | jq -r '.[0].content'
 ```
 
 Notes:
-- `--main_only` returns only the main post body and does not truncate it
+- `--main_only` returns only the main post row and keeps the body untruncated
 
 Output columns: `author`, `content`, `likes`, `created_at`
 

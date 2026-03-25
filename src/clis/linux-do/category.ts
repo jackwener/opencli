@@ -9,6 +9,8 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   columns: ['title', 'replies', 'created', 'likes', 'views', 'url'],
+  deprecated: 'opencli linux-do category is kept for backward compatibility.',
+  replacedBy: 'opencli linux-do feed --category <id-or-name>',
   args: [
     {
       name: 'slug',

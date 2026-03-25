@@ -1,3 +1,6 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { __test__ } from './feed.js';
 
@@ -94,7 +97,26 @@ describe('linux-do feed metadata resolution', () => {
     expect(request.url).toBe('/c/parent/fresh-child/11.json?per_page=20');
   });
 
-  it('falls back to the bundled snapshot when live metadata is unavailable', async () => {
+  it('falls back to cached metadata when live metadata is unavailable', async () => {
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-linux-do-cache-'));
+    __test__.setCacheDirForTests(cacheDir);
+
+    fs.writeFileSync(path.join(cacheDir, 'tags.json'), JSON.stringify({
+      fetchedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      data: [{ id: 3, slug: 'chatgpt', name: 'ChatGPT' }],
+    }));
+    fs.writeFileSync(path.join(cacheDir, 'categories.json'), JSON.stringify({
+      fetchedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      data: [{
+        id: 4,
+        name: '开发调优',
+        description: '',
+        slug: 'develop',
+        parentCategoryId: null,
+        parent: null,
+      }],
+    }));
+
     const request = await __test__.resolveFeedRequest(null, {
       tag: 'ChatGPT',
       category: '开发调优',
