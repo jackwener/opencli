@@ -18,6 +18,7 @@ export default defineConfig({
           name: 'adapter',
           include: [
             'src/clis/bilibili/**/*.test.ts',
+            'src/clis/linux-do/**/*.test.ts',
             'src/clis/zhihu/**/*.test.ts',
             'src/clis/v2ex/**/*.test.ts',
           ],

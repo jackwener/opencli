@@ -51,6 +51,21 @@ interface FetchJsonOptions {
   skipNavigate?: boolean;
 }
 
+interface RawLinuxDoTag {
+  id: number;
+  slug?: string | null;
+  name?: string | null;
+}
+
+interface RawLinuxDoCategory {
+  id: number;
+  name?: string | null;
+  description?: string | null;
+  description_text?: string | null;
+  slug?: string | null;
+  subcategory_ids?: number[] | null;
+}
+
 /**
  * 统一清洗名称和 slug，避免大小写与多空格影响匹配。
  */
@@ -131,7 +146,7 @@ function findMatchingCategory(records: ResolvedLinuxDoCategory[], value: string)
       ?? null;
 }
 
-function toCategoryRecord(raw: any, parent: LinuxDoCategoryRecord | null): ResolvedLinuxDoCategory {
+function toCategoryRecord(raw: RawLinuxDoCategory, parent: LinuxDoCategoryRecord | null): ResolvedLinuxDoCategory {
   return {
     id: raw.id,
     name: raw.name ?? '',
@@ -149,8 +164,8 @@ async function fetchLiveTags(page: IPage | null): Promise<LinuxDoTagRecord[]> {
       .then((data) => {
         const tags = Array.isArray(data?.tags) ? data.tags : [];
         return tags
-          .filter((tag): tag is any => tag && typeof tag.id === 'number')
-          .map((tag) => ({
+          .filter((tag: unknown): tag is RawLinuxDoTag => !!tag && typeof (tag as RawLinuxDoTag).id === 'number')
+          .map((tag: RawLinuxDoTag) => ({
             id: tag.id,
             slug: tag.slug ?? `${tag.id}-tag`,
             name: tag.name ?? String(tag.id),
@@ -169,19 +184,23 @@ async function fetchLiveCategories(page: IPage | null): Promise<ResolvedLinuxDoC
   if (!liveCategoriesPromise) {
     liveCategoriesPromise = (async () => {
       const data = await fetchLinuxDoJson(page, '/categories.json', { skipNavigate: true });
-      const topCategories = Array.isArray(data?.category_list?.categories) ? data.category_list.categories : [];
+      const topCategories: RawLinuxDoCategory[] = Array.isArray(data?.category_list?.categories)
+        ? data.category_list.categories
+        : [];
 
-      const resolvedTop = topCategories.map((category) => toCategoryRecord(category, null));
+      const resolvedTop = topCategories.map((category: RawLinuxDoCategory) => toCategoryRecord(category, null));
       const parentById = new Map<number, LinuxDoCategoryRecord>(resolvedTop.map((item) => [item.id, item]));
 
       const subcategoryGroups = await Promise.allSettled(
         topCategories
-          .filter((category) => Array.isArray(category?.subcategory_ids) && category.subcategory_ids.length > 0)
-          .map(async (category) => {
+          .filter((category: RawLinuxDoCategory) => Array.isArray(category.subcategory_ids) && category.subcategory_ids.length > 0)
+          .map(async (category: RawLinuxDoCategory) => {
             const subData = await fetchLinuxDoJson(page, `/categories.json?parent_category_id=${category.id}`, { skipNavigate: true });
-            const subCategories = Array.isArray(subData?.category_list?.categories) ? subData.category_list.categories : [];
+            const subCategories: RawLinuxDoCategory[] = Array.isArray(subData?.category_list?.categories)
+              ? subData.category_list.categories
+              : [];
             const parent = parentById.get(category.id) ?? null;
-            return subCategories.map((subCategory) => toCategoryRecord(subCategory, parent));
+            return subCategories.map((subCategory: RawLinuxDoCategory) => toCategoryRecord(subCategory, parent));
           }),
       );
 
