@@ -36,6 +36,7 @@ Run `opencli list` for the live registry.
 | **[medium](/adapters/browser/medium)** | `feed` `search` `user` | 🔐 Browser |
 | **[sinablog](/adapters/browser/sinablog)** | `hot` `search` `article` `user` | 🔐 Browser |
 | **[substack](/adapters/browser/substack)** | `feed` `search` `publication` | 🔐 Browser |
+| **[pixiv](/adapters/browser/pixiv)** | `ranking` `search` `user` `illusts` `detail` `download` | 🔐 Browser |
 | **[tiktok](/adapters/browser/tiktok)** | `explore` `search` `profile` `user` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `live` `notifications` `friends` | 🔐 Browser |
 
 ## Public API Adapters

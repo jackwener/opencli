@@ -176,6 +176,7 @@ npm install -g @jackwener/opencli@latest
 | **medium** | `feed` `search` `user` | 浏览器 |
 | **sinablog** | `hot` `search` `article` `user` | 浏览器 |
 | **substack** | `feed` `search` `publication` | 浏览器 |
+| **pixiv** | `ranking` `search` `user` `illusts` `detail` `download` | 浏览器 |
 | **tiktok** | `explore` `search` `profile` `user` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `live` `notifications` `friends` | 浏览器 |
 
 
@@ -227,6 +228,7 @@ OpenCLI 支持从各平台下载图片、视频和文章。
 | **小红书** | 图片、视频 | 下载笔记中的所有媒体文件 |
 | **B站** | 视频 | 需要安装 `yt-dlp` |
 | **Twitter/X** | 图片、视频 | 从用户媒体页或单条推文下载 |
+| **Pixiv** | 图片 | 下载原始画质插画（需要 `Referer` 头） |
 | **知乎** | 文章（Markdown） | 导出文章，可选下载图片到本地 |
 | **微信公众号** | 文章（Markdown） | 导出微信公众号文章为 Markdown |
 

@@ -174,6 +174,7 @@ Run `opencli list` for the live registry.
 | **medium** | `feed` `search` `user` | Browser |
 | **sinablog** | `hot` `search` `article` `user` | Browser |
 | **substack** | `feed` `search` `publication` | Browser |
+| **pixiv** | `ranking` `search` `user` `illusts` `detail` `download` | Browser |
 | **tiktok** | `explore` `search` `profile` `user` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `live` `notifications` `friends` | Browser |
 
 
@@ -225,6 +226,7 @@ OpenCLI supports downloading images, videos, and articles from supported platfor
 | **xiaohongshu** | Images, Videos | Downloads all media from a note |
 | **bilibili** | Videos | Requires `yt-dlp` installed |
 | **twitter** | Images, Videos | Downloads from user media tab or single tweet |
+| **pixiv** | Images | Downloads original-quality images (requires `Referer` header) |
 | **zhihu** | Articles (Markdown) | Exports articles with optional image download |
 | **weixin** | Articles (Markdown) | Exports WeChat Official Account articles |
 

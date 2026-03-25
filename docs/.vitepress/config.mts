@@ -73,6 +73,7 @@ export default defineConfig({
                 { text: 'Douban', link: '/adapters/browser/douban' },
                 { text: 'Sina Blog', link: '/adapters/browser/sinablog' },
                 { text: 'Substack', link: '/adapters/browser/substack' },
+                { text: 'Pixiv', link: '/adapters/browser/pixiv' },
               ],
             },
             {
