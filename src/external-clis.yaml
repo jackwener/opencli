@@ -14,14 +14,6 @@
   install:
     mac: "brew install --cask obsidian"
 
-- name: readwise
-  binary: readwise
-  description: "Readwise & Reader CLI — highlights, annotations, reading list"
-  homepage: "https://github.com/readwiseio/readwise-cli"
-  tags: [reading, highlights]
-  install:
-    default: "npm install -g @readwiseio/readwise-cli"
-
 - name: docker
   binary: docker
   description: "Docker command-line interface"
