@@ -22,7 +22,11 @@ pipeline:
           'https://www.pixiv.net/ajax/illust/' + id,
           { credentials: 'include' }
         );
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' — make sure you are logged in to Pixiv');
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) throw new Error('Authentication required — please log in to Pixiv in Chrome');
+          if (res.status === 404) throw new Error('Illustration not found: ' + id);
+          throw new Error('Pixiv request failed (HTTP ' + res.status + ')');
+        }
         const data = await res.json();
         const b = data?.body;
         if (!b) throw new Error('Illustration not found');
@@ -42,4 +46,4 @@ pipeline:
         }];
       })()
 
-columns: [illust_id, title, author, type, pages, bookmarks, likes, views, tags, created]
+columns: [illust_id, title, author, type, pages, bookmarks, likes, views, tags, created, url]

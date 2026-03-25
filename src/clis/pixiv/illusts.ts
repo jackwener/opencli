@@ -39,7 +39,10 @@ cli({
     `);
 
     if (profileData?.error) {
-      throw new AuthRequiredError('www.pixiv.net', `HTTP ${profileData.error} — make sure you are logged in to Pixiv`);
+      if (profileData.error === 401 || profileData.error === 403) {
+        throw new AuthRequiredError('www.pixiv.net', 'Authentication required — please log in to Pixiv in Chrome');
+      }
+      throw new Error(`Pixiv request failed (HTTP ${profileData.error})`);
     }
 
     const allIds = Object.keys(profileData?.body?.illusts || {})

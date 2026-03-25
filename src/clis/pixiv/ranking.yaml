@@ -32,7 +32,10 @@ pipeline:
           'https://www.pixiv.net/ranking.php?mode=' + mode + '&p=' + page + '&format=json',
           { credentials: 'include' }
         );
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' — make sure you are logged in to Pixiv');
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) throw new Error('Authentication required — please log in to Pixiv in Chrome');
+          throw new Error('Pixiv request failed (HTTP ' + res.status + ')');
+        }
         const data = await res.json();
         const items = (data?.contents || []).slice(0, limit);
         return items.map((item, i) => ({

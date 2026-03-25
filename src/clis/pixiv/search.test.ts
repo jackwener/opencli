@@ -1,24 +1,31 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { CliCommand } from '../../registry.js';
 import { getRegistry } from '../../registry.js';
+import { AuthRequiredError } from '../../errors.js';
 import { createPageMock } from './test-utils.js';
 import './search.js';
 
-describe('pixiv search', () => {
-  it('throws AuthRequiredError on HTTP error', async () => {
-    const cmd = getRegistry().get('pixiv/search');
-    expect(cmd?.func).toBeTypeOf('function');
+let cmd: CliCommand;
 
+beforeAll(() => {
+  cmd = getRegistry().get('pixiv/search')!;
+  expect(cmd?.func).toBeTypeOf('function');
+});
+
+describe('pixiv search', () => {
+  it('throws AuthRequiredError on 401', async () => {
     const page = createPageMock([{ error: 401 }]);
 
-    await expect(cmd!.func!(page, { query: '初音ミク', limit: 5 })).rejects.toThrow(
-      'HTTP 401'
-    );
+    await expect(cmd.func!(page, { query: '初音ミク', limit: 5 })).rejects.toThrow(AuthRequiredError);
+  });
+
+  it('throws generic error on non-auth HTTP failure', async () => {
+    const page = createPageMock([{ error: 500 }]);
+
+    await expect(cmd.func!(page, { query: 'test', limit: 5 })).rejects.toThrow('Pixiv request failed (HTTP 500)');
   });
 
   it('returns ranked results with correct fields', async () => {
-    const cmd = getRegistry().get('pixiv/search');
-    expect(cmd?.func).toBeTypeOf('function');
-
     const page = createPageMock([
       {
         body: {
@@ -48,7 +55,7 @@ describe('pixiv search', () => {
       },
     ]);
 
-    const result = (await cmd!.func!(page, { query: '初音ミク', limit: 10 })) as any[];
+    const result = (await cmd.func!(page, { query: '初音ミク', limit: 10 })) as any[];
 
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({
@@ -63,8 +70,6 @@ describe('pixiv search', () => {
   });
 
   it('respects the limit parameter', async () => {
-    const cmd = getRegistry().get('pixiv/search');
-
     const page = createPageMock([
       {
         body: {
@@ -79,16 +84,14 @@ describe('pixiv search', () => {
       },
     ]);
 
-    const result = (await cmd!.func!(page, { query: 'test', limit: 2 })) as any[];
+    const result = (await cmd.func!(page, { query: 'test', limit: 2 })) as any[];
     expect(result).toHaveLength(2);
   });
 
   it('returns empty array when no results', async () => {
-    const cmd = getRegistry().get('pixiv/search');
-
     const page = createPageMock([{ body: { illust: { data: [] } } }]);
 
-    const result = await cmd!.func!(page, { query: 'nonexistent', limit: 10 });
+    const result = await cmd.func!(page, { query: 'nonexistent', limit: 10 });
     expect(result).toEqual([]);
   });
 });

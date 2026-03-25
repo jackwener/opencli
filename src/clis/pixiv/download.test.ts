@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type { CliCommand } from '../../registry.js';
 import { getRegistry } from '../../registry.js';
+import { AuthRequiredError } from '../../errors.js';
 import { createPageMock } from './test-utils.js';
 
 // Mock download dependencies before importing the adapter
@@ -20,30 +22,44 @@ vi.mock('node:fs', () => ({
 // Now import the adapter (after mocks are set up)
 await import('./download.js');
 
-describe('pixiv download', () => {
-  it('throws AuthRequiredError on HTTP error', async () => {
-    const cmd = getRegistry().get('pixiv/download');
-    expect(cmd?.func).toBeTypeOf('function');
+let cmd: CliCommand;
 
+beforeAll(() => {
+  cmd = getRegistry().get('pixiv/download')!;
+  expect(cmd?.func).toBeTypeOf('function');
+});
+
+describe('pixiv download', () => {
+  it('throws AuthRequiredError on 403', async () => {
     const page = createPageMock([{ error: 403 }]);
 
-    await expect(cmd!.func!(page, { 'illust-id': '12345', output: '/tmp/test' })).rejects.toThrow(
-      'HTTP 403'
+    await expect(cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })).rejects.toThrow(AuthRequiredError);
+  });
+
+  it('throws not-found error on 404', async () => {
+    const page = createPageMock([{ error: 404 }]);
+
+    await expect(cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })).rejects.toThrow(
+      'Illustration not found: 12345'
+    );
+  });
+
+  it('throws generic error on non-auth HTTP failure', async () => {
+    const page = createPageMock([{ error: 500 }]);
+
+    await expect(cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })).rejects.toThrow(
+      'Pixiv request failed (HTTP 500)'
     );
   });
 
   it('returns failure when no images found', async () => {
-    const cmd = getRegistry().get('pixiv/download');
-
     const page = createPageMock([{ body: [] }]);
 
-    const result = (await cmd!.func!(page, { 'illust-id': '12345', output: '/tmp/test' })) as any[];
+    const result = (await cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })) as any[];
     expect(result).toEqual([{ index: 0, type: '-', status: 'failed', size: 'No images found' }]);
   });
 
   it('downloads images with Referer header', async () => {
-    const cmd = getRegistry().get('pixiv/download');
-
     mockHttpDownload.mockResolvedValue({ success: true, size: 1024000 });
 
     const page = createPageMock([
@@ -55,7 +71,7 @@ describe('pixiv download', () => {
       },
     ]);
 
-    const result = (await cmd!.func!(page, { 'illust-id': '12345', output: '/tmp/test' })) as any[];
+    const result = (await cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })) as any[];
 
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ index: 1, type: 'image', status: 'success' });
@@ -68,8 +84,6 @@ describe('pixiv download', () => {
   });
 
   it('handles individual download failures gracefully', async () => {
-    const cmd = getRegistry().get('pixiv/download');
-
     mockHttpDownload
       .mockResolvedValueOnce({ success: true, size: 512000 })
       .mockRejectedValueOnce(new Error('Connection timeout'));
@@ -83,7 +97,7 @@ describe('pixiv download', () => {
       },
     ]);
 
-    const result = (await cmd!.func!(page, { 'illust-id': '12345', output: '/tmp/test' })) as any[];
+    const result = (await cmd.func!(page, { 'illust-id': '12345', output: '/tmp/test' })) as any[];
 
     expect(result).toHaveLength(2);
     expect(result[0].status).toBe('success');

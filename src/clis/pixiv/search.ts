@@ -48,7 +48,10 @@ cli({
     `);
 
     if (data?.error) {
-      throw new AuthRequiredError('www.pixiv.net', `HTTP ${data.error} — make sure you are logged in to Pixiv`);
+      if (data.error === 401 || data.error === 403) {
+        throw new AuthRequiredError('www.pixiv.net', 'Authentication required — please log in to Pixiv in Chrome');
+      }
+      throw new Error(`Pixiv request failed (HTTP ${data.error})`);
     }
 
     const items: any[] = data?.body?.illust?.data || [];

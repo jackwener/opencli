@@ -42,7 +42,13 @@ cli({
     `);
 
     if (data?.error) {
-      throw new AuthRequiredError('www.pixiv.net', `HTTP ${data.error} — make sure you are logged in to Pixiv`);
+      if (data.error === 401 || data.error === 403) {
+        throw new AuthRequiredError('www.pixiv.net', 'Authentication required — please log in to Pixiv in Chrome');
+      }
+      if (data.error === 404) {
+        throw new Error(`Illustration not found: ${illustId}`);
+      }
+      throw new Error(`Pixiv request failed (HTTP ${data.error})`);
     }
 
     const pages: any[] = data?.body || [];

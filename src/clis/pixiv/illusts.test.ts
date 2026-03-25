@@ -1,32 +1,40 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { CliCommand } from '../../registry.js';
 import { getRegistry } from '../../registry.js';
+import { AuthRequiredError } from '../../errors.js';
 import { createPageMock } from './test-utils.js';
 import './illusts.js';
 
-describe('pixiv illusts', () => {
-  it('throws AuthRequiredError when profile fetch fails', async () => {
-    const cmd = getRegistry().get('pixiv/illusts');
-    expect(cmd?.func).toBeTypeOf('function');
+let cmd: CliCommand;
 
+beforeAll(() => {
+  cmd = getRegistry().get('pixiv/illusts')!;
+  expect(cmd?.func).toBeTypeOf('function');
+});
+
+describe('pixiv illusts', () => {
+  it('throws AuthRequiredError on 401', async () => {
     const page = createPageMock([{ error: 401 }]);
 
-    await expect(cmd!.func!(page, { 'user-id': '11', limit: 5 })).rejects.toThrow('HTTP 401');
+    await expect(cmd.func!(page, { 'user-id': '11', limit: 5 })).rejects.toThrow(AuthRequiredError);
+  });
+
+  it('throws generic error on non-auth HTTP failure', async () => {
+    const page = createPageMock([{ error: 500 }]);
+
+    await expect(cmd.func!(page, { 'user-id': '11', limit: 5 })).rejects.toThrow('Pixiv request failed (HTTP 500)');
   });
 
   it('returns empty array when user has no illusts', async () => {
-    const cmd = getRegistry().get('pixiv/illusts');
-
     const page = createPageMock([
       { body: { illusts: {} } },
     ]);
 
-    const result = await cmd!.func!(page, { 'user-id': '11', limit: 5 });
+    const result = await cmd.func!(page, { 'user-id': '11', limit: 5 });
     expect(result).toEqual([]);
   });
 
   it('fetches illust IDs then batch-fetches details', async () => {
-    const cmd = getRegistry().get('pixiv/illusts');
-
     const page = createPageMock([
       // Step 1: profile/all returns illust IDs
       {
@@ -59,7 +67,7 @@ describe('pixiv illusts', () => {
       },
     ]);
 
-    const result = (await cmd!.func!(page, { 'user-id': '11', limit: 3 })) as any[];
+    const result = (await cmd.func!(page, { 'user-id': '11', limit: 3 })) as any[];
 
     // Should be sorted newest first (99999 > 88888 > 77777)
     expect(result).toHaveLength(2); // 77777 has no detail data, filtered out
@@ -79,8 +87,6 @@ describe('pixiv illusts', () => {
   });
 
   it('respects the limit on illust IDs fetched', async () => {
-    const cmd = getRegistry().get('pixiv/illusts');
-
     const page = createPageMock([
       {
         body: {
@@ -97,7 +103,7 @@ describe('pixiv illusts', () => {
       },
     ]);
 
-    const result = (await cmd!.func!(page, { 'user-id': '11', limit: 2 })) as any[];
+    const result = (await cmd.func!(page, { 'user-id': '11', limit: 2 })) as any[];
     expect(result).toHaveLength(2);
   });
 });
