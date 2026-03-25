@@ -8,8 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { cli, Strategy } from '../../registry.js';
-import { formatCookieHeader } from '../../download/index.js';
-import { httpDownload } from '../../download/index.js';
+import { formatCookieHeader, httpDownload } from '../../download/index.js';
 import { formatBytes } from '../../download/progress.js';
 import { AuthRequiredError } from '../../errors.js';
 
@@ -32,8 +31,9 @@ cli({
     // Fetch all page URLs for this illustration
     const data: any = await page.evaluate(`
       (async () => {
+        const illustId = ${JSON.stringify(illustId)};
         const res = await fetch(
-          'https://www.pixiv.net/ajax/illust/${illustId}/pages',
+          'https://www.pixiv.net/ajax/illust/' + illustId + '/pages',
           { credentials: 'include' }
         );
         if (!res.ok) return { error: res.status };

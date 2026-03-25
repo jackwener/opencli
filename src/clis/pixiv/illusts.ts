@@ -28,8 +28,9 @@ cli({
     // Step 1: get all illust IDs
     const profileData: any = await page.evaluate(`
       (async () => {
+        const userId = ${JSON.stringify(userId)};
         const res = await fetch(
-          'https://www.pixiv.net/ajax/user/${userId}/profile/all',
+          'https://www.pixiv.net/ajax/user/' + userId + '/profile/all',
           { credentials: 'include' }
         );
         if (!res.ok) return { error: res.status };
@@ -51,9 +52,11 @@ cli({
     const idsParam = allIds.map(id => 'ids[]=' + id).join('&');
     const detailData: any = await page.evaluate(`
       (async () => {
+        const userId = ${JSON.stringify(userId)};
+        const idsParam = ${JSON.stringify(idsParam)};
         const res = await fetch(
-          'https://www.pixiv.net/ajax/user/${userId}/profile/illusts?' +
-          '${idsParam}' +
+          'https://www.pixiv.net/ajax/user/' + userId + '/profile/illusts?' +
+          idsParam +
           '&work_category=illustManga&is_first_page=1',
           { credentials: 'include' }
         );

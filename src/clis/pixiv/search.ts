@@ -24,17 +24,20 @@ cli({
 
   func: async (page, kwargs) => {
     const { query, limit = 20, order = 'date_d', mode = 'all', page: pageNum = 1 } = kwargs;
-    const keyword = encodeURIComponent(query);
 
     const data: any = await page.evaluate(`
       (async () => {
+        const keyword = encodeURIComponent(${JSON.stringify(query)});
+        const order = ${JSON.stringify(order)};
+        const mode = ${JSON.stringify(mode)};
+        const pageNum = ${JSON.stringify(pageNum)};
         const res = await fetch(
           'https://www.pixiv.net/ajax/search/illustrations/' +
-          '${keyword}' +
-          '?word=${keyword}' +
-          '&order=${order}' +
-          '&mode=${mode}' +
-          '&p=${pageNum}' +
+          keyword +
+          '?word=' + keyword +
+          '&order=' + order +
+          '&mode=' + mode +
+          '&p=' + pageNum +
           '&s_mode=s_tag_full' +
           '&type=illust_and_ugoira',
           { credentials: 'include' }
