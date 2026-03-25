@@ -76,7 +76,7 @@ export class CDPBridge {
           clearTimeout(timeout);
           this._ws = ws;
           if (connection.browserLevel) {
-            await this.attachToBestTarget();
+            await this.attachToBrowserTarget(connection.preferNewTarget);
           }
         } catch (err) {
           reject(err);
@@ -190,24 +190,35 @@ export class CDPBridge {
     });
   }
 
-  private async attachToBestTarget(): Promise<void> {
-    const result = await this.send('Target.getTargets', {}, CDP_SEND_TIMEOUT, { root: true });
-    const targetInfos = isRecord(result) && Array.isArray(result.targetInfos)
-      ? result.targetInfos as CDPTarget[]
-      : [];
-    const target = selectCDPTarget(targetInfos);
-    if (!target?.targetId) {
+  private async attachToBrowserTarget(preferNewTarget: boolean = false): Promise<void> {
+    let targetId: string | undefined;
+
+    if (preferNewTarget) {
+      const created = await this.send('Target.createTarget', { url: 'about:blank' }, CDP_SEND_TIMEOUT, { root: true });
+      targetId = isRecord(created) && typeof created.targetId === 'string' ? created.targetId : undefined;
+    }
+
+    if (!targetId) {
+      const result = await this.send('Target.getTargets', {}, CDP_SEND_TIMEOUT, { root: true });
+      const targetInfos = isRecord(result) && Array.isArray(result.targetInfos)
+        ? result.targetInfos as CDPTarget[]
+        : [];
+      const target = selectCDPTarget(targetInfos);
+      targetId = target?.targetId;
+    }
+
+    if (!targetId) {
       throw new Error('No inspectable targets found at CDP endpoint');
     }
 
-    await this.send('Target.activateTarget', { targetId: target.targetId }, CDP_SEND_TIMEOUT, { root: true }).catch(() => {});
+    await this.send('Target.activateTarget', { targetId }, CDP_SEND_TIMEOUT, { root: true }).catch(() => {});
     const attachResult = await this.send('Target.attachToTarget', {
-      targetId: target.targetId,
+      targetId,
       flatten: true,
     }, CDP_SEND_TIMEOUT, { root: true });
     const sessionId = isRecord(attachResult) ? attachResult.sessionId : undefined;
     if (typeof sessionId !== 'string' || !sessionId) {
-      throw new Error(`Failed to attach to CDP target '${target.targetId}'`);
+      throw new Error(`Failed to attach to CDP target '${targetId}'`);
     }
     this._sessionId = sessionId;
   }
@@ -378,11 +389,11 @@ function matchesCookieDomain(cookieDomain: string, targetDomain: string): boolea
     || normalizedTargetDomain.endsWith(`.${normalizedCookieDomain}`);
 }
 
-async function resolveConnectionEndpoint(endpoint: string): Promise<{ wsUrl: string; browserLevel: boolean }> {
+async function resolveConnectionEndpoint(endpoint: string): Promise<{ wsUrl: string; browserLevel: boolean; preferNewTarget: boolean }> {
   if (endpoint === 'auto') {
     const wsUrl = resolveAnyBrowserWebSocketUrl();
     if (wsUrl) {
-      return { wsUrl, browserLevel: true };
+      return { wsUrl, browserLevel: true, preferNewTarget: shouldPreferNewBrowserTarget(endpoint) };
     }
     throw new Error('Failed to auto-discover a local browser CDP websocket. Start Chrome with --remote-debugging-port and retry, or set OPENCLI_CDP_ENDPOINT explicitly.');
   }
@@ -391,11 +402,12 @@ async function resolveConnectionEndpoint(endpoint: string): Promise<{ wsUrl: str
     return {
       wsUrl: endpoint,
       browserLevel: isBrowserLevelWebSocket(endpoint),
+      preferNewTarget: false,
     };
   }
 
   if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
-    return { wsUrl: endpoint, browserLevel: false };
+    return { wsUrl: endpoint, browserLevel: false, preferNewTarget: false };
   }
 
   const normalized = endpoint.replace(/\/$/, '');
@@ -405,14 +417,14 @@ async function resolveConnectionEndpoint(endpoint: string): Promise<{ wsUrl: str
     if (!target?.webSocketDebuggerUrl) {
       throw new Error('No inspectable targets found at CDP endpoint');
     }
-    return { wsUrl: target.webSocketDebuggerUrl, browserLevel: false };
+    return { wsUrl: target.webSocketDebuggerUrl, browserLevel: false, preferNewTarget: false };
   } catch {
     // Fall through to browser-level websocket discovery.
   }
 
   const browserWsUrl = resolveBrowserWebSocketUrl(normalized);
   if (browserWsUrl) {
-    return { wsUrl: browserWsUrl, browserLevel: true };
+    return { wsUrl: browserWsUrl, browserLevel: true, preferNewTarget: false };
   }
 
   throw new Error('Failed to resolve an inspectable target from CDP endpoint');
@@ -493,6 +505,11 @@ function getDevToolsActivePortCandidates(): string[] {
 function isBrowserLevelWebSocket(endpoint: string): boolean {
   return endpoint.includes('/devtools/browser/');
 }
+
+function shouldPreferNewBrowserTarget(endpoint: string): boolean {
+  return endpoint === 'auto' && !process.env.OPENCLI_CDP_TARGET?.trim();
+}
+
 function selectCDPTarget(targets: CDPTarget[]): CDPTarget | undefined {
   const preferredPattern = compilePreferredPattern(process.env.OPENCLI_CDP_TARGET);
 
@@ -567,6 +584,7 @@ export const __test__ = {
   parseBrowserWebSocketUrlFromActivePort,
   parseAnyBrowserWebSocketUrlFromActivePort,
   isBrowserLevelWebSocket,
+  shouldPreferNewBrowserTarget,
 };
 
 function fetchJsonDirect(url: string): Promise<unknown> {

@@ -112,4 +112,12 @@ describe('CDP browser websocket helpers', () => {
     expect(__test__.isBrowserLevelWebSocket('ws://127.0.0.1:9222/devtools/browser/abc')).toBe(true);
     expect(__test__.isBrowserLevelWebSocket('ws://127.0.0.1:9222/devtools/page/abc')).toBe(false);
   });
+
+  it('prefers a fresh target for auto-discovered browser sessions without an explicit target hint', () => {
+    expect(__test__.shouldPreferNewBrowserTarget('auto')).toBe(true);
+
+    vi.stubEnv('OPENCLI_CDP_TARGET', 'linux.do');
+    expect(__test__.shouldPreferNewBrowserTarget('auto')).toBe(false);
+    expect(__test__.shouldPreferNewBrowserTarget('http://127.0.0.1:9222')).toBe(false);
+  });
 });
