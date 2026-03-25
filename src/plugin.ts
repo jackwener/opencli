@@ -457,7 +457,8 @@ export function resolveEsbuildBin(): string | null {
   // Strategy 4: global esbuild in PATH
   try {
     const lookupCmd = isWindows ? 'where esbuild' : 'which esbuild';
-    const globalBin = execSync(lookupCmd, { encoding: 'utf-8', stdio: 'pipe' }).trim();
+    // `where` on Windows may return multiple lines; take only the first match.
+    const globalBin = execSync(lookupCmd, { encoding: 'utf-8', stdio: 'pipe' }).trim().split('\n')[0].trim();
     if (globalBin && fs.existsSync(globalBin)) {
       return globalBin;
     }
