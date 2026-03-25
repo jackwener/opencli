@@ -229,10 +229,10 @@ async function handleCommand(cmd: Command): Promise<Result> {
 
 // ─── Action handlers ─────────────────────────────────────────────────
 
-/** Check if a URL can be attached via CDP (not chrome:// or chrome-extension://) */
+/** Check if a URL can be attached via CDP — only allow http(s) schemes. */
 function isDebuggableUrl(url?: string): boolean {
   if (!url) return true;  // empty/undefined = tab still loading, allow it
-  return !url.startsWith('chrome://') && !url.startsWith('chrome-extension://');
+  return url.startsWith('http://') || url.startsWith('https://');
 }
 
 /** Minimal URL normalization for same-page comparison: root slash + default port only. */
@@ -266,9 +266,14 @@ async function resolveTabId(tabId: number | undefined, workspace: string): Promi
   if (tabId !== undefined) {
     try {
       const tab = await chrome.tabs.get(tabId);
-      if (isDebuggableUrl(tab.url)) return tabId;
-      // Tab exists but URL is not debuggable — fall through to auto-resolve
-      console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
+      const session = automationSessions.get(workspace);
+      if (isDebuggableUrl(tab.url) && session && tab.windowId === session.windowId) return tabId;
+      if (session && tab.windowId !== session.windowId) {
+        console.warn(`[opencli] Tab ${tabId} belongs to window ${tab.windowId}, not automation window ${session.windowId}, re-resolving`);
+      } else if (!isDebuggableUrl(tab.url)) {
+        // Tab exists but URL is not debuggable — fall through to auto-resolve
+        console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
+      }
     } catch {
       // Tab was closed — fall through to auto-resolve
       console.warn(`[opencli] Tab ${tabId} no longer exists, re-resolving`);
@@ -333,6 +338,9 @@ async function handleExec(cmd: Command, workspace: string): Promise<Result> {
 
 async function handleNavigate(cmd: Command, workspace: string): Promise<Result> {
   if (!cmd.url) return { id: cmd.id, ok: false, error: 'Missing url' };
+  if (!cmd.url.startsWith('http://') && !cmd.url.startsWith('https://')) {
+    return { id: cmd.id, ok: false, error: `Blocked URL scheme — only http:// and https:// are allowed` };
+  }
   const tabId = await resolveTabId(cmd.tabId, workspace);
 
   const beforeTab = await chrome.tabs.get(tabId);
@@ -429,6 +437,9 @@ async function handleTabs(cmd: Command, workspace: string): Promise<Result> {
       return { id: cmd.id, ok: true, data };
     }
     case 'new': {
+      if (cmd.url && !cmd.url.startsWith('http://') && !cmd.url.startsWith('https://')) {
+        return { id: cmd.id, ok: false, error: `Blocked URL scheme — only http:// and https:// are allowed` };
+      }
       const windowId = await getAutomationWindow(workspace);
       const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? 'data:text/html,<html></html>', active: true });
       return { id: cmd.id, ok: true, data: { tabId: tab.id, url: tab.url } };
@@ -466,6 +477,9 @@ async function handleTabs(cmd: Command, workspace: string): Promise<Result> {
 }
 
 async function handleCookies(cmd: Command): Promise<Result> {
+  if (!cmd.domain && !cmd.url) {
+    return { id: cmd.id, ok: false, error: 'Cookie scope required: provide domain or url to avoid dumping all cookies' };
+  }
   const details: chrome.cookies.GetAllDetails = {};
   if (cmd.domain) details.domain = cmd.domain;
   if (cmd.url) details.url = cmd.url;

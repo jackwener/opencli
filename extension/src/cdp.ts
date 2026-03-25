@@ -8,10 +8,10 @@
 
 const attached = new Set<number>();
 
-/** Check if a URL can be attached via CDP */
+/** Check if a URL can be attached via CDP — only allow http(s) schemes. */
 function isDebuggableUrl(url?: string): boolean {
   if (!url) return true;  // empty/undefined = tab still loading, allow it
-  return !url.startsWith('chrome://') && !url.startsWith('chrome-extension://');
+  return url.startsWith('http://') || url.startsWith('https://');
 }
 
 async function ensureAttached(tabId: number): Promise<void> {
