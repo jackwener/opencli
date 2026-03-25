@@ -130,6 +130,28 @@ describe('manifest helper rules', () => {
     expect(scanTs(file, 'demo')).toBeNull();
   });
 
+  it('detects shared desktop factory commands in TS adapters', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-manifest-shared-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, 'status.ts');
+    fs.writeFileSync(
+      file,
+      `import { makeStatusCommand } from '../_shared/desktop-commands.js';
+       export const statusCommand = makeStatusCommand('chatwise', 'ChatWise Desktop');`,
+    );
+
+    expect(scanTs(file, 'chatwise')).toMatchObject({
+      site: 'chatwise',
+      name: 'status',
+      description: 'Check active CDP connection to ChatWise Desktop',
+      strategy: 'ui',
+      browser: true,
+      columns: ['Status', 'Url', 'Title'],
+      type: 'ts',
+      modulePath: 'chatwise/status.js',
+    });
+  });
+
   it('keeps literal domain and navigateBefore for TS adapters', () => {
     const file = path.join(process.cwd(), 'src', 'clis', 'xueqiu', 'fund-holdings.ts');
     const entry = scanTs(file, 'xueqiu');

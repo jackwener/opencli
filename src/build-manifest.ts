@@ -50,6 +50,8 @@ import type { YamlCliDefinition } from './yaml-schema.js';
 
 import { isRecord } from './utils.js';
 
+const SHARED_DESKTOP_FACTORY_PATTERN = /\bmake(Status|New|Screenshot|Dump)Command\s*\(\s*['"`]([^'"`]+)['"`](?:\s*,\s*['"`]([^'"`]+)['"`])?/;
+
 
 function extractBalancedBlock(
   source: string,
@@ -216,6 +218,74 @@ export function scanTs(filePath: string, site: string): ManifestEntry | null {
 
   try {
     const src = fs.readFileSync(filePath, 'utf-8');
+
+    const sharedFactoryMatch = src.match(SHARED_DESKTOP_FACTORY_PATTERN);
+    if (sharedFactoryMatch) {
+      const [, factoryName, siteName, displayName] = sharedFactoryMatch;
+      const label = displayName || siteName;
+
+      switch (factoryName) {
+        case 'Status':
+          return {
+            site: siteName,
+            name: baseName,
+            description: `Check active CDP connection to ${label}`,
+            domain: 'localhost',
+            strategy: 'ui',
+            browser: true,
+            args: [],
+            columns: ['Status', 'Url', 'Title'],
+            type: 'ts',
+            modulePath: relativePath,
+          };
+        case 'New':
+          return {
+            site: siteName,
+            name: baseName,
+            description: `Start a new ${label} session`,
+            domain: 'localhost',
+            strategy: 'ui',
+            browser: true,
+            args: [],
+            columns: ['Status'],
+            type: 'ts',
+            modulePath: relativePath,
+          };
+        case 'Screenshot':
+          return {
+            site: siteName,
+            name: baseName,
+            description: `Capture a snapshot of the current ${label} window (DOM + Accessibility tree)`,
+            domain: 'localhost',
+            strategy: 'ui',
+            browser: true,
+            args: [
+              {
+                name: 'output',
+                type: 'str',
+                required: false,
+                help: `Output file path (default: /tmp/${siteName}-snapshot.txt)`,
+              },
+            ],
+            columns: ['Status', 'File'],
+            type: 'ts',
+            modulePath: relativePath,
+          };
+        case 'Dump':
+          return {
+            site: siteName,
+            name: baseName,
+            description: `Dump the DOM and Accessibility tree of ${siteName} for reverse-engineering`,
+            domain: 'localhost',
+            strategy: 'ui',
+            browser: true,
+            args: [],
+            columns: ['action', 'files'],
+            type: 'ts',
+            modulePath: relativePath,
+          };
+      }
+    }
 
     // Helper/test modules should not appear as CLI commands in the manifest.
     if (!/\bcli\s*\(/.test(src)) return null;

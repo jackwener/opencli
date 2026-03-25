@@ -20,8 +20,8 @@ import type { ManifestEntry } from './build-manifest.js';
 
 /** Plugins directory: ~/.opencli/plugins/ */
 export const PLUGINS_DIR = path.join(os.homedir(), '.opencli', 'plugins');
-/** Matches files that register commands via cli() or lifecycle hooks */
-const PLUGIN_MODULE_PATTERN = /\b(?:cli|onStartup|onBeforeExecute|onAfterExecute)\s*\(/;
+/** Matches files that register commands via cli(), shared desktop factories, or lifecycle hooks */
+const PLUGIN_MODULE_PATTERN = /\b(?:cli|makeStatusCommand|makeNewCommand|makeScreenshotCommand|makeDumpCommand|onStartup|onBeforeExecute|onAfterExecute)\s*\(/;
 
 import type { YamlCliDefinition } from './yaml-schema.js';
 
