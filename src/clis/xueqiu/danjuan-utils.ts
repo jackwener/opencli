@@ -97,14 +97,26 @@ export async function fetchDanjuanAll(page: IPage): Promise<DanjuanSnapshot> {
         mainFlag:    !!a.main_flag,
       }));
 
+      if (!accounts.length) {
+        return { _emptyAccounts: true };
+      }
+
       const details = await Promise.all(
         accounts.map(a => f(${JSON.stringify(SUMMARY_URL)} + encodeURIComponent(a.accountId)))
       );
 
       const holdings = [];
+      const detailErrors = [];
       for (let i = 0; i < accounts.length; i++) {
         const d = details[i];
-        if (d._err) continue;
+        if (d._err) {
+          detailErrors.push({
+            accountId: accounts[i].accountId,
+            accountName: accounts[i].accountName,
+            error: d._err,
+          });
+          continue;
+        }
         const data = d.data || {};
         const funds = Array.isArray(data.items) ? data.items : [];
         const acc = accounts[i];
@@ -138,12 +150,27 @@ export async function fetchDanjuanAll(page: IPage): Promise<DanjuanSnapshot> {
         totalFundMarketValue:n(fundSec && fundSec.amount),
         accounts,
         holdings,
+        detailErrors,
       };
     })()
   `);
 
   if (raw?._httpError) {
     throw new Error(`HTTP ${raw._httpError} — Hint: not logged in to ${DANJUAN_DOMAIN}?`);
+  }
+  if (raw?._emptyAccounts) {
+    throw new Error(`No fund accounts found — Hint: not logged in to ${DANJUAN_DOMAIN}?`);
+  }
+  if (Array.isArray(raw?.detailErrors) && raw.detailErrors.length > 0) {
+    const failedAccounts = raw.detailErrors
+      .map((item: { accountName?: string; accountId?: string; error?: string | number }) => {
+        const label = item.accountName && item.accountId
+          ? `${item.accountName} (${item.accountId})`
+          : item.accountName || item.accountId || 'unknown account';
+        return `${label}: ${item.error}`;
+      })
+      .join(', ');
+    throw new Error(`Failed to fetch Danjuan account details: ${failedAccounts}`);
   }
   return raw as DanjuanSnapshot;
 }
