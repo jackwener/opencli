@@ -1,37 +1,22 @@
 ---
 name: opencli-platform-router
-description: Route social/content requests to OpenCLI by platform command docs (twitter, xiaohongshu, reddit, zhihu, bilibili, weibo, youtube, hackernews, v2ex, xueqiu, boss, yahoo, ctrip, reuters, bbc, smzdm, github). Use when user asks to browse trending, search content, fetch feeds, check bookmarks/history, or execute platform write actions like post/reply/like/check-in.
+description: Route social/content requests to OpenCLI by platform command docs generated from source under src/clis. Use when user asks to browse trending, search content, fetch feeds, check bookmarks/history, or execute write actions on supported platforms.
 ---
 
-Route by platform command file.
+Use this skill as command router.
 
-1. Detect target platform from user request.
-2. Load exactly one file under `references/commands/<platform>.md` first.
-3. Compose OpenCLI command with minimal required args.
+1. Detect platform from user request.
+2. Load `references/commands/<platform>.md`.
+3. Choose the exact command and fill required args.
 4. Prefer `-f json` for parseable output.
-5. Require explicit confirmation before write actions: `post`, `reply`, `comment`, `like`, `checkin`, `delete`, `follow`, `merge`.
-6. If platform command is unknown, ask one clarification question or run `opencli list`/`opencli <site> --help`.
-7. Keep fallback safe: prefer read-only command when user intent is ambiguous.
+5. Require explicit confirmation before write actions (`post`, `reply`, `comment`, `like`, `follow`, `delete`, `block`, `bookmark`, `daily`, `merge`).
+6. If platform/command is unclear, ask one minimal clarification or run `opencli list` / `opencli <site> --help`.
 
-Read workflow docs only when needed:
+Workflow docs (load on demand):
 - `references/workflows/daily-brief.md`
 - `references/workflows/content-post.md`
 
-Platform command docs:
-- `references/commands/twitter.md`
-- `references/commands/xiaohongshu.md`
-- `references/commands/reddit.md`
-- `references/commands/zhihu.md`
-- `references/commands/bilibili.md`
-- `references/commands/weibo.md`
-- `references/commands/youtube.md`
-- `references/commands/hackernews.md`
-- `references/commands/v2ex.md`
-- `references/commands/xueqiu.md`
-- `references/commands/boss.md`
-- `references/commands/yahoo.md`
-- `references/commands/ctrip.md`
-- `references/commands/reuters.md`
-- `references/commands/bbc.md`
-- `references/commands/smzdm.md`
-- `references/commands/github.md`
+All platform command docs live in:
+- `references/commands/*.md`
+
+These files are generated from source definitions in `src/clis/*` and should be refreshed after adapter changes.
