@@ -55,11 +55,13 @@ export class CursorStore {
     return this.entries.get(origin);
   }
 
-  set(origin: string, cursor: string, eventsDelivered: number): void {
+  set(origin: string, cursor: string, newEventsDelivered: number): void {
+    const existing = this.entries.get(origin);
+    const cumulative = (existing?.eventsDelivered ?? 0) + newEventsDelivered;
     this.entries.set(origin, {
       cursor,
       lastPoll: new Date().toISOString(),
-      eventsDelivered,
+      eventsDelivered: cumulative,
     });
   }
 

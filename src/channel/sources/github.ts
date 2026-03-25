@@ -179,15 +179,18 @@ export class GitHubSource implements ChannelSource {
       user: { login: string };
     }>>(endpoint);
 
-    // Filter out events at or before cursor (since= is inclusive)
+    // GitHub's `since` param filters by updated_at, so we must also
+    // filter by updated_at to avoid missing edits or re-delivering stale items.
     const cursorTs = cursor ? Date.parse(cursor) : 0;
     const events: ChannelEvent[] = data
-      .filter(comment => Date.parse(comment.created_at) > cursorTs)
+      .filter(comment => Date.parse(comment.updated_at) > cursorTs)
       .map(comment => ({
-        id: `gh-comment-${comment.id}`,
+        id: `gh-comment-${comment.id}-${comment.updated_at}`,
         source: 'github',
-        type: 'issue_comment.created',
-        timestamp: comment.created_at,
+        type: comment.created_at === comment.updated_at
+          ? 'issue_comment.created'
+          : 'issue_comment.updated',
+        timestamp: comment.updated_at,
         origin: `github:${c.owner}/${c.repo}#${c.number}`,
         payload: {
           author: comment.user.login,
@@ -197,7 +200,7 @@ export class GitHubSource implements ChannelSource {
       }));
 
     const newCursor = data.length > 0
-      ? data[data.length - 1].created_at
+      ? data[data.length - 1].updated_at
       : (cursor ?? '');
 
     return {

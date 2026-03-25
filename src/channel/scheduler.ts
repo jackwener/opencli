@@ -12,10 +12,19 @@ const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 10_000;
 const MAX_BACKOFF_MS = 5 * 60_000;
 
+/** Factory that creates a fresh sink instance per subscription. */
+export type SinkFactory = (name: string, config: Record<string, unknown>) => ChannelSink;
+
+interface SubscriptionSink {
+  subscriptionId: string;
+  sink: ChannelSink;
+}
+
 interface OriginLoop {
   origin: string;
   source: ChannelSource;
   pollConfig: SourcePollConfig;
+  sinks: SubscriptionSink[];
   timer: ReturnType<typeof setTimeout> | null;
   intervalMs: number;
   consecutiveErrors: number;
@@ -27,7 +36,7 @@ export class Scheduler {
 
   constructor(
     private readonly sources: Map<string, ChannelSource>,
-    private readonly sinks: Map<string, ChannelSink>,
+    private readonly sinkFactory: SinkFactory,
     private readonly registry: SubscriptionRegistry,
     private readonly cursors: CursorStore,
     private readonly dedup: Dedup,
@@ -38,7 +47,7 @@ export class Scheduler {
     const origins = this.registry.origins();
 
     for (const origin of origins) {
-      this.startOriginLoop(origin);
+      await this.startOriginLoop(origin);
     }
   }
 
@@ -50,7 +59,7 @@ export class Scheduler {
     this.loops.clear();
   }
 
-  private startOriginLoop(origin: string): void {
+  private async startOriginLoop(origin: string): Promise<void> {
     if (this.loops.has(origin)) return;
 
     // Parse origin → source + config
@@ -67,8 +76,25 @@ export class Scheduler {
       return;
     }
 
-    // Use subscription-level interval override, or default
+    // Create a dedicated sink instance per subscription
     const subs = this.registry.forOrigin(origin);
+    const sinkInstances: SubscriptionSink[] = [];
+    for (const sub of subs) {
+      try {
+        const sink = this.sinkFactory(sub.sink, sub.sinkConfig);
+        await sink.init(sub.sinkConfig);
+        sinkInstances.push({ subscriptionId: sub.id, sink });
+      } catch (e) {
+        console.error(`[channel] Failed to init sink "${sub.sink}" for subscription ${sub.id}:`, e);
+      }
+    }
+
+    if (sinkInstances.length === 0) {
+      console.error(`[channel] No valid sinks for origin "${origin}", skipping.`);
+      return;
+    }
+
+    // Use subscription-level interval override, or default
     const overrideMs = subs.reduce((min, s) => {
       if (s.intervalMs > 0 && s.intervalMs < min) return s.intervalMs;
       return min;
@@ -78,6 +104,7 @@ export class Scheduler {
       origin,
       source,
       pollConfig,
+      sinks: sinkInstances,
       timer: null,
       intervalMs: Math.max(overrideMs, MIN_INTERVAL_MS),
       consecutiveErrors: 0,
@@ -106,21 +133,15 @@ export class Scheduler {
         }
       }
 
-      // Deliver to all subscribers of this origin
+      // Deliver to each subscription's dedicated sink
       let anyDelivered = false;
       if (fresh.length > 0) {
-        const subs = this.registry.forOrigin(loop.origin);
-        for (const sub of subs) {
-          const sink = this.sinks.get(sub.sink);
-          if (!sink) {
-            console.error(`[channel] Unknown sink "${sub.sink}" for subscription ${sub.id}`);
-            continue;
-          }
+        for (const { subscriptionId, sink } of loop.sinks) {
           try {
             await sink.deliver(fresh);
             anyDelivered = true;
           } catch (e) {
-            console.error(`[channel] Sink "${sub.sink}" delivery failed:`, e);
+            console.error(`[channel] Sink delivery failed for subscription ${subscriptionId}:`, e);
           }
         }
       }

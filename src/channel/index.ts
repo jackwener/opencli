@@ -21,7 +21,7 @@ import { spawn } from 'node:child_process';
 import { CursorStore } from './cursor-store.js';
 import { Dedup } from './dedup.js';
 import { SubscriptionRegistry } from './registry.js';
-import { Scheduler } from './scheduler.js';
+import { Scheduler, type SinkFactory } from './scheduler.js';
 import type { ChannelSink, ChannelSource } from './types.js';
 
 // Sources
@@ -44,13 +44,13 @@ function getSources(): Map<string, ChannelSource> {
   return map;
 }
 
-function getSinks(): Map<string, ChannelSink> {
-  const map = new Map<string, ChannelSink>();
-  const stdout = new StdoutSink();
-  const webhook = new WebhookSink();
-  map.set('stdout', stdout);
-  map.set('webhook', webhook);
-  return map;
+/** Factory that creates a fresh sink instance per subscription. */
+function createSink(name: string, _config: Record<string, unknown>): ChannelSink {
+  switch (name) {
+    case 'stdout': return new StdoutSink();
+    case 'webhook': return new WebhookSink();
+    default: throw new Error(`Unknown sink: ${name}`);
+  }
 }
 
 // ── CLI registration ────────────────────────────────────────────────
@@ -254,21 +254,15 @@ export function registerChannelCommand(program: Command): void {
       await cursors.load();
 
       const sources = getSources();
-      const sinks = getSinks();
-
-      // Init sinks with config from subscriptions
-      for (const sub of subs) {
-        const sink = sinks.get(sub.sink);
-        if (sink) await sink.init(sub.sinkConfig);
-      }
 
       const dedup = new Dedup();
-      const scheduler = new Scheduler(sources, sinks, registry, cursors, dedup);
+      const scheduler = new Scheduler(sources, createSink, registry, cursors, dedup);
 
       const shutdown = (): void => {
         console.log('\nStopping channel daemon...');
         scheduler.stop();
-        process.exit(0);
+        // Flush cursors before exit
+        cursors.save().catch(() => {}).finally(() => process.exit(0));
       };
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
