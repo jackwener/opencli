@@ -20,6 +20,7 @@ export default defineConfig({
             'src/clis/bilibili/**/*.test.ts',
             'src/clis/zhihu/**/*.test.ts',
             'src/clis/v2ex/**/*.test.ts',
+            'src/clis/weread/**/*.test.ts',
           ],
           sequence: { groupOrder: 1 },
         },

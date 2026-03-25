@@ -13,7 +13,7 @@ cli({
   ],
   columns: ['title', 'author', 'publisher', 'intro', 'category', 'rating'],
   func: async (page: IPage, args) => {
-    const data = await fetchPrivateApi(page, '/book/info', { bookId: args.bookId });
+    const data = await fetchPrivateApi(page, '/book/info', { bookId: args['book-id'] });
     // newRating is 0-1000 scale per community docs; needs runtime verification
     const rating = data.newRating ? `${(data.newRating / 10).toFixed(1)}%` : '-';
     return [{

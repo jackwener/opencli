@@ -14,7 +14,7 @@ cli({
   ],
   columns: ['chapter', 'text', 'createTime'],
   func: async (page: IPage, args) => {
-    const data = await fetchPrivateApi(page, '/book/bookmarklist', { bookId: args.bookId });
+    const data = await fetchPrivateApi(page, '/book/bookmarklist', { bookId: args['book-id'] });
     const items: any[] = data?.updated ?? [];
     return items.slice(0, Number(args.limit)).map((item: any) => ({
       chapter: item.chapterName ?? '',

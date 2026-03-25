@@ -15,7 +15,7 @@ cli({
   columns: ['chapter', 'text', 'review', 'createTime'],
   func: async (page: IPage, args) => {
     const data = await fetchPrivateApi(page, '/review/list', {
-      bookId: args.bookId,
+      bookId: args['book-id'],
       listType: '11',
       mine: '1',
       synckey: '0',
