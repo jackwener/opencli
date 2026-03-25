@@ -2,7 +2,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import { cli, Strategy } from '../../registry.js';
 import { ConfigError } from '../../errors.js';
 import type { IPage } from '../../types.js';
-import { getVisibleChatMessages, selectModel, MODEL_CHOICES, isGenerating } from './ax.js';
+import { activateChatGPT, getVisibleChatMessages, selectModel, MODEL_CHOICES, isGenerating } from './ax.js';
 
 export const askCommand = cli({
   site: 'chatgpt',
@@ -28,8 +28,8 @@ export const askCommand = cli({
 
     // Switch model before sending if requested
     if (model) {
+      activateChatGPT();
       selectModel(model);
-      execSync("osascript -e 'delay 0.5'");
     }
 
     // Backup clipboard
@@ -39,8 +39,7 @@ export const askCommand = cli({
 
     // Send the message
     spawnSync('pbcopy', { input: text });
-    execSync("osascript -e 'tell application \"ChatGPT\" to activate'");
-    execSync("osascript -e 'delay 0.5'");
+    activateChatGPT();
 
     const cmd = "osascript " +
                 "-e 'tell application \"System Events\"' " +
@@ -71,8 +70,7 @@ export const askCommand = cli({
       if (!generationStarted && i < 3) continue; // give it a moment to start
 
       // Read final response
-      execSync("osascript -e 'tell application \"ChatGPT\" to activate'");
-      execSync("osascript -e 'delay 0.3'");
+      activateChatGPT(0.3);
       const messagesNow = getVisibleChatMessages();
       if (messagesNow.length > messagesBefore.length) {
         const newMessages = messagesNow.slice(messagesBefore.length);

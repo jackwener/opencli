@@ -2,7 +2,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
 import { getErrorMessage } from '../../errors.js';
-import { selectModel, MODEL_CHOICES } from './ax.js';
+import { activateChatGPT, selectModel, MODEL_CHOICES } from './ax.js';
 
 export const sendCommand = cli({
   site: 'chatgpt',
@@ -22,8 +22,8 @@ export const sendCommand = cli({
     try {
       // Switch model before sending if requested
       if (model) {
+        activateChatGPT();
         selectModel(model);
-        execSync("osascript -e 'delay 0.5'");
       }
 
       // Backup current clipboard content
@@ -35,8 +35,7 @@ export const sendCommand = cli({
       // Copy text to clipboard
       spawnSync('pbcopy', { input: text });
 
-      execSync("osascript -e 'tell application \"ChatGPT\" to activate'");
-      execSync("osascript -e 'delay 0.5'");
+      activateChatGPT();
 
       const cmd = "osascript " +
                   "-e 'tell application \"System Events\"' " +

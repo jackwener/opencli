@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 
 const AX_READ_SCRIPT = `
 import Cocoa
@@ -206,6 +206,11 @@ const MODEL_MAP: Record<ModelChoice, { desc: string; legacy?: boolean }> = {
 };
 
 export const MODEL_CHOICES = Object.keys(MODEL_MAP) as ModelChoice[];
+
+export function activateChatGPT(delaySeconds: number = 0.5): void {
+  execSync("osascript -e 'tell application \"ChatGPT\" to activate'");
+  execSync(`osascript -e 'delay ${delaySeconds}'`);
+}
 
 export function selectModel(model: string): string {
   const entry = MODEL_MAP[model as ModelChoice];

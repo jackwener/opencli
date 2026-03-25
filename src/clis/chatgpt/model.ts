@@ -1,8 +1,7 @@
-import { execSync } from 'node:child_process';
 import { cli, Strategy } from '../../registry.js';
 import { ConfigError } from '../../errors.js';
 import type { IPage } from '../../types.js';
-import { selectModel, MODEL_CHOICES } from './ax.js';
+import { activateChatGPT, selectModel, MODEL_CHOICES } from './ax.js';
 
 export const modelCommand = cli({
   site: 'chatgpt',
@@ -21,9 +20,7 @@ export const modelCommand = cli({
     }
 
     const model = kwargs.model as string;
-    execSync("osascript -e 'tell application \"ChatGPT\" to activate'");
-    execSync("osascript -e 'delay 0.5'");
-
+    activateChatGPT();
     const result = selectModel(model);
     return [{ Status: 'Success', Model: result }];
   },
