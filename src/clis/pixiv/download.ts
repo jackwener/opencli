@@ -25,8 +25,12 @@ cli({
   columns: ['index', 'type', 'status', 'size'],
 
   func: async (page, kwargs) => {
-    const illustId = kwargs['illust-id'];
-    const output = kwargs.output;
+    const illustId = String(kwargs['illust-id'] ?? '');
+    const output = String(kwargs.output ?? './pixiv-downloads');
+
+    if (!/^\d+$/.test(illustId)) {
+      throw new CommandExecutionError(`Invalid illustration ID: ${illustId}`);
+    }
 
     await page.goto('https://www.pixiv.net');
 
@@ -75,11 +79,11 @@ cli({
         continue;
       }
 
-      const ext = path.extname(new URL(url).pathname) || '.jpg';
-      const filename = `${illustId}_p${i}${ext}`;
-      const destPath = path.join(outputDir, filename);
-
       try {
+        const ext = path.extname(new URL(url).pathname) || '.jpg';
+        const filename = `${illustId}_p${i}${ext}`;
+        const destPath = path.join(outputDir, filename);
+
         const result = await httpDownload(url, destPath, {
           cookies,
           headers: { Referer: 'https://www.pixiv.net/' },

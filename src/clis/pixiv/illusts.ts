@@ -71,6 +71,9 @@ cli({
     `);
 
     if (detailData?.error) {
+      if (detailData.error === 401 || detailData.error === 403) {
+        throw new AuthRequiredError('www.pixiv.net', 'Authentication required — please log in to Pixiv in Chrome');
+      }
       throw new CommandExecutionError(`Pixiv batch detail request failed (HTTP ${detailData.error})`);
     }
 
