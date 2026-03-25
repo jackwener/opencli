@@ -99,6 +99,15 @@ describe('CDP browser websocket helpers', () => {
     expect(wsUrl).toBe('ws://127.0.0.1:9222/devtools/browser/abc-123');
   });
 
+  it('parses auto-discovered browser websocket URLs from DevToolsActivePort content', () => {
+    const wsUrl = __test__.parseAnyBrowserWebSocketUrlFromActivePort(
+      '9333\n/devtools/browser/abc-123\n',
+      '127.0.0.1',
+    );
+
+    expect(wsUrl).toBe('ws://127.0.0.1:9333/devtools/browser/abc-123');
+  });
+
   it('detects browser-level websocket endpoints', () => {
     expect(__test__.isBrowserLevelWebSocket('ws://127.0.0.1:9222/devtools/browser/abc')).toBe(true);
     expect(__test__.isBrowserLevelWebSocket('ws://127.0.0.1:9222/devtools/page/abc')).toBe(false);

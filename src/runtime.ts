@@ -10,6 +10,50 @@ export function getBrowserFactory(): new () => IBrowserFactory {
   return (process.env.OPENCLI_CDP_ENDPOINT ? CDPBridge : BrowserBridge) as unknown as new () => IBrowserFactory;
 }
 
+export interface BrowserEnvOverrides {
+  browserCdp?: boolean;
+}
+
+export function extractBrowserEnvOverrides(options: Record<string, unknown>): BrowserEnvOverrides {
+  return {
+    browserCdp: readBooleanOption(options, ['browser-cdp', 'browserCdp']),
+  };
+}
+
+export async function withBrowserEnvOverrides<T>(
+  overrides: BrowserEnvOverrides,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!overrides.browserCdp || process.env.OPENCLI_CDP_ENDPOINT) {
+    return fn();
+  }
+
+  const previousEndpoint = process.env.OPENCLI_CDP_ENDPOINT;
+  process.env.OPENCLI_CDP_ENDPOINT = 'auto';
+  try {
+    return await fn();
+  } finally {
+    if (previousEndpoint === undefined) {
+      delete process.env.OPENCLI_CDP_ENDPOINT;
+    } else {
+      process.env.OPENCLI_CDP_ENDPOINT = previousEndpoint;
+    }
+  }
+}
+
+function readBooleanOption(options: Record<string, unknown>, names: string[]): boolean | undefined {
+  for (const name of names) {
+    const value = options[name];
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true' || normalized === '1') return true;
+      if (normalized === 'false' || normalized === '0') return false;
+    }
+  }
+  return undefined;
+}
+
 function parseEnvTimeout(envVar: string, fallback: number): number {
   const raw = process.env[envVar];
   if (raw === undefined) return fallback;
