@@ -37,6 +37,7 @@ export interface CliCommand {
   domain?: string;
   strategy?: Strategy;
   browser?: boolean;
+  supportsBrowserCdp?: boolean;
   args: Arg[];
   columns?: string[];
   func?: (page: IPage, kwargs: CommandArgs, debug?: boolean) => Promise<unknown>;
@@ -88,6 +89,7 @@ export function cli(opts: CliOptions): CliCommand {
     domain: opts.domain,
     strategy,
     browser,
+    supportsBrowserCdp: opts.supportsBrowserCdp ?? (browser && !(opts.domain === 'localhost' && strategy === Strategy.UI)),
     args: opts.args ?? [],
     columns: opts.columns,
     func: opts.func,

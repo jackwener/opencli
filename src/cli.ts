@@ -10,7 +10,8 @@ import chalk from 'chalk';
 import { type CliCommand, fullName, getRegistry, strategyLabel } from './registry.js';
 import { serializeCommand, formatArgSummary } from './serialization.js';
 import { render as renderOutput } from './output.js';
-import { getBrowserFactory, browserSession, extractBrowserEnvOverrides, withBrowserEnvOverrides } from './runtime.js';
+import { getBrowserFactory, browserSession } from './runtime.js';
+import { addBrowserEnvOverrideOptions, runWithBrowserEnvOptions } from './browserEnvOptions.js';
 import { PKG_VERSION } from './version.js';
 import { printCompletionScript } from './completion.js';
 import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
@@ -123,7 +124,8 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
 
   // ── Built-in: explore / synthesize / generate / cascade ───────────────────
 
-  program
+  addBrowserEnvOverrideOptions(
+    program
     .command('explore')
     .alias('probe')
     .description('Explore a website: discover APIs, stores, and recommend strategies')
@@ -132,11 +134,11 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .option('--goal <text>')
     .option('--wait <s>', '', '3')
     .option('--auto', 'Enable interactive fuzzing')
-    .option('--click <labels>', 'Comma-separated labels to click before fuzzing')
-    .option('--browser-cdp', 'Connect directly to a local Chrome CDP session and bypass the daemon/extension')
-    .option('--no-browser-cdp', 'Disable direct Chrome CDP mode for this command, even if enabled globally')
+    .option('--click <labels>', 'Comma-separated labels to click before fuzzing'),
+    { allowBrowserCdp: true },
+  )
     .action(async (url, opts) => {
-      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+      await runWithBrowserEnvOptions(opts, async () => {
         const { exploreUrl, renderExploreSummary } = await import('./explore.js');
         const clickLabels = opts.click
           ? opts.click.split(',').map((s: string) => s.trim())
@@ -152,7 +154,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
           workspace,
         });
         console.log(renderExploreSummary(result));
-      });
+      }, { allowBrowserCdp: true });
     });
 
   program
@@ -165,16 +167,17 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       console.log(renderSynthesizeSummary(synthesizeFromExplore(target, { top: parseInt(opts.top) })));
     });
 
-  program
+  addBrowserEnvOverrideOptions(
+    program
     .command('generate')
     .description('One-shot: explore → synthesize → register')
     .argument('<url>')
     .option('--goal <text>')
-    .option('--site <name>')
-    .option('--browser-cdp', 'Connect directly to a local Chrome CDP session and bypass the daemon/extension')
-    .option('--no-browser-cdp', 'Disable direct Chrome CDP mode for this command, even if enabled globally')
+    .option('--site <name>'),
+    { allowBrowserCdp: true },
+  )
     .action(async (url, opts) => {
-      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+      await runWithBrowserEnvOptions(opts, async () => {
         const { generateCliFromUrl, renderGenerateSummary } = await import('./generate.js');
         const workspace = `generate:${inferHost(url, opts.site)}`;
         const r = await generateCliFromUrl({
@@ -186,23 +189,24 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         });
         console.log(renderGenerateSummary(r));
         process.exitCode = r.ok ? 0 : 1;
-      });
+      }, { allowBrowserCdp: true });
     });
 
   // ── Built-in: record ─────────────────────────────────────────────────────
 
-  program
+  addBrowserEnvOverrideOptions(
+    program
     .command('record')
     .description('Record API calls from a live browser session → generate YAML candidates')
     .argument('<url>', 'URL to open and record')
     .option('--site <name>', 'Site name (inferred from URL if omitted)')
     .option('--out <dir>', 'Output directory for candidates')
     .option('--poll <ms>', 'Poll interval in milliseconds', '2000')
-    .option('--timeout <ms>', 'Auto-stop after N milliseconds (default: 60000)', '60000')
-    .option('--browser-cdp', 'Connect directly to a local Chrome CDP session and bypass the daemon/extension')
-    .option('--no-browser-cdp', 'Disable direct Chrome CDP mode for this command, even if enabled globally')
+    .option('--timeout <ms>', 'Auto-stop after N milliseconds (default: 60000)', '60000'),
+    { allowBrowserCdp: true },
+  )
     .action(async (url, opts) => {
-      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+      await runWithBrowserEnvOptions(opts, async () => {
         const { recordSession, renderRecordSummary } = await import('./record.js');
         const result = await recordSession({
           BrowserFactory: getBrowserFactory(),
@@ -214,18 +218,19 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         });
         console.log(renderRecordSummary(result));
         process.exitCode = result.candidateCount > 0 ? 0 : 1;
-      });
+      }, { allowBrowserCdp: true });
     });
 
-  program
+  addBrowserEnvOverrideOptions(
+    program
     .command('cascade')
     .description('Strategy cascade: find simplest working strategy')
     .argument('<url>')
-    .option('--site <name>')
-    .option('--browser-cdp', 'Connect directly to a local Chrome CDP session and bypass the daemon/extension')
-    .option('--no-browser-cdp', 'Disable direct Chrome CDP mode for this command, even if enabled globally')
+    .option('--site <name>'),
+    { allowBrowserCdp: true },
+  )
     .action(async (url, opts) => {
-      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+      await runWithBrowserEnvOptions(opts, async () => {
         const { cascadeProbe, renderCascadeResult } = await import('./cascade.js');
         const workspace = `cascade:${inferHost(url, opts.site)}`;
         const result = await browserSession(getBrowserFactory(), async (page) => {
@@ -237,7 +242,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
           return cascadeProbe(page, url);
         }, { workspace });
         console.log(renderCascadeResult(result));
-      });
+      }, { allowBrowserCdp: true });
     });
 
   // ── Built-in: doctor / completion ──────────────────────────────────────────
@@ -451,14 +456,14 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
   // ── Antigravity serve (long-running, special case) ────────────────────────
 
   const antigravityCmd = program.command('antigravity').description('antigravity commands');
-  antigravityCmd
+  addBrowserEnvOverrideOptions(
+    antigravityCmd
     .command('serve')
     .description('Start Anthropic-compatible API proxy for Antigravity')
-    .option('--port <port>', 'Server port (default: 8082)', '8082')
-    .option('--browser-cdp', 'Auto-discover a local Chrome CDP session instead of requiring OPENCLI_CDP_ENDPOINT')
-    .option('--no-browser-cdp', 'Disable direct Chrome CDP mode for this command, even if enabled globally')
+    .option('--port <port>', 'Server port (default: 8082)', '8082'),
+  )
     .action(async (opts) => {
-      await withBrowserEnvOverrides(extractBrowserEnvOverrides(opts), async () => {
+      await runWithBrowserEnvOptions(opts, async () => {
         const { startServe } = await import('./clis/antigravity/serve.js');
         await startServe({ port: parseInt(opts.port) });
       });

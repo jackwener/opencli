@@ -28,7 +28,6 @@ import {
   networkRequestsJs,
   waitForDomStableJs,
 } from './dom-helpers.js';
-import { isRecord, saveBase64ToFile } from '../utils.js';
 
 export interface CDPTarget {
   targetId?: string;
@@ -49,11 +48,13 @@ interface RuntimeEvaluateResult {
   };
 }
 
-const CDP_SEND_TIMEOUT = 30_000;
+const CDP_SEND_TIMEOUT = 30_000; // 30s per command
+const CDP_CLOSE_TIMEOUT = 1_500;
 
 export class CDPBridge {
   private _ws: WebSocket | null = null;
   private _sessionId: string | null = null;
+  private _ownedTargetId: string | null = null;
   private _idCounter = 0;
   private _pending = new Map<number, { resolve: (val: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private _eventListeners = new Map<string, Set<(params: unknown) => void>>();
@@ -79,6 +80,7 @@ export class CDPBridge {
             await this.attachToBrowserTarget(connection.preferNewTarget);
           }
         } catch (err) {
+          await this.close().catch(() => {});
           reject(err);
           return;
         }
@@ -87,7 +89,9 @@ export class CDPBridge {
           // Register stealth script to run before any page JS on every navigation.
           await this.send('Page.enable');
           await this.send('Page.addScriptToEvaluateOnNewDocument', { source: generateStealthJs() });
-        } catch {}
+        } catch {
+          // Non-fatal: stealth is best-effort
+        }
         resolve(new CDPPage(this));
       });
 
@@ -99,6 +103,7 @@ export class CDPBridge {
       ws.on('message', (data: RawData) => {
         try {
           const msg = JSON.parse(data.toString());
+          // Handle command responses
           if (msg.id && this._pending.has(msg.id)) {
             const entry = this._pending.get(msg.id)!;
             clearTimeout(entry.timer);
@@ -109,6 +114,7 @@ export class CDPBridge {
               entry.resolve(msg.result);
             }
           }
+          // Handle CDP events
           if (msg.method) {
             if (this._sessionId && msg.sessionId && msg.sessionId !== this._sessionId) {
               return;
@@ -118,12 +124,18 @@ export class CDPBridge {
               for (const fn of listeners) fn(msg.params);
             }
           }
-        } catch {}
+        } catch {
+          // ignore parsing errors
+        }
       });
     });
   }
 
   async close(): Promise<void> {
+    if (this._ownedTargetId && this._ws && this._ws.readyState === WebSocket.OPEN) {
+      await this.send('Target.closeTarget', { targetId: this._ownedTargetId }, CDP_CLOSE_TIMEOUT, { root: true }).catch(() => {});
+    }
+    this._ownedTargetId = null;
     if (this._ws) {
       this._ws.close();
       this._ws = null;
@@ -135,6 +147,7 @@ export class CDPBridge {
     }
     this._pending.clear();
     this._eventListeners.clear();
+    this._idCounter = 0;
   }
 
   /** Send a CDP command with timeout guard (P0 fix #4) */
@@ -162,19 +175,19 @@ export class CDPBridge {
     });
   }
 
+  /** Listen for a CDP event */
   on(event: string, handler: (params: unknown) => void): void {
     let set = this._eventListeners.get(event);
-    if (!set) {
-      set = new Set();
-      this._eventListeners.set(event, set);
-    }
+    if (!set) { set = new Set(); this._eventListeners.set(event, set); }
     set.add(handler);
   }
 
+  /** Remove a CDP event listener */
   off(event: string, handler: (params: unknown) => void): void {
     this._eventListeners.get(event)?.delete(handler);
   }
 
+  /** Wait for a CDP event to fire (one-shot) */
   waitForEvent(event: string, timeoutMs: number = 15_000): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -190,12 +203,13 @@ export class CDPBridge {
     });
   }
 
-  private async attachToBrowserTarget(preferNewTarget: boolean = false): Promise<void> {
+  private async attachToBrowserTarget(preferNewTarget: boolean): Promise<void> {
     let targetId: string | undefined;
 
     if (preferNewTarget) {
       const created = await this.send('Target.createTarget', { url: 'about:blank' }, CDP_SEND_TIMEOUT, { root: true });
       targetId = isRecord(created) && typeof created.targetId === 'string' ? created.targetId : undefined;
+      if (targetId) this._ownedTargetId = targetId;
     }
 
     if (!targetId) {
@@ -203,7 +217,7 @@ export class CDPBridge {
       const targetInfos = isRecord(result) && Array.isArray(result.targetInfos)
         ? result.targetInfos as CDPTarget[]
         : [];
-      const target = selectCDPTarget(targetInfos);
+      const target = selectBrowserPageTarget(targetInfos);
       targetId = target?.targetId;
     }
 
@@ -228,14 +242,29 @@ class CDPPage implements IPage {
   private _pageEnabled = false;
   constructor(private bridge: CDPBridge) {}
 
+  /** Navigate with proper load event waiting (P1 fix #3) */
   async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
     if (!this._pageEnabled) {
       await this.bridge.send('Page.enable');
       this._pageEnabled = true;
     }
-    const loadPromise = this.bridge.waitForEvent('Page.loadEventFired', 30_000).catch(() => {});
-    await this.bridge.send('Page.navigate', { url });
-    await loadPromise;
+    const loadPromise = this.bridge.waitForEvent('Page.loadEventFired', 30_000);
+    const navigateResult = await this.bridge.send('Page.navigate', { url });
+    const navigationError = isRecord(navigateResult) && typeof navigateResult.errorText === 'string'
+      ? navigateResult.errorText.trim()
+      : '';
+    if (navigationError) {
+      void loadPromise.catch(() => {});
+      throw new Error(`Navigation failed for ${url}: ${navigationError}`);
+    }
+    try {
+      await loadPromise;
+    } catch (error) {
+      logVerbose(`[cdp] Timed out waiting for Page.loadEventFired after navigating to ${url}`, normalizeError(error));
+      // Do not fail on load timeout alone; SPAs and long-polling pages may never emit a clean load event.
+    }
+    // Smart settle: use DOM stability detection instead of fixed sleep.
+    // settleMs is now a timeout cap (default 1000ms), not a fixed wait.
     if (options?.waitUntil !== 'none') {
       const maxMs = options?.settleMs ?? 1000;
       await this.evaluate(waitForDomStableJs(maxMs, Math.min(500, maxMs)));
@@ -247,7 +276,7 @@ class CDPPage implements IPage {
     const result = await this.bridge.send('Runtime.evaluate', {
       expression,
       returnByValue: true,
-      awaitPromise: true,
+      awaitPromise: true
     }) as RuntimeEvaluateResult;
     if (result.exceptionDetails) {
       throw new Error('Evaluate error: ' + (result.exceptionDetails.exception?.description || 'Unknown exception'));
@@ -276,6 +305,8 @@ class CDPPage implements IPage {
     return this.evaluate(snapshotJs);
   }
 
+  // ── Shared DOM operations (P1 fix #5 — using dom-helpers.ts) ──
+
   async click(ref: string): Promise<void> {
     await this.evaluate(clickJs(ref));
   }
@@ -298,12 +329,12 @@ class CDPPage implements IPage {
 
   async wait(options: number | WaitOptions): Promise<void> {
     if (typeof options === 'number') {
-      await new Promise((resolve) => setTimeout(resolve, options * 1000));
+      await new Promise(resolve => setTimeout(resolve, options * 1000));
       return;
     }
     if (typeof options.time === 'number') {
       const waitTime = options.time;
-      await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
+      await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
       return;
     }
     if (options.text) {
@@ -311,6 +342,8 @@ class CDPPage implements IPage {
       await this.evaluate(waitForTextJs(options.text, timeout));
     }
   }
+
+  // ── Implemented methods (P1 fix #2) ──
 
   async scroll(direction: string = 'down', amount: number = 500): Promise<void> {
     await this.evaluate(scrollJs(direction, amount));
@@ -375,6 +408,8 @@ class CDPPage implements IPage {
   }
 }
 
+import { isRecord, saveBase64ToFile } from '../utils.js';
+
 function isCookie(value: unknown): value is BrowserCookie {
   return isRecord(value)
     && typeof value.name === 'string'
@@ -389,20 +424,27 @@ function matchesCookieDomain(cookieDomain: string, targetDomain: string): boolea
     || normalizedTargetDomain.endsWith(`.${normalizedCookieDomain}`);
 }
 
-async function resolveConnectionEndpoint(endpoint: string): Promise<{ wsUrl: string; browserLevel: boolean; preferNewTarget: boolean }> {
+async function resolveConnectionEndpoint(
+  endpoint: string,
+): Promise<{ wsUrl: string; browserLevel: boolean; preferNewTarget: boolean }> {
   if (endpoint === 'auto') {
     const wsUrl = resolveAnyBrowserWebSocketUrl();
-    if (wsUrl) {
-      return { wsUrl, browserLevel: true, preferNewTarget: shouldPreferNewBrowserTarget(endpoint) };
+    if (!wsUrl) {
+      throw new Error('Failed to auto-discover a local browser CDP websocket. Start Chrome with --remote-debugging-port and retry, or set OPENCLI_CDP_ENDPOINT explicitly.');
     }
-    throw new Error('Failed to auto-discover a local browser CDP websocket. Start Chrome with --remote-debugging-port and retry, or set OPENCLI_CDP_ENDPOINT explicitly.');
+    return {
+      wsUrl,
+      browserLevel: true,
+      preferNewTarget: shouldPreferNewBrowserTarget(endpoint),
+    };
   }
 
   if (endpoint.startsWith('ws://') || endpoint.startsWith('wss://')) {
+    const browserLevel = isBrowserLevelWebSocket(endpoint);
     return {
       wsUrl: endpoint,
-      browserLevel: isBrowserLevelWebSocket(endpoint),
-      preferNewTarget: false,
+      browserLevel,
+      preferNewTarget: browserLevel && shouldPreferNewBrowserTarget(endpoint),
     };
   }
 
@@ -411,6 +453,9 @@ async function resolveConnectionEndpoint(endpoint: string): Promise<{ wsUrl: str
   }
 
   const normalized = endpoint.replace(/\/$/, '');
+  let discoveryError: Error | undefined;
+  let versionError: Error | undefined;
+
   try {
     const targets = await fetchJsonDirect(`${normalized}/json`) as CDPTarget[];
     const target = selectCDPTarget(targets);
@@ -418,16 +463,39 @@ async function resolveConnectionEndpoint(endpoint: string): Promise<{ wsUrl: str
       throw new Error('No inspectable targets found at CDP endpoint');
     }
     return { wsUrl: target.webSocketDebuggerUrl, browserLevel: false, preferNewTarget: false };
-  } catch {
-    // Fall through to browser-level websocket discovery.
+  } catch (error) {
+    discoveryError = normalizeError(error);
+    logVerbose(`[cdp] Failed to resolve page websocket from ${normalized}/json`, discoveryError);
+  }
+
+  try {
+    const payload = await fetchJsonDirect(`${normalized}/json/version`);
+    const browserWsUrl = extractBrowserWebSocketUrlFromVersionPayload(payload);
+    if (browserWsUrl) {
+      return {
+        wsUrl: browserWsUrl,
+        browserLevel: true,
+        preferNewTarget: shouldPreferNewBrowserTarget(endpoint),
+      };
+    }
+  } catch (error) {
+    versionError = normalizeError(error);
+    logVerbose(`[cdp] Failed to resolve browser websocket from ${normalized}/json/version`, versionError);
   }
 
   const browserWsUrl = resolveBrowserWebSocketUrl(normalized);
   if (browserWsUrl) {
-    return { wsUrl: browserWsUrl, browserLevel: true, preferNewTarget: false };
+    return {
+      wsUrl: browserWsUrl,
+      browserLevel: true,
+      preferNewTarget: shouldPreferNewBrowserTarget(endpoint),
+    };
   }
 
-  throw new Error('Failed to resolve an inspectable target from CDP endpoint');
+  const detail = [discoveryError?.message, versionError?.message].filter(Boolean).join('; ');
+  throw new Error(detail
+    ? `Failed to resolve an inspectable target from CDP endpoint (${detail})`
+    : 'Failed to resolve an inspectable target from CDP endpoint');
 }
 
 function resolveBrowserWebSocketUrl(endpoint: string): string | null {
@@ -439,7 +507,7 @@ function resolveBrowserWebSocketUrl(endpoint: string): string | null {
   }
 
   const host = parsed.hostname.toLowerCase();
-  if (!['127.0.0.1', 'localhost'].includes(host)) return null;
+  if (!isLoopbackHost(host)) return null;
   const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
 
   for (const filePath of getDevToolsActivePortCandidates()) {
@@ -474,7 +542,7 @@ function parseBrowserWebSocketUrlFromActivePort(port: string, host: string, cont
   if (lines.length < 2) return null;
   if (lines[0] !== port) return null;
   if (!lines[1].startsWith('/devtools/browser/')) return null;
-  return `ws://${host}:${port}${lines[1]}`;
+  return `ws://${formatHostForUrl(host)}:${port}${lines[1]}`;
 }
 
 function parseAnyBrowserWebSocketUrlFromActivePort(content: string, host: string): string | null {
@@ -482,7 +550,7 @@ function parseAnyBrowserWebSocketUrlFromActivePort(content: string, host: string
   if (lines.length < 2) return null;
   if (!/^\d+$/.test(lines[0])) return null;
   if (!lines[1].startsWith('/devtools/browser/')) return null;
-  return `ws://${host}:${lines[0]}${lines[1]}`;
+  return `ws://${formatHostForUrl(host)}:${lines[0]}${lines[1]}`;
 }
 
 function getDevToolsActivePortCandidates(): string[] {
@@ -509,6 +577,26 @@ function isBrowserLevelWebSocket(endpoint: string): boolean {
 function shouldPreferNewBrowserTarget(endpoint: string): boolean {
   return endpoint === 'auto' && !process.env.OPENCLI_CDP_TARGET?.trim();
 }
+
+function isLoopbackHost(host: string): boolean {
+  return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host);
+}
+
+function formatHostForUrl(host: string): string {
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+}
+
+function extractBrowserWebSocketUrlFromVersionPayload(payload: unknown): string | null {
+  if (!isRecord(payload)) return null;
+  const wsUrl = payload.webSocketDebuggerUrl;
+  return typeof wsUrl === 'string' && isBrowserLevelWebSocket(wsUrl) ? wsUrl : null;
+}
+
+function selectBrowserPageTarget(targets: CDPTarget[]): CDPTarget | undefined {
+  return selectCDPTarget(targets.filter(target => (target.type ?? '').toLowerCase() === 'page'));
+}
+
+// ── CDP target selection (unchanged) ──
 
 function selectCDPTarget(targets: CDPTarget[]): CDPTarget | undefined {
   const preferredPattern = compilePreferredPattern(process.env.OPENCLI_CDP_TARGET);
@@ -580,10 +668,13 @@ function escapeRegExp(value: string): string {
 
 export const __test__ = {
   selectCDPTarget,
+  selectBrowserPageTarget,
   scoreCDPTarget,
   parseBrowserWebSocketUrlFromActivePort,
   parseAnyBrowserWebSocketUrlFromActivePort,
+  extractBrowserWebSocketUrlFromVersionPayload,
   isBrowserLevelWebSocket,
+  isLoopbackHost,
   shouldPreferNewBrowserTarget,
 };
 
@@ -594,7 +685,7 @@ function fetchJsonDirect(url: string): Promise<unknown> {
       const statusCode = res.statusCode ?? 0;
       if (statusCode < 200 || statusCode >= 300) {
         res.resume();
-        reject(new Error(`Failed to fetch CDP targets: HTTP ${statusCode}`));
+        reject(new Error(`HTTP ${statusCode}`));
         return;
       }
 
@@ -604,7 +695,7 @@ function fetchJsonDirect(url: string): Promise<unknown> {
         try {
           resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
         } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)));
+          reject(normalizeError(error));
         }
       });
     });
@@ -613,4 +704,13 @@ function fetchJsonDirect(url: string): Promise<unknown> {
     request.setTimeout(10_000, () => request.destroy(new Error('Timed out fetching CDP targets')));
     request.end();
   });
+}
+
+function logVerbose(message: string, error?: Error): void {
+  if (process.env.OPENCLI_VERBOSE !== '1') return;
+  console.error(error ? `${message}: ${error.message}` : message);
+}
+
+function normalizeError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }

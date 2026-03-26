@@ -17,7 +17,7 @@ import { formatRegistryHelpText } from './serialization.js';
 import { render as renderOutput } from './output.js';
 import { executeCommand } from './execution.js';
 import { CliError, ERROR_ICONS, getErrorMessage } from './errors.js';
-import { extractBrowserEnvOverrides, withBrowserEnvOverrides } from './runtime.js';
+import { addBrowserEnvOverrideOptions, runWithBrowserEnvOptions } from './browserEnvOptions.js';
 
 /**
  * Register a single CliCommand as a Commander subcommand.
@@ -45,14 +45,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
     .option('-f, --format <fmt>', 'Output format: table, json, yaml, md, csv', 'table')
     .option('-v, --verbose', 'Debug output', false);
   if (cmd.browser) {
-    subCmd.option(
-      '--browser-cdp',
-      'Connect directly to a local Chrome CDP session and bypass the daemon/extension',
-    );
-    subCmd.option(
-      '--no-browser-cdp',
-      'Disable direct Chrome CDP mode for this command, even if enabled globally',
-    );
+    addBrowserEnvOverrideOptions(subCmd, { allowBrowserCdp: cmd.supportsBrowserCdp !== false });
   }
 
   subCmd.addHelpText('after', formatRegistryHelpText(cmd));
@@ -80,11 +73,13 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       const verbose = optionsRecord.verbose === true;
       const format = typeof optionsRecord.format === 'string' ? optionsRecord.format : 'table';
       if (verbose) process.env.OPENCLI_VERBOSE = '1';
-
-      const result = await withBrowserEnvOverrides(
-        extractBrowserEnvOverrides(optionsRecord),
-        () => executeCommand(cmd, kwargs, verbose),
-      );
+      const result = cmd.browser
+        ? await runWithBrowserEnvOptions(
+            optionsRecord,
+            () => executeCommand(cmd, kwargs, verbose),
+            { allowBrowserCdp: cmd.supportsBrowserCdp !== false },
+          )
+        : await executeCommand(cmd, kwargs, verbose);
 
       if (verbose && (!result || (Array.isArray(result) && result.length === 0))) {
         console.error(chalk.yellow('[Verbose] Warning: Command returned an empty result.'));
