@@ -41,13 +41,14 @@ describe('xiaohongshu comments', () => {
       ],
     });
 
-    const result = await command!.func!(page, { 'note-id': '69aadbcb000000002202f131', limit: 5 });
+    const result = (await command!.func!(page, { 'note-id': '69aadbcb000000002202f131', limit: 5 })) as any[];
 
     expect((page.goto as any).mock.calls[0][0]).toContain('/explore/69aadbcb000000002202f131');
     expect(result).toEqual([
       { rank: 1, author: 'Alice', text: 'Great note!', likes: 10, time: '2024-01-01' },
       { rank: 2, author: 'Bob', text: 'Very helpful', likes: 0, time: '2024-01-02' },
     ]);
+    expect(result[0]).not.toHaveProperty('loginWall');
   });
 
   it('strips /explore/ prefix from full URL input', async () => {
@@ -72,12 +73,10 @@ describe('xiaohongshu comments', () => {
     );
   });
 
-  it('throws EmptyResultError when no comments are found', async () => {
+  it('returns empty array when no comments are found', async () => {
     const page = createPageMock({ loginWall: false, results: [] });
 
-    await expect(command!.func!(page, { 'note-id': 'abc123', limit: 5 })).rejects.toThrow(
-      'xiaohongshu/comments returned no data',
-    );
+    await expect(command!.func!(page, { 'note-id': 'abc123', limit: 5 })).resolves.toEqual([]);
   });
 
   it('respects the limit', async () => {

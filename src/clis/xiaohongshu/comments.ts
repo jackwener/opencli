@@ -60,7 +60,7 @@ cli({
           const time = clean(item.querySelector('.date, .time'))
 
           if (!text) continue
-          results.push({ loginWall: false, author, text, likes, time })
+          results.push({ author, text, likes, time })
         }
 
         return { loginWall, results }
@@ -76,13 +76,6 @@ cli({
     }
 
     const results: any[] = (data as any).results ?? [];
-    if (results.length === 0) {
-      throw new EmptyResultError(
-        'xiaohongshu/comments',
-        'No comments found — check that you are logged in and the note ID is correct',
-      );
-    }
-
     return results.slice(0, limit).map((c: any, i: number) => ({ rank: i + 1, ...c }));
   },
 });
