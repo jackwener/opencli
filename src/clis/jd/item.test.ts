@@ -29,7 +29,7 @@ describe('jd item adapter', () => {
 
   it('includes expected columns', () => {
     expect(command!.columns).toEqual(
-      expect.arrayContaining(['title', 'price', 'shop', 'specs', 'mainImages', 'detailImages']),
+      expect.arrayContaining(['title', 'price', 'shop', 'specs', 'avifImages']),
     );
   });
 });
