@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import path from 'node:path';
 import type { CliCommand } from '../../registry.js';
 import { getRegistry } from '../../registry.js';
 import type { IPage } from '../../types.js';
@@ -38,6 +39,10 @@ beforeAll(() => {
   cmd = getRegistry().get('douban/download')!;
   expect(cmd?.func).toBeTypeOf('function');
 });
+
+function toPosixPath(value: string): string {
+  return value.replaceAll(path.sep, '/');
+}
 
 describe('douban download', () => {
   beforeEach(() => {
@@ -89,26 +94,22 @@ describe('douban download', () => {
       type: 'Rb',
       limit: 20,
     });
-    expect(mockMkdirSync).toHaveBeenCalledWith('/tmp/douban-test/30382501', { recursive: true });
+    expect(mockMkdirSync).toHaveBeenCalledTimes(1);
+    expect(toPosixPath(mockMkdirSync.mock.calls[0][0])).toBe('/tmp/douban-test/30382501');
+    expect(mockMkdirSync.mock.calls[0][1]).toEqual({ recursive: true });
     expect(mockHttpDownload).toHaveBeenCalledTimes(2);
-    expect(mockHttpDownload).toHaveBeenNthCalledWith(
-      1,
-      'https://img1.doubanio.com/view/photo/l/public/p2913450214.webp',
-      '/tmp/douban-test/30382501/30382501_001_2913450214_Main_poster.webp',
-      expect.objectContaining({
-        headers: { Referer: 'https://movie.douban.com/photos/photo/2913450214/' },
-        timeout: 60000,
-      }),
-    );
-    expect(mockHttpDownload).toHaveBeenNthCalledWith(
-      2,
-      'https://img1.doubanio.com/view/photo/l/public/p2913450215.jpg',
-      '/tmp/douban-test/30382501/30382501_002_2913450215_Character_poster.jpg',
-      expect.objectContaining({
-        headers: { Referer: 'https://movie.douban.com/photos/photo/2913450215/' },
-        timeout: 60000,
-      }),
-    );
+    expect(mockHttpDownload.mock.calls[0]?.[0]).toBe('https://img1.doubanio.com/view/photo/l/public/p2913450214.webp');
+    expect(toPosixPath(mockHttpDownload.mock.calls[0]?.[1])).toBe('/tmp/douban-test/30382501/30382501_001_2913450214_Main_poster.webp');
+    expect(mockHttpDownload.mock.calls[0]?.[2]).toEqual(expect.objectContaining({
+      headers: { Referer: 'https://movie.douban.com/photos/photo/2913450214/' },
+      timeout: 60000,
+    }));
+    expect(mockHttpDownload.mock.calls[1]?.[0]).toBe('https://img1.doubanio.com/view/photo/l/public/p2913450215.jpg');
+    expect(toPosixPath(mockHttpDownload.mock.calls[1]?.[1])).toBe('/tmp/douban-test/30382501/30382501_002_2913450215_Character_poster.jpg');
+    expect(mockHttpDownload.mock.calls[1]?.[2]).toEqual(expect.objectContaining({
+      headers: { Referer: 'https://movie.douban.com/photos/photo/2913450215/' },
+      timeout: 60000,
+    }));
 
     expect(result).toEqual([
       {
@@ -164,14 +165,13 @@ describe('douban download', () => {
       type: 'Rb',
       targetPhotoId: '2913450215',
     });
-    expect(mockHttpDownload).toHaveBeenCalledWith(
-      'https://img1.doubanio.com/view/photo/l/public/p2913450215.jpg',
-      '/tmp/douban-test/30382501/30382501_002_2913450215_Character_poster.jpg',
-      expect.objectContaining({
-        headers: { Referer: 'https://movie.douban.com/photos/photo/2913450215/' },
-        timeout: 60000,
-      }),
-    );
+    expect(mockHttpDownload).toHaveBeenCalledTimes(1);
+    expect(mockHttpDownload.mock.calls[0]?.[0]).toBe('https://img1.doubanio.com/view/photo/l/public/p2913450215.jpg');
+    expect(toPosixPath(mockHttpDownload.mock.calls[0]?.[1])).toBe('/tmp/douban-test/30382501/30382501_002_2913450215_Character_poster.jpg');
+    expect(mockHttpDownload.mock.calls[0]?.[2]).toEqual(expect.objectContaining({
+      headers: { Referer: 'https://movie.douban.com/photos/photo/2913450215/' },
+      timeout: 60000,
+    }));
 
     expect(result).toEqual([
       {

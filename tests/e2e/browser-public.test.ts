@@ -33,11 +33,20 @@ function isImdbChallenge(result: CliResult): boolean {
   return /IMDb blocked this request|Robot Check|Are you a robot|verify that you are human|captcha/i.test(text);
 }
 
+function isBrowserBridgeUnavailable(result: CliResult): boolean {
+  const text = `${result.stderr}\n${result.stdout}`;
+  return /Browser Extension is not connected|Browser Bridge extension.*not connected|Daemon is running but the Browser Extension is not connected/i.test(text);
+}
+
 async function expectImdbDataOrChallengeSkip(args: string[], label: string): Promise<any[] | null> {
   const result = await runCli(args, { timeout: 60_000 });
   if (result.code !== 0) {
     if (isImdbChallenge(result)) {
       console.warn(`${label}: skipped — IMDb challenge page detected`);
+      return null;
+    }
+    if (isBrowserBridgeUnavailable(result)) {
+      console.warn(`${label}: skipped — Browser Bridge extension is unavailable in this environment`);
       return null;
     }
     throw new Error(`${label} failed:\n${result.stderr || result.stdout}`);
