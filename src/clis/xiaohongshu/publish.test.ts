@@ -88,6 +88,9 @@ describe('xiaohongshu publish', () => {
       'https://creator.xiaohongshu.com/publish/publish?from=menu_left',
       { ok: false, visibleTexts: ['上传视频', '上传图文'] },
       { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
     ]);
 
     await expect(cmd!.func!(page, {
@@ -98,5 +101,37 @@ describe('xiaohongshu publish', () => {
     })).rejects.toThrow('Still on the video publish page after trying to select 图文');
 
     expect(page.screenshot).toHaveBeenCalledWith({ path: '/tmp/xhs_publish_tab_debug.png' });
+  });
+
+  it('waits for the image-text surface to appear after clicking the tab', async () => {
+    const cmd = getRegistry().get('xiaohongshu/publish');
+    expect(cmd?.func).toBeTypeOf('function');
+
+    const page = createPageMock([
+      'https://creator.xiaohongshu.com/publish/publish?from=menu_left',
+      { ok: true, target: '上传图文', text: '上传图文' },
+      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { hasTitleInput: true, hasImageInput: true, hasVideoSurface: false },
+      { ok: true, sel: 'input[maxlength="20"]' },
+      { ok: true, sel: '[contenteditable="true"][class*="content"]' },
+      true,
+      'https://creator.xiaohongshu.com/publish/success',
+      '发布成功',
+    ]);
+
+    const result = await cmd!.func!(page, {
+      title: '延迟切换也能过',
+      content: '图文页切换慢一点也继续等',
+      topics: '',
+      draft: false,
+    });
+
+    expect((page.wait as any).mock.calls).toContainEqual([{ time: 0.5 }]);
+    expect(result).toEqual([
+      {
+        status: '✅ 发布成功',
+        detail: '"延迟切换也能过" · 无图 · 发布成功',
+      },
+    ]);
   });
 });

@@ -243,6 +243,27 @@ async function inspectPublishSurface(
   `);
 }
 
+async function waitForImageTextSurface(
+  page: IPage,
+  maxWaitMs = 5_000,
+): Promise<{ hasTitleInput: boolean; hasImageInput: boolean; hasVideoSurface: boolean }> {
+  const pollMs = 500;
+  const maxAttempts = Math.max(1, Math.ceil(maxWaitMs / pollMs));
+  let surface = await inspectPublishSurface(page);
+
+  for (let i = 0; i < maxAttempts; i++) {
+    if (surface.hasTitleInput || surface.hasImageInput || !surface.hasVideoSurface) {
+      return surface;
+    }
+    if (i < maxAttempts - 1) {
+      await page.wait({ time: pollMs / 1_000 });
+      surface = await inspectPublishSurface(page);
+    }
+  }
+
+  return surface;
+}
+
 cli({
   site: 'xiaohongshu',
   name: 'publish',
@@ -297,7 +318,7 @@ cli({
 
     // ── Step 2: Select 图文 (image+text) note type if tabs are present ─────────
     const tabResult = await selectImageTextTab(page);
-    const surface = await inspectPublishSurface(page);
+    const surface = await waitForImageTextSurface(page, tabResult?.ok ? 5_000 : 2_000);
     if (!surface.hasTitleInput && !surface.hasImageInput && surface.hasVideoSurface) {
       await page.screenshot({ path: '/tmp/xhs_publish_tab_debug.png' });
       const detail = tabResult?.ok
