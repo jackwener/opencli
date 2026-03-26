@@ -6,10 +6,17 @@
  */
 import { cli, Strategy } from '../../registry.js';
 
+function extractAvifImages(imageUrls: string[], maxImages: number): string[] {
+  const unique = [...new Set(imageUrls.filter(Boolean))];
+  return unique
+    .filter((url) => url.includes('.avif') && url.includes('pcpubliccms'))
+    .slice(0, maxImages);
+}
+
 cli({
   site: 'jd',
   name: 'item',
-  description: '京东商品详情（价格、主图、详情图、规格参数）',
+  description: '京东商品详情（价格、店铺、规格参数、AVIF 图片）',
   domain: 'item.jd.com',
   strategy: Strategy.COOKIE,
   args: [
@@ -23,7 +30,7 @@ cli({
       name: 'images',
       type: 'int',
       default: 10,
-      help: '详情图数量（默认10）',
+      help: 'AVIF 图片数量上限（默认10）',
     },
   ],
   columns: ['title', 'price', 'shop', 'specs', 'avifImages'],
@@ -35,7 +42,7 @@ cli({
     await page.goto(url, { waitUntil: 'load' });
     await page.wait(2);
 
-    // 滚动加载详情图
+    // 滚动加载商品详情区域中的延迟图片
     for (let i = 0; i < 6; i++) {
       await page.evaluate(`window.scrollTo(0, ${i * 2500})`);
       await page.wait(1);
@@ -65,12 +72,9 @@ cli({
         // 所有图片
         const allImgs = Array.from(document.querySelectorAll('img[src*="360buyimg.com"]'));
         const srcs = allImgs.map(img => img.src).filter(Boolean);
-        const unique = [...new Set(srcs)];
 
         // 所有 avif 图片（去重，只保留 pcpubliccms CDN）
-        const avifImages = unique
-          .filter(u => u.includes('.avif') && u.includes('pcpubliccms'))
-          .slice(0, maxImg);
+        const avifImages = ${extractAvifImages.toString()}(srcs, maxImg);
 
         // 规格参数：从页面文本提取
         const text = document.body.innerText;
@@ -87,10 +91,14 @@ cli({
           }
         }
 
-        return { title, price, shop, specs, avifImages, totalImages: unique.length };
+        return { title, price, shop, specs, avifImages, totalImages: new Set(srcs).size };
       })()
     `);
 
     return [data];
   },
 });
+
+export const __test__ = {
+  extractAvifImages,
+};
