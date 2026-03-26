@@ -147,31 +147,47 @@ export function validatePluginStructure(pluginDir: string): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
-/**
- * Shared post-install lifecycle: npm install → host symlink → TS transpile.
- * Called by both installPlugin() and updatePlugin().
- */
-function postInstallLifecycle(pluginDir: string): void {
-  const pkgJsonPath = path.join(pluginDir, 'package.json');
+function installDependencies(dir: string): void {
+  const pkgJsonPath = path.join(dir, 'package.json');
   if (!fs.existsSync(pkgJsonPath)) return;
 
   try {
     execFileSync('npm', ['install', '--omit=dev'], {
-      cwd: pluginDir,
+      cwd: dir,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       ...(isWindows && { shell: true }),
     });
   } catch (err) {
-    console.error(`[plugin] npm install failed in ${pluginDir}: ${err instanceof Error ? err.message : err}`);
+    throw new Error(`npm install failed in ${dir}: ${getErrorMessage(err)}`);
   }
+}
 
+function finalizePluginRuntime(pluginDir: string): void {
   // Symlink host opencli so TS plugins resolve '@jackwener/opencli/registry'
   // against the running host, not a stale npm-published version.
   linkHostOpencli(pluginDir);
 
   // Transpile .ts → .js via esbuild (production node can't load .ts directly).
   transpilePluginTs(pluginDir);
+}
+
+/**
+ * Shared post-install lifecycle for standalone plugins.
+ */
+function postInstallLifecycle(pluginDir: string): void {
+  installDependencies(pluginDir);
+  finalizePluginRuntime(pluginDir);
+}
+
+/**
+ * Monorepo lifecycle: install shared deps once at repo root, then finalize each sub-plugin.
+ */
+function postInstallMonorepoLifecycle(repoDir: string, pluginDirs: string[]): void {
+  installDependencies(repoDir);
+  for (const pluginDir of pluginDirs) {
+    finalizePluginRuntime(pluginDir);
+  }
 }
 
 /**
@@ -305,6 +321,7 @@ function installMonorepo(
   const installedNames: string[] = [];
   const lock = readLockFile();
   const commitHash = getCommitHash(repoDir);
+  const eligiblePlugins: Array<{ name: string; entry: typeof pluginsToInstall[number]['entry']; subDir: string }> = [];
 
   fs.mkdirSync(PLUGINS_DIR, { recursive: true });
 
@@ -333,11 +350,19 @@ function installMonorepo(
       continue;
     }
 
+    eligiblePlugins.push({ name, entry, subDir });
+  }
+
+  if (eligiblePlugins.length > 0) {
+    postInstallMonorepoLifecycle(repoDir, eligiblePlugins.map((p) => p.subDir));
+  }
+
+  for (const { name, entry, subDir } of eligiblePlugins) {
+    const linkPath = path.join(PLUGINS_DIR, name);
+
     // Create symlink (junction on Windows)
     const linkType = isWindows ? 'junction' : 'dir';
     fs.symlinkSync(subDir, linkPath, linkType);
-
-    postInstallLifecycle(subDir);
 
     if (commitHash) {
       lock[name] = {
@@ -436,6 +461,7 @@ export function updatePlugin(name: string): void {
     // Re-run lifecycle for ALL sub-plugins from this monorepo
     const monoName = lockEntry.monorepo.name;
     const commitHash = getCommitHash(monoDir);
+    const pluginDirs: string[] = [];
     for (const [pluginName, entry] of Object.entries(lock)) {
       if (entry.monorepo?.name !== monoName) continue;
       const subDir = path.join(monoDir, entry.monorepo.subPath);
@@ -443,7 +469,13 @@ export function updatePlugin(name: string): void {
       if (!validation.valid) {
         log.warn(`Plugin "${pluginName}" structure invalid after update:\n- ${validation.errors.join('\n- ')}`);
       }
-      postInstallLifecycle(subDir);
+      pluginDirs.push(subDir);
+    }
+    if (pluginDirs.length > 0) {
+      postInstallMonorepoLifecycle(monoDir, pluginDirs);
+    }
+    for (const [pluginName, entry] of Object.entries(lock)) {
+      if (entry.monorepo?.name !== monoName) continue;
       if (commitHash) {
         lock[pluginName] = {
           ...entry,
@@ -780,7 +812,9 @@ function transpilePluginTs(pluginDir: string): void {
 export {
   resolveEsbuildBin as _resolveEsbuildBin,
   getCommitHash as _getCommitHash,
+  installDependencies as _installDependencies,
   parseSource as _parseSource,
+  postInstallMonorepoLifecycle as _postInstallMonorepoLifecycle,
   readLockFile as _readLockFile,
   updateAllPlugins as _updateAllPlugins,
   validatePluginStructure as _validatePluginStructure,

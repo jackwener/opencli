@@ -10,9 +10,16 @@ import { PLUGINS_DIR } from './discovery.js';
 import type { LockEntry } from './plugin.js';
 import * as pluginModule from './plugin.js';
 
+const { mockExecFileSync, mockExecSync } = vi.hoisted(() => ({
+  mockExecFileSync: vi.fn(),
+  mockExecSync: vi.fn(),
+}));
+
 const {
   LOCK_FILE,
   _getCommitHash,
+  _installDependencies,
+  _postInstallMonorepoLifecycle,
   listPlugins,
   _readLockFile,
   _resolveEsbuildBin,
@@ -285,7 +292,7 @@ describe('updatePlugin', () => {
 
 vi.mock('node:child_process', () => {
   return {
-    execFileSync: vi.fn((_cmd, args, opts) => {
+    execFileSync: mockExecFileSync.mockImplementation((_cmd, args, opts) => {
       if (Array.isArray(args) && args[0] === 'rev-parse' && args[1] === 'HEAD') {
         if (opts?.cwd === os.tmpdir()) {
           throw new Error('not a git repository');
@@ -297,8 +304,61 @@ vi.mock('node:child_process', () => {
       }
       return '';
     }),
-    execSync: vi.fn(() => ''),
+    execSync: mockExecSync.mockImplementation(() => ''),
   };
+});
+
+describe('installDependencies', () => {
+  beforeEach(() => {
+    mockExecFileSync.mockClear();
+    mockExecSync.mockClear();
+  });
+
+  it('throws when npm install fails', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-plugin-b-'));
+    const failingDir = path.join(tmpDir, 'plugin-b');
+    fs.mkdirSync(failingDir, { recursive: true });
+    fs.writeFileSync(path.join(failingDir, 'package.json'), JSON.stringify({ name: 'plugin-b' }));
+
+    expect(() => _installDependencies(failingDir)).toThrow('npm install failed');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe('postInstallMonorepoLifecycle', () => {
+  let repoDir: string;
+  let subDir: string;
+
+  beforeEach(() => {
+    mockExecFileSync.mockClear();
+    mockExecSync.mockClear();
+    repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-monorepo-'));
+    subDir = path.join(repoDir, 'packages', 'alpha');
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({
+      name: 'opencli-plugins',
+      private: true,
+      workspaces: ['packages/*'],
+    }));
+    fs.writeFileSync(path.join(subDir, 'hello.yaml'), 'site: test\nname: hello\n');
+  });
+
+  afterEach(() => {
+    fs.rmSync(repoDir, { recursive: true, force: true });
+  });
+
+  it('installs dependencies once at the monorepo root, not in each sub-plugin', () => {
+    _postInstallMonorepoLifecycle(repoDir, [subDir]);
+
+    const npmCalls = mockExecFileSync.mock.calls.filter(
+      ([cmd, args]) => cmd === 'npm' && Array.isArray(args) && args[0] === 'install',
+    );
+
+    expect(npmCalls).toHaveLength(1);
+    expect(npmCalls[0][2]).toMatchObject({ cwd: repoDir });
+    expect(npmCalls.some(([, , opts]) => opts?.cwd === subDir)).toBe(false);
+  });
 });
 
 describe('updateAllPlugins', () => {
