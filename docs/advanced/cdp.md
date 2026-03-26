@@ -101,3 +101,22 @@ opencli bilibili hot --limit 5    # Test a command
 > *Tip: If you provide a standard HTTP/HTTPS CDP endpoint, OpenCLI requests the `/json` target list and picks the most likely inspectable app/page target automatically. If multiple app targets exist, you can further narrow selection with `OPENCLI_CDP_TARGET` (for example `antigravity` or `codex`).*
 
 If you plan to use this setup frequently, you can persist the environment variable by adding the `export` line to your `~/.bashrc` or `~/.zshrc` on the server.
+
+## Local Shortcut: `--browser-cdp`
+
+For local browser-backed commands, you can bypass the daemon/extension path explicitly with `--browser-cdp`.
+
+```bash
+opencli cascade https://news.ycombinator.com --browser-cdp
+opencli explore https://linux.do --browser-cdp
+```
+
+When this flag is present, OpenCLI forces the browser command through Chrome CDP directly. If `OPENCLI_CDP_ENDPOINT` is not already set, OpenCLI will try to auto-discover a local Chrome/Edge debugging session from `DevToolsActivePort`.
+
+If you want this behavior globally, set:
+
+```bash
+export OPENCLI_BROWSER_CDP=1
+```
+
+With that environment variable enabled, browser-backed commands use the same direct-CDP path by default. You can still disable it for one command with `--no-browser-cdp`.

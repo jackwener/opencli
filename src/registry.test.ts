@@ -53,6 +53,38 @@ describe('cli() registration', () => {
     expect(cmd.strategy).toBe(Strategy.PUBLIC);
   });
 
+  it('disables browser-cdp by default for local desktop UI targets', () => {
+    const localhostCmd = cli({
+      site: 'test-registry',
+      name: 'localhost-ui',
+      domain: 'localhost',
+      strategy: Strategy.UI,
+      browser: true,
+    });
+    const appCmd = cli({
+      site: 'test-registry',
+      name: 'app-ui',
+      domain: 'doubao-app',
+      strategy: Strategy.UI,
+      browser: true,
+    });
+
+    expect(localhostCmd.supportsBrowserCdp).toBe(false);
+    expect(appCmd.supportsBrowserCdp).toBe(false);
+  });
+
+  it('keeps browser-cdp enabled for real website UI targets', () => {
+    const cmd = cli({
+      site: 'test-registry',
+      name: 'remote-ui',
+      domain: 'x.com',
+      strategy: Strategy.UI,
+      browser: true,
+    });
+
+    expect(cmd.supportsBrowserCdp).toBe(true);
+  });
+
   it('overwrites existing command on re-registration', () => {
     cli({ site: 'test-registry', name: 'overwrite', description: 'v1' });
     cli({ site: 'test-registry', name: 'overwrite', description: 'v2' });

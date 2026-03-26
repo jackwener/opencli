@@ -6,6 +6,8 @@
 
 - Ensure the opencli Browser Bridge extension is installed and **enabled** in `chrome://extensions`.
 - Run `opencli doctor` to diagnose connectivity.
+- If Chrome is already running with `--remote-debugging-port`, browser-backed commands can bypass the daemon path explicitly with `--browser-cdp`.
+- If you want browser-backed commands to use that path by default, set `OPENCLI_BROWSER_CDP=1`.
 
 ### Empty data or 'Unauthorized' error
 

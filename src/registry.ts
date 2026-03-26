@@ -30,6 +30,11 @@ export interface RequiredEnv {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- kwargs from CLI parsing are inherently untyped
 export type CommandArgs = Record<string, any>;
 
+export interface RequiredEnv {
+  name: string;
+  help?: string;
+}
+
 export interface CliCommand {
   site: string;
   name: string;
@@ -37,6 +42,7 @@ export interface CliCommand {
   domain?: string;
   strategy?: Strategy;
   browser?: boolean;
+  supportsBrowserCdp?: boolean;
   args: Arg[];
   columns?: string[];
   func?: (page: IPage, kwargs: CommandArgs, debug?: boolean) => Promise<unknown>;
@@ -75,6 +81,31 @@ export interface CliOptions extends Partial<Omit<CliCommand, 'args' | 'descripti
   args?: Arg[];
 }
 
+function isLocalUiDomain(domain?: string): boolean {
+  const normalized = domain?.trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === 'localhost'
+    || normalized === '127.0.0.1'
+    || normalized === '::1'
+    || normalized === '[::1]'
+    || !normalized.includes('.');
+}
+
+export function deriveSupportsBrowserCdp(opts: {
+  browser?: boolean;
+  strategy?: Strategy;
+  domain?: string;
+  supportsBrowserCdp?: boolean;
+}): boolean {
+  if (typeof opts.supportsBrowserCdp === 'boolean') return opts.supportsBrowserCdp;
+
+  const strategy = opts.strategy ?? (opts.browser === false ? Strategy.PUBLIC : Strategy.COOKIE);
+  const browser = opts.browser ?? (strategy !== Strategy.PUBLIC);
+  if (!browser) return false;
+  if (strategy !== Strategy.UI) return true;
+  return !isLocalUiDomain(opts.domain);
+}
+
 // Use globalThis to ensure a single shared registry across all module instances.
 // This is critical for TS plugins loaded via npm link / peerDependency — without
 // this, the plugin's import creates a separate module instance with its own Map.
@@ -92,6 +123,12 @@ export function cli(opts: CliOptions): CliCommand {
     domain: opts.domain,
     strategy,
     browser,
+    supportsBrowserCdp: deriveSupportsBrowserCdp({
+      browser,
+      strategy,
+      domain: opts.domain,
+      supportsBrowserCdp: opts.supportsBrowserCdp,
+    }),
     args: opts.args ?? [],
     columns: opts.columns,
     func: opts.func,
