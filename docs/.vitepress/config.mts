@@ -79,6 +79,7 @@ export default defineConfig({
                 { text: 'Doubao', link: '/adapters/browser/doubao' },
                 { text: 'Facebook', link: '/adapters/browser/facebook' },
                 { text: 'Google', link: '/adapters/browser/google' },
+                { text: 'IMDb', link: '/adapters/browser/imdb' },
                 { text: 'Instagram', link: '/adapters/browser/instagram' },
                 { text: 'JD.com', link: '/adapters/browser/jd' },
                 { text: 'Medium', link: '/adapters/browser/medium' },
