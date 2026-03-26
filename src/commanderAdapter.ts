@@ -130,36 +130,46 @@ const ISSUES_URL = 'https://github.com/jackwener/opencli/issues';
 function classifyGenericError(msg: string): 'auth' | 'http' | 'not-found' | 'other' {
   const m = msg.toLowerCase();
   if (/not logged in|login required|please log in|未登录|请先登录|authentication required|cookie expired/.test(m)) return 'auth';
-  if (/http [45]\d\d/.test(m)) return 'http';
+  // Match "HTTP 404", "status: 500", "status 403", bare "404 Not Found", etc.
+  if (/\b(status[: ]+)?[45]\d{2}\b|http[/ ][45]\d{2}/.test(m)) return 'http';
   if (/not found|未找到|could not find|no .+ found/.test(m)) return 'not-found';
   return 'other';
 }
 
+/** Render a status line for BrowserConnectError based on real-time or kind-derived state. */
+function renderBridgeStatus(running: boolean, extensionConnected: boolean): void {
+  const ok = chalk.green('✓');
+  const fail = chalk.red('✗');
+  console.error(`  Daemon    ${running ? ok : fail} ${running ? 'running' : 'not running'}`);
+  console.error(`  Extension ${extensionConnected ? ok : fail} ${extensionConnected ? 'connected' : 'not connected'}`);
+  console.error();
+  if (!running) {
+    console.error(chalk.yellow('  Run the command again — daemon should auto-start.'));
+    console.error(chalk.dim('  Still failing? Run: opencli doctor'));
+  } else if (!extensionConnected) {
+    console.error(chalk.yellow('  Install the Browser Bridge extension to continue:'));
+    console.error(chalk.dim('    1. Download from github.com/jackwener/opencli/releases'));
+    console.error(chalk.dim('    2. chrome://extensions → Enable Developer Mode → Load unpacked'));
+  } else {
+    console.error(chalk.yellow('  Connection failed despite extension being active.'));
+    console.error(chalk.dim('  Try reloading the extension, or run: opencli doctor'));
+  }
+}
+
 async function renderError(err: unknown, cmdName: string, verbose: boolean): Promise<void> {
-  // ── BrowserConnectError: inline real-time diagnosis ───────────────────
+  // ── BrowserConnectError: real-time diagnosis, kind as fallback ────────
   if (err instanceof BrowserConnectError) {
     console.error(chalk.red('🔌 Browser Bridge not connected'));
     console.error();
     try {
-      const status = await checkDaemonStatus();
-      const ok = chalk.green('✓');
-      const fail = chalk.red('✗');
-      console.error(`  Daemon    ${status.running ? ok : fail} ${status.running ? 'running' : 'not running'}`);
-      console.error(`  Extension ${status.extensionConnected ? ok : fail} ${status.extensionConnected ? 'connected' : 'not connected'}`);
-      console.error();
-      if (!status.running) {
-        console.error(chalk.yellow('  Run the command again — daemon should auto-start.'));
-        console.error(chalk.dim('  Still failing? Run: opencli doctor'));
-      } else if (!status.extensionConnected) {
-        console.error(chalk.yellow('  Install the Browser Bridge extension to continue:'));
-        console.error(chalk.dim('    1. Download from github.com/jackwener/opencli/releases'));
-        console.error(chalk.dim('    2. chrome://extensions → Enable Developer Mode → Load unpacked'));
-      } else {
-        console.error(chalk.yellow('  Connection failed despite extension being active.'));
-        console.error(chalk.dim('  Try reloading the extension, or run: opencli doctor'));
-      }
-    } catch {
-      if (err.hint) console.error(chalk.yellow(`→ ${err.hint}`));
+      // 300ms matches execution.ts — localhost responds in <50ms when running.
+      const status = await checkDaemonStatus({ timeout: 300 });
+      renderBridgeStatus(status.running, status.extensionConnected);
+    } catch (_statusErr) {
+      // checkDaemonStatus itself failed — derive best-guess state from kind.
+      const running = err.kind !== 'daemon-not-running';
+      const extensionConnected = err.kind === 'command-failed';
+      renderBridgeStatus(running, extensionConnected);
     }
     return;
   }
@@ -167,7 +177,8 @@ async function renderError(err: unknown, cmdName: string, verbose: boolean): Pro
   // ── AuthRequiredError ─────────────────────────────────────────────────
   if (err instanceof AuthRequiredError) {
     console.error(chalk.red(`🔒 Not logged in to ${err.domain}`));
-    console.error(chalk.yellow(`→ Open Chrome and log in to https://${err.domain}, then retry.`));
+    // Respect custom hints set by the adapter; fall back to generic guidance.
+    console.error(chalk.yellow(`→ ${err.hint ?? `Open Chrome and log in to https://${err.domain}, then retry.`}`));
     return;
   }
 
