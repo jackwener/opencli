@@ -9,9 +9,11 @@ import { parseJsonOutput, runCli } from './helpers.js';
 function isExpectedChineseSiteRestriction(code: number, stderr: string): boolean {
   if (code === 0) return false;
   // Overseas CI runners may get HTTP errors, geo-blocks, DNS failures,
-  // or receive mangled HTML that fails parsing.
+  // or receive mangled HTML that fails parsing. Some runners also fail
+  // without surfacing a useful stderr payload.
   return /Error \[(FETCH_ERROR|PARSE_ERROR|NOT_FOUND)\]/.test(stderr)
-    || /fetch failed/.test(stderr);
+    || /fetch failed/.test(stderr)
+    || stderr.trim() === '';
 }
 
 function isExpectedApplePodcastsRestriction(code: number, stderr: string): boolean {

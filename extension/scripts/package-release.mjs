@@ -11,7 +11,10 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--out' && argv[i + 1]) {
-      args.outDir = path.resolve(repoRoot, argv[++i]);
+      const outDir = argv[++i];
+      args.outDir = path.isAbsolute(outDir)
+        ? outDir
+        : path.resolve(process.cwd(), outDir);
     }
   }
   return args;
