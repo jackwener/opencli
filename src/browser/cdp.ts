@@ -50,11 +50,13 @@ interface RuntimeEvaluateResult {
 
 const CDP_SEND_TIMEOUT = 30_000; // 30s per command
 const CDP_CLOSE_TIMEOUT = 1_500;
+const PERSISTENT_TARGET_REGISTRY_PATH = path.join(os.tmpdir(), 'opencli-cdp-targets.json');
 
 export class CDPBridge {
   private _ws: WebSocket | null = null;
   private _sessionId: string | null = null;
   private _ownedTargetId: string | null = null;
+  private _closeOwnedTargetOnClose = false;
   private _idCounter = 0;
   private _pending = new Map<number, { resolve: (val: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private _eventListeners = new Map<string, Set<(params: unknown) => void>>();
@@ -77,7 +79,11 @@ export class CDPBridge {
           clearTimeout(timeout);
           this._ws = ws;
           if (connection.browserLevel) {
-            await this.attachToBrowserTarget(connection.preferNewTarget);
+            await this.attachToBrowserTarget({
+              preferNewTarget: connection.preferNewTarget,
+              workspace: normalizeWorkspaceKey(opts?.workspace),
+              endpointKey: endpoint,
+            });
           }
         } catch (err) {
           await this.close().catch(() => {});
@@ -132,10 +138,11 @@ export class CDPBridge {
   }
 
   async close(): Promise<void> {
-    if (this._ownedTargetId && this._ws && this._ws.readyState === WebSocket.OPEN) {
+    if (this._ownedTargetId && this._closeOwnedTargetOnClose && this._ws && this._ws.readyState === WebSocket.OPEN) {
       await this.send('Target.closeTarget', { targetId: this._ownedTargetId }, CDP_CLOSE_TIMEOUT, { root: true }).catch(() => {});
     }
     this._ownedTargetId = null;
+    this._closeOwnedTargetOnClose = false;
     if (this._ws) {
       this._ws.close();
       this._ws = null;
@@ -203,21 +210,40 @@ export class CDPBridge {
     });
   }
 
-  private async attachToBrowserTarget(preferNewTarget: boolean): Promise<void> {
+  private async attachToBrowserTarget(opts: { preferNewTarget: boolean; workspace?: string; endpointKey: string }): Promise<void> {
     let targetId: string | undefined;
+    const targetInfos = await this.listBrowserTargets();
 
-    if (preferNewTarget) {
+    if (hasExplicitTargetHint()) {
+      const hintedTarget = selectBrowserAttachTarget(targetInfos);
+      targetId = hintedTarget?.targetId;
+      if (targetId && opts.workspace) {
+        setPersistentTargetId(opts.endpointKey, opts.workspace, targetId);
+      }
+    } else if (opts.workspace) {
+      const storedTargetId = getPersistentTargetId(opts.endpointKey, opts.workspace);
+      const storedTarget = selectTargetById(targetInfos, storedTargetId);
+      if (storedTarget?.targetId) {
+        targetId = storedTarget.targetId;
+      } else if (storedTargetId) {
+        clearPersistentTargetId(opts.endpointKey, opts.workspace);
+      }
+    }
+
+    if (!targetId && opts.preferNewTarget) {
       const created = await this.send('Target.createTarget', { url: 'about:blank' }, CDP_SEND_TIMEOUT, { root: true });
       targetId = isRecord(created) && typeof created.targetId === 'string' ? created.targetId : undefined;
-      if (targetId) this._ownedTargetId = targetId;
+      if (targetId) {
+        this._ownedTargetId = targetId;
+        this._closeOwnedTargetOnClose = !opts.workspace;
+        if (opts.workspace) {
+          setPersistentTargetId(opts.endpointKey, opts.workspace, targetId);
+        }
+      }
     }
 
     if (!targetId) {
-      const result = await this.send('Target.getTargets', {}, CDP_SEND_TIMEOUT, { root: true });
-      const targetInfos = isRecord(result) && Array.isArray(result.targetInfos)
-        ? result.targetInfos as CDPTarget[]
-        : [];
-      const target = selectBrowserPageTarget(targetInfos);
+      const target = selectBrowserAttachTarget(targetInfos);
       targetId = target?.targetId;
     }
 
@@ -236,6 +262,13 @@ export class CDPBridge {
     }
     this._sessionId = sessionId;
   }
+
+  private async listBrowserTargets(): Promise<CDPTarget[]> {
+    const result = await this.send('Target.getTargets', {}, CDP_SEND_TIMEOUT, { root: true });
+    return isRecord(result) && Array.isArray(result.targetInfos)
+      ? result.targetInfos as CDPTarget[]
+      : [];
+  }
 }
 
 class CDPPage implements IPage {
@@ -249,12 +282,14 @@ class CDPPage implements IPage {
       this._pageEnabled = true;
     }
     const loadPromise = this.bridge.waitForEvent('Page.loadEventFired', 30_000);
+    // Guard the event wait immediately so a navigation transport failure does not
+    // leave a late unhandled rejection behind.
+    void loadPromise.catch(() => {});
     const navigateResult = await this.bridge.send('Page.navigate', { url });
     const navigationError = isRecord(navigateResult) && typeof navigateResult.errorText === 'string'
       ? navigateResult.errorText.trim()
       : '';
     if (navigationError) {
-      void loadPromise.catch(() => {});
       throw new Error(`Navigation failed for ${url}: ${navigationError}`);
     }
     try {
@@ -462,7 +497,11 @@ async function resolveConnectionEndpoint(
     if (!target?.webSocketDebuggerUrl) {
       throw new Error('No inspectable targets found at CDP endpoint');
     }
-    return { wsUrl: target.webSocketDebuggerUrl, browserLevel: false, preferNewTarget: false };
+    return {
+      wsUrl: rewriteBrowserWebSocketUrlForEndpoint(normalized, target.webSocketDebuggerUrl) ?? target.webSocketDebuggerUrl,
+      browserLevel: false,
+      preferNewTarget: false,
+    };
   } catch (error) {
     discoveryError = normalizeError(error);
     logVerbose(`[cdp] Failed to resolve page websocket from ${normalized}/json`, discoveryError);
@@ -470,7 +509,10 @@ async function resolveConnectionEndpoint(
 
   try {
     const payload = await fetchJsonDirect(`${normalized}/json/version`);
-    const browserWsUrl = extractBrowserWebSocketUrlFromVersionPayload(payload);
+    const browserWsUrl = rewriteBrowserWebSocketUrlForEndpoint(
+      normalized,
+      extractBrowserWebSocketUrlFromVersionPayload(payload),
+    );
     if (browserWsUrl) {
       return {
         wsUrl: browserWsUrl,
@@ -578,6 +620,58 @@ function shouldPreferNewBrowserTarget(endpoint: string): boolean {
   return endpoint === 'auto' && !process.env.OPENCLI_CDP_TARGET?.trim();
 }
 
+function normalizeWorkspaceKey(workspace?: string): string | undefined {
+  const trimmed = workspace?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function makePersistentTargetRegistryKey(endpointKey: string, workspace: string): string {
+  return `${endpointKey}::${workspace}`;
+}
+
+function readPersistentTargetRegistry(): Record<string, string> {
+  try {
+    const raw = fs.readFileSync(PERSISTENT_TARGET_REGISTRY_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[0] === 'string' && typeof entry[1] === 'string'),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writePersistentTargetRegistry(registry: Record<string, string>): void {
+  try {
+    fs.writeFileSync(PERSISTENT_TARGET_REGISTRY_PATH, JSON.stringify(registry, null, 2), 'utf8');
+  } catch {
+    // Best-effort cache only.
+  }
+}
+
+function getPersistentTargetId(endpointKey: string, workspace: string): string | undefined {
+  const registry = readPersistentTargetRegistry();
+  return registry[makePersistentTargetRegistryKey(endpointKey, workspace)];
+}
+
+function setPersistentTargetId(endpointKey: string, workspace: string, targetId: string): void {
+  const registry = readPersistentTargetRegistry();
+  registry[makePersistentTargetRegistryKey(endpointKey, workspace)] = targetId;
+  writePersistentTargetRegistry(registry);
+}
+
+function clearPersistentTargetId(endpointKey: string, workspace: string): void {
+  const registry = readPersistentTargetRegistry();
+  delete registry[makePersistentTargetRegistryKey(endpointKey, workspace)];
+  writePersistentTargetRegistry(registry);
+}
+
+function selectTargetById(targets: CDPTarget[], targetId?: string): CDPTarget | undefined {
+  if (!targetId) return undefined;
+  return targets.find((target) => target.targetId === targetId && isBrowserAttachableTarget(target));
+}
+
 function isLoopbackHost(host: string): boolean {
   return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host);
 }
@@ -592,8 +686,37 @@ function extractBrowserWebSocketUrlFromVersionPayload(payload: unknown): string 
   return typeof wsUrl === 'string' && isBrowserLevelWebSocket(wsUrl) ? wsUrl : null;
 }
 
-function selectBrowserPageTarget(targets: CDPTarget[]): CDPTarget | undefined {
-  return selectCDPTarget(targets.filter(target => (target.type ?? '').toLowerCase() === 'page'));
+function rewriteBrowserWebSocketUrlForEndpoint(endpoint: string, wsUrl: string | null): string | null {
+  if (!wsUrl) return null;
+
+  let endpointUrl: URL;
+  let browserWsUrl: URL;
+  try {
+    endpointUrl = new URL(endpoint);
+    browserWsUrl = new URL(wsUrl);
+  } catch {
+    return wsUrl;
+  }
+
+  if (isLoopbackHost(endpointUrl.hostname.toLowerCase())) return wsUrl;
+  if (!isLoopbackHost(browserWsUrl.hostname.toLowerCase())) return wsUrl;
+
+  browserWsUrl.protocol = endpointUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  browserWsUrl.hostname = endpointUrl.hostname;
+  browserWsUrl.port = endpointUrl.port;
+  browserWsUrl.username = endpointUrl.username;
+  browserWsUrl.password = endpointUrl.password;
+  return browserWsUrl.toString();
+}
+
+function isBrowserAttachableTarget(target: CDPTarget): boolean {
+  const type = (target.type ?? '').toLowerCase();
+  if (!type) return true;
+  return ['page', 'app', 'webview', 'iframe'].includes(type);
+}
+
+function selectBrowserAttachTarget(targets: CDPTarget[]): CDPTarget | undefined {
+  return selectCDPTarget(targets.filter(isBrowserAttachableTarget));
 }
 
 // ── CDP target selection (unchanged) ──
@@ -662,20 +785,31 @@ function compilePreferredPattern(raw: string | undefined): RegExp | undefined {
   return new RegExp(escapeRegExp(value.toLowerCase()));
 }
 
+function hasExplicitTargetHint(): boolean {
+  return !!process.env.OPENCLI_CDP_TARGET?.trim();
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export const __test__ = {
   selectCDPTarget,
-  selectBrowserPageTarget,
+  selectBrowserAttachTarget,
+  selectTargetById,
+  isBrowserAttachableTarget,
   scoreCDPTarget,
   parseBrowserWebSocketUrlFromActivePort,
   parseAnyBrowserWebSocketUrlFromActivePort,
   extractBrowserWebSocketUrlFromVersionPayload,
+  rewriteBrowserWebSocketUrlForEndpoint,
   isBrowserLevelWebSocket,
   isLoopbackHost,
   shouldPreferNewBrowserTarget,
+  hasExplicitTargetHint,
+  normalizeWorkspaceKey,
+  makePersistentTargetRegistryKey,
+  persistentTargetRegistryPath: PERSISTENT_TARGET_REGISTRY_PATH,
 };
 
 function fetchJsonDirect(url: string): Promise<unknown> {

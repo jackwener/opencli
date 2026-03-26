@@ -35,7 +35,7 @@ export async function withBrowserEnvOverrides<T>(
   config: BrowserEnvOverrideConfig = {},
 ): Promise<T> {
   const effectiveEndpoint = resolveEffectiveCdpEndpoint(overrides, config);
-  const pairs: Array<[key: 'OPENCLI_CDP_ENDPOINT' | 'OPENCLI_CDP_TARGET', value: string | undefined]> = [
+  const pairs: Array<[key: 'OPENCLI_CDP_ENDPOINT' | 'OPENCLI_CDP_TARGET', value: string | null | undefined]> = [
     ['OPENCLI_CDP_ENDPOINT', effectiveEndpoint],
     ['OPENCLI_CDP_TARGET', overrides.cdpTarget],
   ];
@@ -44,7 +44,8 @@ export async function withBrowserEnvOverrides<T>(
   for (const [key, value] of pairs) {
     if (value === undefined) continue;
     previous.set(key, process.env[key]);
-    process.env[key] = value;
+    if (value === null) delete process.env[key];
+    else process.env[key] = value;
   }
 
   try {
@@ -100,7 +101,7 @@ function readCdpEndpointOption(value: unknown): string | undefined {
 function resolveEffectiveCdpEndpoint(
   overrides: BrowserEnvOverrides,
   config: BrowserEnvOverrideConfig,
-): string | undefined {
+): string | null | undefined {
   if (overrides.cdpEndpoint) {
     if (overrides.cdpEndpoint === 'auto' && !config.allowBrowserCdp) {
       throw new Error('The "auto" CDP endpoint is only supported for browser CDP commands.');
@@ -111,7 +112,7 @@ function resolveEffectiveCdpEndpoint(
   if (!config.allowBrowserCdp) return undefined;
 
   if (typeof overrides.browserCdp === 'boolean') {
-    return overrides.browserCdp ? 'auto' : undefined;
+    return overrides.browserCdp ? 'auto' : null;
   }
 
   return readBooleanEnv('OPENCLI_BROWSER_CDP') ? 'auto' : undefined;

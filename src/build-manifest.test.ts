@@ -129,7 +129,6 @@ describe('manifest helper rules', () => {
 
     expect(scanTs(file, 'demo')).toBeNull();
   });
-
   it('keeps literal domain and navigateBefore for TS adapters', () => {
     const file = path.join(process.cwd(), 'src', 'clis', 'xueqiu', 'fund-holdings.ts');
     const entry = scanTs(file, 'xueqiu');
@@ -165,5 +164,28 @@ describe('manifest helper rules', () => {
       deprecated: 'legacy is deprecated',
       replacedBy: 'opencli demo new',
     });
+  });
+
+  it('derives supportsBrowserCdp for desktop-style TS adapters', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, 'ask.ts');
+    fs.writeFileSync(file, `
+import { cli, Strategy } from '../../registry.js';
+cli({
+  site: 'doubao-app',
+  name: 'ask',
+  description: 'ask',
+  domain: 'doubao-app',
+  strategy: Strategy.UI,
+  browser: true,
+});
+`);
+
+    expect(scanTs(file, 'doubao-app')).toEqual(expect.objectContaining({
+      site: 'doubao-app',
+      name: 'ask',
+      supportsBrowserCdp: false,
+    }));
   });
 });

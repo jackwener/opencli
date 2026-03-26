@@ -13,7 +13,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import yaml from 'js-yaml';
-import { type CliCommand, type InternalCliCommand, type Arg, Strategy, registerCommand } from './registry.js';
+import { type CliCommand, type InternalCliCommand, type Arg, Strategy, deriveSupportsBrowserCdp, registerCommand } from './registry.js';
 import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
 import type { ManifestEntry } from './build-manifest.js';
@@ -72,6 +72,12 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
           domain: entry.domain,
           strategy,
           browser: entry.browser,
+          supportsBrowserCdp: deriveSupportsBrowserCdp({
+            browser: entry.browser,
+            strategy,
+            domain: entry.domain,
+            supportsBrowserCdp: entry.supportsBrowserCdp,
+          }),
           args: entry.args ?? [],
           columns: entry.columns,
           pipeline: entry.pipeline,
@@ -94,6 +100,12 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
           domain: entry.domain,
           strategy,
           browser: entry.browser ?? true,
+          supportsBrowserCdp: deriveSupportsBrowserCdp({
+            browser: entry.browser ?? true,
+            strategy,
+            domain: entry.domain,
+            supportsBrowserCdp: entry.supportsBrowserCdp,
+          }),
           args: entry.args ?? [],
           columns: entry.columns,
           timeoutSeconds: entry.timeout,
@@ -184,6 +196,11 @@ async function registerYamlCli(filePath: string, defaultSite: string): Promise<v
       domain: cliDef.domain,
       strategy,
       browser,
+      supportsBrowserCdp: deriveSupportsBrowserCdp({
+        browser,
+        strategy,
+        domain: cliDef.domain,
+      }),
       args,
       columns: cliDef.columns,
       pipeline: cliDef.pipeline,

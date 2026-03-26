@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'js-yaml';
 import { getErrorMessage } from './errors.js';
+import { Strategy, deriveSupportsBrowserCdp } from './registry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIS_DIR = path.resolve(__dirname, 'clis');
@@ -26,6 +27,7 @@ export interface ManifestEntry {
   domain?: string;
   strategy: string;
   browser: boolean;
+  supportsBrowserCdp?: boolean;
   args: Array<{
     name: string;
     type?: string;
@@ -51,6 +53,12 @@ export interface ManifestEntry {
 import type { YamlCliDefinition } from './yaml-schema.js';
 
 import { isRecord } from './utils.js';
+
+function toStrategyEnum(strategy: string | undefined, browser: boolean): Strategy {
+  if (!strategy) return browser ? Strategy.COOKIE : Strategy.PUBLIC;
+  const key = strategy.toUpperCase() as keyof typeof Strategy;
+  return Strategy[key] ?? (browser ? Strategy.COOKIE : Strategy.PUBLIC);
+}
 
 
 function extractBalancedBlock(
@@ -197,6 +205,11 @@ function scanYaml(filePath: string, site: string): ManifestEntry | null {
       domain: cliDef.domain,
       strategy: strategy.toLowerCase(),
       browser,
+      supportsBrowserCdp: deriveSupportsBrowserCdp({
+        browser,
+        strategy: Strategy[strategy as keyof typeof Strategy],
+        domain: cliDef.domain,
+      }),
       args,
       columns: cliDef.columns,
       pipeline: cliDef.pipeline,
@@ -251,6 +264,14 @@ export function scanTs(filePath: string, site: string): ManifestEntry | null {
     const browserMatch = src.match(/browser\s*:\s*(true|false)/);
     if (browserMatch) entry.browser = browserMatch[1] === 'true';
     else entry.browser = entry.strategy !== 'public';
+
+    const supportsBrowserCdpMatch = src.match(/supportsBrowserCdp\s*:\s*(true|false)/);
+    entry.supportsBrowserCdp = deriveSupportsBrowserCdp({
+      browser: entry.browser,
+      strategy: toStrategyEnum(entry.strategy, entry.browser),
+      domain: entry.domain,
+      supportsBrowserCdp: supportsBrowserCdpMatch ? supportsBrowserCdpMatch[1] === 'true' : undefined,
+    });
 
     // Extract columns
     const colMatch = src.match(/columns\s*:\s*\[([^\]]*)\]/);

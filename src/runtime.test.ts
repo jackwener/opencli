@@ -83,6 +83,20 @@ describe('browser env overrides', () => {
     expect(process.env.OPENCLI_CDP_ENDPOINT).toBe('http://127.0.0.1:9222');
   });
 
+  it('honors --no-browser-cdp by clearing an inherited endpoint during the command', async () => {
+    vi.stubEnv('OPENCLI_CDP_ENDPOINT', 'http://127.0.0.1:9222');
+
+    let seenEndpoint: string | undefined;
+    await withBrowserEnvOverrides({
+      browserCdp: false,
+    }, async () => {
+      seenEndpoint = process.env.OPENCLI_CDP_ENDPOINT;
+    }, { allowBrowserCdp: true });
+
+    expect(seenEndpoint).toBeUndefined();
+    expect(process.env.OPENCLI_CDP_ENDPOINT).toBe('http://127.0.0.1:9222');
+  });
+
   it('restores outer overrides correctly across nested calls', async () => {
     const seen: Array<{ label: string; endpoint?: string; target?: string }> = [];
 

@@ -17,7 +17,80 @@ vi.mock('./output.js', () => ({
 
 import { registerCommandToProgram } from './commanderAdapter.js';
 
-describe('registerCommandToProgram', () => {
+describe('commanderAdapter bool normalization', () => {
+  const cmd: CliCommand = {
+    site: 'paperreview',
+    name: 'submit',
+    description: 'Submit a PDF',
+    browser: false,
+    args: [
+      { name: 'pdf', positional: true, required: true, help: 'Path to the paper PDF' },
+      { name: 'dry-run', type: 'bool', default: false, help: 'Validate only' },
+      { name: 'prepare-only', type: 'bool', default: false, help: 'Prepare only' },
+    ],
+    func: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    mockExecuteCommand.mockResolvedValue([]);
+    process.exitCode = undefined;
+  });
+
+  it('normalizes explicit false string values to false', async () => {
+    const program = new Command();
+    const siteCmd = program.command('paperreview');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'paperreview', 'submit', './paper.pdf', '--dry-run', 'false']);
+
+    expect(mockExecuteCommand).toHaveBeenCalledWith(
+      cmd,
+      expect.objectContaining({
+        pdf: './paper.pdf',
+        'dry-run': false,
+        'prepare-only': false,
+      }),
+      false,
+    );
+  });
+
+  it('normalizes valueless bool flags to true', async () => {
+    const program = new Command();
+    const siteCmd = program.command('paperreview');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'paperreview', 'submit', './paper.pdf', '--prepare-only']);
+
+    expect(mockExecuteCommand).toHaveBeenCalledWith(
+      cmd,
+      expect.objectContaining({
+        pdf: './paper.pdf',
+        'dry-run': false,
+        'prepare-only': true,
+      }),
+      false,
+    );
+  });
+
+  it('rejects invalid bool strings before execution', async () => {
+    const program = new Command();
+    const siteCmd = program.command('paperreview');
+    registerCommandToProgram(siteCmd, cmd);
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await program.parseAsync(['node', 'opencli', 'paperreview', 'submit', './paper.pdf', '--dry-run', 'maybe']);
+
+    expect(mockExecuteCommand).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('"dry-run" must be either "true" or "false".'));
+
+    stderr.mockRestore();
+  });
+});
+
+describe('registerCommandToProgram browser env overrides', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();

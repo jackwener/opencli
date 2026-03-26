@@ -78,6 +78,36 @@ cli({
       await fs.promises.rm(tempBuildRoot, { recursive: true, force: true });
     }
   });
+
+  it('preserves supportsBrowserCdp when loading commands from the manifest', async () => {
+    const tempBuildRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-manifest-flags-'));
+    const distDir = path.join(tempBuildRoot, 'dist');
+    const manifestPath = path.join(tempBuildRoot, 'cli-manifest.json');
+
+    try {
+      await fs.promises.mkdir(distDir, { recursive: true });
+      await fs.promises.writeFile(manifestPath, JSON.stringify([
+        {
+          site: 'doubao-app',
+          name: 'ask',
+          description: 'ask',
+          domain: 'doubao-app',
+          strategy: 'ui',
+          browser: true,
+          supportsBrowserCdp: false,
+          args: [],
+          type: 'ts',
+          modulePath: 'doubao-app/ask.js',
+        },
+      ]));
+
+      await discoverClis(distDir);
+
+      expect(getRegistry().get('doubao-app/ask')?.supportsBrowserCdp).toBe(false);
+    } finally {
+      await fs.promises.rm(tempBuildRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('discoverPlugins', () => {
