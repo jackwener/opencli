@@ -170,6 +170,7 @@ Run `opencli list` for the live registry.
 | **douban** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | Browser |
 | **facebook** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | Browser |
 | **google** | `news` `search` `suggest` `trends` | Public |
+| **36kr** | `news` `hot` `search` `article` | Public / Browser |
 | **instagram** | `explore` `profile` `search` `user` `followers` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `saved` | Browser |
 | **lobsters** | `hot` `newest` `active` `tag` | Public |
 | **medium** | `feed` `search` `user` | Browser |

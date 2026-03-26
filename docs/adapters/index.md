@@ -42,6 +42,7 @@ Run `opencli list` for the live registry.
 | **[jd](/adapters/browser/jd)** | `item` | 🔐 Browser |
 | **[web](/adapters/browser/web)** | `read` | 🔐 Browser |
 | **[weixin](/adapters/browser/weixin)** | `download` | 🔐 Browser |
+| **[36kr](/adapters/browser/36kr)** | `news` `hot` `search` `article` | 🌐 / 🔐 |
 
 ## Public API Adapters
 

@@ -15,6 +15,23 @@ const TYPE_MAP: Record<string, string> = {
   catalog: '热门资讯',
 };
 
+function getShanghaiDate(date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function buildHotListUrl(listType: string, date = new Date()): string {
+  if (listType === 'catalog') {
+    return 'https://www.36kr.com/hot-list/catalog';
+  }
+
+  return `https://www.36kr.com/hot-list/${listType}/${getShanghaiDate(date)}/1`;
+}
+
 cli({
   site: '36kr',
   name: 'hot',
@@ -42,13 +59,7 @@ cli({
       );
     }
 
-    let url: string;
-    if (listType === 'catalog') {
-      url = 'https://www.36kr.com/hot-list/catalog';
-    } else {
-      const today = new Date().toISOString().slice(0, 10);
-      url = `https://www.36kr.com/hot-list/${listType}/${today}/1`;
-    }
+    const url = buildHotListUrl(listType);
 
     await page.installInterceptor('36kr.com/api');
     await page.goto(url);
@@ -88,3 +99,5 @@ cli({
     }));
   },
 });
+
+export { buildHotListUrl, getShanghaiDate };
