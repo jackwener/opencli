@@ -189,4 +189,33 @@ describe('executePipeline', () => {
     expect(result).toEqual([{ a: 1 }]);
     expect(page.goto).toHaveBeenCalledWith('https://example.com');
   });
+
+  it('retries intercept step on transient browser error', async () => {
+    // trigger is empty, so each attempt calls evaluate twice:
+    // once for interceptor inject, once for reading intercepted data
+    const page = createMockPage({
+      evaluate: vi.fn()
+        .mockRejectedValueOnce(new Error('Extension disconnected'))
+        .mockResolvedValueOnce(undefined)   // interceptor inject (retry)
+        .mockResolvedValueOnce([{ id: 1 }]), // read intercepted
+    });
+    const result = await executePipeline(page, [
+      { intercept: { capture: '/api/data' } },
+    ]);
+    expect(page.evaluate).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({ id: 1 });
+  });
+
+  it('retries tap step on transient browser error', async () => {
+    const page = createMockPage({
+      evaluate: vi.fn()
+        .mockRejectedValueOnce(new Error('attach failed'))
+        .mockResolvedValueOnce({ data: 'ok' }),
+    });
+    const result = await executePipeline(page, [
+      { tap: { store: 'myStore', action: 'fetch', capture: '/api' } },
+    ]);
+    expect(page.evaluate).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ data: 'ok' });
+  });
 });

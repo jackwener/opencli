@@ -10,6 +10,7 @@
  */
 
 import type { IPage } from '../../types.js';
+import { ConfigError } from '../../errors.js';
 import { render } from '../template.js';
 import { generateTapInterceptorJs } from '../../interceptor.js';
 
@@ -24,6 +25,13 @@ export async function stepTap(page: IPage | null, params: any, data: any, args: 
   const actionArgs = cfg.args ?? [];
 
   if (!storeName || !actionName) throw new Error('tap: store and action are required');
+
+  if (!page) {
+    throw new ConfigError(
+      'tap step requires a browser session',
+      'Set browser: true in your command definition.',
+    );
+  }
 
   // Build select chain for the captured response
   const selectChain = selectPath
@@ -96,5 +104,5 @@ export async function stepTap(page: IPage | null, params: any, data: any, args: 
     }
   `;
 
-  return page!.evaluate(js);
+  return page.evaluate(js);
 }
