@@ -4,6 +4,7 @@ import { AuthRequiredError, CommandExecutionError } from '../../errors.js';
 const BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 const LIKES_QUERY_ID = 'RozQdCp4CilQzrcuU0NY5w';
 const USER_BY_SCREEN_NAME_QUERY_ID = 'qRednkZG-rn1P6b48NINmQ';
+const QUERY_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 const FEATURES = {
   rweb_video_screen_enabled: false,
@@ -56,7 +57,11 @@ interface LikedTweet {
   url: string;
 }
 
-function buildLikesUrl(userId: string, count: number, cursor?: string | null): string {
+function sanitizeQueryId(resolved: unknown, fallbackId: string): string {
+  return typeof resolved === 'string' && QUERY_ID_PATTERN.test(resolved) ? resolved : fallbackId;
+}
+
+function buildLikesUrl(queryId: string, userId: string, count: number, cursor?: string | null): string {
   const vars: Record<string, any> = {
     userId,
     count,
@@ -67,9 +72,31 @@ function buildLikesUrl(userId: string, count: number, cursor?: string | null): s
   };
   if (cursor) vars.cursor = cursor;
 
-  return `/i/api/graphql/${LIKES_QUERY_ID}/Likes`
+  return `/i/api/graphql/${queryId}/Likes`
     + `?variables=${encodeURIComponent(JSON.stringify(vars))}`
     + `&features=${encodeURIComponent(JSON.stringify(FEATURES))}`;
+}
+
+function buildUserByScreenNameUrl(queryId: string, screenName: string): string {
+  const vars = JSON.stringify({ screen_name: screenName, withSafetyModeUserFields: true });
+  const feats = JSON.stringify({
+    hidden_profile_subscriptions_enabled: true,
+    rweb_tipjar_consumption_enabled: true,
+    responsive_web_graphql_exclude_directive_enabled: true,
+    verified_phone_label_enabled: false,
+    subscriptions_verification_info_is_identity_verified_enabled: true,
+    subscriptions_verification_info_verified_since_enabled: true,
+    highlights_tweets_tab_ui_enabled: true,
+    responsive_web_twitter_article_notes_tab_enabled: true,
+    subscriptions_feature_can_gift_premium: true,
+    creator_subscriptions_tweet_preview_api_enabled: true,
+    responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
+    responsive_web_graphql_timeline_navigation_enabled: true,
+  });
+
+  return `/i/api/graphql/${queryId}/UserByScreenName`
+    + `?variables=${encodeURIComponent(vars)}`
+    + `&features=${encodeURIComponent(feats)}`;
 }
 
 function extractLikedTweet(result: any, seen: Set<string>): LikedTweet | null {
@@ -134,6 +161,36 @@ function parseLikes(data: any, seen: Set<string>): { tweets: LikedTweet[]; nextC
   return { tweets, nextCursor };
 }
 
+async function resolveTwitterQueryId(page: any, operationName: string, fallbackId: string): Promise<string> {
+  const resolved = await page.evaluate(`async () => {
+    const operationName = ${JSON.stringify(operationName)};
+    try {
+      const ghResp = await fetch('https://raw.githubusercontent.com/fa0311/twitter-openapi/refs/heads/main/src/config/placeholder.json');
+      if (ghResp.ok) {
+        const data = await ghResp.json();
+        const entry = data?.[operationName];
+        if (entry && entry.queryId) return entry.queryId;
+      }
+    } catch {}
+    try {
+      const scripts = performance.getEntriesByType('resource')
+        .filter(r => r.name.includes('client-web') && r.name.endsWith('.js'))
+        .map(r => r.name);
+      for (const scriptUrl of scripts.slice(0, 15)) {
+        try {
+          const text = await (await fetch(scriptUrl)).text();
+          const re = new RegExp('queryId:"([A-Za-z0-9_-]+)"[^}]{0,200}operationName:"' + operationName + '"');
+          const match = text.match(re);
+          if (match) return match[1];
+        } catch {}
+      }
+    } catch {}
+    return null;
+  }`);
+
+  return sanitizeQueryId(resolved, fallbackId);
+}
+
 cli({
   site: 'twitter',
   name: 'likes',
@@ -168,18 +225,12 @@ cli({
       username = href.replace('/', '');
     }
 
-    // Resolve queryId from GitHub community source or fallback
-    const queryIdLikes = await page.evaluate(`async () => {
-      try {
-        const ghResp = await fetch('https://raw.githubusercontent.com/fa0311/twitter-openapi/refs/heads/main/src/config/placeholder.json');
-        if (ghResp.ok) {
-          const data = await ghResp.json();
-          const entry = data['Likes'];
-          if (entry && entry.queryId) return entry.queryId;
-        }
-      } catch {}
-      return null;
-    }`) || LIKES_QUERY_ID;
+    const likesQueryId = await resolveTwitterQueryId(page, 'Likes', LIKES_QUERY_ID);
+    const userByScreenNameQueryId = await resolveTwitterQueryId(
+      page,
+      'UserByScreenName',
+      USER_BY_SCREEN_NAME_QUERY_ID,
+    );
 
     const headers = JSON.stringify({
       'Authorization': `Bearer ${decodeURIComponent(BEARER_TOKEN)}`,
@@ -191,34 +242,7 @@ cli({
     // Get userId from screen_name
     const userId = await page.evaluate(`async () => {
       const screenName = ${JSON.stringify(username)};
-      const vars = JSON.stringify({ screen_name: screenName, withSafetyModeUserFields: true });
-      const feats = JSON.stringify({
-        hidden_profile_subscriptions_enabled: true,
-        rweb_tipjar_consumption_enabled: true,
-        responsive_web_graphql_exclude_directive_enabled: true,
-        verified_phone_label_enabled: false,
-        subscriptions_verification_info_is_identity_verified_enabled: true,
-        subscriptions_verification_info_verified_since_enabled: true,
-        highlights_tweets_tab_ui_enabled: true,
-        responsive_web_twitter_article_notes_tab_enabled: true,
-        subscriptions_feature_can_gift_premium: true,
-        creator_subscriptions_tweet_preview_api_enabled: true,
-        responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
-        responsive_web_graphql_timeline_navigation_enabled: true,
-      });
-
-      // Try to resolve UserByScreenName queryId from GitHub
-      let queryId = '${USER_BY_SCREEN_NAME_QUERY_ID}';
-      try {
-        const ghResp = await fetch('https://raw.githubusercontent.com/fa0311/twitter-openapi/refs/heads/main/src/config/placeholder.json');
-        if (ghResp.ok) {
-          const data = await ghResp.json();
-          const entry = data['UserByScreenName'];
-          if (entry && entry.queryId) queryId = entry.queryId;
-        }
-      } catch {}
-
-      const url = '/i/api/graphql/' + queryId + '/UserByScreenName?variables=' + encodeURIComponent(vars) + '&features=' + encodeURIComponent(feats);
+      const url = ${JSON.stringify(buildUserByScreenNameUrl(userByScreenNameQueryId, username))};
       const resp = await fetch(url, { headers: ${headers}, credentials: 'include' });
       if (!resp.ok) return null;
       const d = await resp.json();
@@ -235,7 +259,7 @@ cli({
 
     for (let i = 0; i < 5 && allTweets.length < limit; i++) {
       const fetchCount = Math.min(100, limit - allTweets.length + 10);
-      const apiUrl = buildLikesUrl(userId, fetchCount, cursor).replace(LIKES_QUERY_ID, queryIdLikes);
+      const apiUrl = buildLikesUrl(likesQueryId, userId, fetchCount, cursor);
 
       const data = await page.evaluate(`async () => {
         const r = await fetch("${apiUrl}", { headers: ${headers}, credentials: 'include' });
@@ -257,3 +281,10 @@ cli({
     return allTweets.slice(0, limit);
   },
 });
+
+export const __test__ = {
+  sanitizeQueryId,
+  buildLikesUrl,
+  buildUserByScreenNameUrl,
+  parseLikes,
+};
