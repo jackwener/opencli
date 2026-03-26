@@ -69,7 +69,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.5
 
       - uses: actions/setup-node@v6
         with:
@@ -146,4 +146,3 @@ jobs:
         env:
           OPENCLI_BROWSER_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
     timeout-minutes: 15
-
