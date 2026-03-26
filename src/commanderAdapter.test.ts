@@ -65,16 +65,14 @@ describe('commanderAdapter arg passing', () => {
     expect(kwargs['prepare-only']).toBe(true);
   });
 
-  it('passes raw invalid bool values through to executeCommand', async () => {
+  it('rejects invalid bool values before calling executeCommand', async () => {
     const program = new Command();
     const siteCmd = program.command('paperreview');
     registerCommandToProgram(siteCmd, cmd);
 
     await program.parseAsync(['node', 'opencli', 'paperreview', 'submit', './paper.pdf', '--dry-run', 'maybe']);
 
-    // Raw value is passed through; coerceAndValidateArgs in execution.ts handles validation
-    expect(mockExecuteCommand).toHaveBeenCalled();
-    const kwargs = mockExecuteCommand.mock.calls[0][1];
-    expect(kwargs.pdf).toBe('./paper.pdf');
+    // normalizeArgValue validates bools eagerly; executeCommand should not be reached
+    expect(mockExecuteCommand).not.toHaveBeenCalled();
   });
 });

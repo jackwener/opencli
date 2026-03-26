@@ -16,7 +16,32 @@ import { type CliCommand, fullName, getRegistry } from './registry.js';
 import { formatRegistryHelpText } from './serialization.js';
 import { render as renderOutput } from './output.js';
 import { executeCommand } from './execution.js';
-import { CliError, ERROR_ICONS, getErrorMessage } from './errors.js';
+import {
+  CliError,
+  ERROR_ICONS,
+  getErrorMessage,
+  BrowserConnectError,
+  AuthRequiredError,
+  TimeoutError,
+  SelectorError,
+  EmptyResultError,
+  ArgumentError,
+  AdapterLoadError,
+  CommandExecutionError,
+} from './errors.js';
+import { checkDaemonStatus } from './browser/discover.js';
+
+export function normalizeArgValue(argType: string | undefined, value: unknown, name: string): unknown {
+  if (argType !== 'bool') return value;
+  if (typeof value === 'boolean') return value;
+  if (value == null || value === '') return false;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+
+  throw new CliError('ARGUMENT', `"${name}" must be either "true" or "false".`);
+}
 
 /**
  * Register a single CliCommand as a Commander subcommand.
@@ -64,7 +89,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
         if (arg.positional) continue;
         const camelName = arg.name.replace(/-([a-z])/g, (_m, ch: string) => ch.toUpperCase());
         const v = optionsRecord[arg.name] ?? optionsRecord[camelName];
-        if (v !== undefined) kwargs[arg.name] = v;
+        if (v !== undefined) kwargs[arg.name] = normalizeArgValue(arg.type, v, arg.name);
       }
 
       const verbose = optionsRecord.verbose === true;
@@ -91,18 +116,140 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
         footerExtra: resolved.footerExtra?.(kwargs),
       });
     } catch (err) {
-      if (err instanceof CliError) {
-        const icon = ERROR_ICONS[err.code] ?? '⚠️';
-        console.error(chalk.red(`${icon} ${err.message}`));
-        if (err.hint) console.error(chalk.yellow(`→ ${err.hint}`));
-      } else if (optionsRecord.verbose === true && err instanceof Error && err.stack) {
-        console.error(chalk.red(err.stack));
-      } else {
-        console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
-      }
+      await renderError(err, fullName(cmd), optionsRecord.verbose === true);
       process.exitCode = 1;
     }
   });
+}
+
+// ── Error rendering ──────────────────────────────────────────────────────────
+
+const ISSUES_URL = 'https://github.com/jackwener/opencli/issues';
+
+/** Pattern-based classifier for untyped errors thrown by adapters. */
+function classifyGenericError(msg: string): 'auth' | 'http' | 'not-found' | 'other' {
+  const m = msg.toLowerCase();
+  if (/not logged in|login required|please log in|未登录|请先登录|authentication required|cookie expired/.test(m)) return 'auth';
+  if (/http [45]\d\d/.test(m)) return 'http';
+  if (/not found|未找到|could not find|no .+ found/.test(m)) return 'not-found';
+  return 'other';
+}
+
+async function renderError(err: unknown, cmdName: string, verbose: boolean): Promise<void> {
+  // ── BrowserConnectError: inline real-time diagnosis ───────────────────
+  if (err instanceof BrowserConnectError) {
+    console.error(chalk.red('🔌 Browser Bridge not connected'));
+    console.error();
+    try {
+      const status = await checkDaemonStatus();
+      const ok = chalk.green('✓');
+      const fail = chalk.red('✗');
+      console.error(`  Daemon    ${status.running ? ok : fail} ${status.running ? 'running' : 'not running'}`);
+      console.error(`  Extension ${status.extensionConnected ? ok : fail} ${status.extensionConnected ? 'connected' : 'not connected'}`);
+      console.error();
+      if (!status.running) {
+        console.error(chalk.yellow('  Run the command again — daemon should auto-start.'));
+        console.error(chalk.dim('  Still failing? Run: opencli doctor'));
+      } else if (!status.extensionConnected) {
+        console.error(chalk.yellow('  Install the Browser Bridge extension to continue:'));
+        console.error(chalk.dim('    1. Download from github.com/jackwener/opencli/releases'));
+        console.error(chalk.dim('    2. chrome://extensions → Enable Developer Mode → Load unpacked'));
+      } else {
+        console.error(chalk.yellow('  Connection failed despite extension being active.'));
+        console.error(chalk.dim('  Try reloading the extension, or run: opencli doctor'));
+      }
+    } catch {
+      if (err.hint) console.error(chalk.yellow(`→ ${err.hint}`));
+    }
+    return;
+  }
+
+  // ── AuthRequiredError ─────────────────────────────────────────────────
+  if (err instanceof AuthRequiredError) {
+    console.error(chalk.red(`🔒 Not logged in to ${err.domain}`));
+    console.error(chalk.yellow(`→ Open Chrome and log in to https://${err.domain}, then retry.`));
+    return;
+  }
+
+  // ── TimeoutError ──────────────────────────────────────────────────────
+  if (err instanceof TimeoutError) {
+    console.error(chalk.red(`⏱  ${err.message}`));
+    console.error(chalk.yellow('→ Try again, or raise the limit:'));
+    console.error(chalk.dim(`    OPENCLI_BROWSER_COMMAND_TIMEOUT=60 ${cmdName}`));
+    return;
+  }
+
+  // ── SelectorError / EmptyResultError: likely outdated adapter ─────────
+  if (err instanceof SelectorError || err instanceof EmptyResultError) {
+    const icon = ERROR_ICONS[err.code] ?? '⚠️';
+    console.error(chalk.red(`${icon} ${err.message}`));
+    console.error(chalk.yellow('→ The page structure may have changed — this adapter may be outdated.'));
+    console.error(chalk.dim(`  Debug:  ${cmdName} --verbose`));
+    console.error(chalk.dim(`  Report: ${ISSUES_URL}`));
+    return;
+  }
+
+  // ── ArgumentError ─────────────────────────────────────────────────────
+  if (err instanceof ArgumentError) {
+    console.error(chalk.red(`❌ ${err.message}`));
+    if (err.hint) console.error(chalk.yellow(`→ ${err.hint}`));
+    return;
+  }
+
+  // ── AdapterLoadError ──────────────────────────────────────────────────
+  if (err instanceof AdapterLoadError) {
+    console.error(chalk.red(`📦 ${err.message}`));
+    if (err.hint) console.error(chalk.yellow(`→ ${err.hint}`));
+    return;
+  }
+
+  // ── CommandExecutionError ─────────────────────────────────────────────
+  if (err instanceof CommandExecutionError) {
+    console.error(chalk.red(`💥 ${err.message}`));
+    if (err.hint) {
+      console.error(chalk.yellow(`→ ${err.hint}`));
+    } else {
+      console.error(chalk.dim(`  Add --verbose for details, or report: ${ISSUES_URL}`));
+    }
+    return;
+  }
+
+  // ── Other typed CliError (fallback for future codes) ──────────────────
+  if (err instanceof CliError) {
+    const icon = ERROR_ICONS[err.code] ?? '⚠️';
+    console.error(chalk.red(`${icon} ${err.message}`));
+    if (err.hint) console.error(chalk.yellow(`→ ${err.hint}`));
+    return;
+  }
+
+  // ── Generic Error from adapters: classify by message pattern ──────────
+  const msg = getErrorMessage(err);
+  const kind = classifyGenericError(msg);
+
+  if (kind === 'auth') {
+    console.error(chalk.red(`🔒 ${msg}`));
+    console.error(chalk.yellow('→ Open Chrome, log in to the target site, then retry.'));
+    return;
+  }
+  if (kind === 'http') {
+    console.error(chalk.red(`🌐 ${msg}`));
+    console.error(chalk.yellow('→ Check your login status, or the site may be temporarily unavailable.'));
+    return;
+  }
+  if (kind === 'not-found') {
+    console.error(chalk.red(`📭 ${msg}`));
+    console.error(chalk.yellow('→ The resource was not found. The adapter or page structure may have changed.'));
+    console.error(chalk.dim(`  Report: ${ISSUES_URL}`));
+    return;
+  }
+
+  // ── Unknown error: show stack in verbose mode ─────────────────────────
+  if (verbose && err instanceof Error && err.stack) {
+    console.error(chalk.red(err.stack));
+  } else {
+    console.error(chalk.red(`💥 Unexpected error: ${msg}`));
+    console.error(chalk.dim(`  Run with --verbose for details, or report: ${ISSUES_URL}`));
+  }
 }
 
 /**
