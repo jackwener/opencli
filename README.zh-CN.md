@@ -3,8 +3,7 @@
 > **把任何网站、本地工具、Electron 应用变成能够让 AI 调用的命令行！**  
 > 零风控 · 复用 Chrome 登录 · AI 自动发现接口 · 全能 CLI 枢纽
 
-[English](./README.md)
-
+[![English](https://img.shields.io/badge/docs-English-1D4ED8?style=flat-square)](./README.md)
 [![npm](https://img.shields.io/npm/v/@jackwener/opencli?style=flat-square)](https://www.npmjs.com/package/@jackwener/opencli)
 [![Node.js Version](https://img.shields.io/node/v/@jackwener/opencli?style=flat-square)](https://nodejs.org)
 [![License](https://img.shields.io/npm/l/@jackwener/opencli?style=flat-square)](./LICENSE)
@@ -149,6 +148,7 @@ npm install -g @jackwener/opencli@latest
 | **devto** | `top` `tag` `user` | 公开 |
 | **dictionary** | `search` `synonyms` `examples` | 公开 |
 | **arxiv** | `search` `paper` | 公开 |
+| **paperreview** | `submit` `review` `feedback` | 公开 |
 | **wikipedia** | `search` `summary` `random` `trending` | 公开 |
 | **hackernews** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | 公共 API |
 | **jd** | `item` | 浏览器 |
@@ -170,9 +170,12 @@ npm install -g @jackwener/opencli@latest
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | 公开 |
 | **steam** | `top-sellers` | 公开 |
 | **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | 浏览器 |
-| **douban** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | 浏览器 |
+| **douban** | `search` `top250` `subject` `photos` `download` `marks` `reviews` `movie-hot` `book-hot` | 浏览器 |
 | **facebook** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | 浏览器 |
 | **google** | `news` `search` `suggest` `trends` | 公开 |
+| **36kr** | `news` `hot` `search` `article` | 公开 / 浏览器 |
+| **imdb** | `search` `title` `top` `trending` `person` `reviews` | 公开 |
+| **producthunt** | `posts` `today` `hot` `browse` | 公开 / 浏览器 |
 | **instagram** | `explore` `profile` `search` `user` `followers` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `saved` | 浏览器 |
 | **lobsters** | `hot` `newest` `active` `tag` | 公开 |
 | **medium** | `feed` `search` `user` | 浏览器 |
@@ -233,6 +236,7 @@ OpenCLI 支持从各平台下载图片、视频和文章。
 | **Pixiv** | 图片 | 下载原始画质插画，支持多页作品 |
 | **知乎** | 文章（Markdown） | 导出文章，可选下载图片到本地 |
 | **微信公众号** | 文章（Markdown） | 导出微信公众号文章为 Markdown |
+| **豆瓣** | 图片 | 下载电影条目的海报 / 剧照图片 |
 
 ### 前置依赖
 
@@ -260,6 +264,9 @@ opencli twitter download elonmusk --limit 20 --output ./twitter
 
 # 下载单条推文的媒体
 opencli twitter download --tweet-url "https://x.com/user/status/123" --output ./twitter
+
+# 下载豆瓣电影海报 / 剧照
+opencli douban download 30382501 --output ./douban
 
 # 导出知乎文章为 Markdown
 opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu

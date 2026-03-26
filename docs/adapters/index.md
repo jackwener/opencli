@@ -30,8 +30,9 @@ Run `opencli list` for the live registry.
 | **[grok](/adapters/browser/grok)** | `ask` | 🔐 Browser |
 | **[doubao](/adapters/browser/doubao)** | `status` `new` `send` `read` `ask` | 🔐 Browser |
 | **[weread](/adapters/browser/weread)** | `shelf` `search` `book` `ranking` `notebooks` `highlights` `notes` | 🔐 Browser |
-| **[douban](/adapters/browser/douban)** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | 🔐 Browser |
+| **[douban](/adapters/browser/douban)** | `search` `top250` `subject` `photos` `download` `marks` `reviews` `movie-hot` `book-hot` | 🔐 Browser |
 | **[facebook](/adapters/browser/facebook)** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | 🔐 Browser |
+| **[imdb](/adapters/browser/imdb)** | `search` `title` `top` `trending` `person` `reviews` | 🌐 / 🔐 |
 | **[instagram](/adapters/browser/instagram)** | `explore` `profile` `search` `user` `followers` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `saved` | 🔐 Browser |
 | **[medium](/adapters/browser/medium)** | `feed` `search` `user` | 🔐 Browser |
 | **[sinablog](/adapters/browser/sinablog)** | `hot` `search` `article` `user` | 🔐 Browser |
@@ -42,6 +43,8 @@ Run `opencli list` for the live registry.
 | **[jd](/adapters/browser/jd)** | `item` | 🔐 Browser |
 | **[web](/adapters/browser/web)** | `read` | 🔐 Browser |
 | **[weixin](/adapters/browser/weixin)** | `download` | 🔐 Browser |
+| **[36kr](/adapters/browser/36kr)** | `news` `hot` `search` `article` | 🌐 / 🔐 |
+| **[producthunt](/adapters/browser/producthunt)** | `posts` `today` `hot` `browse` | 🌐 / 🔐 |
 
 ## Public API Adapters
 
@@ -55,6 +58,7 @@ Run `opencli list` for the live registry.
 | **[xiaoyuzhou](/adapters/browser/xiaoyuzhou)** | `podcast` `podcast-episodes` `episode` | 🌐 Public |
 | **[yahoo-finance](/adapters/browser/yahoo-finance)** | `quote` | 🌐 Public |
 | **[arxiv](/adapters/browser/arxiv)** | `search` `paper` | 🌐 Public |
+| **[paperreview](/adapters/browser/paperreview)** | `submit` `review` `feedback` | 🌐 Public |
 | **[barchart](/adapters/browser/barchart)** | `quote` `options` `greeks` `flow` | 🌐 Public |
 | **[hf](/adapters/browser/hf)** | `top` | 🌐 Public |
 | **[sinafinance](/adapters/browser/sinafinance)** | `news` | 🌐 Public |
