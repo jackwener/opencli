@@ -13,7 +13,7 @@ export { isDaemonRunning };
 /**
  * Check daemon status and return connection info.
  */
-export async function checkDaemonStatus(): Promise<{
+export async function checkDaemonStatus(opts?: { timeout?: number }): Promise<{
   running: boolean;
   extensionConnected: boolean;
   extensionVersion?: string;
@@ -21,7 +21,7 @@ export async function checkDaemonStatus(): Promise<{
   try {
     const port = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2000);
+    const timer = setTimeout(() => controller.abort(), opts?.timeout ?? 2000);
     const res = await fetch(`http://127.0.0.1:${port}/status`, {
       headers: { 'X-OpenCLI': '1' },
       signal: controller.signal,

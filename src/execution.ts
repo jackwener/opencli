@@ -158,7 +158,9 @@ export async function executeCommand(
       // If daemon is not running, let browserSession() handle auto-start as usual.
       // We only short-circuit when the daemon confirms the extension is missing —
       // that's a clear setup gap, not a transient startup state.
-      const status = await checkDaemonStatus();
+      // Use a short timeout: localhost responds in <50ms when running.
+      // 300ms avoids a full 2s wait on cold-start (daemon not yet running).
+      const status = await checkDaemonStatus({ timeout: 300 });
       if (status.running && !status.extensionConnected) {
         throw new BrowserConnectError(
           'Browser Bridge extension not connected',

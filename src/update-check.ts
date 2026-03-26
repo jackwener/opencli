@@ -74,10 +74,14 @@ export function registerUpdateNoticeOnExit(): void {
     if (code !== 0) return; // Don't show update notice on error exit
     if (!_cache) return;
     if (!isNewer(_cache.latestVersion, PKG_VERSION)) return;
-    process.stderr.write(
-      chalk.yellow(`\n  Update available: v${PKG_VERSION} → v${_cache.latestVersion}\n`) +
-      chalk.dim(`  Run: npm install -g @jackwener/opencli\n\n`),
-    );
+    try {
+      process.stderr.write(
+        chalk.yellow(`\n  Update available: v${PKG_VERSION} → v${_cache.latestVersion}\n`) +
+        chalk.dim(`  Run: npm install -g @jackwener/opencli\n\n`),
+      );
+    } catch {
+      // Ignore broken pipe (stderr closed before process exits)
+    }
   });
 }
 
