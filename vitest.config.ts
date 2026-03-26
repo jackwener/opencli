@@ -24,6 +24,7 @@ export default defineConfig({
             'src/clis/zhihu/**/*.test.ts',
             'src/clis/v2ex/**/*.test.ts',
             'src/clis/weread/**/*.test.ts',
+            'src/clis/36kr/**/*.test.ts',
           ],
           sequence: { groupOrder: 1 },
         },
