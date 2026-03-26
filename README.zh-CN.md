@@ -132,9 +132,9 @@ npm install -g @jackwener/opencli@latest
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | 桌面端 |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | 桌面端 |
 | **v2ex** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | 公开 / 浏览器 |
-| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | 浏览器 |
+| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` `fund-holdings` `fund-snapshot` | 浏览器 |
 | **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` | 桌面端 |
-| **chatgpt** | `status` `new` `send` `read` `ask` | 桌面端 |
+| **chatgpt** | `status` `new` `send` `read` `ask` `model` | 桌面端 |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | 浏览器 |
 | **apple-podcasts** | `search` `episodes` `top` | 公开 |
 | **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` | 公开 |
@@ -151,9 +151,11 @@ npm install -g @jackwener/opencli@latest
 | **arxiv** | `search` `paper` | 公开 |
 | **wikipedia** | `search` `summary` `random` `trending` | 公开 |
 | **hackernews** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | 公共 API |
-| **linkedin** | `search` | 浏览器 |
+| **jd** | `item` | 浏览器 |
+| **linkedin** | `search` `timeline` | 浏览器 |
 | **reuters** | `search` | 浏览器 |
 | **smzdm** | `search` | 浏览器 |
+| **web** | `read` | 浏览器 |
 | **weibo** | `hot` `search` | 浏览器 |
 | **yahoo-finance** | `quote` | 浏览器 |
 | **sinafinance** | `news` | 🌐 公开 |
@@ -164,7 +166,7 @@ npm install -g @jackwener/opencli@latest
 | **jike** | `feed` `search` `create` `like` `comment` `repost` `notifications` `post` `topic` `user` | 浏览器 |
 | **jimeng** | `generate` `history` | 浏览器 |
 | **yollomi** | `generate` `video` `edit` `upload` `models` `remove-bg` `upscale` `face-swap` `restore` `try-on` `background` `object-remover` | 浏览器 |
-| **linux-do** | `hot` `latest` `search` `categories` `category` `topic` | 公开 |
+| **linux-do** | `feed` `categories` `tags` `search` `topic` `user-topics` `user-posts` | 浏览器 |
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | 公开 |
 | **steam** | `top-sellers` | 公开 |
 | **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | 浏览器 |

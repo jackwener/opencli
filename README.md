@@ -130,9 +130,9 @@ Run `opencli list` for the live registry.
 | **notion** | `status` `search` `read` `new` `write` `sidebar` `favorites` `export` | Desktop |
 | **discord-app** | `status` `send` `read` `channels` `servers` `search` `members` | Desktop |
 | **v2ex** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | Public / Browser |
-| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` | Browser |
+| **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `watchlist` `earnings-date` `fund-holdings` `fund-snapshot` | Browser |
 | **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` | Desktop |
-| **chatgpt** | `status` `new` `send` `read` `ask` | Desktop |
+| **chatgpt** | `status` `new` `send` `read` `ask` `model` | Desktop |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | Browser |
 | **apple-podcasts** | `search` `episodes` `top` | Public |
 | **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` | Public |
@@ -149,9 +149,11 @@ Run `opencli list` for the live registry.
 | **arxiv** | `search` `paper` | Public |
 | **wikipedia** | `search` `summary` `random` `trending` | Public |
 | **hackernews** | `top` `new` `best` `ask` `show` `jobs` `search` `user` | Public |
-| **linkedin** | `search` | Browser |
+| **jd** | `item` | Browser |
+| **linkedin** | `search` `timeline` | Browser |
 | **reuters** | `search` | Browser |
 | **smzdm** | `search` | Browser |
+| **web** | `read` | Browser |
 | **weibo** | `hot` `search` | Browser |
 | **yahoo-finance** | `quote` | Browser |
 | **sinafinance** | `news` | 🌐 Public |
@@ -162,7 +164,7 @@ Run `opencli list` for the live registry.
 | **jike** | `feed` `search` `create` `like` `comment` `repost` `notifications` `post` `topic` `user` | Browser |
 | **jimeng** | `generate` `history` | Browser |
 | **yollomi** | `generate` `video` `edit` `upload` `models` `remove-bg` `upscale` `face-swap` `restore` `try-on` `background` `object-remover` | Browser |
-| **linux-do** | `hot` `latest` `search` `categories` `category` `topic` | Public |
+| **linux-do** | `feed` `categories` `tags` `search` `topic` `user-topics` `user-posts` | Browser |
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | Public |
 | **steam** | `top-sellers` | Public |
 | **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | Browser |
@@ -203,6 +205,8 @@ opencli register mycli
 ### Desktop App Adapters
 
 Each desktop adapter has its own detailed documentation with commands reference, setup guide, and examples:
+
+If you want to add support for a new Electron desktop app, start with [docs/guide/electron-app-cli.md](./docs/guide/electron-app-cli.md) and the deeper [Electron guide](./docs/advanced/electron.md).
 
 | App | Description | Doc |
 |-----|-------------|-----|

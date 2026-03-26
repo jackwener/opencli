@@ -129,4 +129,41 @@ describe('manifest helper rules', () => {
 
     expect(scanTs(file, 'demo')).toBeNull();
   });
+
+  it('keeps literal domain and navigateBefore for TS adapters', () => {
+    const file = path.join(process.cwd(), 'src', 'clis', 'xueqiu', 'fund-holdings.ts');
+    const entry = scanTs(file, 'xueqiu');
+
+    expect(entry).toMatchObject({
+      site: 'xueqiu',
+      name: 'fund-holdings',
+      domain: 'danjuanfunds.com',
+      navigateBefore: 'https://danjuanfunds.com/my-money',
+      type: 'ts',
+      modulePath: 'xueqiu/fund-holdings.js',
+    });
+  });
+
+  it('captures deprecated metadata for TS adapters', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, 'legacy.ts');
+    fs.writeFileSync(file, `
+      import { cli } from '../../registry.js';
+      cli({
+        site: 'demo',
+        name: 'legacy',
+        description: 'legacy command',
+        deprecated: 'legacy is deprecated',
+        replacedBy: 'opencli demo new',
+      });
+    `);
+
+    expect(scanTs(file, 'demo')).toMatchObject({
+      site: 'demo',
+      name: 'legacy',
+      deprecated: 'legacy is deprecated',
+      replacedBy: 'opencli demo new',
+    });
+  });
 });
