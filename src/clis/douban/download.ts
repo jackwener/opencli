@@ -50,10 +50,6 @@ cli({
       );
     }
 
-    if (!photos.length) {
-      return [{ index: 0, title: '-', status: 'failed', size: 'No photos found' }];
-    }
-
     const outputDir = path.join(output, subjectId);
     fs.mkdirSync(outputDir, { recursive: true });
 
