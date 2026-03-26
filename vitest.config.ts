@@ -22,6 +22,7 @@ export default defineConfig({
             'src/clis/linux-do/**/*.test.ts',
             'src/clis/xiaohongshu/**/*.test.ts',
             'src/clis/twitter/**/*.test.ts',
+            'src/clis/douban/**/*.test.ts',
             'src/clis/zhihu/**/*.test.ts',
             'src/clis/v2ex/**/*.test.ts',
             'src/clis/weread/**/*.test.ts',

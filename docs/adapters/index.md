@@ -30,7 +30,7 @@ Run `opencli list` for the live registry.
 | **[grok](/adapters/browser/grok)** | `ask` | 🔐 Browser |
 | **[doubao](/adapters/browser/doubao)** | `status` `new` `send` `read` `ask` | 🔐 Browser |
 | **[weread](/adapters/browser/weread)** | `shelf` `search` `book` `ranking` `notebooks` `highlights` `notes` | 🔐 Browser |
-| **[douban](/adapters/browser/douban)** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | 🔐 Browser |
+| **[douban](/adapters/browser/douban)** | `search` `top250` `subject` `photos` `download` `marks` `reviews` `movie-hot` `book-hot` | 🔐 Browser |
 | **[facebook](/adapters/browser/facebook)** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | 🔐 Browser |
 | **[instagram](/adapters/browser/instagram)** | `explore` `profile` `search` `user` `followers` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `saved` | 🔐 Browser |
 | **[medium](/adapters/browser/medium)** | `feed` `search` `user` | 🔐 Browser |

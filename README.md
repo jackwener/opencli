@@ -187,7 +187,7 @@ Run `opencli list` for the live registry.
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | Public |
 | **steam** | `top-sellers` | Public |
 | **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | Browser |
-| **douban** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | Browser |
+| **douban** | `search` `top250` `subject` `photos` `download` `marks` `reviews` `movie-hot` `book-hot` | Browser |
 | **facebook** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | Browser |
 | **google** | `news` `search` `suggest` `trends` | Public |
 | **36kr** | `news` `hot` `search` `article` | Public / Browser |
@@ -251,6 +251,7 @@ OpenCLI supports downloading images, videos, and articles from supported platfor
 | **xiaohongshu** | Images, Videos | Downloads all media from a note |
 | **bilibili** | Videos | Requires `yt-dlp` installed |
 | **twitter** | Images, Videos | Downloads from user media tab or single tweet |
+| **douban** | Images | Downloads poster / still image lists from movie subjects |
 | **pixiv** | Images | Downloads original-quality illustrations, supports multi-page works |
 | **zhihu** | Articles (Markdown) | Exports articles with optional image download |
 | **weixin** | Articles (Markdown) | Exports WeChat Official Account articles |
@@ -281,6 +282,9 @@ opencli twitter download elonmusk --limit 20 --output ./twitter
 
 # Download single tweet media
 opencli twitter download --tweet-url "https://x.com/user/status/123" --output ./twitter
+
+# Download Douban posters / stills
+opencli douban download 30382501 --output ./douban
 
 # Export Zhihu article to Markdown
 opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu

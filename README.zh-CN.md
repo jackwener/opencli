@@ -169,7 +169,7 @@ npm install -g @jackwener/opencli@latest
 | **stackoverflow** | `hot` `search` `bounties` `unanswered` | 公开 |
 | **steam** | `top-sellers` | 公开 |
 | **weread** | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` | 浏览器 |
-| **douban** | `search` `top250` `subject` `marks` `reviews` `movie-hot` `book-hot` | 浏览器 |
+| **douban** | `search` `top250` `subject` `photos` `download` `marks` `reviews` `movie-hot` `book-hot` | 浏览器 |
 | **facebook** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | 浏览器 |
 | **google** | `news` `search` `suggest` `trends` | 公开 |
 | **36kr** | `news` `hot` `search` `article` | 公开 / 浏览器 |
@@ -234,6 +234,7 @@ OpenCLI 支持从各平台下载图片、视频和文章。
 | **Pixiv** | 图片 | 下载原始画质插画，支持多页作品 |
 | **知乎** | 文章（Markdown） | 导出文章，可选下载图片到本地 |
 | **微信公众号** | 文章（Markdown） | 导出微信公众号文章为 Markdown |
+| **豆瓣** | 图片 | 下载电影条目的海报 / 剧照图片 |
 
 ### 前置依赖
 
@@ -261,6 +262,9 @@ opencli twitter download elonmusk --limit 20 --output ./twitter
 
 # 下载单条推文的媒体
 opencli twitter download --tweet-url "https://x.com/user/status/123" --output ./twitter
+
+# 下载豆瓣电影海报 / 剧照
+opencli douban download 30382501 --output ./douban
 
 # 导出知乎文章为 Markdown
 opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu
