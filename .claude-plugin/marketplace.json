@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "opencli",
+  "owner": {
+    "name": "jackwener",
+    "url": "https://github.com/jackwener"
+  },
+  "plugins": [
+    {
+      "name": "opencli",
+      "source": "./",
+      "description": "Make any website or Electron App your CLI. Reuse Chrome login, zero risk, AI-powered discovery. Supports 50+ platforms including Bilibili, Zhihu, Twitter/X, YouTube, Reddit, HackerNews, V2EX, 小红书, 雪球, BOSS直聘 and more.",
+      "version": "1.4.1"
+    }
+  ]
+}
