@@ -6,12 +6,12 @@
 
 import { DEFAULT_DAEMON_PORT } from '../constants.js';
 import type { BrowserSessionInfo } from '../types.js';
+import { sleep } from '../utils.js';
 
 const DAEMON_PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 const DAEMON_URL = `http://127.0.0.1:${DAEMON_PORT}`;
 
 let _idCounter = 0;
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 function generateId(): string {
   return `cmd_${Date.now()}_${++_idCounter}`;

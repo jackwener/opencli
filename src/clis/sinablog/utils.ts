@@ -1,7 +1,7 @@
 import type { IPage } from '../../types.js';
-import { clampToRange } from '../_shared/common.js';
+import { clamp } from '../_shared/common.js';
 
-const clampLimit = (limit: number) => clampToRange(limit, 20, 1, 50);
+const clampLimit = (limit: number) => clamp(limit || 20, 1, 50);
 
 export function buildSinaBlogSearchUrl(keyword: string): string {
   return `https://search.sina.com.cn/search?q=${encodeURIComponent(keyword)}&tp=mix`;
