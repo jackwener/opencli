@@ -255,6 +255,9 @@ export function installPlugin(source: string): string | string[] {
       `  github:user/repo\n` +
       `  github:user/repo/subplugin\n` +
       `  https://github.com/user/repo\n` +
+      `  https://<host>/<path>/repo.git\n` +
+      `  ssh://git@<host>/<path>/repo.git\n` +
+      `  git@<host>:user/repo.git\n` +
       `  file:///absolute/path\n` +
       `  /absolute/path`
     );
@@ -831,6 +834,42 @@ function parseSource(
       cloneUrl: `https://github.com/${user}/${repo}.git`,
       name,
     };
+  }
+
+  // ── Generic git URL support ─────────────────────────────────────────────
+
+  // ssh://git@host/path/to/repo.git
+  const sshUrlMatch = source.match(/^ssh:\/\/[^/]+\/(.*?)(?:\.git)?$/);
+  if (sshUrlMatch) {
+    const pathPart = sshUrlMatch[1];
+    const segments = pathPart.split('/');
+    const repoSegment = segments.pop()!;
+    const name = repoSegment.replace(/^opencli-plugin-/, '');
+    return { type: 'git', cloneUrl: source, name };
+  }
+
+  // git@host:user/repo.git (SCP-style)
+  const scpMatch = source.match(/^git@[^:]+:(.+?)(?:\.git)?$/);
+  if (scpMatch) {
+    const pathPart = scpMatch[1];
+    const segments = pathPart.split('/');
+    const repoSegment = segments.pop()!;
+    const name = repoSegment.replace(/^opencli-plugin-/, '');
+    return { type: 'git', cloneUrl: source, name };
+  }
+
+  // Generic https/http git URL (non-GitHub hosts)
+  const genericHttpMatch = source.match(
+    /^https?:\/\/[^/]+\/(.+?)(?:\.git)?$/,
+  );
+  if (genericHttpMatch) {
+    const pathPart = genericHttpMatch[1];
+    const segments = pathPart.split('/');
+    const repoSegment = segments.pop()!;
+    const name = repoSegment.replace(/^opencli-plugin-/, '');
+    // Ensure clone URL ends with .git
+    const cloneUrl = source.endsWith('.git') ? source : `${source}.git`;
+    return { type: 'git', cloneUrl, name };
   }
 
   return null;

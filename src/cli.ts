@@ -253,7 +253,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
 
   pluginCmd
     .command('install')
-    .description('Install a plugin from GitHub')
+    .description('Install a plugin from a git repository')
     .argument('<source>', 'Plugin source (e.g. github:user/repo)')
     .action(async (source: string) => {
       const { installPlugin } = await import('./plugin.js');

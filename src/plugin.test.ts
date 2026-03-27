@@ -99,6 +99,71 @@ describe('parseSource', () => {
     const result = _parseSource(localDir);
     expect(result!.name).toBe('foo');
   });
+
+  // ── Generic git URL support ──
+  it('parses ssh:// URLs', () => {
+    const result = _parseSource('ssh://git@gitlab.com/team/opencli-plugin-tools.git');
+    expect(result).toEqual({
+      type: 'git',
+      cloneUrl: 'ssh://git@gitlab.com/team/opencli-plugin-tools.git',
+      name: 'tools',
+    });
+  });
+
+  it('parses ssh:// URLs without .git suffix', () => {
+    const result = _parseSource('ssh://git@gitlab.com/team/my-plugin');
+    expect(result).toEqual({
+      type: 'git',
+      cloneUrl: 'ssh://git@gitlab.com/team/my-plugin',
+      name: 'my-plugin',
+    });
+  });
+
+  it('parses git@ SCP-style URLs', () => {
+    const result = _parseSource('git@gitlab.com:team/my-plugin.git');
+    expect(result).toEqual({
+      type: 'git',
+      cloneUrl: 'git@gitlab.com:team/my-plugin.git',
+      name: 'my-plugin',
+    });
+  });
+
+  it('parses git@ SCP-style URLs and strips opencli-plugin- prefix', () => {
+    const result = _parseSource('git@github.com:user/opencli-plugin-awesome.git');
+    expect(result).toEqual({
+      type: 'git',
+      cloneUrl: 'git@github.com:user/opencli-plugin-awesome.git',
+      name: 'awesome',
+    });
+  });
+
+  it('parses generic HTTPS git URLs (non-GitHub)', () => {
+    const result = _parseSource('https://codehub.example.com/Team/App/opencli-plugins-app.git');
+    expect(result).toEqual({
+      type: 'git',
+      cloneUrl: 'https://codehub.example.com/Team/App/opencli-plugins-app.git',
+      name: 'opencli-plugins-app',
+    });
+  });
+
+  it('parses generic HTTPS git URLs without .git suffix', () => {
+    const result = _parseSource('https://gitlab.example.com/org/my-plugin');
+    expect(result).toEqual({
+      type: 'git',
+      cloneUrl: 'https://gitlab.example.com/org/my-plugin.git',
+      name: 'my-plugin',
+    });
+  });
+
+  it('still prefers GitHub shorthand over generic HTTPS for github.com', () => {
+    const result = _parseSource('https://github.com/user/repo');
+    // Should be handled by the GitHub-specific matcher (normalizes URL)
+    expect(result).toEqual({
+      type: 'git',
+      cloneUrl: 'https://github.com/user/repo.git',
+      name: 'repo',
+    });
+  });
 });
 
 describe('validatePluginStructure', () => {
