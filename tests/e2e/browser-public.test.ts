@@ -126,4 +126,70 @@ describe('browser public-data commands E2E', () => {
       expect(data[0]).toHaveProperty('value');
     }
   }, 60_000);
+
+  // ── baidu-scholar (browser: true, strategy: public) ──
+  it('baidu-scholar search returns papers', async () => {
+    const data = await tryBrowserCommand(['baidu-scholar', 'search', '深度学习', '--limit', '3', '-f', 'json']);
+    expectDataOrSkip(data, 'baidu-scholar search');
+    if (data) {
+      expect(data[0]).toHaveProperty('title');
+      expect(data[0]).toHaveProperty('rank');
+    }
+  }, 60_000);
+
+  // ── google-scholar (browser: true, strategy: public) ──
+  it('google-scholar search returns papers', async () => {
+    const data = await tryBrowserCommand(['google-scholar', 'search', 'quantum computing', '--limit', '3', '-f', 'json']);
+    expectDataOrSkip(data, 'google-scholar search');
+    if (data) {
+      expect(data[0]).toHaveProperty('title');
+      expect(data[0]).toHaveProperty('authors');
+    }
+  }, 60_000);
+
+  // ── wanfang (browser: true, strategy: public) ──
+  it('wanfang search returns papers', async () => {
+    const data = await tryBrowserCommand(['wanfang', 'search', '人工智能', '--limit', '3', '-f', 'json']);
+    expectDataOrSkip(data, 'wanfang search');
+    if (data) {
+      expect(data[0]).toHaveProperty('title');
+      expect(data[0]).toHaveProperty('rank');
+    }
+  }, 60_000);
+
+  // ── gov-law (browser: true, strategy: public, Vue SPA) ──
+  it('gov-law recent returns laws', async () => {
+    const data = await tryBrowserCommand(['gov-law', 'recent', '--limit', '3', '-f', 'json']);
+    expectDataOrSkip(data, 'gov-law recent');
+    if (data) {
+      expect(data[0]).toHaveProperty('title');
+      expect(data[0]).toHaveProperty('publish_date');
+    }
+  }, 60_000);
+
+  it('gov-law search returns results', async () => {
+    const data = await tryBrowserCommand(['gov-law', 'search', '数据安全', '--limit', '3', '-f', 'json']);
+    expectDataOrSkip(data, 'gov-law search');
+    if (data) {
+      expect(data[0]).toHaveProperty('title');
+    }
+  }, 60_000);
+
+  // ── gov-policy (browser: true, strategy: public) ──
+  it('gov-policy recent returns policies', async () => {
+    const data = await tryBrowserCommand(['gov-policy', 'recent', '--limit', '3', '-f', 'json']);
+    expectDataOrSkip(data, 'gov-policy recent');
+    if (data) {
+      expect(data[0]).toHaveProperty('title');
+      expect(data[0]).toHaveProperty('date');
+    }
+  }, 60_000);
+
+  it('gov-policy search returns results', async () => {
+    const data = await tryBrowserCommand(['gov-policy', 'search', '数据安全', '--limit', '3', '-f', 'json']);
+    expectDataOrSkip(data, 'gov-policy search');
+    if (data) {
+      expect(data[0]).toHaveProperty('title');
+    }
+  }, 60_000);
 });
