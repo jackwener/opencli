@@ -40,6 +40,20 @@ describe('node network proxy decisions', () => {
     expect(decision).toEqual({ mode: 'direct' });
   });
 
+  it('matches NO_PROXY entries that rely on the default URL port', () => {
+    const env = { https_proxy: 'http://127.0.0.1:7897', http_proxy: 'http://127.0.0.1:7897' };
+
+    expect(decideProxy(
+      new URL('https://example.com/'),
+      { ...env, NO_PROXY: 'example.com:443' },
+    )).toEqual({ mode: 'direct' });
+
+    expect(decideProxy(
+      new URL('http://example.com/health'),
+      { ...env, NO_PROXY: 'example.com:80' },
+    )).toEqual({ mode: 'direct' });
+  });
+
   it('falls back to ALL_PROXY when protocol-specific settings are absent', () => {
     const decision = decideProxy(
       new URL('http://example.net/data'),

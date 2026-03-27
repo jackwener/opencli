@@ -15,6 +15,10 @@ const PROXY_ENV_BY_PROTOCOL: Record<'http:' | 'https:', ProxyEnvKey[]> = {
   'http:': ['http_proxy', 'HTTP_PROXY', 'all_proxy', 'ALL_PROXY'],
   'https:': ['https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY'],
 };
+const DEFAULT_PORT_BY_PROTOCOL: Record<'http:' | 'https:', string> = {
+  'http:': '80',
+  'https:': '443',
+};
 
 export interface ProxyDecision {
   mode: 'direct' | 'proxy';
@@ -80,7 +84,7 @@ function matchesNoProxyEntry(url: URL, entry: string): boolean {
   if (host === '*') return true;
 
   const hostname = normalizeHostname(url.hostname);
-  const urlPort = url.port || undefined;
+  const urlPort = url.port || DEFAULT_PORT_BY_PROTOCOL[url.protocol as 'http:' | 'https:'] || undefined;
   if (port && port !== urlPort) return false;
   return hostname === host || hostname.endsWith(`.${host}`);
 }
