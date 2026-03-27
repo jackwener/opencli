@@ -16,7 +16,6 @@ const { mockExecFileSync, mockExecSync } = vi.hoisted(() => ({
 }));
 
 const {
-  LOCK_FILE,
   _getCommitHash,
   _installDependencies,
   _postInstallMonorepoLifecycle,
@@ -31,6 +30,7 @@ const {
   _writeLockFile,
   _isSymlinkSync,
   _getMonoreposDir,
+  getLockFilePath,
 } = pluginModule;
 
 describe('parseSource', () => {
@@ -128,28 +128,28 @@ describe('validatePluginStructure', () => {
 });
 
 describe('lock file', () => {
-  const backupPath = `${LOCK_FILE}.test-backup`;
+  const backupPath = `${getLockFilePath()}.test-backup`;
   let hadOriginal = false;
 
   beforeEach(() => {
-    hadOriginal = fs.existsSync(LOCK_FILE);
+    hadOriginal = fs.existsSync(getLockFilePath());
     if (hadOriginal) {
       fs.mkdirSync(path.dirname(backupPath), { recursive: true });
-      fs.copyFileSync(LOCK_FILE, backupPath);
+      fs.copyFileSync(getLockFilePath(), backupPath);
     }
   });
 
   afterEach(() => {
     if (hadOriginal) {
-      fs.copyFileSync(backupPath, LOCK_FILE);
+      fs.copyFileSync(backupPath, getLockFilePath());
       fs.unlinkSync(backupPath);
       return;
     }
-    try { fs.unlinkSync(LOCK_FILE); } catch {}
+    try { fs.unlinkSync(getLockFilePath()); } catch {}
   });
 
   it('reads empty lock when file does not exist', () => {
-    try { fs.unlinkSync(LOCK_FILE); } catch {}
+    try { fs.unlinkSync(getLockFilePath()); } catch {}
     expect(_readLockFile()).toEqual({});
   });
 
@@ -173,8 +173,8 @@ describe('lock file', () => {
   });
 
   it('handles malformed lock file gracefully', () => {
-    fs.mkdirSync(path.dirname(LOCK_FILE), { recursive: true });
-    fs.writeFileSync(LOCK_FILE, 'not valid json');
+    fs.mkdirSync(path.dirname(getLockFilePath()), { recursive: true });
+    fs.writeFileSync(getLockFilePath(), 'not valid json');
     expect(_readLockFile()).toEqual({});
   });
 });

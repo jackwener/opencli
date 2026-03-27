@@ -39,9 +39,7 @@ export function getMonoreposDir(): string {
   return path.join(getHomeDir(), '.opencli', 'monorepos');
 }
 
-// Legacy const for backward compatibility (computed at load time)
-export const LOCK_FILE = path.join(os.homedir(), '.opencli', 'plugins.lock.json');
-export const MONOREPOS_DIR = path.join(os.homedir(), '.opencli', 'monorepos');
+
 
 export interface LockEntry {
   source: string;
