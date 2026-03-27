@@ -195,6 +195,22 @@ export class Page implements IPage {
 
   async wait(options: number | WaitOptions): Promise<void> {
     if (typeof options === 'number') {
+      if (options >= 1) {
+        // For waits >= 1s, use DOM-stable check: return early when the page
+        // stops mutating, with the original wait time as the hard cap.
+        // This turns e.g. `page.wait(5)` from a fixed 5s sleep into
+        // "wait until DOM is stable, max 5s" — often completing in <1s.
+        try {
+          const maxMs = options * 1000;
+          await sendCommand('exec', {
+            code: waitForDomStableJs(maxMs, Math.min(500, maxMs)),
+            ...this._cmdOpts(),
+          });
+          return;
+        } catch {
+          // Fallback: fixed sleep (e.g. if page has no DOM yet)
+        }
+      }
       await new Promise(resolve => setTimeout(resolve, options * 1000));
       return;
     }
