@@ -1,0 +1,38 @@
+site: note
+name: search
+description: Search note.com articles
+domain: note.com
+strategy: cookie
+
+args:
+  query:
+    type: str
+    required: true
+    positional: true
+    description: Search query
+  limit:
+    type: int
+    default: 10
+    description: Number of results (max ~10 per request)
+
+pipeline:
+  - fetch:
+      url: https://note.com/api/v3/searches
+      params:
+        context: note
+        q: ${{ args.query }}
+        size: ${{ args.limit }}
+        start: "0"
+
+  - select: data.notes
+
+  - map:
+      rank: ${{ index + 1 }}
+      title: ${{ item.name }}
+      author: ${{ item.user.urlname }}
+      likes: ${{ item.likeCount }}
+      url: ${{ item.noteUrl }}
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, title, author, likes, url]
