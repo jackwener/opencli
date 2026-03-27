@@ -12,18 +12,21 @@ args:
     description: Number of topics
 
 pipeline:
-  - navigate: https://www.v2ex.com/api/topics/hot.json
+  - navigate: https://www.v2ex.com/
 
   - evaluate: |
       (async () => {
-        // 获取页面中的JSON数据
-        const preElement = document.querySelector('pre');
-        if (preElement) {
-          const jsonText = preElement.textContent;
-          const data = JSON.parse(jsonText);
-          return data;
+        const response = await fetch('/api/topics/hot.json', {
+          credentials: 'include',
+          headers: {
+            accept: 'application/json, text/plain, */*',
+            'x-requested-with': 'XMLHttpRequest',
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`V2EX hot API request failed: ${response.status}`);
         }
-        return [];
+        return await response.json();
       })()
 
   - map:
