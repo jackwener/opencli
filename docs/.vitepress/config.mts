@@ -121,6 +121,7 @@ export default defineConfig({
                 { text: 'ChatWise', link: '/adapters/desktop/chatwise' },
                 { text: 'Notion', link: '/adapters/desktop/notion' },
                 { text: 'Discord', link: '/adapters/desktop/discord' },
+                { text: 'Dory', link: '/adapters/desktop/dory' },
                 { text: 'Doubao App', link: '/adapters/desktop/doubao-app' },
               ],
             },
