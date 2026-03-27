@@ -313,7 +313,7 @@ export function listContracts(): Array<{ site: string; command: string; captured
     if (!entry.isDirectory()) continue;
     const site = entry.name;
     const siteDir = path.join(baseDir, site);
-    const files = fs.readdirSync(siteDir).filter(f => f.endsWith('.json'));
+    const files = fs.readdirSync(siteDir).filter((f: string) => f.endsWith('.json'));
     for (const file of files) {
       try {
         const raw = fs.readFileSync(path.join(siteDir, file), 'utf-8');
