@@ -4,9 +4,11 @@ import { cli, Strategy } from '../../registry.js';
 /**
  * band posts — List posts from a specific Band.
  *
- * Uses the INTERCEPT strategy: navigates to band.us home, installs a fetch
- * interceptor, then SPA-navigates to the target band's post page to capture
- * the get_posts_and_announcements API response.
+ * Band.us signs every API request with a per-request HMAC (`md` header) generated
+ * by its own JavaScript, so we cannot replicate it externally. Instead we use
+ * Strategy.INTERCEPT: install an XHR interceptor, then SPA-navigate to the target
+ * band's post page — which causes Band's React app to call get_posts_and_announcements
+ * with its own auth headers automatically.
  */
 cli({
   site: 'band',
@@ -29,58 +31,54 @@ cli({
 
   func: async (page, kwargs) => {
     const bandNo = Number(kwargs.band_no);
-    const limit = Number(kwargs.limit ?? 20);
+    const limit = Number(kwargs.limit);
 
     if (!bandNo) throw new ArgumentError('band_no', 'Band number is required. Get it from: band bands');
 
-    // 1. Navigate to Band home first
     await page.goto('https://www.band.us/');
-    await page.wait(2);
+    await page.wait(2); // wait for React hydration and cookie settlement
 
     const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
-    // 2. Install interceptor BEFORE SPA navigation
+    // Install XHR interceptor before triggering navigation so we don't miss the request.
     await page.installInterceptor('get_posts_and_announcements');
 
-    // 3. SPA navigate to the band's post page
+    // SPA navigation: history.pushState keeps the React app alive (no full reload),
+    // so the interceptor stays active. PopStateEvent signals React Router to re-render.
     await page.evaluate(`() => {
       window.history.pushState({}, '', '/band/${bandNo}/post');
       window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
     }`);
-    await page.wait(4);
+    await page.wait(4); // allow time for the XHR round-trip to complete
 
-    const finalRequests = await page.getInterceptedRequests();
-
-    if (finalRequests.length === 0) {
+    const requests = await page.getInterceptedRequests();
+    if (requests.length === 0) {
       throw new EmptyResultError('band posts', 'No post data captured');
     }
 
-    // 4. Parse get_posts_and_announcements response
-    let items: any[] = [];
-    for (const req of finalRequests) {
-      const postItems = req?.result_data?.items;
-      if (Array.isArray(postItems)) {
-        items.push(...postItems);
-      }
-    }
+    // result_data.items is an array of { post: { ... } }
+    const items = (requests as any[]).flatMap(req =>
+      Array.isArray(req?.result_data?.items) ? req.result_data.items : []
+    );
 
     if (items.length === 0) {
       throw new EmptyResultError('band posts', 'No posts found in this Band');
     }
 
+    // Band markup tags (<band:mention>, <band:sticker>, etc.) appear in content;
+    // strip them to get plain text.
+    const stripBandTags = (s: string) => s.replace(/<\/?band:[^>]+>/g, '').trim();
+
     return items.slice(0, limit).map((item: any) => {
-      const post = item.post ?? item;
+      const post = item.post;
       const ts = post.created_at ? new Date(post.created_at) : null;
-      const dateStr = ts
-        ? ts.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-        : '';
-      // Strip Band markup tags
-      const rawContent = (post.content ?? '').replace(/<band:[^>]+>[^<]*<\/band:[^>]+>/g, '').trim();
       return {
-        date: dateStr,
+        date: ts
+          ? ts.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+          : '',
         author: post.author?.name ?? '',
-        content: rawContent.slice(0, 120),
+        content: stripBandTags(post.content ?? '').slice(0, 120),
         comments: post.comment_count ?? 0,
         url: post.web_url ?? `https://band.us/band/${bandNo}/post/${post.post_no}`,
       };

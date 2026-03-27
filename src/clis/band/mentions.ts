@@ -2,11 +2,16 @@ import { AuthRequiredError, EmptyResultError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 
 /**
- * band mentions — Show Band notifications where you were @mentioned or assigned.
+ * band mentions — Show Band notifications where you were @mentioned.
  *
- * Uses the INTERCEPT strategy: navigates to band.us home, installs a fetch
- * interceptor, then clicks the notification bell to trigger the get_news API
- * call (which Band makes with its own auth headers including the md signature).
+ * Band.us signs every API request with a per-request HMAC (`md` header) generated
+ * by its own JavaScript, so we cannot replicate it externally. Instead we use
+ * Strategy.INTERCEPT: install an XHR interceptor, open the notification panel by
+ * clicking the bell, then click the @メンション tab — which triggers a server-side
+ * filtered get_news call containing only notifications where you were mentioned.
+ *
+ * The tab-click approach is preferred over client-side filtering on the full
+ * notification list, because Band's server already paginates/filters correctly.
  */
 cli({
   site: 'band',
@@ -28,61 +33,58 @@ cli({
   columns: ['time', 'band', 'type', 'from', 'text', 'url'],
 
   func: async (page, kwargs) => {
-    const filter = String(kwargs.filter ?? 'mentioned');
-    const limit = Number(kwargs.limit ?? 20);
-    const unreadOnly = Boolean(kwargs.unread);
+    const filter = kwargs.filter as string;
+    const limit = kwargs.limit as number;
+    const unreadOnly = kwargs.unread as boolean;
 
-    // 1. Navigate to Band home (ensures cookies are active)
     await page.goto('https://www.band.us/');
-    await page.wait(2);
+    await page.wait(2); // wait for React hydration and cookie settlement
 
-    // Verify we're logged in
-    const isLoggedIn = await page.evaluate(`() => {
-      return document.cookie.includes('band_session');
-    }`);
+    const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
-    // 2. Install interceptor BEFORE triggering any API calls
+    // Install XHR interceptor before any clicks so all get_news responses are captured.
     await page.installInterceptor('get_news');
 
-    // 3. Click the notification bell (opens panel, triggers get_news for all)
-    //    The bell button has class '_btnWidgetIcon' and text content containing 'お知らせ'.
+    // Click the notification bell to open the panel. This triggers an initial get_news
+    // call for all notification types. The bell button is identified by class and text
+    // since Band does not use aria-label on this element.
     await page.evaluate(`() => {
-      const bell = Array.from(document.querySelectorAll('button._btnWidgetIcon')).find(b =>
-        b.textContent && b.textContent.includes('お知らせ')
-      );
+      const bell = Array.from(document.querySelectorAll('button._btnWidgetIcon'))
+        .find(b => b.textContent && b.textContent.includes('お知らせ'));
       if (bell) bell.click();
     }`);
-    await page.wait(2);
+    await page.wait(2); // wait for panel to render and initial get_news to complete
 
-    // 4. For @mention filter: click the @メンション tab (triggers server-side filtered get_news).
-    //    For unread: also click 未確認のみ表示 button.
     if (filter === 'mentioned') {
+      // Click the @メンション tab to trigger a server-side filtered get_news call.
+      // This response contains only notifications with the 'referred' filter flag,
+      // which is more accurate than client-side filtering the full list.
       await page.evaluate(`() => {
-        const tab = Array.from(document.querySelectorAll('button._btnFilter')).find(b =>
-          b.textContent && b.textContent.includes('メンション')
-        );
+        const tab = Array.from(document.querySelectorAll('button._btnFilter'))
+          .find(b => b.textContent && b.textContent.includes('メンション'));
         if (tab) tab.click();
       }`);
       await page.wait(2);
 
       if (unreadOnly) {
+        // 未確認のみ表示: triggers another server-side filtered get_news for unread mentions.
         await page.evaluate(`() => {
-          const btn = Array.from(document.querySelectorAll('button')).find(b =>
-            b.textContent && b.textContent.includes('未確認のみ')
-          );
+          const btn = Array.from(document.querySelectorAll('button'))
+            .find(b => b.textContent && b.textContent.includes('未確認のみ'));
           if (btn) btn.click();
         }`);
         await page.wait(2);
       }
     }
 
-    // 5. Retrieve intercepted data — use the LAST captured response (most specific filter)
     const requests = await page.getInterceptedRequests();
-    if (!requests || requests.length === 0) {
+    if (requests.length === 0) {
       throw new EmptyResultError('band mentions', 'No notification data captured. Try running the command again.');
     }
 
+    // Use the last captured response: each UI action (bell → tab → unread toggle)
+    // triggers a progressively more specific get_news call, so the last one is correct.
     const lastReq = requests[requests.length - 1] as any;
     let items: any[] = Array.isArray(lastReq?.result_data?.news) ? lastReq.result_data.news : [];
 
@@ -90,29 +92,31 @@ cli({
       throw new EmptyResultError('band mentions', 'No notifications found');
     }
 
-    // 6. Client-side filters for non-mention modes
-    if (filter === 'all' && unreadOnly) {
+    // Client-side filters for non-mention modes (server already filters 'mentioned').
+    if (unreadOnly) {
       items = items.filter((n: any) => n.is_new === true);
-    } else if (filter === 'post') {
+    }
+    if (filter === 'post') {
       items = items.filter((n: any) => n.category === 'post');
     } else if (filter === 'comment') {
       items = items.filter((n: any) => n.category === 'comment');
     }
 
+    // Band markup tags (<band:mention uid="...">, <band:sticker>, etc.) appear in
+    // notification text; strip them to get plain readable content.
+    const stripBandTags = (s: string) => s.replace(/<\/?band:[^>]+>/g, '');
+
     return items.slice(0, limit).map((n: any) => {
       const ts = n.created_at ? new Date(n.created_at) : null;
-      const timeStr = ts
-        ? ts.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-        : '';
-      const type = n.filters?.includes('referred') ? '@mention' : n.category ?? '';
-      // Strip Band markup tags from text
-      const rawText = (n.subtext ?? '').replace(/<band:[^>]+>/g, '').replace(/<\/band:[^>]+>/g, '');
       return {
-        time: timeStr,
+        time: ts
+          ? ts.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+          : '',
         band: n.band?.name ?? '',
-        type,
+        // 'filters' is Band's server-side tag array; 'referred' means you were @mentioned.
+        type: n.filters?.includes('referred') ? '@mention' : n.category ?? '',
         from: n.actor?.name ?? '',
-        text: rawText.slice(0, 100),
+        text: stripBandTags(n.subtext ?? '').slice(0, 100),
         url: n.action?.pc ?? '',
       };
     });

@@ -4,8 +4,11 @@ import { cli, Strategy } from '../../registry.js';
 /**
  * band bands — List all Bands you belong to.
  *
- * Uses the INTERCEPT strategy to capture the get_band_list_with_filter
- * API response that Band.us automatically makes on the home page.
+ * Band.us signs every API request with a per-request HMAC (`md` header) generated
+ * by its own JavaScript, so we cannot replicate it externally. Instead we use
+ * Strategy.INTERCEPT: install an XHR interceptor in the page, then trigger Band's
+ * own React app to fire the request by SPA-navigating to a band page — which always
+ * causes Band to call get_band_list_with_filter to re-populate the sidebar.
  */
 cli({
   site: 'band',
@@ -18,45 +21,43 @@ cli({
   columns: ['band_no', 'name', 'members'],
 
   func: async (page, _kwargs) => {
-    // 1. Navigate to home, verify login, extract a band_no from sidebar links
     await page.goto('https://www.band.us/');
-    await page.wait(1);
+    await page.wait(2); // wait for React hydration and cookie settlement
 
     const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
-    // Extract any band_no visible in the sidebar — needed for SPA navigation trigger
+    // Extract any band_no from sidebar links. We need it to SPA-navigate to a band
+    // page, which is the only route that reliably re-triggers get_band_list_with_filter
+    // (direct / and /discover routes serve from React cache after first load).
     const bandNo = await page.evaluate(`() => {
-      const link = Array.from(document.querySelectorAll('a[href*="/band/"]'))
+      const m = Array.from(document.querySelectorAll('a[href*="/band/"]'))
         .map(a => a.getAttribute('href').match(/\\/band\\/(\\d+)/))
-        .find(m => m);
-      return link ? link[1] : null;
+        .find(Boolean);
+      return m ? m[1] : null;
     }`);
-    if (!bandNo) throw new EmptyResultError('band bands', 'No band links found on page. Are you logged in?');
-    const bandNoStr = String(bandNo);
+    if (!bandNo) throw new EmptyResultError('band bands', 'No band links found — are you logged in?');
 
-    // 2. Install interceptor BEFORE SPA navigation.
-    //    Navigating to a band page triggers get_band_list_with_filter automatically.
+    // Install XHR interceptor before triggering navigation so we don't miss the request.
     await page.installInterceptor('get_band_list_with_filter');
 
+    // SPA navigation: history.pushState keeps the React app alive (no full reload),
+    // so the interceptor stays active. PopStateEvent signals React Router to re-render.
     await page.evaluate(`() => {
-      window.history.pushState({}, '', '/band/${bandNoStr}/post');
+      window.history.pushState({}, '', '/band/${String(bandNo)}/post');
       window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
     }`);
-    await page.wait(4);
+    await page.wait(4); // allow time for the XHR round-trip to complete
 
     const requests = await page.getInterceptedRequests();
-    if (!requests || requests.length === 0) {
-      throw new EmptyResultError('band bands', 'No band list data captured. Try again.');
+    if (requests.length === 0) {
+      throw new EmptyResultError('band bands', 'No band list data captured — try again.');
     }
 
-    let bands: any[] = [];
-    for (const req of requests) {
-      const data = req?.result_data;
-      if (Array.isArray(data)) {
-        bands.push(...data.map((d: any) => d.band).filter(Boolean));
-      }
-    }
+    // result_data is an array of { band: { band_no, name, member_count, ... } }
+    const bands = (requests as any[]).flatMap(req =>
+      Array.isArray(req?.result_data) ? req.result_data.map((d: any) => d.band).filter(Boolean) : []
+    );
 
     if (bands.length === 0) {
       throw new EmptyResultError('band bands', 'No bands found');
