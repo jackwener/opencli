@@ -13,26 +13,37 @@ args:
   limit:
     type: int
     default: 10
-    description: Number of results (max ~10 per request)
+    description: Number of results
 
 pipeline:
-  - fetch:
-      url: https://note.com/api/v3/searches
-      params:
-        context: note
-        q: ${{ args.query }}
-        size: ${{ args.limit }}
-        start: "0"
+  - navigate: "https://note.com/search?q=${{ args.query }}&context=note&mode=search"
 
-  - select: data.notes
+  - evaluate: |
+      (async () => {
+        for (let i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 500));
+          if (document.querySelectorAll('a[href*="/n/n"]').length > 0) break;
+        }
+        const links = document.querySelectorAll('a[href*="/n/n"]');
+        const seen = new Set();
+        const results = [];
+        for (const a of links) {
+          const href = a.getAttribute('href');
+          if (!href || seen.has(href)) continue;
+          seen.add(href);
+          const title = a.textContent?.trim() || '';
+          if (!title || title.length < 4) continue;
+          const url = href.startsWith('http') ? href : 'https://note.com' + href;
+          results.push({ title, url });
+        }
+        return results;
+      })()
 
   - map:
       rank: ${{ index + 1 }}
-      title: ${{ item.name }}
-      author: ${{ item.user.urlname }}
-      likes: ${{ item.likeCount }}
-      url: ${{ item.noteUrl }}
+      title: ${{ item.title }}
+      url: ${{ item.url }}
 
   - limit: ${{ args.limit }}
 
-columns: [rank, title, author, likes, url]
+columns: [rank, title, url]

@@ -66,6 +66,8 @@ Run `opencli list` for the live registry.
 | **[wikipedia](/adapters/browser/wikipedia)** | `search` `summary` `random` `trending` | 🌐 Public |
 | **[lobsters](/adapters/browser/lobsters)** | `hot` `newest` `active` `tag` | 🌐 Public |
 | **[steam](/adapters/browser/steam)** | `top-sellers` | 🌐 Public |
+| **[qiita](/adapters/browser/qiita)** | `search` `user` `articles` | 🌐 Public |
+| **[note.com](/adapters/browser/note)** | `search` `user` `articles` | 🌐 / 🔐 |
 
 ## Desktop Adapters
 
