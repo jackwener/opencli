@@ -51,7 +51,7 @@ describe('xiaohongshu publish', () => {
     const page = createPageMock([
       'https://creator.xiaohongshu.com/publish/publish?from=menu_left',
       { ok: true, target: '上传图文', text: '上传图文' },
-      { hasTitleInput: true, hasImageInput: true, hasVideoSurface: false },
+      { state: 'editor_ready', hasTitleInput: true, hasImageInput: true, hasVideoSurface: false },
       { ok: true, count: 1 },
       false,
       true, // waitForEditForm: editor appeared
@@ -92,10 +92,10 @@ describe('xiaohongshu publish', () => {
     const page = createPageMock([
       'https://creator.xiaohongshu.com/publish/publish?from=menu_left',
       { ok: false, visibleTexts: ['上传视频', '上传图文'] },
-      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
-      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
-      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
-      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { state: 'video_surface', hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { state: 'video_surface', hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { state: 'video_surface', hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { state: 'video_surface', hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
     ]);
 
     await expect(cmd!.func!(page, {
@@ -120,8 +120,8 @@ describe('xiaohongshu publish', () => {
     const page = createPageMock([
       'https://creator.xiaohongshu.com/publish/publish?from=menu_left',
       { ok: true, target: '上传图文', text: '上传图文' },
-      { hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
-      { hasTitleInput: true, hasImageInput: true, hasVideoSurface: false },
+      { state: 'video_surface', hasTitleInput: false, hasImageInput: false, hasVideoSurface: true },
+      { state: 'editor_ready', hasTitleInput: true, hasImageInput: true, hasVideoSurface: false },
       { ok: true, count: 1 }, // injectImages
       false, // waitForUploads: no progress indicator
       true, // waitForEditForm: editor appeared

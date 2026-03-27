@@ -221,12 +221,19 @@ async function selectImageTextTab(
   return result;
 }
 
-async function inspectPublishSurface(
-  page: IPage,
-): Promise<{ hasTitleInput: boolean; hasImageInput: boolean; hasVideoSurface: boolean }> {
+type PublishSurfaceState = 'video_surface' | 'image_surface' | 'editor_ready';
+
+type PublishSurfaceInspection = {
+  state: PublishSurfaceState;
+  hasTitleInput: boolean;
+  hasImageInput: boolean;
+  hasVideoSurface: boolean;
+};
+
+async function inspectPublishSurfaceState(page: IPage): Promise<PublishSurfaceInspection> {
   return page.evaluate(`
     () => {
-      const text = (document.body?.innerText || '').replace(/\\s+/g, ' ').trim();
+      const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
       const hasTitleInput = !!Array.from(document.querySelectorAll('input, textarea')).find((el) => {
         if (!el || el.offsetParent === null) return false;
         const placeholder = (el.getAttribute('placeholder') || '').trim();
@@ -250,30 +257,28 @@ async function inspectPublishSurface(
           accept.includes('.webp')
         );
       });
-      return {
-        hasTitleInput,
-        hasImageInput,
-        hasVideoSurface: text.includes('拖拽视频到此处点击上传') || text.includes('上传视频'),
-      };
+      const hasVideoSurface = text.includes('拖拽视频到此处点击上传') || text.includes('上传视频');
+      const state = hasTitleInput ? 'editor_ready' : hasImageInput || !hasVideoSurface ? 'image_surface' : 'video_surface';
+      return { state, hasTitleInput, hasImageInput, hasVideoSurface };
     }
   `);
 }
 
-async function waitForImageTextSurface(
+async function waitForPublishSurfaceState(
   page: IPage,
   maxWaitMs = 5_000,
-): Promise<{ hasTitleInput: boolean; hasImageInput: boolean; hasVideoSurface: boolean }> {
+): Promise<PublishSurfaceInspection> {
   const pollMs = 500;
   const maxAttempts = Math.max(1, Math.ceil(maxWaitMs / pollMs));
-  let surface = await inspectPublishSurface(page);
+  let surface = await inspectPublishSurfaceState(page);
 
   for (let i = 0; i < maxAttempts; i++) {
-    if (surface.hasTitleInput || surface.hasImageInput || !surface.hasVideoSurface) {
+    if (surface.state !== 'video_surface') {
       return surface;
     }
     if (i < maxAttempts - 1) {
       await page.wait({ time: pollMs / 1_000 });
-      surface = await inspectPublishSurface(page);
+      surface = await inspectPublishSurfaceState(page);
     }
   }
 
@@ -359,8 +364,8 @@ cli({
 
     // ── Step 2: Select 图文 (image+text) note type if tabs are present ─────────
     const tabResult = await selectImageTextTab(page);
-    const surface = await waitForImageTextSurface(page, tabResult?.ok ? 5_000 : 2_000);
-    if (!surface.hasTitleInput && !surface.hasImageInput && surface.hasVideoSurface) {
+    const surface = await waitForPublishSurfaceState(page, tabResult?.ok ? 5_000 : 2_000);
+    if (surface.state === 'video_surface') {
       await page.screenshot({ path: '/tmp/xhs_publish_tab_debug.png' });
       const detail = tabResult?.ok
         ? `clicked "${tabResult.text}"`
