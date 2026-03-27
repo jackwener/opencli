@@ -34,6 +34,7 @@ const {
   getLockFilePath,
   _installLocalPlugin,
   _isLocalPluginSource,
+  _moveDir,
   _resolveStoredPluginSource,
   _toLocalPluginSource,
 } = pluginModule;
@@ -733,5 +734,22 @@ describe('plugin source helpers', () => {
       installedAt: '2025-01-01T00:00:00.000Z',
     }, dir);
     expect(source).toBe('local:/tmp/plugin');
+  });
+});
+
+describe('moveDir', () => {
+  it('cleans up destination when EXDEV fallback copy fails', () => {
+    const src = path.join(os.tmpdir(), 'opencli-move-src');
+    const dest = path.join(os.tmpdir(), 'opencli-move-dest');
+    const renameErr = Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
+    const copyErr = new Error('copy failed');
+    const renameSync = vi.fn(() => { throw renameErr; });
+    const cpSync = vi.fn(() => { throw copyErr; });
+    const rmSync = vi.fn(() => undefined);
+
+    expect(() => _moveDir(src, dest, { renameSync, cpSync, rmSync })).toThrow(copyErr);
+    expect(renameSync).toHaveBeenCalledWith(src, dest);
+    expect(cpSync).toHaveBeenCalledWith(src, dest, { recursive: true });
+    expect(rmSync).toHaveBeenCalledWith(dest, { recursive: true, force: true });
   });
 });
