@@ -46,8 +46,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ (github.event_name == 'push') && fromJSON('["ubuntu-latest","macos-latest","windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
-        node-version: ${{ (github.event_name == 'push') && fromJSON('["20","22"]') || fromJSON('["22"]') }}
+        os: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && fromJSON('["ubuntu-latest","macos-latest","windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        node-version: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && fromJSON('["20","22"]') || fromJSON('["22"]') }}
         shard: [1, 2]
     steps:
       - uses: actions/checkout@v6

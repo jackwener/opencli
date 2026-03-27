@@ -10,7 +10,9 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Clamp a numeric value to [min, max] with a fallback default when value is 0/NaN/undefined.
+ * Clamp a numeric value to [min, max].
+ * Falls back to defaultVal when value is falsy (0, NaN, undefined coerced to 0).
+ * Matches the convention used across adapters where 0 means "not provided".
  */
 export function clampToRange(value: number, defaultVal: number, min: number, max: number): number {
   return Math.max(min, Math.min(value || defaultVal, max));
