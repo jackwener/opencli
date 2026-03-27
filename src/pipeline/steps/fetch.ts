@@ -8,8 +8,17 @@ import type { IPage } from '../../types.js';
 import { render } from '../template.js';
 
 import { isRecord, mapConcurrent } from '../../utils.js';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
-
+/** Returns a fetch function that routes through the system proxy if configured. */
+function getProxyFetch(): typeof fetch {
+  const proxyUrl = process.env.HTTPS_PROXY ?? process.env.https_proxy
+    ?? process.env.HTTP_PROXY ?? process.env.http_proxy
+    ?? process.env.ALL_PROXY ?? process.env.all_proxy;
+  if (!proxyUrl) return fetch;
+  const dispatcher = new ProxyAgent(proxyUrl);
+  return (input, init) => undiciFetch(input as Parameters<typeof undiciFetch>[0], { ...(init as object), dispatcher }) as unknown as Promise<Response>;
+}
 
 /** Single URL fetch helper */
 async function fetchSingle(
@@ -29,7 +38,8 @@ async function fetchSingle(
   }
 
   if (page === null) {
-    const resp = await fetch(finalUrl, { method: method.toUpperCase(), headers: renderedHeaders });
+    const proxyFetch = getProxyFetch();
+    const resp = await proxyFetch(finalUrl, { method: method.toUpperCase(), headers: renderedHeaders });
     if (!resp.ok) {
       throw new CliError('FETCH_ERROR', `HTTP ${resp.status} ${resp.statusText} from ${finalUrl}`);
     }
