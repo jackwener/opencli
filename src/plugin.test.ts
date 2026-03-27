@@ -318,6 +318,7 @@ describe('lock file', () => {
   });
 
   it('migrates legacy string sources to structured sources on read', () => {
+    const legacyLocalPath = path.resolve(path.join(os.tmpdir(), 'opencli-legacy-local-plugin'));
     fs.mkdirSync(path.dirname(getLockFilePath()), { recursive: true });
     fs.writeFileSync(getLockFilePath(), JSON.stringify({
       alpha: {
@@ -327,7 +328,7 @@ describe('lock file', () => {
         monorepo: { name: 'opencli-plugins', subPath: 'packages/alpha' },
       },
       beta: {
-        source: 'local:/tmp/plugin',
+        source: `local:${legacyLocalPath}`,
         commitHash: 'local',
         installedAt: '2025-01-01T00:00:00.000Z',
       },
@@ -345,7 +346,7 @@ describe('lock file', () => {
         installedAt: '2025-01-01T00:00:00.000Z',
       },
       beta: {
-        source: { kind: 'local', path: '/tmp/plugin' },
+        source: { kind: 'local', path: legacyLocalPath },
         commitHash: 'local',
         installedAt: '2025-01-01T00:00:00.000Z',
       },
@@ -956,12 +957,13 @@ describe('plugin source helpers', () => {
 
   it('prefers lockfile source over git remote lookup', () => {
     const dir = path.join(os.tmpdir(), 'opencli-plugin-source');
+    const localPath = path.resolve(path.join(os.tmpdir(), 'opencli-plugin-source-local'));
     const source = _resolveStoredPluginSource({
-      source: { kind: 'local', path: '/tmp/plugin' },
+      source: { kind: 'local', path: localPath },
       commitHash: 'local',
       installedAt: '2025-01-01T00:00:00.000Z',
     }, dir);
-    expect(source).toBe('local:/tmp/plugin');
+    expect(source).toBe(`local:${localPath}`);
   });
 
   it('returns structured monorepo sources unchanged', () => {
