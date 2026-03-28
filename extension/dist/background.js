@@ -1,10 +1,3 @@
-const DAEMON_PORT = 19825;
-const DAEMON_HOST = "localhost";
-const DAEMON_WS_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}/ext`;
-const DAEMON_PING_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}/ping`;
-const WS_RECONNECT_BASE_DELAY = 2e3;
-const WS_RECONNECT_MAX_DELAY = 6e4;
-
 const attached = /* @__PURE__ */ new Set();
 const BLANK_PAGE$1 = "data:text/html,<html></html>";
 function isDebuggableUrl$1(url) {
@@ -124,19 +117,49 @@ function registerListeners() {
   });
 }
 
-let ws = null;
-let reconnectTimer = null;
-let reconnectAttempts = 0;
+const OFFSCREEN_URL = chrome.runtime.getURL("offscreen.html");
+async function ensureOffscreen() {
+  if (!chrome.offscreen) return;
+  const existing = await chrome.offscreen.hasDocument();
+  if (!existing) {
+    await chrome.offscreen.createDocument({
+      url: OFFSCREEN_URL,
+      reasons: ["DOM_SCRAPING"],
+      justification: "Maintain persistent WebSocket connection to opencli daemon"
+    });
+  }
+}
+async function offscreenConnect() {
+  await ensureOffscreen();
+  try {
+    await chrome.runtime.sendMessage({ type: "ws-connect" });
+  } catch {
+  }
+}
+async function wsSend(payload) {
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: "ws-send", payload });
+    if (!resp?.ok) {
+      void offscreenConnect();
+    }
+  } catch {
+    void offscreenConnect();
+  }
+}
+async function wsStatus() {
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: "ws-status" });
+    return { connected: resp?.connected ?? false, reconnecting: resp?.reconnecting ?? false };
+  } catch {
+    return { connected: false, reconnecting: false };
+  }
+}
 const _origLog = console.log.bind(console);
 const _origWarn = console.warn.bind(console);
 const _origError = console.error.bind(console);
 function forwardLog(level, args) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  try {
-    const msg = args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ");
-    ws.send(JSON.stringify({ type: "log", level, msg, ts: Date.now() }));
-  } catch {
-  }
+  const msg = args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ");
+  void wsSend(JSON.stringify({ type: "log", level, msg, ts: Date.now() }));
 }
 console.log = (...args) => {
   _origLog(...args);
@@ -150,58 +173,6 @@ console.error = (...args) => {
   _origError(...args);
   forwardLog("error", args);
 };
-async function connect() {
-  if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
-  try {
-    const res = await fetch(DAEMON_PING_URL, { signal: AbortSignal.timeout(1e3) });
-    if (!res.ok) return;
-  } catch {
-    return;
-  }
-  try {
-    ws = new WebSocket(DAEMON_WS_URL);
-  } catch {
-    scheduleReconnect();
-    return;
-  }
-  ws.onopen = () => {
-    console.log("[opencli] Connected to daemon");
-    reconnectAttempts = 0;
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    ws?.send(JSON.stringify({ type: "hello", version: chrome.runtime.getManifest().version }));
-  };
-  ws.onmessage = async (event) => {
-    try {
-      const command = JSON.parse(event.data);
-      const result = await handleCommand(command);
-      ws?.send(JSON.stringify(result));
-    } catch (err) {
-      console.error("[opencli] Message handling error:", err);
-    }
-  };
-  ws.onclose = () => {
-    console.log("[opencli] Disconnected from daemon");
-    ws = null;
-    scheduleReconnect();
-  };
-  ws.onerror = () => {
-    ws?.close();
-  };
-}
-const MAX_EAGER_ATTEMPTS = 6;
-function scheduleReconnect() {
-  if (reconnectTimer) return;
-  reconnectAttempts++;
-  if (reconnectAttempts > MAX_EAGER_ATTEMPTS) return;
-  const delay = Math.min(WS_RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts - 1), WS_RECONNECT_MAX_DELAY);
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    void connect();
-  }, delay);
-}
 const automationSessions = /* @__PURE__ */ new Map();
 const WINDOW_IDLE_TIMEOUT = 3e4;
 function getWorkspaceKey(workspace) {
@@ -264,9 +235,9 @@ let initialized = false;
 function initialize() {
   if (initialized) return;
   initialized = true;
-  chrome.alarms.create("keepalive", { periodInMinutes: 0.4 });
+  chrome.alarms.create("keepalive", { periodInMinutes: 0.25 });
   registerListeners();
-  void connect();
+  void offscreenConnect();
   console.log("[opencli] OpenCLI extension initialized");
 }
 chrome.runtime.onInstalled.addListener(() => {
@@ -276,14 +247,34 @@ chrome.runtime.onStartup.addListener(() => {
   initialize();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "keepalive") void connect();
+  if (alarm.name === "keepalive") {
+    void offscreenConnect();
+  }
 });
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "getStatus") {
-    sendResponse({
-      connected: ws?.readyState === WebSocket.OPEN,
-      reconnecting: reconnectTimer !== null
-    });
+    wsStatus().then((s) => sendResponse(s));
+    return true;
+  }
+  if (msg?.type === "ws-message") {
+    void (async () => {
+      try {
+        const command = JSON.parse(msg.data);
+        const result = await handleCommand(command);
+        await wsSend(JSON.stringify(result));
+      } catch (err) {
+        console.error("[opencli] Message handling error:", err);
+      }
+    })();
+    return false;
+  }
+  if (msg?.type === "ws-connected") {
+    void wsSend(JSON.stringify({ type: "hello", version: chrome.runtime.getManifest().version }));
+    return false;
+  }
+  if (msg?.type === "log") {
+    void wsSend(JSON.stringify(msg));
+    return false;
   }
   return false;
 });
@@ -435,17 +426,13 @@ async function handleNavigate(cmd, workspace) {
     };
     const listener = (id, info, tab2) => {
       if (id !== tabId) return;
-      if (info.status === "complete" && isNavigationDone(tab2.url ?? info.url)) {
-        finish();
-      }
+      if (info.status === "complete" && isNavigationDone(tab2.url ?? info.url)) finish();
     };
     chrome.tabs.onUpdated.addListener(listener);
     checkTimer = setTimeout(async () => {
       try {
         const currentTab = await chrome.tabs.get(tabId);
-        if (currentTab.status === "complete" && isNavigationDone(currentTab.url)) {
-          finish();
-        }
+        if (currentTab.status === "complete" && isNavigationDone(currentTab.url)) finish();
       } catch {
       }
     }, 100);
