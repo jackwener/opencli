@@ -108,6 +108,8 @@ export default defineConfig({
                 { text: 'Wikipedia', link: '/adapters/browser/wikipedia' },
                 { text: 'Lobsters', link: '/adapters/browser/lobsters' },
                 { text: 'Steam', link: '/adapters/browser/steam' },
+                { text: 'Qiita', link: '/adapters/browser/qiita' },
+                { text: 'note.com', link: '/adapters/browser/note' },
               ],
             },
             {
