@@ -135,6 +135,7 @@ OpenCLI acts as a universal hub for your existing command-line tools — unified
 | **docker** | Docker | `opencli docker ps` |
 | **gws** | Google Workspace CLI | `opencli gws docs list` |
 | **lark-cli** | Lark/Feishu — messages, docs, calendar, tasks, 200+ commands | `opencli lark-cli calendar +agenda` |
+| **vercel** | Vercel — deploy projects, manage domains, env vars, logs | `opencli vercel deploy --prod` |
 
 **Register your own** — add any local CLI so AI agents can discover it via `opencli list`:
 
