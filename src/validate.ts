@@ -36,7 +36,6 @@ interface ValidatedYamlCliDefinition {
 
 import { isRecord } from './utils.js';
 
-
 export function validateClisWithTarget(dirs: string[], target?: string): ValidationReport {
   const results: FileValidationResult[] = [];
   let errors = 0; let warnings = 0; let files = 0;

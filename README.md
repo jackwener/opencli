@@ -132,6 +132,70 @@ opencli list  # Now you can use it anywhere!
 npm install -g @jackwener/opencli@latest
 ```
 
+## Install the OpenCLI Skill (opencli-skill)
+
+Skill location in this repo:
+
+```bash
+skills/opencli-skill/
+```
+
+### Codex
+
+Install to Codex user skills directory:
+
+```bash
+mkdir -p ~/.codex/skills
+cp -R skills/opencli-skill ~/.codex/skills/opencli-skill
+```
+
+Then restart Codex.
+
+### Cursor
+
+You can use either legacy `.cursorrules` or project rules (`.cursor/rules/*.mdc`):
+
+```bash
+mkdir -p .cursor/rules
+cat > .cursor/rules/opencli-skill.mdc <<'EOF'
+# OpenCLI Skill
+
+When user requests OpenCLI command usage:
+1. Read `skills/opencli-skill/SKILL.md`
+2. Read `skills/opencli-skill/references/commands/<platform>.md`
+3. Prefer command examples with `-f json`
+4. If browser command fails, run `opencli doctor`
+EOF
+```
+
+### Claude Code
+
+Add project memory and optional slash command:
+
+```bash
+# Project memory
+cat > CLAUDE.md <<'EOF'
+For OpenCLI command requests:
+1. Read `skills/opencli-skill/SKILL.md`
+2. Read `skills/opencli-skill/references/commands/<platform>.md`
+3. Use exact command + required args and prefer `-f json`
+4. Run `opencli doctor` before first browser command
+EOF
+
+# Optional slash command: /opencli <platform and intent>
+mkdir -p .claude/commands
+cat > .claude/commands/opencli.md <<'EOF'
+Use OpenCLI skill docs for: $ARGUMENTS
+1. Read `skills/opencli-skill/SKILL.md`
+2. Read platform file under `skills/opencli-skill/references/commands/`
+3. Return concrete commands and args only
+EOF
+```
+
+Skill prerequisites:
+- installed `opencli` binary
+- manually installed Chrome Browser Bridge extension (`chrome://extensions`)
+
 ## Built-in Commands
 
 65+ adapters across global and Chinese platforms. Run `opencli list` for the live registry, or browse the full table:

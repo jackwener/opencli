@@ -114,6 +114,70 @@ opencli list  # 可以在任何地方使用了！
 npm install -g @jackwener/opencli@latest
 ```
 
+## 安装 OpenCLI Skill（opencli-skill）
+
+本仓库内 Skill 路径：
+
+```bash
+skills/opencli-skill/
+```
+
+### Codex
+
+安装到 Codex 用户技能目录：
+
+```bash
+mkdir -p ~/.codex/skills
+cp -R skills/opencli-skill ~/.codex/skills/opencli-skill
+```
+
+安装后重启 Codex。
+
+### Cursor
+
+可使用旧版 `.cursorrules`，也可使用项目规则（`.cursor/rules/*.mdc`）：
+
+```bash
+mkdir -p .cursor/rules
+cat > .cursor/rules/opencli-skill.mdc <<'EOF'
+# OpenCLI Skill
+
+当用户询问 OpenCLI 命令时：
+1. 读取 `skills/opencli-skill/SKILL.md`
+2. 读取 `skills/opencli-skill/references/commands/<platform>.md`
+3. 优先给出带 `-f json` 的命令示例
+4. 浏览器命令失败时先执行 `opencli doctor`
+EOF
+```
+
+### Claude Code
+
+添加项目记忆，并可选配置 slash command：
+
+```bash
+# 项目记忆
+cat > CLAUDE.md <<'EOF'
+For OpenCLI command requests:
+1. Read `skills/opencli-skill/SKILL.md`
+2. Read `skills/opencli-skill/references/commands/<platform>.md`
+3. Use exact command + required args and prefer `-f json`
+4. Run `opencli doctor` before first browser command
+EOF
+
+# 可选 slash command：/opencli <平台与意图>
+mkdir -p .claude/commands
+cat > .claude/commands/opencli.md <<'EOF'
+Use OpenCLI skill docs for: $ARGUMENTS
+1. Read `skills/opencli-skill/SKILL.md`
+2. Read platform file under `skills/opencli-skill/references/commands/`
+3. Return concrete commands and args only
+EOF
+```
+
+该 Skill 依赖：
+- 已安装 `opencli` 命令
+- 已手动安装 Chrome Browser Bridge 扩展（`chrome://extensions`）
+
 ## 内置命令
 
 运行 `opencli list` 查看完整注册表。

@@ -43,6 +43,15 @@ Browser commands require:
 2. **opencli Browser Bridge** Chrome extension installed (load `extension/` as unpacked in `chrome://extensions`)
 3. No further setup needed — the daemon auto-starts on first browser command
 
+## Skill Package in Repo
+
+OpenCLI platform command skill is located at:
+
+- `skills/opencli-platform-router/SKILL.md`
+- `skills/opencli-platform-router/references/commands/*.md`
+
+Use this skill when an agent needs per-platform command usage + args reference.
+
 > **Note**: You must be logged into the target website in Chrome before running commands. Tabs opened during command execution are auto-closed afterwards.
 
 Public API commands (`hackernews`, `v2ex`) need no browser.
@@ -542,7 +551,8 @@ opencli synthesize <site>
 # Generate: one-shot explore → synthesize → register
 opencli generate <url> --goal "hot"
 
-# Record: YOU operate the page, opencli captures every API call → YAML candidates
+# Record Workflow (critical for dynamic/auth-heavy sites)
+# YOU operate the page, opencli captures every API call and generates YAML candidates.
 # Opens the URL in automation window, injects fetch/XHR interceptor into ALL tabs,
 # polls every 2s, auto-stops after 60s (or press Enter to stop early).
 opencli record <url>                            # 录制，site name 从域名推断

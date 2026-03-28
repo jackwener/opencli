@@ -52,7 +52,6 @@ import { type YamlCliDefinition, parseYamlArgs } from './yaml-schema.js';
 
 import { isRecord } from './utils.js';
 
-
 function extractBalancedBlock(
   source: string,
   startIndex: number,
