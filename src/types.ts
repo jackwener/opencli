@@ -66,6 +66,9 @@ export interface IPage {
   installInterceptor(pattern: string): Promise<void>;
   getInterceptedRequests(): Promise<any[]>;
   waitForCapture(timeout?: number): Promise<void>;
+  installStreamingInterceptor(pattern: string): Promise<void>;
+  getStreamedResponses(): Promise<{ text: string; events: any[]; done: boolean; errors: any[] }>;
+  waitForStreamCapture(timeout?: number, opts?: { minChars?: number; waitForDone?: boolean }): Promise<void>;
   screenshot(options?: ScreenshotOptions): Promise<string>;
   closeWindow?(): Promise<void>;
   /** Returns the current page URL, or null if unavailable. */

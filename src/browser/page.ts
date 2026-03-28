@@ -24,6 +24,7 @@ import {
   waitForTextJs,
   waitForCaptureJs,
   waitForSelectorJs,
+  waitForStreamCaptureJs,
   scrollJs,
   autoScrollJs,
   networkRequestsJs,
@@ -345,6 +346,24 @@ export class Page implements IPage {
       code: waitForCaptureJs(maxMs),
       ...this._cmdOpts(),
     });
+  }
+
+  async installStreamingInterceptor(pattern: string): Promise<void> {
+    const { generateStreamingInterceptorJs } = await import('../interceptor.js');
+    await this.evaluate(generateStreamingInterceptorJs(JSON.stringify(pattern)));
+  }
+
+  async getStreamedResponses(): Promise<{ text: string; events: any[]; done: boolean; errors: any[] }> {
+    const { generateReadStreamJs } = await import('../interceptor.js');
+    return (await this.evaluate(generateReadStreamJs())) as { text: string; events: any[]; done: boolean; errors: any[] };
+  }
+
+  async waitForStreamCapture(timeout: number = 30, opts?: { minChars?: number; waitForDone?: boolean }): Promise<void> {
+    const maxMs = timeout * 1000;
+    await sendCommand('exec', {
+      code: waitForStreamCaptureJs(maxMs, opts),
+      ...this._cmdOpts(),
+    }, maxMs + 10000); // HTTP timeout = browser timeout + 10s buffer
   }
 }
 
