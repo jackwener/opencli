@@ -133,11 +133,22 @@ cli({
     // which handles redirects, timeouts, and stream errors correctly.
     // Pass browser cookies so Band's login-protected photo URLs don't fail with 401/403.
     if (outputDir && photos.length > 0) {
-      const cookieHeader = formatCookieHeader(await page.getCookies({ domain: 'band.us' }));
-      await downloadMedia(
-        photos.map(url => ({ type: 'image' as const, url })),
-        { output: outputDir, filenamePrefix: 'photo', verbose: false, cookies: cookieHeader },
-      );
+      // Only send Band cookies to Band-hosted URLs; avoid leaking auth cookies to third-party CDNs.
+      const bandPhotos = photos.filter(u => { try { const h = new URL(u).hostname; return h === 'band.us' || h.endsWith('.band.us'); } catch { return false; } });
+      const otherPhotos = photos.filter(u => !bandPhotos.includes(u));
+      if (bandPhotos.length > 0) {
+        const cookieHeader = formatCookieHeader(await page.getCookies({ domain: 'band.us' }));
+        await downloadMedia(
+          bandPhotos.map(url => ({ type: 'image' as const, url })),
+          { output: outputDir, filenamePrefix: 'photo', verbose: false, cookies: cookieHeader },
+        );
+      }
+      if (otherPhotos.length > 0) {
+        await downloadMedia(
+          otherPhotos.map(url => ({ type: 'image' as const, url })),
+          { output: outputDir, filenamePrefix: 'photo', verbose: false },
+        );
+      }
     }
 
     const rows: Record<string, string>[] = [];

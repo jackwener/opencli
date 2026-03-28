@@ -57,7 +57,7 @@ cli({
 
           // Member count is the <em> inside span.member.
           const memberEl = a.querySelector('span.member em');
-          const members = memberEl ? parseInt(memberEl.textContent, 10) || 0 : 0;
+          const members = memberEl ? parseInt((memberEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0 : 0;
 
           results.push({ band_no: bandNo, name, members });
         }

@@ -86,7 +86,7 @@ cli({
 
           // Comment count is in span.count inside the count area.
           const commentEl = el.querySelector('span.count');
-          const comments = commentEl ? parseInt(commentEl.textContent, 10) || 0 : 0;
+          const comments = commentEl ? parseInt((commentEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0 : 0;
 
           if (!url && !content) continue;
           results.push({ date, author, content, comments, url });
