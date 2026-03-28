@@ -22,7 +22,8 @@ cli({
   columns: ['band_no', 'name', 'members'],
 
   func: async (page, _kwargs) => {
-    const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
+    const cookies = await page.getCookies({ domain: 'band.us' });
+    const isLoggedIn = cookies.some(c => c.name === 'band_session');
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
     // Extract the band list from the sidebar. Poll until at least one band card

@@ -40,7 +40,8 @@ cli({
 
     await page.goto(`https://www.band.us/band/${bandNo}/post/${postNo}`);
 
-    const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
+    const cookies = await page.getCookies({ domain: 'band.us' });
+    const isLoggedIn = cookies.some(c => c.name === 'band_session');
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
     const data: {

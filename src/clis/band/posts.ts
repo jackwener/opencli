@@ -35,7 +35,8 @@ cli({
     // Navigate directly to the band's post page — no home-page detour needed.
     await page.goto(`https://www.band.us/band/${bandNo}/post`);
 
-    const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
+    const cookies = await page.getCookies({ domain: 'band.us' });
+    const isLoggedIn = cookies.some(c => c.name === 'band_session');
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
     // Extract post list from the DOM. Poll until post items appear (React hydration).

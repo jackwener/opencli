@@ -39,7 +39,8 @@ cli({
     // and leaving the notification panel open from a previous run).
     await page.goto(`https://www.band.us/?_=${Date.now()}`);
 
-    const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
+    const cookies = await page.getCookies({ domain: 'band.us' });
+    const isLoggedIn = cookies.some(c => c.name === 'band_session');
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
     // Install XHR interceptor before any clicks so all get_news responses are captured.
