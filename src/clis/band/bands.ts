@@ -31,9 +31,13 @@ cli({
       (async () => {
         const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+        // Sidebar band links have the form /band/{id} or /band/{id}/post (no post_no suffix).
+        // This pattern excludes feed/post-detail links like /band/{id}/post/{postNo}.
+        const sidebarHref = /^\\/band\\/(\\d+)(?:\\/post)?$/;
+
         // Wait up to 9 s for sidebar band links to render.
         for (let i = 0; i < 30; i++) {
-          if (document.querySelector('a[href*="/band/"]')) break;
+          if (Array.from(document.querySelectorAll('a[href*="/band/"]')).some(a => sidebarHref.test(a.getAttribute('href') || ''))) break;
           await sleep(300);
         }
 
@@ -41,7 +45,7 @@ cli({
         const results = [];
 
         for (const a of Array.from(document.querySelectorAll('a[href*="/band/"]'))) {
-          const m = a.getAttribute('href').match(/\\/band\\/(\\d+)/);
+          const m = (a.getAttribute('href') || '').match(sidebarHref);
           if (!m) continue;
           const bandNo = Number(m[1]);
           if (seen.has(bandNo)) continue;

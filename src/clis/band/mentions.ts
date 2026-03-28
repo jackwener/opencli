@@ -46,6 +46,17 @@ cli({
     // Install XHR interceptor before any clicks so all get_news responses are captured.
     await page.installInterceptor('get_news');
 
+    // Poll until at least `count` requests are captured, up to maxSecs seconds.
+    // Avoids relying on fixed sleeps when the XHR round-trip is slow.
+    const waitForCaptures = async (count: number, maxSecs = 8): Promise<any[]> => {
+      for (let i = 0; i < maxSecs * 2; i++) {
+        await page.wait(500);
+        const reqs = await page.getInterceptedRequests();
+        if (reqs.length >= count) return reqs;
+      }
+      return page.getInterceptedRequests();
+    };
+
     // Click the notification bell to open the panel. This triggers an initial get_news
     // call for all notification types. The bell button is identified by class and text
     // since Band does not use aria-label on this element.
@@ -54,7 +65,8 @@ cli({
         .find(b => b.textContent && b.textContent.includes('お知らせ'));
       if (bell) bell.click();
     }`);
-    await page.wait(2); // wait for panel to render and initial get_news to complete
+
+    let requests = await waitForCaptures(1);
 
     if (filter === 'mentioned') {
       // Click the @メンション tab to trigger a server-side filtered get_news call.
@@ -65,7 +77,7 @@ cli({
           .find(b => b.textContent && b.textContent.includes('メンション'));
         if (tab) tab.click();
       }`);
-      await page.wait(2);
+      requests = await waitForCaptures(2);
 
       if (unreadOnly) {
         // 未確認のみ表示: triggers another server-side filtered get_news for unread mentions.
@@ -74,11 +86,10 @@ cli({
             .find(b => b.textContent && b.textContent.includes('未確認のみ'));
           if (btn) btn.click();
         }`);
-        await page.wait(2);
+        requests = await waitForCaptures(3);
       }
     }
 
-    const requests = await page.getInterceptedRequests();
     if (requests.length === 0) {
       throw new EmptyResultError('band mentions', 'No notification data captured. Try running the command again.');
     }
