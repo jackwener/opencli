@@ -138,7 +138,7 @@ cli({
     if (outputDir && photos.length > 0) {
       // Only send Band cookies to Band-hosted URLs; avoid leaking auth cookies to third-party CDNs.
       // Use a global index across both batches so filenames don't collide (photo_1, photo_2, ...).
-      const cookieHeader = formatCookieHeader(await page.getCookies({ domain: 'band.us' }));
+      const cookieHeader = formatCookieHeader(await page.getCookies({ url: 'https://www.band.us' }));
       const isBandUrl = (u: string) => { try { const h = new URL(u).hostname; return h === 'band.us' || h.endsWith('.band.us'); } catch { return false; } };
       // Derive extension from URL path so downloaded files have correct extensions (e.g. photo_1.jpg).
       const urlExt = (u: string) => { try { return new URL(u).pathname.match(/\.(\w+)$/)?.[1] ?? 'jpg'; } catch { return 'jpg'; } };
