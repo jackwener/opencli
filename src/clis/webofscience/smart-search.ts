@@ -21,8 +21,8 @@ cli({
   browser: true,
   navigateBefore: false,
   args: [
-    { name: 'query', positional: true, required: true, help: 'Search query' },
-    { name: 'database', required: false, help: 'Database to search', choices: ['woscc', 'alldb'] },
+    { name: 'query', positional: true, required: true, help: 'Natural-language or fielded query, e.g. machine learning or TS=(machine learning)' },
+    { name: 'database', required: false, help: 'Database to search. Defaults to woscc.', choices: ['woscc', 'alldb'] },
     { name: 'limit', type: 'int', default: 10, help: 'Max results (max 50)' },
   ],
   columns: ['rank', 'title', 'authors', 'year', 'source', 'citations', 'doi', 'url'],

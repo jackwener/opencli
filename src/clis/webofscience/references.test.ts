@@ -38,6 +38,17 @@ function createPageMock(evaluateResults: any[]): IPage {
 }
 
 describe('webofscience references', () => {
+  it('describes reference lookup identifiers and database inference in command help', () => {
+    const cmd = getRegistry().get('webofscience/references');
+    const idArg = cmd?.args.find(arg => arg.name === 'id');
+    const databaseArg = cmd?.args.find(arg => arg.name === 'database');
+
+    expect(idArg?.help).toContain('WOS:');
+    expect(idArg?.help).toContain('DOI');
+    expect(idArg?.help).toContain('full-record URL');
+    expect(databaseArg?.help).toContain('Defaults to the database in the URL');
+  });
+
   it('parses summary stream payloads that arrive as a JSON array', () => {
     expect(parseWosEventStream(JSON.stringify([
       { key: 'searchInfo', payload: { QueryID: 'QIDREFS', RecordsFound: 2 } },

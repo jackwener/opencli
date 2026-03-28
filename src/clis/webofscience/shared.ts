@@ -200,8 +200,14 @@ const BASIC_SEARCH_FIELDS: BasicSearchFieldSpec[] = [
   { key: 'web_of_science_categories', label: 'Web of Science Categories', tag: 'WC', aliases: ['web-of-science-categories', 'web of science categories', 'web_of_science_categories', 'wos categories', 'wc'] },
 ];
 
+const BASIC_SEARCH_FIELD_HELP_EXAMPLES = ['topic', 'title', 'author', 'doi', 'web-of-science-categories'] as const;
+
 export function listBasicSearchFields(): BasicSearchFieldSpec[] {
   return [...BASIC_SEARCH_FIELDS];
+}
+
+export function basicSearchFieldHelpText(): string {
+  return 'Field to search in. Default: topic. Common: topic, title, author, doi, WOS categories';
 }
 
 export function normalizeBasicSearchField(value: unknown): BasicSearchFieldSpec {
@@ -216,7 +222,9 @@ export function normalizeBasicSearchField(value: unknown): BasicSearchFieldSpec 
     || field.label.toLowerCase() === normalized);
 
   if (!match) {
-    throw new ArgumentError(`Unsupported Web of Science basic-search field: ${String(value)}`);
+    throw new ArgumentError(
+      `Unsupported Web of Science basic-search field: ${String(value)}. Try one of: ${BASIC_SEARCH_FIELD_HELP_EXAMPLES.join(', ')}`,
+    );
   }
 
   return match;

@@ -38,6 +38,17 @@ function createPageMock(evaluateResults: any[]): IPage {
 }
 
 describe('webofscience record', () => {
+  it('describes supported record identifiers and database inference in command help', () => {
+    const cmd = getRegistry().get('webofscience/record');
+    const idArg = cmd?.args.find(arg => arg.name === 'id');
+    const databaseArg = cmd?.args.find(arg => arg.name === 'database');
+
+    expect(idArg?.help).toContain('WOS:');
+    expect(idArg?.help).toContain('DOI');
+    expect(idArg?.help).toContain('full-record URL');
+    expect(databaseArg?.help).toContain('Defaults to the database in the URL');
+  });
+
   it('extracts structured metadata from full-record page text blocks', () => {
     const body = `Keywords
 Keywords PlusNEURAL-NETWORKSSELECTION

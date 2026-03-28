@@ -30,7 +30,7 @@ async function resolveUt(
 ): Promise<string> {
   const identifier = parseRecordIdentifier(rawId);
   if (!identifier) {
-    throw new ArgumentError('Record identifier must be a Web of Science UT, DOI, or full-record URL');
+    throw new ArgumentError('Record identifier must be a Web of Science UT, DOI, or full-record URL, e.g. WOS:001335131500001 or 10.1016/j.patter.2024.101046');
   }
   if (identifier.kind === 'ut') return identifier.value;
 
@@ -61,8 +61,8 @@ cli({
   browser: true,
   navigateBefore: false,
   args: [
-    { name: 'id', positional: true, required: true, help: 'Web of Science UT, DOI, or full-record URL' },
-    { name: 'database', required: false, help: 'Database to use', choices: ['woscc', 'alldb'] },
+    { name: 'id', positional: true, required: true, help: 'Web of Science UT, DOI, or full-record URL, e.g. WOS:001335131500001 or 10.1016/j.patter.2024.101046' },
+    { name: 'database', required: false, help: 'Database to use. Defaults to the database in the URL, otherwise woscc.', choices: ['woscc', 'alldb'] },
     { name: 'limit', type: 'int', default: 10, help: 'Max results (max 50)' },
   ],
   columns: ['rank', 'title', 'authors', 'year', 'source', 'citations', 'doi', 'url'],
@@ -72,7 +72,7 @@ cli({
 
     const identifier = parseRecordIdentifier(rawId);
     if (!identifier) {
-      throw new ArgumentError('Record identifier must be a Web of Science UT, DOI, or full-record URL');
+      throw new ArgumentError('Record identifier must be a Web of Science UT, DOI, or full-record URL, e.g. WOS:001335131500001 or 10.1016/j.patter.2024.101046');
     }
 
     const database = normalizeDatabase(kwargs.database, identifier.database ?? 'woscc');

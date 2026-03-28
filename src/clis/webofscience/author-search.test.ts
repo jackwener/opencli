@@ -38,6 +38,18 @@ function createPageMock(evaluateResults: any[]): IPage {
 }
 
 describe('webofscience author-search', () => {
+  it('describes refine filters and multi-value input in command help', () => {
+    const cmd = getRegistry().get('webofscience/author-search');
+    const claimedStatusArg = cmd?.args.find(arg => arg.name === 'claimed-status');
+    const affiliationArg = cmd?.args.find(arg => arg.name === 'affiliation');
+
+    expect(claimedStatusArg?.help).toContain('claimed');
+    expect(claimedStatusArg?.help).toContain('unclaimed');
+    expect(claimedStatusArg?.help).toContain('result page');
+    expect(affiliationArg?.help).toContain('semicolon-separated');
+    expect(affiliationArg?.help).toContain('current result page');
+  });
+
   it('normalizes researcher refine filters from comma-separated CLI args', () => {
     expect(normalizeAuthorSearchFilters({
       'claimed-status': 'claimed',
@@ -59,7 +71,9 @@ describe('webofscience author-search', () => {
   });
 
   it('rejects unsupported claimed-status filters', () => {
-    expect(() => normalizeAuthorSearchFilters({ 'claimed-status': 'maybe' })).toThrow(ArgumentError);
+    expect(() => normalizeAuthorSearchFilters({ 'claimed-status': 'maybe' })).toThrow(
+      'Unsupported Web of Science researcher claimed-status filter: maybe. Use one of: claimed, unclaimed',
+    );
   });
 
   it('submits the author search page and maps researcher results', async () => {

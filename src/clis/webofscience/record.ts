@@ -476,8 +476,8 @@ cli({
   browser: true,
   navigateBefore: false,
   args: [
-    { name: 'id', positional: true, required: true, help: 'UT, DOI, or Web of Science full-record URL' },
-    { name: 'database', required: false, help: 'Database to search', choices: ['woscc', 'alldb'] },
+    { name: 'id', positional: true, required: true, help: 'Web of Science UT, DOI, or full-record URL, e.g. WOS:001335131500001 or 10.1016/j.patter.2024.101046' },
+    { name: 'database', required: false, help: 'Database to search. Defaults to the database in the URL, otherwise woscc.', choices: ['woscc', 'alldb'] },
   ],
   columns: ['field', 'value'],
   func: async (page, kwargs) => {
@@ -488,7 +488,7 @@ cli({
 
     const identifier = parseRecordIdentifier(rawId);
     if (!identifier) {
-      throw new ArgumentError('Record identifier must be a Web of Science UT, DOI, or full-record URL');
+      throw new ArgumentError('Record identifier must be a Web of Science UT, DOI, or full-record URL, e.g. WOS:001335131500001 or 10.1016/j.patter.2024.101046');
     }
 
     const database = normalizeDatabase(kwargs.database, identifier.database ?? 'woscc');

@@ -37,6 +37,14 @@ function createPageMock(evaluateResults: any[]): IPage {
 }
 
 describe('webofscience author-record', () => {
+  it('describes supported author-record identifiers in command help', () => {
+    const cmd = getRegistry().get('webofscience/author-record');
+    const idArg = cmd?.args.find(arg => arg.name === 'id');
+
+    expect(idArg?.help).toContain('89895674');
+    expect(idArg?.help).toContain('author-record URL');
+  });
+
   it('extracts a structured researcher profile from selector-driven page data', async () => {
     const cmd = getRegistry().get('webofscience/author-record');
     expect(cmd?.func).toBeTypeOf('function');

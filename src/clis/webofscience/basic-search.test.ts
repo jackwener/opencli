@@ -38,6 +38,17 @@ function createPageMock(evaluateResults: any[]): IPage {
 }
 
 describe('webofscience basic-search', () => {
+  it('describes common field choices and the default field in command help', () => {
+    const cmd = getRegistry().get('webofscience/basic-search');
+    const fieldArg = cmd?.args.find(arg => arg.name === 'field');
+
+    expect(fieldArg?.help).toContain('Default: topic');
+    expect(fieldArg?.help).toContain('topic');
+    expect(fieldArg?.help).toContain('title');
+    expect(fieldArg?.help).toContain('author');
+    expect(fieldArg?.help).toContain('doi');
+  });
+
   it('normalizes basic-search field aliases to official WOS tags', () => {
     expect(normalizeBasicSearchField(undefined)).toMatchObject({
       key: 'topic',
@@ -59,6 +70,12 @@ describe('webofscience basic-search', () => {
       label: 'Web of Science Categories',
       tag: 'WC',
     });
+  });
+
+  it('reports supported field examples when an unsupported field is passed', () => {
+    expect(() => normalizeBasicSearchField('headline')).toThrow(
+      'Unsupported Web of Science basic-search field: headline. Try one of: topic, title, author, doi, web-of-science-categories',
+    );
   });
 
   it('builds rowText for basic-search fields using the mapped WOS tag', () => {

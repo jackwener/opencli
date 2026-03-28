@@ -235,7 +235,7 @@ cli({
   browser: true,
   navigateBefore: false,
   args: [
-    { name: 'id', positional: true, required: true, help: 'Author record id or author-record URL' },
+    { name: 'id', positional: true, required: true, help: 'Numeric author record id or author-record URL, e.g. 89895674' },
   ],
   columns: ['field', 'value'],
   func: async (page, kwargs) => {
@@ -244,7 +244,7 @@ cli({
 
     const identifier = parseAuthorRecordIdentifier(rawId);
     if (!identifier) {
-      throw new ArgumentError('Author record identifier must be a numeric id or author-record URL');
+      throw new ArgumentError('Author record identifier must be a numeric id like 89895674 or an author-record URL');
     }
 
     const url = authorRecordUrl(identifier.id);

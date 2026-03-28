@@ -37,6 +37,16 @@ function createPageMock(evaluateResults: any[]): IPage {
 }
 
 describe('webofscience smart-search', () => {
+  it('describes natural-language queries and the default database in command help', () => {
+    const cmd = getRegistry().get('webofscience/smart-search');
+    const queryArg = cmd?.args.find(arg => arg.name === 'query');
+    const databaseArg = cmd?.args.find(arg => arg.name === 'database');
+
+    expect(queryArg?.help).toContain('e.g.');
+    expect(queryArg?.help).toContain('machine learning');
+    expect(databaseArg?.help).toContain('Defaults to woscc');
+  });
+
   it('retries once when SID is missing, then maps records from runQuerySearch', async () => {
     const cmd = getRegistry().get('webofscience/smart-search');
     expect(cmd?.func).toBeTypeOf('function');

@@ -61,7 +61,9 @@ function normalizeClaimedStatus(value: unknown): ClaimedStatus | undefined {
     return 'unclaimed';
   }
 
-  throw new ArgumentError(`Unsupported Web of Science researcher claimed-status filter: ${String(value)}`);
+  throw new ArgumentError(
+    `Unsupported Web of Science researcher claimed-status filter: ${String(value)}. Use one of: claimed, unclaimed`,
+  );
 }
 
 export function normalizeAuthorSearchFilters(kwargs: Record<string, unknown>): AuthorSearchFilters {
@@ -398,14 +400,14 @@ cli({
   browser: true,
   navigateBefore: false,
   args: [
-    { name: 'query', positional: true, required: true, help: 'Researcher name or keyword' },
-    { name: 'claimed-status', required: false, help: 'Refine by claimed status', choices: ['claimed', 'unclaimed'] },
-    { name: 'author', required: false, help: 'Comma- or semicolon-separated author refine values' },
-    { name: 'affiliation', required: false, help: 'Comma- or semicolon-separated affiliation refine values' },
-    { name: 'country', required: false, help: 'Comma- or semicolon-separated country/region refine values' },
-    { name: 'category', required: false, help: 'Comma- or semicolon-separated Web of Science categories / subject categories' },
-    { name: 'award-year', required: false, help: 'Comma- or semicolon-separated award year refine values' },
-    { name: 'award-category', required: false, help: 'Comma- or semicolon-separated award category refine values' },
+    { name: 'query', positional: true, required: true, help: 'Researcher name, e.g. Yann LeCun or LeCun, Yann' },
+    { name: 'claimed-status', required: false, help: 'Refine by claimed or unclaimed profiles from the current result page', choices: ['claimed', 'unclaimed'] },
+    { name: 'author', required: false, help: 'Comma- or semicolon-separated author facet values from the current result page' },
+    { name: 'affiliation', required: false, help: 'Comma- or semicolon-separated affiliation facet values from the current result page' },
+    { name: 'country', required: false, help: 'Comma- or semicolon-separated country/region facet values from the current result page' },
+    { name: 'category', required: false, help: 'Comma- or semicolon-separated Web of Science category facet values from the current result page' },
+    { name: 'award-year', required: false, help: 'Comma- or semicolon-separated award year facet values from the current result page' },
+    { name: 'award-category', required: false, help: 'Comma- or semicolon-separated award category facet values from the current result page' },
     { name: 'limit', type: 'int', default: 10, help: 'Max results' },
   ],
   columns: ['rank', 'name', 'affiliations', 'location', 'researcher_id', 'url'],
