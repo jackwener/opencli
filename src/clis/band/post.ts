@@ -1,8 +1,5 @@
-import fs from 'fs';
-import http from 'http';
-import https from 'https';
-import path from 'path';
-import { AuthRequiredError, EmptyResultError, ArgumentError } from '../../errors.js';
+import { AuthRequiredError, EmptyResultError } from '../../errors.js';
+import { downloadMedia } from '../../download/media-download.js';
 import { cli, Strategy } from '../../registry.js';
 
 /**
@@ -39,9 +36,6 @@ cli({
     const postNo = Number(kwargs.post_no);
     const outputDir = kwargs.output as string;
     const withComments = kwargs.comments as boolean;
-
-    if (!bandNo) throw new ArgumentError('band_no', 'Band number is required');
-    if (!postNo) throw new ArgumentError('post_no', 'Post number is required');
 
     await page.goto(`https://www.band.us/band/${bandNo}/post/${postNo}`);
 
@@ -86,9 +80,12 @@ cli({
         const text = bodyEl ? stripTags(norm(bodyEl.innerText || bodyEl.textContent)) : '';
 
         // Photo thumbnails have a ?type=sNNN query param; strip it for full-res URL.
+        // Use location.href as base so protocol-relative or relative URLs resolve correctly.
         const photos = Array.from(postCard?.querySelectorAll('img._imgRecentPhoto, img._imgPhoto') || [])
           .map(img => {
-            try { const u = new URL(img.getAttribute('src') || ''); return u.origin + u.pathname; }
+            const src = img.getAttribute('src') || '';
+            if (!src) return '';
+            try { const u = new URL(src, location.href); return u.origin + u.pathname; }
             catch { return ''; }
           })
           .filter(Boolean);
@@ -129,27 +126,15 @@ cli({
       throw new EmptyResultError('band post', 'Post not found or not accessible');
     }
 
-    // Download photos when --output is specified.
     const photos: string[] = data.photos ?? [];
+
+    // Download photos when --output is specified, using the shared httpDownload utility
+    // which handles redirects, timeouts, and stream errors correctly.
     if (outputDir && photos.length > 0) {
-      fs.mkdirSync(outputDir, { recursive: true });
-      await Promise.all(photos.map((url, i) =>
-        new Promise<void>((resolve, reject) => {
-          const ext = path.extname(new URL(url).pathname) || '.jpg';
-          const dest = path.join(outputDir, `photo_${i + 1}${ext}`);
-          const file = fs.createWriteStream(dest);
-          (url.startsWith('https') ? https : http).get(url, res => {
-            if (res.statusCode && res.statusCode >= 300) {
-              file.close();
-              fs.unlink(dest, () => {});
-              reject(new Error(`HTTP ${res.statusCode} downloading ${url}`));
-              return;
-            }
-            res.pipe(file);
-            file.on('finish', () => { file.close(); resolve(); });
-          }).on('error', reject);
-        })
-      ));
+      await downloadMedia(
+        photos.map(url => ({ type: 'image' as const, url })),
+        { output: outputDir, filenamePrefix: 'photo', verbose: false },
+      );
     }
 
     const rows: Record<string, string>[] = [];

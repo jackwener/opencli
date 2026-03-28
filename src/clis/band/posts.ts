@@ -1,4 +1,4 @@
-import { AuthRequiredError, EmptyResultError, ArgumentError } from '../../errors.js';
+import { AuthRequiredError, EmptyResultError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 
 /**
@@ -31,8 +31,6 @@ cli({
   func: async (page, kwargs) => {
     const bandNo = Number(kwargs.band_no);
     const limit = Number(kwargs.limit);
-
-    if (!bandNo) throw new ArgumentError('band_no', 'Band number is required. Get it from: band bands');
 
     // Navigate directly to the band's post page — no home-page detour needed.
     await page.goto(`https://www.band.us/band/${bandNo}/post`);
