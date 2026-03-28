@@ -459,7 +459,8 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
-      installExternalCli(ext, { version: opts.version, isolated: opts.isolated });
+      const success = installExternalCli(ext, { version: opts.version, isolated: opts.isolated });
+      if (!success) process.exitCode = 1;
     });
 
   program
@@ -468,7 +469,8 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .argument('<name>', 'Name of the external CLI')
     .option('--version <ver>', 'Uninstall only the specified version')
     .action((name: string, opts: { version?: string }) => {
-      uninstallExternalCli(name, opts.version);
+      const success = uninstallExternalCli(name, opts.version);
+      if (!success) process.exitCode = 1;
     });
 
   program
