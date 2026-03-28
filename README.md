@@ -12,8 +12,7 @@ A CLI tool that turns **any website**, **Electron app**, or **local CLI tool** i
 
 **Built for AI Agents**: Simply configure an instruction in your global `AGENT.md` or `.cursorrules` guiding the AI to execute `opencli list` via Bash to discover available tools. Register your favorite local CLIs (`opencli register mycli`), and the AI will automatically learn how to invoke all your tools perfectly!
 
-**CLI All Electron Apps! The Most Powerful Update Has Arrived!**
-Turn ANY Electron application into a CLI tool! Recombine, script, and extend applications like Antigravity Ultra seamlessly. Now AI can control itself natively. Unlimited possibilities await!
+**CLI for Electron Apps** — Turn any Electron application into a CLI tool. Recombine, script, and extend apps like Antigravity Ultra from the terminal. AI agents can now control other AI apps natively.
 
 ---
 
@@ -47,32 +46,46 @@ There are many great browser automation tools. Here's when opencli is the right 
 
 > For a detailed comparison with Browser-Use, Crawl4AI, Firecrawl, and others, see the [Comparison Guide](./docs/comparison.md).
 
+## Quick Start
+
+### Install via npm (recommended)
+
+```bash
+npm install -g @jackwener/opencli
+```
+
+Then use directly:
+
+```bash
+opencli list                              # See all commands
+opencli hackernews top --limit 5          # Public API, no browser needed
+opencli bilibili hot --limit 5            # Browser command (requires Extension)
+opencli zhihu hot -f json                 # JSON output
+```
+
+### Install from source (for developers)
+
+```bash
+git clone git@github.com:jackwener/opencli.git
+cd opencli
+npm install
+npm run build
+npm link      # Link binary globally
+opencli list  # Now you can use it anywhere!
+```
+
+### Update
+
+```bash
+npm install -g @jackwener/opencli@latest
+```
+
 ## Prerequisites
 
-- **Node.js**: >= 20.0.0 (or **Bun** >= 1.0 — see [Runtime Support](#runtime-support) below)
+- **Node.js**: >= 20.0.0 (or **Bun** >= 1.0)
 - **Chrome** running **and logged into the target site** (e.g. bilibili.com, zhihu.com, xiaohongshu.com).
 
 > **⚠️ Important**: Browser commands reuse your Chrome login session. You must be logged into the target website in Chrome before running commands. If you get empty data or errors, check your login status first.
-
-### Runtime Support
-
-OpenCLI works with both **Node.js** (≥ 20) and **Bun** (≥ 1.0). All commands and adapters are runtime-agnostic.
-
-```bash
-# Development with Bun (faster startup)
-npm run dev:bun
-
-# Run the built CLI with Bun
-npm run start:bun
-
-# Run unit tests under Bun
-npm run test:bun
-
-# Run E2E tests with Bun as the runtime
-OPENCLI_TEST_RUNTIME=bun npm run test:e2e
-```
-
-Use `opencli doctor` to check your current runtime — it displays the active engine (e.g. `node v22.13.0` or `bun 1.1.42`).
 
 OpenCLI connects to your browser through a lightweight **Browser Bridge** Chrome Extension + micro-daemon (zero config, auto-start).
 
@@ -95,42 +108,6 @@ That's it! The daemon auto-starts when you run any browser command. No tokens, n
 > ```bash
 > opencli doctor            # Check extension + daemon connectivity
 > ```
-
-## Quick Start
-
-### Install via npm (recommended)
-
-```bash
-npm install -g @jackwener/opencli
-```
-
-Then use directly:
-
-```bash
-opencli list                              # See all commands
-opencli list -f yaml                      # List commands as YAML
-opencli hackernews top --limit 5          # Public API, no browser
-opencli bilibili hot --limit 5            # Browser command
-opencli zhihu hot -f json                 # JSON output
-opencli zhihu hot -f yaml                 # YAML output
-```
-
-### Install from source (for developers)
-
-```bash
-git clone git@github.com:jackwener/opencli.git
-cd opencli 
-npm install
-npm run build
-npm link      # Link binary globally
-opencli list  # Now you can use it anywhere!
-```
-
-### Update
-
-```bash
-npm install -g @jackwener/opencli@latest
-```
 
 ## Built-in Commands
 
