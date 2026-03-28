@@ -16,8 +16,8 @@ description: "Cross-project CLI command migration workflow for opencli. Use when
 
 ## Prerequisites
 
-- 熟悉 [CLI-EXPLORER.md](file:///Users/jakevin/code/opencli/CLI-EXPLORER.md)（adapter 开发决策树）
-- 熟悉 [SKILL.md](file:///Users/jakevin/code/opencli/SKILL.md)（命令参考 & 模板）
+- 熟悉 [CLI-EXPLORER.md](../../../CLI-EXPLORER.md)（adapter 开发决策树）
+- 熟悉 [SKILL.md](../../../SKILL.md)（命令参考 & 模板）
 
 ---
 
@@ -82,7 +82,7 @@ opencli list | grep <site>  # 确认已注册命令
 ## Phase 3: 批量实现
 
 > [!IMPORTANT]
-> 实现前必须查阅 [CLI-EXPLORER.md](file:///Users/jakevin/code/opencli/CLI-EXPLORER.md) 确认策略选择。
+> 实现前必须查阅 [CLI-EXPLORER.md](../../../CLI-EXPLORER.md) 确认策略选择。
 
 ### 3.1 选择实现方式
 
