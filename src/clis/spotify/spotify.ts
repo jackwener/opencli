@@ -129,10 +129,15 @@ cli({
   columns: ['status'],
   func: async () => {
     if (!CLIENT_ID || !CLIENT_SECRET) {
+      const envFile = join(homedir(), '.opencli', 'spotify.env');
       throw new CliError(
         'CONFIG',
-        'Missing credentials. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in ' +
-        '~/.opencli/spotify.env or as environment variables.'
+        `Missing Spotify credentials.\n\n` +
+        `1. Go to https://developer.spotify.com/dashboard and create an app\n` +
+        `2. Copy your Client ID and Client Secret\n` +
+        `3. Open the file: ${envFile}\n` +
+        `4. Replace the placeholder values and save\n` +
+        `5. Run: opencli spotify auth`
       );
     }
     return new Promise((resolve, reject) => {
