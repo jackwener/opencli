@@ -68,6 +68,7 @@ export default defineConfig({
                 { text: 'Jimeng', link: '/adapters/browser/jimeng' },
                 { text: 'Yollomi', link: '/adapters/browser/yollomi' },
                 { text: 'LINUX DO', link: '/adapters/browser/linux-do' },
+                { text: 'Band', link: '/adapters/browser/band' },
                 { text: 'Chaoxing', link: '/adapters/browser/chaoxing' },
                 { text: 'Grok', link: '/adapters/browser/grok' },
                 { text: 'WeRead', link: '/adapters/browser/weread' },
