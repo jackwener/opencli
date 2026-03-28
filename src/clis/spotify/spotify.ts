@@ -20,7 +20,7 @@ function loadEnv(): Record<string, string> {
     readFileSync(ENV_FILE, 'utf-8')
       .split('\n')
       .map(l => l.trim())
-      .filter(l => l && !l.startsWith('#'))
+      .filter(l => l && !l.startsWith('#') && l.includes('='))
       .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()] as [string, string]; })
   );
 }
@@ -81,6 +81,9 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
 async function getToken(): Promise<string> {
   const tokens = loadTokens();
   if (!tokens) throw new CliError('AUTH_REQUIRED', 'Not authenticated. Run: opencli spotify auth');
+  if (!tokens.access_token || !tokens.refresh_token || !(tokens.expires_at > 0)) {
+    throw new CliError('AUTH_CORRUPTED', 'Token file is corrupted. Run: opencli spotify auth');
+  }
   if (Date.now() > tokens.expires_at - 60_000) return refreshAccessToken(tokens.refresh_token);
   return tokens.access_token;
 }
@@ -104,7 +107,7 @@ async function api(method: string, path: string, body?: unknown): Promise<any> {
 
 async function findTrackUri(query: string): Promise<{ uri: string; name: string; artist: string }> {
   const data = await api('GET', `/search?q=${encodeURIComponent(query)}&type=track&limit=1`);
-  const track = data.tracks.items[0];
+  const track = data?.tracks?.items?.[0];
   if (!track) throw new CliError('EMPTY_RESULT', `No track found for: ${query}`);
   return { uri: track.uri, name: track.name, artist: track.artists.map((a: any) => a.name).join(', ') };
 }
@@ -189,7 +192,8 @@ cli({
     const data = await api('GET', '/me/player');
     if (!data || !data.item) return [{ track: 'Nothing playing', artist: '', album: '', status: '', progress: '' }];
     const t = data.item;
-    const prog = data.progress_ms / 1000 | 0;
+    if (t.type !== 'track') return [{ track: t.name, artist: '', album: t.show?.name ?? '', status: data.is_playing ? 'playing' : 'paused', progress: '' }];
+    const prog = (data.progress_ms ?? 0) / 1000 | 0;
     const dur  = t.duration_ms / 1000 | 0;
     const fmt  = (s: number) => `${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`;
     return [{ track: t.name, artist: t.artists.map((a: any) => a.name).join(', '), album: t.album.name, status: data.is_playing ? 'playing' : 'paused', progress: `${fmt(prog)} / ${fmt(dur)}` }];
@@ -276,7 +280,9 @@ cli({
   ],
   columns: ['track', 'artist', 'album', 'uri'],
   func: async (_page, kwargs) => {
-    const data = await api('GET', `/search?q=${encodeURIComponent(kwargs.query)}&type=track&limit=${kwargs.limit}`);
+    const limit = Math.min(50, Math.max(1, Math.round(kwargs.limit)));
+    const data = await api('GET', `/search?q=${encodeURIComponent(kwargs.query)}&type=track&limit=${limit}`);
+    if (!data?.tracks?.items) throw new CliError('EMPTY_RESULT', `No results found for: ${kwargs.query}`);
     return data.tracks.items.map((t: any) => ({ track: t.name, artist: t.artists.map((a: any) => a.name).join(', '), album: t.album.name, uri: t.uri }));
   },
 });
