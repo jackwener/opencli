@@ -134,6 +134,7 @@ OpenCLI acts as a universal hub for your existing command-line tools — unified
 | **obsidian** | Obsidian vault management | `opencli obsidian search query="AI"` |
 | **docker** | Docker | `opencli docker ps` |
 | **gws** | Google Workspace CLI | `opencli gws docs list` |
+| **lark-cli** | Lark/Feishu — messages, docs, calendar, tasks, 200+ commands | `opencli lark-cli calendar +agenda` |
 
 **Register your own** — add any local CLI so AI agents can discover it via `opencli list`:
 
