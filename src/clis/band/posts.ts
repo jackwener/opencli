@@ -89,8 +89,8 @@ cli({
           const comments = commentEl ? parseInt((commentEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0 : 0;
 
           if (!url && !content) continue;
-          results.push({ date, author, content, comments, url });
           if (results.length >= limit) break;
+          results.push({ date, author, content, comments, url });
         }
 
         return results;

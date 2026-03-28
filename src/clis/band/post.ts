@@ -170,7 +170,7 @@ cli({
         type: c.depth === 0 ? 'comment' : 'reply',
         author: c.author ?? '',
         date: c.date ?? '',
-        text: c.depth > 0 ? '  └ ' + (c.text ?? '') : (c.text ?? ''),
+        text: c.depth > 0 ? '  '.repeat(c.depth) + '└ ' + (c.text ?? '') : (c.text ?? ''),
       });
     }
 
