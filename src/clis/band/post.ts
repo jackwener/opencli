@@ -137,19 +137,22 @@ cli({
     // Pass browser cookies so Band's login-protected photo URLs don't fail with 401/403.
     if (outputDir && photos.length > 0) {
       // Only send Band cookies to Band-hosted URLs; avoid leaking auth cookies to third-party CDNs.
-      const bandPhotos = photos.filter(u => { try { const h = new URL(u).hostname; return h === 'band.us' || h.endsWith('.band.us'); } catch { return false; } });
-      const otherPhotos = photos.filter(u => !bandPhotos.includes(u));
+      // Use a global index across both batches so filenames don't collide (photo_1, photo_2, ...).
+      const cookieHeader = formatCookieHeader(await page.getCookies({ domain: 'band.us' }));
+      const isBandUrl = (u: string) => { try { const h = new URL(u).hostname; return h === 'band.us' || h.endsWith('.band.us'); } catch { return false; } };
+      let globalIndex = 1;
+      const bandPhotos = photos.filter(isBandUrl);
+      const otherPhotos = photos.filter(u => !isBandUrl(u));
       if (bandPhotos.length > 0) {
-        const cookieHeader = formatCookieHeader(await page.getCookies({ domain: 'band.us' }));
         await downloadMedia(
-          bandPhotos.map(url => ({ type: 'image' as const, url })),
-          { output: outputDir, filenamePrefix: 'photo', verbose: false, cookies: cookieHeader },
+          bandPhotos.map(url => ({ type: 'image' as const, url, filename: `photo_${globalIndex++}` })),
+          { output: outputDir, verbose: false, cookies: cookieHeader },
         );
       }
       if (otherPhotos.length > 0) {
         await downloadMedia(
-          otherPhotos.map(url => ({ type: 'image' as const, url })),
-          { output: outputDir, filenamePrefix: 'photo', verbose: false },
+          otherPhotos.map(url => ({ type: 'image' as const, url, filename: `photo_${globalIndex++}` })),
+          { output: outputDir, verbose: false },
         );
       }
     }

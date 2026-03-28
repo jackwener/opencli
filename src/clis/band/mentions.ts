@@ -1,4 +1,4 @@
-import { AuthRequiredError, EmptyResultError } from '../../errors.js';
+import { AuthRequiredError, EmptyResultError, SelectorError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
 
 /**
@@ -54,7 +54,7 @@ cli({
       await page.wait(0.5);
     }
     if (!bellReady) {
-      throw new EmptyResultError('band mentions', 'Notification bell not found (selector: button._btnWidgetIcon). The Band.us UI may have changed.');
+      throw new SelectorError('button._btnWidgetIcon', 'Notification bell not found. The Band.us UI may have changed.');
     }
 
     // Poll until a capture containing result_data.news arrives, up to maxSecs seconds.
@@ -83,7 +83,7 @@ cli({
       return true;
     }`);
     if (!bellClicked) {
-      throw new EmptyResultError('band mentions', 'Notification bell disappeared before click (selector: button._btnWidgetIcon). The Band.us UI may have changed.');
+      throw new SelectorError('button._btnWidgetIcon', 'Notification bell disappeared before click. The Band.us UI may have changed.');
     }
 
     const requests = await waitForOneCapture();
