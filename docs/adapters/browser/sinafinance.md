@@ -8,7 +8,7 @@
 |---------|-------------|------|
 | `opencli sinafinance news` | 新浪财经 7×24 小时实时快讯 | 🌐 Public |
 | `opencli sinafinance rolling-news` | 新浪财经滚动新闻 | 🔐 Browser |
-| `opencli sinafinance stock` | 新浪财经行情（A股/港股/美股） | 🔐 Browser |
+| `opencli sinafinance stock` | 新浪财经行情（A股/港股/美股） | 🌐 Public |
 
 ## Usage Examples
 
@@ -69,17 +69,17 @@ opencli sinafinance stock 贵州茅台 -f json
 
 | Option | Description |
 |--------|-------------|
-| `--key` | Stock name or code to search (required) |
 | `--market` | Market: `cn`, `hk`, `us`, `auto` (default: auto). When `auto`, searches in cn, hk, us order |
 
 ## Prerequisites
 
-- `news`: No browser required — uses public API
-- `rolling-news` & `stock`: Chrome running and **logged into** `finance.sina.com.cn`
-- For `rolling-news` & `stock`: [Browser Bridge extension](/guide/browser-bridge) installed
+- `news` & `stock`: No browser required — uses public API
+- `rolling-news`: Chrome running and **logged into** `finance.sina.com.cn`
+- For `rolling-news`: [Browser Bridge extension](/guide/browser-bridge) installed
 
 ## Notes
 
-- `news` command uses a public API and does not require browser or login
-- `stock` command supports Chinese stock names and codes, and automatically detects the market
+- `news` and `stock` use public APIs — no browser or login needed
+- `stock` supports Chinese names, Chinese codes, and ticker symbols; auto-detects market
 - Market priority for auto-detection: cn (A股) → hk (港股) → us (美股)
+- US stock `High`/`Low` columns show 52-week range; A股/港股 show today's range
