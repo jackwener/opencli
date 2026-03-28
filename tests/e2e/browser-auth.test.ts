@@ -163,4 +163,8 @@ describe('login-required commands — graceful failure', () => {
   it('band posts fails gracefully without login', async () => {
     await expectGracefulAuthFailure(['band', 'posts', '58400480', '--limit', '3', '-f', 'json'], 'band posts');
   }, 60_000);
+
+  it('band post fails gracefully without login', async () => {
+    await expectGracefulAuthFailure(['band', 'post', '58400480', '1', '-f', 'json'], 'band post');
+  }, 60_000);
 });

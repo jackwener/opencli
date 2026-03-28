@@ -4,69 +4,72 @@ import { cli, Strategy } from '../../registry.js';
 /**
  * band bands — List all Bands you belong to.
  *
- * Band.us signs every API request with a per-request HMAC (`md` header) generated
- * by its own JavaScript, so we cannot replicate it externally. Instead we use
- * Strategy.INTERCEPT: install an XHR interceptor in the page, then trigger Band's
- * own React app to fire the request by SPA-navigating to a band page — which always
- * causes Band to call get_band_list_with_filter to re-populate the sidebar.
+ * Band.us renders the full band list in the left sidebar of the home page for
+ * logged-in users, so we can extract everything we need from the DOM without
+ * XHR interception or any secondary navigation.
+ *
+ * Each sidebar item is an <a href="/band/{band_no}/..."> link whose text and
+ * data attributes carry the band name and member count.
  */
 cli({
   site: 'band',
   name: 'bands',
   description: 'List all Bands you belong to',
   domain: 'www.band.us',
-  strategy: Strategy.INTERCEPT,
+  strategy: Strategy.COOKIE,
   browser: true,
   args: [],
   columns: ['band_no', 'name', 'members'],
 
   func: async (page, _kwargs) => {
-    await page.goto('https://www.band.us/');
-    await page.wait(2); // wait for React hydration and cookie settlement
-
     const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
-    // Extract any band_no from sidebar links. We need it to SPA-navigate to a band
-    // page, which is the only route that reliably re-triggers get_band_list_with_filter
-    // (direct / and /discover routes serve from React cache after first load).
-    const bandNo = await page.evaluate(`() => {
-      const m = Array.from(document.querySelectorAll('a[href*="/band/"]'))
-        .map(a => a.getAttribute('href').match(/\\/band\\/(\\d+)/))
-        .find(Boolean);
-      return m ? m[1] : null;
-    }`);
-    if (!bandNo) throw new EmptyResultError('band bands', 'No band links found — are you logged in?');
+    // Extract the band list from the sidebar. Poll until at least one band link
+    // appears (React hydration may take a moment after navigation).
+    const bands: { band_no: number; name: string; members: number }[] = await page.evaluate(`
+      (async () => {
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-    // Install XHR interceptor before triggering navigation so we don't miss the request.
-    await page.installInterceptor('get_band_list_with_filter');
+        // Wait up to 9 s for sidebar band links to render.
+        for (let i = 0; i < 30; i++) {
+          if (document.querySelector('a[href*="/band/"]')) break;
+          await sleep(300);
+        }
 
-    // SPA navigation: history.pushState keeps the React app alive (no full reload),
-    // so the interceptor stays active. PopStateEvent signals React Router to re-render.
-    await page.evaluate(`() => {
-      window.history.pushState({}, '', '/band/${String(bandNo)}/post');
-      window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
-    }`);
-    await page.wait(4); // allow time for the XHR round-trip to complete
+        const seen = new Set();
+        const results = [];
 
-    const requests = await page.getInterceptedRequests();
-    if (requests.length === 0) {
-      throw new EmptyResultError('band bands', 'No band list data captured — try again.');
+        for (const a of Array.from(document.querySelectorAll('a[href*="/band/"]'))) {
+          const m = a.getAttribute('href').match(/\\/band\\/(\\d+)/);
+          if (!m) continue;
+          const bandNo = Number(m[1]);
+          if (seen.has(bandNo)) continue;
+          seen.add(bandNo);
+
+          // Band name: prefer a dedicated name element; fall back to the link's
+          // own text content (stripping any nested numeric badge text).
+          const nameEl = a.querySelector('._bandName, .bandName, .name, strong');
+          const name = (nameEl?.textContent || a.textContent || '').trim()
+            .replace(/\\s*\\d+\\s*$/, '') // strip trailing member-count badge
+            .trim();
+          if (!name) continue;
+
+          // Member count may appear as a small badge element inside the link.
+          const memberEl = a.querySelector('._memberCount, .memberCount, .count');
+          const members = memberEl ? parseInt(memberEl.textContent, 10) || 0 : 0;
+
+          results.push({ band_no: bandNo, name, members });
+        }
+
+        return results;
+      })()
+    `);
+
+    if (!bands || bands.length === 0) {
+      throw new EmptyResultError('band bands', 'No bands found in sidebar — are you logged in?');
     }
 
-    // result_data is an array of { band: { band_no, name, member_count, ... } }
-    const bands = (requests as any[]).flatMap(req =>
-      Array.isArray(req?.result_data) ? req.result_data.map((d: any) => d.band).filter(Boolean) : []
-    );
-
-    if (bands.length === 0) {
-      throw new EmptyResultError('band bands', 'No bands found');
-    }
-
-    return bands.map((b: any) => ({
-      band_no: b.band_no,
-      name: b.name ?? '',
-      members: b.member_count ?? 0,
-    }));
+    return bands;
   },
 });

@@ -6,44 +6,31 @@ import { AuthRequiredError, EmptyResultError, ArgumentError } from '../../errors
 import { cli, Strategy } from '../../registry.js';
 
 /**
- * band post — Export the full content of a single Band post, including all comments.
+ * band post — Export full content of a Band post: body, comments, and optional photo download.
  *
- * Uses Strategy.INTERCEPT with a broad `band.us` pattern to capture both the
- * batch request (which embeds get_post) and the get_comments request in a single
- * page navigation. Client-side we identify each by their response shape:
- *   - batch response: result_data.batch_result[]
- *   - comments response: result_data.items[] where items have a comment_id field
+ * Navigates directly to the post URL and extracts everything from the DOM.
+ * No XHR interception needed — Band renders the full post for logged-in users.
  *
- * Optionally downloads attached photos with --output <dir>.
+ * Output rows:
+ *   type=post    → the post itself (author, date, body text)
+ *   type=comment → top-level comment
+ *   type=reply   → reply to a comment (nested under its parent)
+ *
+ * Photo thumbnail URLs carry a ?type=sNNN suffix; stripping it yields full-res.
  */
 cli({
   site: 'band',
   name: 'post',
   description: 'Export full content of a post including comments',
   domain: 'www.band.us',
-  strategy: Strategy.INTERCEPT,
+  strategy: Strategy.COOKIE,
+  navigateBefore: false,
   browser: true,
   args: [
-    {
-      name: 'band_no',
-      positional: true,
-      required: true,
-      type: 'int',
-      help: 'Band number',
-    },
-    {
-      name: 'post_no',
-      positional: true,
-      required: true,
-      type: 'int',
-      help: 'Post number',
-    },
-    {
-      name: 'output',
-      type: 'str',
-      default: '',
-      help: 'Directory to download attached photos into',
-    },
+    { name: 'band_no', positional: true, required: true, type: 'int', help: 'Band number' },
+    { name: 'post_no', positional: true, required: true, type: 'int', help: 'Post number' },
+    { name: 'output', type: 'str', default: '', help: 'Directory to save attached photos' },
+    { name: 'comments', type: 'bool', default: true, help: 'Include comments (default: true)' },
   ],
   columns: ['type', 'author', 'date', 'text'],
 
@@ -51,102 +38,140 @@ cli({
     const bandNo = Number(kwargs.band_no);
     const postNo = Number(kwargs.post_no);
     const outputDir = kwargs.output as string;
+    const withComments = kwargs.comments as boolean;
 
     if (!bandNo) throw new ArgumentError('band_no', 'Band number is required');
     if (!postNo) throw new ArgumentError('post_no', 'Post number is required');
 
-    await page.goto('https://www.band.us/');
-    await page.wait(2); // wait for React hydration and cookie settlement
+    await page.goto(`https://www.band.us/band/${bandNo}/post/${postNo}`);
 
     const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
-    // Use a broad pattern to capture both the batch (post body) and get_comments
-    // in a single navigation, since they fire concurrently on the same page load.
-    await page.installInterceptor('band.us');
+    const data: {
+      author: string;
+      date: string;
+      text: string;
+      photos: string[];
+      comments: { depth: number; author: string; date: string; text: string }[];
+    } = await page.evaluate(`
+      (async () => {
+        const withComments = ${withComments};
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        const norm = s => (s || '').replace(/\\s+/g, ' ').trim();
+        // Band embeds <band:mention>, <band:sticker>, etc. in content — strip to plain text.
+        const stripTags = s => s.replace(/<\\/?band:[^>]+>/g, '');
 
-    // SPA navigation: PopStateEvent signals React Router to render the post page,
-    // which triggers both batch (containing get_post) and get_comments XHR calls.
-    await page.evaluate(`() => {
-      window.history.pushState({}, '', '/band/${bandNo}/post/${postNo}');
-      window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
-    }`);
-    await page.wait(5); // allow time for both XHR round-trips to complete
+        // Wait up to 9 s for the post content to render (poll for the author link,
+        // which appears after React hydration fills the post header).
+        for (let i = 0; i < 30; i++) {
+          if (document.querySelector('._postWrapper a.text')) break;
+          await sleep(300);
+        }
 
-    const requests = await page.getInterceptedRequests();
-    if (requests.length === 0) {
-      throw new EmptyResultError('band post', 'No data captured — try again.');
-    }
+        const postCard = document.querySelector('._postWrapper');
+        const commentSection = postCard?.querySelector('.dPostCommentMainView');
 
-    // Identify the batch response by the presence of batch_result.
-    // The batch embeds get_post, get_emotions, etc. as sub-requests.
-    const batchReq = (requests as any[]).find(r =>
-      Array.isArray(r?.result_data?.batch_result)
-    );
-    // Identify the comments response by items that have a comment_id field.
-    const commentsReq = (requests as any[]).find(r =>
-      Array.isArray(r?.result_data?.items) &&
-      r.result_data.items.length > 0 &&
-      r.result_data.items[0]?.comment_id !== undefined
-    );
+        // Author and date live in the post header, above the comment section.
+        // Exclude any matches inside the comment section to avoid picking up comment authors.
+        let author = '', date = '';
+        for (const el of (postCard?.querySelectorAll('a.text') || [])) {
+          if (!commentSection?.contains(el)) { author = norm(el.textContent); break; }
+        }
+        for (const el of (postCard?.querySelectorAll('time.time') || [])) {
+          if (!commentSection?.contains(el)) { date = norm(el.textContent); break; }
+        }
 
-    const postData = batchReq?.result_data?.batch_result?.[0]?.result_data?.post;
-    if (!postData) {
+        const bodyEl = postCard?.querySelector('.postText._postText');
+        const text = bodyEl ? stripTags(norm(bodyEl.innerText || bodyEl.textContent)) : '';
+
+        // Photo thumbnails have a ?type=sNNN query param; strip it for full-res URL.
+        const photos = Array.from(postCard?.querySelectorAll('img._imgRecentPhoto, img._imgPhoto') || [])
+          .map(img => {
+            try { const u = new URL(img.getAttribute('src') || ''); return u.origin + u.pathname; }
+            catch { return ''; }
+          })
+          .filter(Boolean);
+
+        if (!withComments) return { author, date, text, photos, comments: [] };
+
+        // Wait up to 6 s for comments to appear.
+        for (let i = 0; i < 20; i++) {
+          if (postCard?.querySelector('.sCommentList._heightDetectAreaForComment .cComment')) break;
+          await sleep(300);
+        }
+
+        // Recursively collect comments and their replies.
+        // Replies live in .sReplyList > .sCommentList, not in ._replyRegion.
+        function extractComments(container, depth) {
+          const results = [];
+          for (const el of container.querySelectorAll(':scope > .cComment')) {
+            results.push({
+              depth,
+              author: norm(el.querySelector('strong.name')?.textContent),
+              date:   norm(el.querySelector('time.time')?.textContent),
+              text:   stripTags(norm(el.querySelector('p.txt._commentContent')?.innerText || '')),
+            });
+            const replyList = el.querySelector('.sReplyList .sCommentList._heightDetectAreaForComment');
+            if (replyList) results.push(...extractComments(replyList, depth + 1));
+          }
+          return results;
+        }
+
+        const commentList = postCard?.querySelector('.sCommentList._heightDetectAreaForComment');
+        const comments = commentList ? extractComments(commentList, 0) : [];
+
+        return { author, date, text, photos, comments };
+      })()
+    `);
+
+    if (!data?.text && !data?.comments?.length) {
       throw new EmptyResultError('band post', 'Post not found or not accessible');
     }
 
-    const stripBandTags = (s: string) => s.replace(/<\/?band:[^>]+>/g, '');
-    const fmtDate = (ms: number) =>
-      new Date(ms).toLocaleString('ja-JP', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit',
-      });
-
-    // Extract photo URLs from attachment.photo (object keyed by photo_no).
-    const photos: string[] = Object.values(postData.attachment?.photo ?? {})
-      .map((p: any) => p.photo_url)
-      .filter(Boolean);
-
-    // Download photos if --output was specified.
+    // Download photos when --output is specified.
+    const photos: string[] = data.photos ?? [];
     if (outputDir && photos.length > 0) {
       fs.mkdirSync(outputDir, { recursive: true });
-      await Promise.all(
-        photos.map((url, i) =>
-          new Promise<void>((resolve, reject) => {
-            const ext = path.extname(new URL(url).pathname) || '.jpg';
-            const dest = path.join(outputDir, `photo_${i + 1}${ext}`);
-            const file = fs.createWriteStream(dest);
-            const get = url.startsWith('https') ? https.get : http.get;
-            get(url, res => {
-              res.pipe(file);
-              file.on('finish', () => { file.close(); resolve(); });
-            }).on('error', reject);
-          })
-        )
-      );
+      await Promise.all(photos.map((url, i) =>
+        new Promise<void>((resolve, reject) => {
+          const ext = path.extname(new URL(url).pathname) || '.jpg';
+          const dest = path.join(outputDir, `photo_${i + 1}${ext}`);
+          const file = fs.createWriteStream(dest);
+          (url.startsWith('https') ? https : http).get(url, res => {
+            if (res.statusCode && res.statusCode >= 300) {
+              file.close();
+              fs.unlink(dest, () => {});
+              reject(new Error(`HTTP ${res.statusCode} downloading ${url}`));
+              return;
+            }
+            res.pipe(file);
+            file.on('finish', () => { file.close(); resolve(); });
+          }).on('error', reject);
+        })
+      ));
     }
 
-    // Build output rows: post header first, then one row per comment.
     const rows: Record<string, string>[] = [];
 
+    // Post row — append photo URLs inline when not downloading to disk.
     rows.push({
       type: 'post',
-      author: postData.author?.name ?? '',
-      date: postData.created_at ? fmtDate(postData.created_at) : '',
-      // Include photo URLs in the text if not downloading, so they are visible.
+      author: data.author ?? '',
+      date: data.date ?? '',
       text: [
-        stripBandTags(postData.content ?? ''),
+        data.text ?? '',
         ...(outputDir ? [] : photos.map((u, i) => `[photo${i + 1}] ${u}`)),
       ].filter(Boolean).join('\n'),
     });
 
-    const commentItems: any[] = commentsReq?.result_data?.items ?? [];
-    for (const c of commentItems) {
+    // Comment rows — depth=0 → type 'comment', depth≥1 → type 'reply'.
+    for (const c of data.comments ?? []) {
       rows.push({
-        type: 'comment',
-        author: c.author?.name ?? '',
-        date: c.created_at ? fmtDate(c.created_at) : '',
-        text: stripBandTags(c.body ?? ''),
+        type: c.depth === 0 ? 'comment' : 'reply',
+        author: c.author ?? '',
+        date: c.date ?? '',
+        text: c.depth > 0 ? '  └ ' + (c.text ?? '') : (c.text ?? ''),
       });
     }
 

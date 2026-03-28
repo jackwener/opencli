@@ -92,8 +92,10 @@ cli({
       throw new EmptyResultError('band mentions', 'No notifications found');
     }
 
-    // Client-side filters for non-mention modes (server already filters 'mentioned').
-    if (unreadOnly) {
+    // For non-mention modes the server returns the full list; apply unread filter client-side.
+    // For 'mentioned' mode the server already filtered by unread (via the 未確認のみ button click),
+    // so skip the redundant client-side pass to avoid dropping items when is_new is absent.
+    if (unreadOnly && filter !== 'mentioned') {
       items = items.filter((n: any) => n.is_new === true);
     }
     if (filter === 'post') {
