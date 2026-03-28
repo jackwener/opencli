@@ -1,0 +1,71 @@
+/**
+ * Cursor store — persists poll positions per origin.
+ * File: ~/.opencli/channel/cursors.json
+ */
+
+import { mkdirSync } from 'node:fs';
+import { readFile, writeFile, rename } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+
+export interface CursorEntry {
+  cursor: string;
+  lastPoll: string;
+  eventsDelivered: number;
+}
+
+const DEFAULT_PATH = join(homedir(), '.opencli', 'channel', 'cursors.json');
+
+export class CursorStore {
+  private entries = new Map<string, CursorEntry>();
+
+  constructor(private readonly path: string = DEFAULT_PATH) {}
+
+  async load(): Promise<void> {
+    try {
+      const raw = await readFile(this.path, 'utf8');
+      const parsed = JSON.parse(raw) as Record<string, CursorEntry>;
+      this.entries = new Map(Object.entries(parsed));
+    } catch (e: unknown) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+        this.entries = new Map();
+        return;
+      }
+      throw e;
+    }
+  }
+
+  private saveQueue: Promise<void> = Promise.resolve();
+
+  async save(): Promise<void> {
+    // Chain saves to serialize concurrent calls
+    this.saveQueue = this.saveQueue.then(() => this._doSave(), () => this._doSave());
+    await this.saveQueue;
+  }
+
+  private async _doSave(): Promise<void> {
+    mkdirSync(dirname(this.path), { recursive: true });
+    const tmp = `${this.path}.${process.pid}.${Date.now()}.tmp`;
+    const data = JSON.stringify(Object.fromEntries(this.entries), null, 2);
+    await writeFile(tmp, data, 'utf8');
+    await rename(tmp, this.path);
+  }
+
+  get(origin: string): CursorEntry | undefined {
+    return this.entries.get(origin);
+  }
+
+  set(origin: string, cursor: string, newEventsDelivered: number): void {
+    const existing = this.entries.get(origin);
+    const cumulative = (existing?.eventsDelivered ?? 0) + newEventsDelivered;
+    this.entries.set(origin, {
+      cursor,
+      lastPoll: new Date().toISOString(),
+      eventsDelivered: cumulative,
+    });
+  }
+
+  getAll(): Map<string, CursorEntry> {
+    return new Map(this.entries);
+  }
+}
