@@ -38,13 +38,23 @@ cli({
     // Without this, same-URL navigation may skip the reload (preserving the JS context
     // and leaving the notification panel open from a previous run).
     await page.goto(`https://www.band.us/?_=${Date.now()}`);
-    await page.wait(2);
 
     const isLoggedIn = await page.evaluate(`() => document.cookie.includes('band_session')`);
     if (!isLoggedIn) throw new AuthRequiredError('band.us', 'Not logged in to Band');
 
     // Install XHR interceptor before any clicks so all get_news responses are captured.
     await page.installInterceptor('get_news');
+
+    // Wait for the bell button to appear (React hydration) instead of a fixed sleep.
+    let bellReady = false;
+    for (let i = 0; i < 20; i++) {
+      const exists = await page.evaluate(`() => !!document.querySelector('button._btnWidgetIcon')`);
+      if (exists) { bellReady = true; break; }
+      await page.wait(0.5);
+    }
+    if (!bellReady) {
+      throw new EmptyResultError('band mentions', 'Notification bell not found (selector: button._btnWidgetIcon). The Band.us UI may have changed.');
+    }
 
     // Poll until a capture containing result_data.news arrives, up to maxSecs seconds.
     // getInterceptedRequests() clears the array on each call, so captures are accumulated
@@ -63,27 +73,17 @@ cli({
       return captures;
     };
 
-    // Click the notification bell to open the panel. This triggers an initial get_news
-    // call for all notification types. Use the CSS class directly — text-based matching
-    // is locale-dependent and breaks when Band.us is set to a non-Japanese language.
-    const bellFound = await page.evaluate(`() => {
-      const bell = document.querySelector('button._btnWidgetIcon');
-      if (bell) { bell.click(); return true; }
-      return false;
-    }`);
-    if (!bellFound) {
-      throw new EmptyResultError('band mentions', 'Notification bell not found (selector: button._btnWidgetIcon). The Band.us UI may have changed.');
-    }
+    // Click the bell — bellReady guarantees the element exists at this point.
+    await page.evaluate(`() => document.querySelector('button._btnWidgetIcon').click()`);
 
     const requests = await waitForOneCapture();
 
-    if (requests.length === 0) {
-      throw new EmptyResultError('band mentions', 'No notification data captured. Try running the command again.');
-    }
-
     // Find the get_news response (has result_data.news); get_news_count responses do not.
     const newsReq = requests.find((r: any) => Array.isArray(r?.result_data?.news)) as any;
-    let items: any[] = newsReq?.result_data?.news ?? [];
+    if (!newsReq) {
+      throw new EmptyResultError('band mentions', 'Failed to capture get_news response from Band.us. Try running the command again.');
+    }
+    let items: any[] = newsReq.result_data.news ?? [];
 
     if (items.length === 0) {
       throw new EmptyResultError('band mentions', 'No notifications found');

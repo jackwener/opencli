@@ -69,6 +69,7 @@ cli({
           // URL: first post permalink link (absolute or relative).
           const linkEl = el.querySelector('a[href*="/post/"]');
           const href = linkEl?.getAttribute('href') || '';
+          if (!href) continue;
           const url = href.startsWith('http') ? href : 'https://www.band.us' + href;
 
           // Author name — a.text in the post header area.
