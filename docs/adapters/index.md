@@ -28,7 +28,7 @@ Run `opencli list` for the live registry.
 | **[linux-do](/adapters/browser/linux-do)** | `feed` `categories` `tags` `search` `topic` `user-topics` `user-posts` | 🔐 Browser |
 | **[chaoxing](/adapters/browser/chaoxing)** | `assignments` `exams` | 🔐 Browser |
 | **[grok](/adapters/browser/grok)** | `ask` | 🔐 Browser |
-| **[doubao](/adapters/browser/doubao)** | `status` `new` `send` `read` `ask` | 🔐 Browser |
+| **[doubao](/adapters/browser/doubao)** | `status` `new` `send` `read` `ask` `history` `detail` `meeting-summary` `meeting-transcript` | 🔐 Browser |
 | **[weread](/adapters/browser/weread)** | `shelf` `search` `book` `ranking` `notebooks` `highlights` `notes` | 🔐 Browser |
 | **[douban](/adapters/browser/douban)** | `search` `top250` `subject` `photos` `download` `marks` `reviews` `movie-hot` `book-hot` | 🔐 Browser |
 | **[facebook](/adapters/browser/facebook)** | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` | 🔐 Browser |
