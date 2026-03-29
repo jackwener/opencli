@@ -183,7 +183,10 @@ npm install -g @jackwener/opencli@latest
 | **substack** | `feed` `search` `publication` | 浏览器 |
 | **pixiv** | `ranking` `search` `user` `illusts` `detail` `download` | 浏览器 |
 | **tiktok** | `explore` `search` `profile` `user` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `live` `notifications` `friends` | 浏览器 |
+| **bluesky** | `search` `trending` `user` `profile` `thread` `feeds` `followers` `following` `starter-packs` | 公开 |
+| **douyin** | `videos` `publish` `drafts` `draft` `delete` `stats` `profile` `update` `hashtag` `location` `activities` `collections` | 浏览器 |
 
+66+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
 
 ### 外部 CLI 枢纽
 
@@ -194,8 +197,8 @@ OpenCLI 也可以作为你现有命令行工具的统一入口，负责发现、
 | **gh** | GitHub CLI | `opencli gh pr list --limit 5` |
 | **obsidian** | Obsidian 仓库管理 | `opencli obsidian search query="AI"` |
 | **docker** | Docker 命令行工具 | `opencli docker ps` |
-| **readwise** | Readwise / Reader CLI | `opencli readwise login` |
-| **gws** | Google Workspace CLI — Docs, Sheets, Drive, Gmail, Calendar | `opencli gws docs list` |
+| **lark-cli** | 飞书 CLI — 消息、文档、日历、任务，200+ 命令 | `opencli lark-cli calendar +agenda` |
+| **vercel** | Vercel — 部署项目、管理域名、环境变量、日志 | `opencli vercel deploy --prod` |
 
 **零配置透传**：OpenCLI 会把你的输入原样转发给底层二进制，保留原生 stdout / stderr 行为。
 
@@ -293,6 +296,31 @@ opencli bilibili hot -f yaml    # YAML（更适合人类直接阅读）
 opencli bilibili hot -f md      # Markdown
 opencli bilibili hot -f csv     # CSV
 opencli bilibili hot -v         # 详细模式：展示管线执行步骤调试信息
+```
+
+## 退出码
+
+opencli 遵循 Unix `sysexits.h` 惯例，可无缝接入 shell 管道和 CI 脚本：
+
+| 退出码 | 含义 | 触发场景 |
+|--------|------|----------|
+| `0` | 成功 | 命令正常完成 |
+| `1` | 通用错误 | 未分类的意外错误 |
+| `2` | 用法错误 | 参数错误或未知命令 |
+| `66` | 无数据 | 命令返回空结果（`EX_NOINPUT`） |
+| `69` | 服务不可用 | Browser Bridge 未连接（`EX_UNAVAILABLE`） |
+| `75` | 临时失败 | 命令超时，可重试（`EX_TEMPFAIL`） |
+| `77` | 需要认证 | 未登录目标网站（`EX_NOPERM`） |
+| `78` | 配置错误 | 凭证缺失或配置有误（`EX_CONFIG`） |
+| `130` | 中断 | Ctrl-C / SIGINT |
+
+```bash
+opencli bilibili hot 2>/dev/null
+case $? in
+  0)   echo "ok" ;;
+  69)  echo "请先启动 Browser Bridge" ;;
+  77)  echo "请先登录 bilibili.com" ;;
+esac
 ```
 
 ## 插件
