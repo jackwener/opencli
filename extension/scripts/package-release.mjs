@@ -65,6 +65,10 @@ function collectManifestEntrypoints(manifest) {
   for (const entry of manifest.web_accessible_resources ?? []) {
     for (const resource of entry.resources ?? []) addLocalAsset(files, resource);
   }
+  // MV3 offscreen documents are created at runtime via chrome.offscreen.createDocument()
+  // and are not referenced directly from manifest entry fields, so include the
+  // conventional offscreen page explicitly when the permission is present.
+  if ((manifest.permissions ?? []).includes('offscreen')) files.add('offscreen.html');
   if (manifest.default_locale) files.add('_locales');
 
   return [...files];
@@ -94,9 +98,35 @@ async function collectHtmlDependencies(relativeHtmlPath, files, visited) {
   }
 }
 
+async function collectScriptDependencies(relativeScriptPath, files, visited) {
+  if (visited.has(relativeScriptPath)) return;
+  visited.add(relativeScriptPath);
+
+  const scriptPath = path.join(extensionDir, relativeScriptPath);
+  const source = await fs.readFile(scriptPath, 'utf8');
+  const importRe = /\bimport\s+(?:[^"'()]+?\s+from\s+)?["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/g;
+
+  for (const match of source.matchAll(importRe)) {
+    const rawRef = match[1] ?? match[2];
+    const cleanRef = rawRef?.split('?')[0];
+    if (!isLocalAsset(cleanRef)) continue;
+
+    const resolvedRelativePath = cleanRef.startsWith('/')
+      ? cleanRef.slice(1)
+      : path.posix.normalize(path.posix.join(path.posix.dirname(relativeScriptPath), cleanRef));
+
+    addLocalAsset(files, resolvedRelativePath);
+
+    if (resolvedRelativePath.endsWith('.js') || resolvedRelativePath.endsWith('.mjs')) {
+      await collectScriptDependencies(resolvedRelativePath, files, visited);
+    }
+  }
+}
+
 async function collectManifestAssets(manifest) {
   const files = new Set(collectManifestEntrypoints(manifest));
   const htmlPages = [];
+  const scriptEntries = [];
 
   if (manifest.action?.default_popup) {
     htmlPages.push(manifest.action.default_popup);
@@ -104,6 +134,7 @@ async function collectManifestAssets(manifest) {
   if (manifest.options_page) htmlPages.push(manifest.options_page);
   if (manifest.devtools_page) htmlPages.push(manifest.devtools_page);
   if (manifest.side_panel?.default_path) htmlPages.push(manifest.side_panel.default_path);
+  if ((manifest.permissions ?? []).includes('offscreen')) htmlPages.push('offscreen.html');
   for (const page of manifest.sandbox?.pages ?? []) htmlPages.push(page);
   for (const overridePage of Object.values(manifest.chrome_url_overrides ?? {})) htmlPages.push(overridePage);
 
@@ -112,6 +143,26 @@ async function collectManifestAssets(manifest) {
     if (isLocalAsset(htmlPage)) {
       await collectHtmlDependencies(htmlPage, files, visited);
     }
+  }
+
+  if (manifest.background?.service_worker && isLocalAsset(manifest.background.service_worker)) {
+    scriptEntries.push(manifest.background.service_worker);
+  }
+  for (const contentScript of manifest.content_scripts ?? []) {
+    for (const jsFile of contentScript.js ?? []) {
+      if (isLocalAsset(jsFile)) scriptEntries.push(jsFile);
+    }
+  }
+
+  for (const file of files) {
+    if (typeof file === 'string' && (file.endsWith('.js') || file.endsWith('.mjs'))) {
+      scriptEntries.push(file);
+    }
+  }
+
+  const scriptVisited = new Set();
+  for (const scriptEntry of new Set(scriptEntries)) {
+    await collectScriptDependencies(scriptEntry, files, scriptVisited);
   }
 
   return [...files];
