@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { mergeTranscriptSnapshots } from './utils.js';
+import { mergeTranscriptSnapshots, parseDoubaoConversationId } from './utils.js';
+
+describe('parseDoubaoConversationId', () => {
+  it('extracts the numeric id from a full conversation URL', () => {
+    expect(parseDoubaoConversationId('https://www.doubao.com/chat/1234567890123')).toBe('1234567890123');
+  });
+
+  it('keeps a raw id unchanged', () => {
+    expect(parseDoubaoConversationId('1234567890123')).toBe('1234567890123');
+  });
+});
 
 describe('mergeTranscriptSnapshots', () => {
   it('extends the transcript when the next snapshot overlaps with the tail', () => {

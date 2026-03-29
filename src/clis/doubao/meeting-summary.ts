@@ -5,6 +5,7 @@ import {
   openMeetingPanel,
   getMeetingSummary,
   getMeetingChapters,
+  parseDoubaoConversationId,
 } from './utils.js';
 
 export const meetingSummaryCommand = cli({
@@ -21,9 +22,7 @@ export const meetingSummaryCommand = cli({
   ],
   columns: ['Section', 'Content'],
   func: async (page: IPage, kwargs: Record<string, unknown>) => {
-    const raw = kwargs.id as string;
-    const match = raw.match(/(\d{10,})/);
-    const conversationId = match ? match[1] : raw;
+    const conversationId = parseDoubaoConversationId(kwargs.id as string);
     const includeChapters = kwargs.chapters === 'true' || kwargs.chapters === true;
 
     const opened = await openMeetingPanel(page, conversationId);

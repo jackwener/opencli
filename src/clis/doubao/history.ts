@@ -13,17 +13,18 @@ export const historyCommand = cli({
   args: [
     { name: 'limit', required: false, help: 'Max number of conversations to show', default: '50' },
   ],
-  columns: ['Index', 'Title', 'Url'],
+  columns: ['Index', 'Id', 'Title', 'Url'],
   func: async (page: IPage, kwargs: Record<string, unknown>) => {
     const limit = parseInt(kwargs.limit as string, 10) || 50;
     const conversations = await getDoubaoConversationList(page);
 
     if (conversations.length === 0) {
-      return [{ Index: 0, Title: 'No conversation history found. Make sure you are logged in.', Url: '' }];
+      return [{ Index: 0, Id: '', Title: 'No conversation history found. Make sure you are logged in.', Url: '' }];
     }
 
     return conversations.slice(0, limit).map((conv, i) => ({
       Index: i + 1,
+      Id: conv.Id,
       Title: conv.Title,
       Url: conv.Url,
     }));

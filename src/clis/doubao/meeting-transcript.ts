@@ -4,6 +4,7 @@ import {
   DOUBAO_DOMAIN,
   openMeetingPanel,
   getMeetingTranscript,
+  parseDoubaoConversationId,
   triggerTranscriptDownload,
 } from './utils.js';
 
@@ -21,9 +22,7 @@ export const meetingTranscriptCommand = cli({
   ],
   columns: ['Section', 'Content'],
   func: async (page: IPage, kwargs: Record<string, unknown>) => {
-    const raw = kwargs.id as string;
-    const match = raw.match(/(\d{10,})/);
-    const conversationId = match ? match[1] : raw;
+    const conversationId = parseDoubaoConversationId(kwargs.id as string);
     const shouldDownload = kwargs.download === 'true' || kwargs.download === true;
 
     const opened = await openMeetingPanel(page, conversationId);

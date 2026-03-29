@@ -1,6 +1,6 @@
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
-import { DOUBAO_DOMAIN, getConversationDetail } from './utils.js';
+import { DOUBAO_DOMAIN, getConversationDetail, parseDoubaoConversationId } from './utils.js';
 
 export const detailCommand = cli({
   site: 'doubao',
@@ -15,9 +15,7 @@ export const detailCommand = cli({
   ],
   columns: ['Role', 'Text'],
   func: async (page: IPage, kwargs: Record<string, unknown>) => {
-    const raw = kwargs.id as string;
-    const match = raw.match(/(\d{10,})/);
-    const conversationId = match ? match[1] : raw;
+    const conversationId = parseDoubaoConversationId(kwargs.id as string);
 
     const { messages, meeting } = await getConversationDetail(page, conversationId);
 

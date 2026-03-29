@@ -667,6 +667,11 @@ export interface DoubaoMeetingInfo {
   time: string;
 }
 
+export function parseDoubaoConversationId(input: string): string {
+  const match = input.match(/(\d{10,})/);
+  return match ? match[1] : input;
+}
+
 function getConversationDetailScript(): string {
   return `
     (() => {
