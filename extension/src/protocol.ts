@@ -5,7 +5,7 @@
  * Everything else is just JS code sent via 'exec'.
  */
 
-export type Action = 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions';
+export type Action = 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input';
 
 export interface Command {
   /** Unique request ID */
@@ -32,6 +32,10 @@ export interface Command {
   quality?: number;
   /** Whether to capture full page (not just viewport) */
   fullPage?: boolean;
+  /** Local file paths for set-file-input action */
+  files?: string[];
+  /** CSS selector for file input element (set-file-input action) */
+  selector?: string;
 }
 
 export interface Result {

@@ -147,6 +147,48 @@ export async function screenshot(
   }
 }
 
+/**
+ * Set local file paths on a file input element via CDP DOM.setFileInputFiles.
+ * This bypasses the need to send large base64 payloads through the message channel —
+ * Chrome reads the files directly from the local filesystem.
+ *
+ * @param tabId - Target tab ID
+ * @param files - Array of absolute local file paths
+ * @param selector - CSS selector to find the file input (optional, defaults to first file input)
+ */
+export async function setFileInputFiles(
+  tabId: number,
+  files: string[],
+  selector?: string,
+): Promise<void> {
+  await ensureAttached(tabId);
+
+  // Enable DOM domain (required for DOM.querySelector and DOM.setFileInputFiles)
+  await chrome.debugger.sendCommand({ tabId }, 'DOM.enable');
+
+  // Get the document root
+  const doc = await chrome.debugger.sendCommand({ tabId }, 'DOM.getDocument') as {
+    root: { nodeId: number };
+  };
+
+  // Find the file input element
+  const query = selector || 'input[type="file"]';
+  const result = await chrome.debugger.sendCommand({ tabId }, 'DOM.querySelector', {
+    nodeId: doc.root.nodeId,
+    selector: query,
+  }) as { nodeId: number };
+
+  if (!result.nodeId) {
+    throw new Error(`No element found matching selector: ${query}`);
+  }
+
+  // Set files directly via CDP — Chrome reads from local filesystem
+  await chrome.debugger.sendCommand({ tabId }, 'DOM.setFileInputFiles', {
+    files,
+    nodeId: result.nodeId,
+  });
+}
+
 export async function detach(tabId: number): Promise<void> {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);

@@ -3,7 +3,7 @@
  *
  * Flow:
  *   1. Navigate to creator publish page
- *   2. Upload images via DataTransfer injection into the file input
+ *   2. Upload images via CDP DOM.setFileInputFiles (with base64 fallback)
  *   3. Fill title and body text
  *   4. Add topic hashtags
  *   5. Publish (or save as draft)
@@ -43,44 +43,100 @@ const TITLE_SELECTORS = [
   'input[maxlength]',
 ];
 
-type ImagePayload = { name: string; mimeType: string; base64: string };
+const SUPPORTED_EXTENSIONS: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+};
 
 /**
- * Read a local image and return the name, MIME type, and base64 content.
- * Throws if the file does not exist or the extension is unsupported.
+ * Validate image paths: check existence and extension.
+ * Returns resolved absolute paths.
  */
-function readImageFile(filePath: string): ImagePayload {
-  const absPath = path.resolve(filePath);
-  if (!fs.existsSync(absPath)) throw new Error(`Image file not found: ${absPath}`);
-  const ext = path.extname(absPath).toLowerCase();
-  const mimeMap: Record<string, string> = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-  };
-  const mimeType = mimeMap[ext];
-  if (!mimeType) throw new Error(`Unsupported image format "${ext}". Supported: jpg, png, gif, webp`);
-  const base64 = fs.readFileSync(absPath).toString('base64');
-  return { name: path.basename(absPath), mimeType, base64 };
+function validateImagePaths(filePaths: string[]): string[] {
+  return filePaths.map((filePath) => {
+    const absPath = path.resolve(filePath);
+    if (!fs.existsSync(absPath)) throw new Error(`Image file not found: ${absPath}`);
+    const ext = path.extname(absPath).toLowerCase();
+    if (!SUPPORTED_EXTENSIONS[ext]) {
+      throw new Error(`Unsupported image format "${ext}". Supported: jpg, png, gif, webp`);
+    }
+    return absPath;
+  });
 }
 
+/** CSS selector for image-accepting file inputs. */
+const IMAGE_INPUT_SELECTOR = 'input[type="file"][accept*="image"],'
+  + 'input[type="file"][accept*=".jpg"],'
+  + 'input[type="file"][accept*=".jpeg"],'
+  + 'input[type="file"][accept*=".png"],'
+  + 'input[type="file"][accept*=".gif"],'
+  + 'input[type="file"][accept*=".webp"]';
+
 /**
- * Inject images into the page's file input using DataTransfer.
- * Converts base64 payloads to File objects in the browser context, then dispatches
- * a synthetic 'change' event on the input element.
+ * Upload images via CDP DOM.setFileInputFiles — Chrome reads files directly
+ * from the local filesystem, avoiding base64 payload size limits.
  *
- * Returns { ok, count, error }.
+ * Falls back to the legacy base64 DataTransfer approach if the extension
+ * does not support set-file-input (e.g. older extension version).
  */
-async function injectImages(page: IPage, images: ImagePayload[]): Promise<{ ok: boolean; count: number; error?: string }> {
+async function uploadImages(
+  page: IPage,
+  absPaths: string[],
+): Promise<{ ok: boolean; count: number; error?: string }> {
+  // ── Primary: CDP DOM.setFileInputFiles ──────────────────────────────
+  if (page.setFileInput) {
+    try {
+      // Find image-accepting file input on the page
+      const selector: string | null = await page.evaluate(`
+        (() => {
+          const sels = ${JSON.stringify(IMAGE_INPUT_SELECTOR)};
+          const el = document.querySelector(sels);
+          if (el) return sels;
+          const any = document.querySelector('input[type="file"]');
+          return any ? 'input[type="file"]' : null;
+        })()
+      `);
+      if (!selector) {
+        return { ok: false, count: 0, error: 'No file input found on page' };
+      }
+      await page.setFileInput(absPaths, selector);
+      return { ok: true, count: absPaths.length };
+    } catch (err) {
+      // If set-file-input action is not supported by extension, fall through to legacy
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Unknown action') || msg.includes('not supported')) {
+        // Extension too old — fall through to legacy base64 method
+      } else {
+        return { ok: false, count: 0, error: msg };
+      }
+    }
+  }
+
+  // ── Fallback: legacy base64 DataTransfer injection ─────────────────
+  const images = absPaths.map((absPath) => {
+    const base64 = fs.readFileSync(absPath).toString('base64');
+    const ext = path.extname(absPath).toLowerCase();
+    return { name: path.basename(absPath), mimeType: SUPPORTED_EXTENSIONS[ext], base64 };
+  });
+
+  // Warn if total payload is large — this may fail with older extensions
+  const totalBytes = images.reduce((sum, img) => sum + img.base64.length, 0);
+  if (totalBytes > 500_000) {
+    console.warn(
+      `[warn] Total image payload is ${(totalBytes / 1024 / 1024).toFixed(1)}MB (base64). ` +
+      'This may fail with the browser bridge. Update the extension to v1.6+ for CDP-based upload, ' +
+      'or compress images before publishing.'
+    );
+  }
+
   const payload = JSON.stringify(images);
   return page.evaluate(`
     (async () => {
       const images = ${payload};
 
-      // Only use image-capable file inputs. Do not fall back to a generic uploader,
-      // otherwise we can accidentally feed images into the video upload flow.
       const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
       const input = inputs.find(el => {
         const accept = el.getAttribute('accept') || '';
@@ -346,8 +402,8 @@ cli({
     if (imagePaths.length > MAX_IMAGES)
       throw new Error(`Too many images: ${imagePaths.length} (max ${MAX_IMAGES})`);
 
-    // Read images in Node.js context before navigating (fast-fail on bad paths)
-    const imageData: ImagePayload[] = imagePaths.map(readImageFile);
+    // Validate image paths before navigating (fast-fail on bad paths / unsupported formats)
+    const absImagePaths = validateImagePaths(imagePaths);
 
     // ── Step 1: Navigate to publish page ──────────────────────────────────────
     await page.goto(PUBLISH_URL);
@@ -377,7 +433,7 @@ cli({
     }
 
     // ── Step 3: Upload images ──────────────────────────────────────────────────
-    const upload = await injectImages(page, imageData);
+    const upload = await uploadImages(page, absImagePaths);
     if (!upload.ok) {
       await page.screenshot({ path: '/tmp/xhs_publish_upload_debug.png' });
       throw new Error(
@@ -532,7 +588,7 @@ cli({
         status: isSuccess ? `✅ ${verb}` : '⚠️ 操作完成，请在浏览器中确认',
         detail: [
           `"${title}"`,
-          `${imageData.length}张图片`,
+          `${absImagePaths.length}张图片`,
           topics.length ? `话题: ${topics.join(' ')}` : '',
           successMsg || finalUrl || '',
         ]

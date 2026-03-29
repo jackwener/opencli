@@ -339,6 +339,22 @@ export class Page implements IPage {
     return Array.isArray(result) ? result : [];
   }
 
+  /**
+   * Set local file paths on a file input element via CDP DOM.setFileInputFiles.
+   * Chrome reads the files directly from the local filesystem, avoiding the
+   * payload size limits of base64-in-evaluate.
+   */
+  async setFileInput(files: string[], selector?: string): Promise<void> {
+    const result = await sendCommand('set-file-input', {
+      files,
+      selector,
+      ...this._cmdOpts(),
+    }) as { count?: number };
+    if (!result?.count) {
+      throw new Error('setFileInput returned no count — command may not be supported by the extension');
+    }
+  }
+
   async waitForCapture(timeout: number = 10): Promise<void> {
     const maxMs = timeout * 1000;
     await sendCommand('exec', {

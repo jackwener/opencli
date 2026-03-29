@@ -252,6 +252,8 @@ async function handleCommand(cmd: Command): Promise<Result> {
         return await handleCloseWindow(cmd, workspace);
       case 'sessions':
         return await handleSessions(cmd);
+      case 'set-file-input':
+        return await handleSetFileInput(cmd, workspace);
       default:
         return { id: cmd.id, ok: false, error: `Unknown action: ${cmd.action}` };
     }
@@ -577,6 +579,19 @@ async function handleCloseWindow(cmd: Command, workspace: string): Promise<Resul
     automationSessions.delete(workspace);
   }
   return { id: cmd.id, ok: true, data: { closed: true } };
+}
+
+async function handleSetFileInput(cmd: Command, workspace: string): Promise<Result> {
+  if (!cmd.files || !Array.isArray(cmd.files) || cmd.files.length === 0) {
+    return { id: cmd.id, ok: false, error: 'Missing or empty files array' };
+  }
+  const tabId = await resolveTabId(cmd.tabId, workspace);
+  try {
+    await executor.setFileInputFiles(tabId, cmd.files, cmd.selector);
+    return { id: cmd.id, ok: true, data: { count: cmd.files.length } };
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 async function handleSessions(cmd: Command): Promise<Result> {
