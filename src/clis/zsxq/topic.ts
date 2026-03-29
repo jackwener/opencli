@@ -32,16 +32,18 @@ cli({
 
     const detailResp = await fetchFirstJson(page, [
       `https://api.zsxq.com/v2/topics/${topicId}`,
-    ]);
+    ], { allowStatuses: [404] });
+
+    if (detailResp.status === 404) {
+      throw new CliError('NOT_FOUND', `Topic ${topicId} not found`);
+    }
 
     const commentsResp = await fetchFirstJson(page, [
       `https://api.zsxq.com/v2/topics/${topicId}/comments?sort=asc&count=${commentLimit}`,
     ]);
 
     const topic = getTopicFromResponse(detailResp.data);
-    if (!topic) {
-      throw new CliError('NOT_FOUND', `Topic ${topicId} not found`);
-    }
+    if (!topic) throw new CliError('NOT_FOUND', `Topic ${topicId} not found`);
 
     const comments = getCommentsFromResponse(commentsResp.data);
     const row = toTopicRow({

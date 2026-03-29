@@ -86,6 +86,10 @@ interface BrowserFetchResult {
   data?: unknown;
 }
 
+interface FetchFirstJsonOptions {
+  allowStatuses?: number[];
+}
+
 const SITE_DOMAIN = 'wx.zsxq.com';
 const SITE_URL = 'https://wx.zsxq.com';
 
@@ -200,36 +204,68 @@ export async function getDefaultGroupId(page: IPage): Promise<string> {
   return raw;
 }
 
-export async function fetchFirstJson(page: IPage, paths: string[]): Promise<BrowserFetchResult> {
+export async function fetchFirstJson(
+  page: IPage,
+  paths: string[],
+  options: FetchFirstJsonOptions = {},
+): Promise<BrowserFetchResult> {
   const raw = await page.evaluate(`
     (async () => {
       const paths = ${JSON.stringify(paths)};
+      const allowStatuses = ${JSON.stringify(options.allowStatuses || [])};
+      let lastFailure = null;
 
       for (const path of paths) {
         try {
-          const data = await new Promise((resolve, reject) => {
+          const result = await new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('GET', path, true);
             xhr.withCredentials = true;
             xhr.setRequestHeader('accept', 'application/json, text/plain, */*');
             xhr.onload = () => {
+              let parsed = null;
+              if (xhr.responseText) {
+                try { parsed = JSON.parse(xhr.responseText); }
+                catch {}
+              }
+
               if (xhr.status >= 200 && xhr.status < 300) {
-                try { resolve(JSON.parse(xhr.responseText)); }
-                catch { resolve(null); }
-              } else { resolve(null); }
+                resolve({ ok: true, url: path, status: xhr.status, data: parsed });
+                return;
+              }
+
+              if (allowStatuses.includes(xhr.status)) {
+                resolve({ ok: true, url: path, status: xhr.status, data: parsed });
+                return;
+              }
+
+              resolve({
+                ok: false,
+                url: path,
+                status: xhr.status,
+                data: parsed,
+                error: 'HTTP ' + xhr.status,
+              });
             };
-            xhr.onerror = () => resolve(null);
+            xhr.onerror = () => resolve({
+              ok: false,
+              url: path,
+              error: 'Network error',
+            });
             xhr.send();
           });
-          if (data) {
-            return { ok: true, url: path, status: 200, data };
+
+          if (result && result.ok) {
+            return result;
           }
+
+          if (result) lastFailure = result;
         } catch (error) {
           // keep probing the next candidate path
         }
       }
 
-      return { ok: false, error: 'No candidate endpoint returned JSON', url: paths[0] || '' };
+      return lastFailure || { ok: false, error: 'No candidate endpoint returned JSON', url: paths[0] || '' };
     })()
   `) as BrowserFetchResult;
 
