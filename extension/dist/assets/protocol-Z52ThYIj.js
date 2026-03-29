@@ -1,0 +1,8 @@
+const DAEMON_PORT = 19825;
+const DAEMON_HOST = "localhost";
+const DAEMON_WS_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}/ext`;
+const DAEMON_PING_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}/ping`;
+const WS_RECONNECT_BASE_DELAY = 2e3;
+const WS_RECONNECT_MAX_DELAY = 6e4;
+
+export { DAEMON_PING_URL as D, WS_RECONNECT_BASE_DELAY as W, DAEMON_WS_URL as a, WS_RECONNECT_MAX_DELAY as b };

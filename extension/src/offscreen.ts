@@ -17,13 +17,17 @@
  *     { type: 'log', level, msg, ts }       — forward console output
  */
 
-import { DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
+import { DAEMON_WS_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
+let pendingFrames: string[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let flushingFrames = false;
 
 const MAX_EAGER_ATTEMPTS = 6;
+const FRAME_RETRY_DELAY = 1000;
 
 // ─── Logging ─────────────────────────────────────────────────────────
 
@@ -50,11 +54,25 @@ console.error = (...args: unknown[]) => {
 
 // ─── WebSocket ───────────────────────────────────────────────────────
 
+async function probeDaemon(): Promise<boolean> {
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: 'ws-probe' }) as { ok?: boolean };
+    return resp?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
 async function connect(): Promise<void> {
   if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
 
-  // Skip HTTP ping — fetch to localhost is blocked in offscreen context.
-  // WebSocket onerror will handle daemon-not-running gracefully.
+  // Offscreen cannot probe localhost directly, so ask the background SW to do it.
+  // This preserves the previous "don't spam console with refused WS connects" guard.
+  if (!(await probeDaemon())) {
+    scheduleReconnect();
+    return;
+  }
+
   try {
     ws = new WebSocket(DAEMON_WS_URL);
   } catch {
@@ -69,16 +87,13 @@ async function connect(): Promise<void> {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
-    // Send hello — version comes from background, use a static marker here
-    ws?.send(JSON.stringify({ type: 'hello', version: '__offscreen__' }));
-    // Tell background we're up so it can send a proper hello with the real version
-    chrome.runtime.sendMessage({ type: 'ws-connected' }).catch(() => {});
+    ws?.send(JSON.stringify({ type: 'hello', version: chrome.runtime.getManifest().version }));
+    void flushPendingFrames();
   };
 
   ws.onmessage = (event) => {
-    chrome.runtime.sendMessage({ type: 'ws-message', data: event.data as string }).catch(() => {
-      // SW may be sleeping — it will wake via alarm and re-check
-    });
+    pendingFrames.push(event.data as string);
+    void flushPendingFrames();
   };
 
   ws.onclose = () => {
@@ -90,6 +105,43 @@ async function connect(): Promise<void> {
   ws.onerror = () => {
     ws?.close();
   };
+}
+
+function scheduleFlush(): void {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    void flushPendingFrames();
+  }, FRAME_RETRY_DELAY);
+}
+
+async function flushPendingFrames(): Promise<void> {
+  if (flushingFrames || pendingFrames.length === 0) return;
+  flushingFrames = true;
+  try {
+    while (pendingFrames.length > 0) {
+      let delivered = false;
+      try {
+        const resp = await chrome.runtime.sendMessage({
+          type: 'ws-message',
+          data: pendingFrames[0],
+        }) as { ok?: boolean };
+        delivered = resp?.ok === true;
+      } catch {
+        delivered = false;
+      }
+
+      if (!delivered) {
+        scheduleFlush();
+        break;
+      }
+
+      pendingFrames.shift();
+    }
+  } finally {
+    flushingFrames = false;
+    if (pendingFrames.length > 0 && !flushTimer) scheduleFlush();
+  }
 }
 
 function scheduleReconnect(): void {

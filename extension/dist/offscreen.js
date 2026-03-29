@@ -1,13 +1,13 @@
-const DAEMON_PORT = 19825;
-const DAEMON_HOST = "localhost";
-const DAEMON_WS_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}/ext`;
-const WS_RECONNECT_BASE_DELAY = 2e3;
-const WS_RECONNECT_MAX_DELAY = 6e4;
+import { a as DAEMON_WS_URL, W as WS_RECONNECT_BASE_DELAY, b as WS_RECONNECT_MAX_DELAY } from './assets/protocol-Z52ThYIj.js';
 
 let ws = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
+let pendingFrames = [];
+let flushTimer = null;
+let flushingFrames = false;
 const MAX_EAGER_ATTEMPTS = 6;
+const FRAME_RETRY_DELAY = 1e3;
 function sendLog(level, msg) {
   chrome.runtime.sendMessage({ type: "log", level, msg, ts: Date.now() }).catch(() => {
   });
@@ -27,8 +27,20 @@ console.error = (...args) => {
   _origError(...args);
   sendLog("error", args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" "));
 };
+async function probeDaemon() {
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: "ws-probe" });
+    return resp?.ok === true;
+  } catch {
+    return false;
+  }
+}
 async function connect() {
   if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
+  if (!await probeDaemon()) {
+    scheduleReconnect();
+    return;
+  }
   try {
     ws = new WebSocket(DAEMON_WS_URL);
   } catch {
@@ -42,13 +54,12 @@ async function connect() {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
-    ws?.send(JSON.stringify({ type: "hello", version: "__offscreen__" }));
-    chrome.runtime.sendMessage({ type: "ws-connected" }).catch(() => {
-    });
+    ws?.send(JSON.stringify({ type: "hello", version: chrome.runtime.getManifest().version }));
+    void flushPendingFrames();
   };
   ws.onmessage = (event) => {
-    chrome.runtime.sendMessage({ type: "ws-message", data: event.data }).catch(() => {
-    });
+    pendingFrames.push(event.data);
+    void flushPendingFrames();
   };
   ws.onclose = () => {
     console.log("[opencli/offscreen] Disconnected from daemon");
@@ -58,6 +69,39 @@ async function connect() {
   ws.onerror = () => {
     ws?.close();
   };
+}
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    void flushPendingFrames();
+  }, FRAME_RETRY_DELAY);
+}
+async function flushPendingFrames() {
+  if (flushingFrames || pendingFrames.length === 0) return;
+  flushingFrames = true;
+  try {
+    while (pendingFrames.length > 0) {
+      let delivered = false;
+      try {
+        const resp = await chrome.runtime.sendMessage({
+          type: "ws-message",
+          data: pendingFrames[0]
+        });
+        delivered = resp?.ok === true;
+      } catch {
+        delivered = false;
+      }
+      if (!delivered) {
+        scheduleFlush();
+        break;
+      }
+      pendingFrames.shift();
+    }
+  } finally {
+    flushingFrames = false;
+    if (pendingFrames.length > 0 && !flushTimer) scheduleFlush();
+  }
 }
 function scheduleReconnect() {
   if (reconnectTimer) return;

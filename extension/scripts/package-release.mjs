@@ -94,9 +94,35 @@ async function collectHtmlDependencies(relativeHtmlPath, files, visited) {
   }
 }
 
+async function collectScriptDependencies(relativeScriptPath, files, visited) {
+  if (visited.has(relativeScriptPath)) return;
+  visited.add(relativeScriptPath);
+
+  const scriptPath = path.join(extensionDir, relativeScriptPath);
+  const source = await fs.readFile(scriptPath, 'utf8');
+  const importRe = /\bimport\s+(?:[^"'()]+?\s+from\s+)?["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/g;
+
+  for (const match of source.matchAll(importRe)) {
+    const rawRef = match[1] ?? match[2];
+    const cleanRef = rawRef?.split('?')[0];
+    if (!isLocalAsset(cleanRef)) continue;
+
+    const resolvedRelativePath = cleanRef.startsWith('/')
+      ? cleanRef.slice(1)
+      : path.posix.normalize(path.posix.join(path.posix.dirname(relativeScriptPath), cleanRef));
+
+    addLocalAsset(files, resolvedRelativePath);
+
+    if (resolvedRelativePath.endsWith('.js') || resolvedRelativePath.endsWith('.mjs')) {
+      await collectScriptDependencies(resolvedRelativePath, files, visited);
+    }
+  }
+}
+
 async function collectManifestAssets(manifest) {
   const files = new Set(collectManifestEntrypoints(manifest));
   const htmlPages = [];
+  const scriptEntries = [];
 
   if (manifest.action?.default_popup) {
     htmlPages.push(manifest.action.default_popup);
@@ -112,6 +138,26 @@ async function collectManifestAssets(manifest) {
     if (isLocalAsset(htmlPage)) {
       await collectHtmlDependencies(htmlPage, files, visited);
     }
+  }
+
+  if (manifest.background?.service_worker && isLocalAsset(manifest.background.service_worker)) {
+    scriptEntries.push(manifest.background.service_worker);
+  }
+  for (const contentScript of manifest.content_scripts ?? []) {
+    for (const jsFile of contentScript.js ?? []) {
+      if (isLocalAsset(jsFile)) scriptEntries.push(jsFile);
+    }
+  }
+
+  for (const file of files) {
+    if (typeof file === 'string' && (file.endsWith('.js') || file.endsWith('.mjs'))) {
+      scriptEntries.push(file);
+    }
+  }
+
+  const scriptVisited = new Set();
+  for (const scriptEntry of new Set(scriptEntries)) {
+    await collectScriptDependencies(scriptEntry, files, scriptVisited);
   }
 
   return [...files];

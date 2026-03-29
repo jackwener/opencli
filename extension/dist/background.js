@@ -1,3 +1,5 @@
+import { D as DAEMON_PING_URL, a as DAEMON_WS_URL, W as WS_RECONNECT_BASE_DELAY, b as WS_RECONNECT_MAX_DELAY } from './assets/protocol-Z52ThYIj.js';
+
 const attached = /* @__PURE__ */ new Set();
 const BLANK_PAGE$1 = "data:text/html,<html></html>";
 function isDebuggableUrl$1(url) {
@@ -118,25 +120,116 @@ function registerListeners() {
 }
 
 const OFFSCREEN_URL = chrome.runtime.getURL("offscreen.html");
+let forceLegacyTransport = false;
+let legacyWs = null;
+let legacyReconnectTimer = null;
+let legacyReconnectAttempts = 0;
+const MAX_EAGER_ATTEMPTS = 6;
+function prefersOffscreenTransport() {
+  return !forceLegacyTransport && !!chrome.offscreen;
+}
+async function probeDaemon() {
+  try {
+    const res = await fetch(DAEMON_PING_URL, { signal: AbortSignal.timeout(1e3) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 async function ensureOffscreen() {
-  if (!chrome.offscreen) return;
-  const existing = await chrome.offscreen.hasDocument();
-  if (!existing) {
-    await chrome.offscreen.createDocument({
-      url: OFFSCREEN_URL,
-      reasons: ["DOM_SCRAPING"],
-      justification: "Maintain persistent WebSocket connection to opencli daemon"
-    });
+  if (!chrome.offscreen) return false;
+  try {
+    const existing = await chrome.offscreen.hasDocument();
+    if (!existing) {
+      await chrome.offscreen.createDocument({
+        url: OFFSCREEN_URL,
+        reasons: ["DOM_SCRAPING"],
+        justification: "Maintain persistent WebSocket connection to opencli daemon"
+      });
+    }
+    return true;
+  } catch (err) {
+    forceLegacyTransport = true;
+    console.warn("[opencli] Failed to initialize offscreen transport, falling back to Service Worker transport:", err);
+    return false;
   }
 }
 async function offscreenConnect() {
-  await ensureOffscreen();
+  const ready = await ensureOffscreen();
+  if (!ready) {
+    await legacyConnect();
+    return;
+  }
   try {
     await chrome.runtime.sendMessage({ type: "ws-connect" });
   } catch {
   }
 }
+async function legacyConnect() {
+  if (legacyWs?.readyState === WebSocket.OPEN || legacyWs?.readyState === WebSocket.CONNECTING) return;
+  if (!await probeDaemon()) return;
+  try {
+    legacyWs = new WebSocket(DAEMON_WS_URL);
+  } catch {
+    scheduleLegacyReconnect();
+    return;
+  }
+  legacyWs.onopen = () => {
+    console.log("[opencli] Connected to daemon");
+    legacyReconnectAttempts = 0;
+    if (legacyReconnectTimer) {
+      clearTimeout(legacyReconnectTimer);
+      legacyReconnectTimer = null;
+    }
+    legacyWs?.send(JSON.stringify({ type: "hello", version: chrome.runtime.getManifest().version }));
+  };
+  legacyWs.onmessage = async (event) => {
+    try {
+      const command = JSON.parse(event.data);
+      const result = await handleCommand(command);
+      await wsSend(JSON.stringify(result));
+    } catch (err) {
+      console.error("[opencli] Message handling error:", err);
+    }
+  };
+  legacyWs.onclose = () => {
+    console.log("[opencli] Disconnected from daemon");
+    legacyWs = null;
+    scheduleLegacyReconnect();
+  };
+  legacyWs.onerror = () => {
+    legacyWs?.close();
+  };
+}
+function scheduleLegacyReconnect() {
+  if (legacyReconnectTimer) return;
+  legacyReconnectAttempts++;
+  if (legacyReconnectAttempts > MAX_EAGER_ATTEMPTS) return;
+  const delay = Math.min(
+    WS_RECONNECT_BASE_DELAY * Math.pow(2, legacyReconnectAttempts - 1),
+    WS_RECONNECT_MAX_DELAY
+  );
+  legacyReconnectTimer = setTimeout(() => {
+    legacyReconnectTimer = null;
+    void legacyConnect();
+  }, delay);
+}
+async function connectTransport() {
+  if (prefersOffscreenTransport()) {
+    await offscreenConnect();
+  } else {
+    await legacyConnect();
+  }
+}
 async function wsSend(payload) {
+  if (!prefersOffscreenTransport()) {
+    if (legacyWs?.readyState === WebSocket.OPEN) {
+      legacyWs.send(payload);
+    } else {
+      void legacyConnect();
+    }
+    return;
+  }
   try {
     const resp = await chrome.runtime.sendMessage({ type: "ws-send", payload });
     if (!resp?.ok) {
@@ -147,6 +240,12 @@ async function wsSend(payload) {
   }
 }
 async function wsStatus() {
+  if (!prefersOffscreenTransport()) {
+    return {
+      connected: legacyWs?.readyState === WebSocket.OPEN,
+      reconnecting: legacyReconnectTimer !== null
+    };
+  }
   try {
     const resp = await chrome.runtime.sendMessage({ type: "ws-status" });
     return { connected: resp?.connected ?? false, reconnecting: resp?.reconnecting ?? false };
@@ -237,7 +336,7 @@ function initialize() {
   initialized = true;
   chrome.alarms.create("keepalive", { periodInMinutes: 0.25 });
   registerListeners();
-  void offscreenConnect();
+  void connectTransport();
   console.log("[opencli] OpenCLI extension initialized");
 }
 chrome.runtime.onInstalled.addListener(() => {
@@ -248,7 +347,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "keepalive") {
-    void offscreenConnect();
+    void connectTransport();
   }
 });
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -256,7 +355,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     wsStatus().then((s) => sendResponse(s));
     return true;
   }
+  if (msg?.type === "ws-probe") {
+    probeDaemon().then((ok) => sendResponse({ ok }));
+    return true;
+  }
   if (msg?.type === "ws-message") {
+    sendResponse({ ok: true });
     void (async () => {
       try {
         const command = JSON.parse(msg.data);
@@ -266,10 +370,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         console.error("[opencli] Message handling error:", err);
       }
     })();
-    return false;
-  }
-  if (msg?.type === "ws-connected") {
-    void wsSend(JSON.stringify({ type: "hello", version: chrome.runtime.getManifest().version }));
     return false;
   }
   if (msg?.type === "log") {
