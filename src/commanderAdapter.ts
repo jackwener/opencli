@@ -33,7 +33,7 @@ import {
 import { checkDaemonStatus } from './browser/discover.js';
 
 export function normalizeArgValue(argType: string | undefined, value: unknown, name: string): unknown {
-  if (argType !== 'bool') return value;
+  if (argType !== 'bool' && argType !== 'boolean') return value;
   if (typeof value === 'boolean') return value;
   if (value == null || value === '') return false;
 

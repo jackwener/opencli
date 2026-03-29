@@ -76,3 +76,50 @@ describe('commanderAdapter arg passing', () => {
     expect(mockExecuteCommand).not.toHaveBeenCalled();
   });
 });
+
+describe('commanderAdapter boolean alias support', () => {
+  const cmd: CliCommand = {
+    site: 'reddit',
+    name: 'save',
+    description: 'Save a post',
+    browser: false,
+    args: [
+      { name: 'post-id', positional: true, required: true, help: 'Post ID' },
+      { name: 'undo', type: 'boolean', default: false, help: 'Unsave instead of save' },
+    ],
+    func: vi.fn(),
+  };
+
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockExecuteCommand.mockResolvedValue([]);
+    mockRenderOutput.mockReset();
+    delete process.env.OPENCLI_VERBOSE;
+    process.exitCode = undefined;
+  });
+
+  it('coerces default false for boolean args to a real boolean', async () => {
+    const program = new Command();
+    const siteCmd = program.command('reddit');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'reddit', 'save', 't3_abc123']);
+
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs['post-id']).toBe('t3_abc123');
+    expect(kwargs.undo).toBe(false);
+  });
+
+  it('coerces explicit false for boolean args to a real boolean', async () => {
+    const program = new Command();
+    const siteCmd = program.command('reddit');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'reddit', 'save', 't3_abc123', '--undo', 'false']);
+
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs.undo).toBe(false);
+  });
+});
