@@ -8,6 +8,7 @@ import {
   defaultPeekBody,
   flattenPeekGroups,
   mapTaskEntry,
+  parsePeekLimit,
 } from './task-helpers.js';
 
 /** 文档示例里「负责人」常用 field004；与顶层 assign 在不同部署上二选一有效 */
@@ -98,7 +99,7 @@ cli({
       );
     }
 
-    const limit = Math.max(1, Math.min(500, Number(kwargs.limit ?? 100)));
+    const limit = parsePeekLimit(kwargs.limit, 100);
     const mode = String(kwargs.mode ?? 'assign');
 
     await gotoOnesHome(page);

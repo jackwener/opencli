@@ -79,6 +79,36 @@ function pickTaskTotalManhourRaw(parsed: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+export function buildAddManhourGraphqlBody(input: {
+  ownerId: string;
+  taskId: string;
+  startTime: number;
+  rawManhour: number;
+  note: string;
+}): string {
+  const { ownerId, taskId, startTime, rawManhour, note } = input;
+  const description = JSON.stringify(note);
+  const owner = JSON.stringify(ownerId);
+  const task = JSON.stringify(taskId);
+
+  return JSON.stringify({
+    query: `mutation AddManhour {
+  addManhour(
+    mode: "simple"
+    owner: ${owner}
+    task: ${task}
+    type: "recorded"
+    start_time: ${startTime}
+    hours: ${rawManhour}
+    description: ${description}
+    customData: {}
+  ) {
+    key
+  }
+}`,
+  });
+}
+
 cli({
   site: 'ones',
   name: 'worklog',
@@ -191,20 +221,12 @@ cli({
     };
 
     const enc = encodeURIComponent(taskId);
-    const gqlBody = JSON.stringify({
-      query:
-        'mutation AddManhour { addManhour (mode: $mode owner: $owner task: $task type: $type start_time: $start_time hours: $hours description: $description customData: $customData) { key } }',
-      variables: {
-        mode: 'simple',
-        type: 'recorded',
-        customData: {},
-        owner: ownerId,
-        task: taskId,
-        start_time: startTime,
-        hours: rawManhour,
-        description: note,
-        remaining_hours: null,
-      },
+    const gqlBody = buildAddManhourGraphqlBody({
+      ownerId,
+      taskId,
+      startTime,
+      rawManhour,
+      note,
     });
     const attempts: { path: string; body: string }[] = [
       { path: `team/${team}/items/graphql`, body: gqlBody },

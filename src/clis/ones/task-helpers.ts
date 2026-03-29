@@ -206,3 +206,9 @@ export function defaultPeekBody(query: Record<string, unknown>): Record<string, 
     is_show_derive: false,
   };
 }
+
+export function parsePeekLimit(value: unknown, fallback: number): number {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.max(1, Math.min(500, parsed));
+}

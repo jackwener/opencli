@@ -3,7 +3,7 @@ import { CliError } from '../../errors.js';
 import { gotoOnesHome, onesFetchInPage } from './common.js';
 import { enrichPeekEntriesWithDetails } from './enrich-tasks.js';
 import { resolveTaskListLabels } from './resolve-labels.js';
-import { defaultPeekBody, flattenPeekGroups, mapTaskEntry } from './task-helpers.js';
+import { defaultPeekBody, flattenPeekGroups, mapTaskEntry, parsePeekLimit } from './task-helpers.js';
 
 function buildQuery(project?: string, assign?: string): Record<string, unknown> {
   const must: unknown[] = [];
@@ -72,7 +72,7 @@ cli({
 
     const project = (kwargs.project as string | undefined)?.trim();
     const assign = (kwargs.assign as string | undefined)?.trim();
-    const limit = Math.max(1, Math.min(500, Number(kwargs.limit ?? 30)));
+    const limit = parsePeekLimit(kwargs.limit, 30);
 
     await gotoOnesHome(page);
 
