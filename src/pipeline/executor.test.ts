@@ -32,6 +32,9 @@ function createMockPage(overrides: Partial<IPage> = {}): IPage {
     getInterceptedRequests: vi.fn().mockResolvedValue([]),
     screenshot: vi.fn().mockResolvedValue(''),
     waitForCapture: vi.fn().mockResolvedValue(undefined),
+    installStreamingInterceptor: vi.fn().mockResolvedValue(undefined),
+    getStreamedResponses: vi.fn().mockResolvedValue({ text: '', events: [], done: false, errors: [] }),
+    waitForStreamCapture: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
