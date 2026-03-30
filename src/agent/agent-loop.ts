@@ -162,6 +162,10 @@ export class AgentLoop {
     for (const action of response.actions) {
       if (action.type === 'done') {
         isDone = true;
+        // Capture final DOM snapshot before finalizing trace
+        if (this.traceRecorder) {
+          this.traceRecorder.recordFinalSnapshot(domContext);
+        }
         doneResult = {
           success: true,
           status: 'done',

@@ -24,12 +24,16 @@ export async function saveTraceAsSkill(
   trace: RichTrace,
   name: string,
 ): Promise<SavedSkill> {
-  // Parse and validate name
+  // Parse and validate name (with path traversal protection)
   const parts = name.split('/');
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new Error(`Invalid skill name "${name}" — must be "site/command" format (e.g., "flights/search")`);
   }
   const [site, command] = parts;
+  const SAFE_NAME = /^[a-zA-Z0-9_-]+$/;
+  if (!SAFE_NAME.test(site) || !SAFE_NAME.test(command)) {
+    throw new Error(`Skill name parts must only contain alphanumeric, dash, underscore. Got: "${name}"`);
+  }
 
   // Stage 2: API Discovery
   const discovery = discoverApi(trace);
@@ -43,11 +47,11 @@ export async function saveTraceAsSkill(
   const filePath = join(cliDir, `${command}.ts`);
   writeFileSync(filePath, tsCode, 'utf-8');
 
-  // Save raw trace as JSON for debugging
+  // Save sanitized trace as JSON for debugging (strip sensitive data)
   const traceDir = join(homedir(), '.opencli', 'traces');
   mkdirSync(traceDir, { recursive: true });
   const tracePath = join(traceDir, `${site}-${command}-${Date.now()}.json`);
-  writeFileSync(tracePath, JSON.stringify(trace, null, 2), 'utf-8');
+  writeFileSync(tracePath, JSON.stringify(sanitizeTrace(trace), null, 2), 'utf-8');
 
   return {
     path: filePath,
@@ -116,9 +120,9 @@ function validateAdapterSyntax(code: string): string[] {
     issues.push('page.waitForSelector() does not exist. Use page.wait({ selector: "..." }) instead');
   }
 
-  // Import paths should end with .js
-  if (/from ['"]\.\.\/.*(?<!\.js)['"]/.test(code) && !code.includes('.js')) {
-    issues.push('Import paths should end with .js (ESM requirement)');
+  // Import paths should end with .js (ESM requirement)
+  if (/from ['"]\.\.\/[^'"]*(?<!\.js)['"]/.test(code)) {
+    issues.push('Import paths should end with .js (ESM requirement). Use ../../registry.js not ../../registry');
   }
 
   return issues;
@@ -141,10 +145,17 @@ async function generateTsAdapter(
     [{ role: 'user', content: prompt }],
   );
 
-  // Extract code from the response
-  return extractCode(response.actions?.[0]?.type === 'done'
-    ? (response.actions[0] as any).result ?? ''
-    : JSON.stringify(response));
+  // Extract code from the LLM response
+  const doneAction = response.actions.find(a => a.type === 'done');
+  if (doneAction && doneAction.type === 'done' && doneAction.result) {
+    return extractCode(doneAction.result);
+  }
+  // Fallback: try to extract code from the thinking field
+  if (response.thinking) {
+    const fromThinking = extractCode(response.thinking);
+    if (fromThinking.includes('cli(')) return fromThinking;
+  }
+  throw new Error('LLM did not return a done action with generated code');
 }
 
 function buildGenerationPrompt(
@@ -233,8 +244,8 @@ cli({
   if (discovery.needsAuth) {
     parts.push(`\n## Auth Context`);
     parts.push(`Cookie names on domain: ${trace.authContext.cookieNames.join(', ')}`);
-    if (trace.authContext.csrfToken) {
-      parts.push(`CSRF token found: yes (extract from cookies)`);
+    if (trace.authContext.csrfPresent) {
+      parts.push(`CSRF token found: yes (extract from cookies at runtime)`);
     }
   }
 
@@ -314,9 +325,11 @@ Respond with JSON: {"thinking": "...", "nextGoal": "fix error", "actions": [{"ty
     [{ role: 'user', content: prompt }],
   );
 
-  return extractCode(response.actions?.[0]?.type === 'done'
-    ? (response.actions[0] as any).result ?? code
-    : code);
+  const doneAction = response.actions.find(a => a.type === 'done');
+  if (doneAction && doneAction.type === 'done' && doneAction.result) {
+    return extractCode(doneAction.result);
+  }
+  return code; // Return original if LLM didn't produce a fix
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -338,6 +351,27 @@ function extractCode(text: string): string {
 
   // Return as-is
   return trimmed;
+}
+
+/** Strip sensitive data from trace before writing to disk. */
+function sanitizeTrace(trace: RichTrace): RichTrace {
+  const SENSITIVE_KEYS = /^(token|access_token|refresh_token|password|secret|authorization|cookie|set-cookie|x-auth|api_key|apikey)/i;
+  return {
+    ...trace,
+    authContext: {
+      ...trace.authContext,
+      csrfPresent: trace.authContext.csrfPresent,
+      bearerPresent: trace.authContext.bearerPresent,
+    },
+    networkCapture: trace.networkCapture.map(req => ({
+      ...req,
+      responseBody: req.responseBody && typeof req.responseBody === 'object'
+        ? JSON.parse(JSON.stringify(req.responseBody, (key, val) =>
+            SENSITIVE_KEYS.test(key) ? '[REDACTED]' : val
+          ))
+        : req.responseBody,
+    })),
+  };
 }
 
 function extractDomain(url?: string): string | undefined {

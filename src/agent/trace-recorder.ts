@@ -33,8 +33,10 @@ export interface CapturedRequest {
 
 export interface AuthContext {
   cookieNames: string[];
-  csrfToken?: string;
-  bearerToken?: string;
+  /** Whether a CSRF token was detected (value is never stored) */
+  csrfPresent: boolean;
+  /** Whether bearer auth was detected */
+  bearerPresent: boolean;
   authHeaders: Record<string, string>;
 }
 
@@ -239,8 +241,8 @@ export class TraceRecorder {
       // Page might have navigated away
     }
 
-    // Collect auth context
-    let authContext: AuthContext = { cookieNames: [], authHeaders: {} };
+    // Collect auth context (only boolean flags, never actual token values)
+    let authContext: AuthContext = { cookieNames: [], csrfPresent: false, bearerPresent: false, authHeaders: {} };
     try {
       const raw = await page.evaluate(READ_AUTH_CONTEXT_JS) as {
         cookieNames: string[];
@@ -248,18 +250,10 @@ export class TraceRecorder {
       } | null;
       if (raw) {
         authContext.cookieNames = raw.cookieNames ?? [];
-        authContext.csrfToken = raw.csrfToken ?? undefined;
+        authContext.csrfPresent = !!raw.csrfToken;
       }
     } catch {
       // Non-fatal
-    }
-
-    // Detect bearer tokens from captured requests
-    for (const req of networkCapture) {
-      // Check if any request URL matches a known auth pattern
-      if (req.url.includes('/api/') || req.url.includes('/graphql')) {
-        // This is heuristic — we record that API calls were made
-      }
     }
 
     return {

@@ -75,8 +75,10 @@ export function discoverApi(trace: RichTrace): DiscoveryResult {
   candidates.sort((a, b) => b.score - a.score);
 
   const goldenApi = candidates.length > 0 ? candidates[0] : null;
-  const needsAuth = trace.authContext.cookieNames.length > 0;
-  const needsCsrf = !!trace.authContext.csrfToken;
+  const AUTH_COOKIE_PATTERN = /^(session|sess|auth|token|jwt|access|refresh|user_id|uid|logged|ct0|sid|_session)/i;
+  const needsAuth = trace.authContext.cookieNames.some(name => AUTH_COOKIE_PATTERN.test(name))
+    || trace.authContext.csrfPresent;
+  const needsCsrf = trace.authContext.csrfPresent;
 
   // Determine strategy
   let strategy: StrategyRecommendation;
