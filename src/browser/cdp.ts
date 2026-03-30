@@ -56,6 +56,7 @@ export class CDPBridge implements IBrowserFactory {
   private _idCounter = 0;
   private _pending = new Map<number, { resolve: (val: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private _eventListeners = new Map<string, Set<(params: unknown) => void>>();
+  private _sessionId: string | null = null;
 
   async connect(opts?: { timeout?: number; workspace?: string }): Promise<IPage> {
     if (this._ws) throw new Error('CDPBridge is already connected. Call close() before reconnecting.');
@@ -72,6 +73,7 @@ export class CDPBridge implements IBrowserFactory {
     }
 
     let wsUrl = endpoint;
+    const isBrowserEndpoint = /^wss?:\/\/.+\/devtools\/browser\//i.test(endpoint);
     if (endpoint.startsWith('http')) {
       const targets = await fetchJsonDirect(`${endpoint.replace(/\/$/, '')}/json`) as CDPTarget[];
       const target = selectCDPTarget(targets);
@@ -90,6 +92,19 @@ export class CDPBridge implements IBrowserFactory {
         clearTimeout(timeout);
         this._ws = ws;
         try {
+          if (isBrowserEndpoint) {
+            const target = await this.sendRaw('Target.createTarget', { url: 'about:blank' }) as { targetId?: string };
+            const targetId = typeof target?.targetId === 'string' ? target.targetId : '';
+            if (!targetId) throw new Error('CDP browser endpoint did not return a targetId');
+
+            const attached = await this.sendRaw('Target.attachToTarget', {
+              targetId,
+              flatten: true,
+            }) as { sessionId?: string };
+            const sessionId = typeof attached?.sessionId === 'string' ? attached.sessionId : '';
+            if (!sessionId) throw new Error('CDP browser endpoint did not return a sessionId');
+            this._sessionId = sessionId;
+          }
           await this.send('Page.enable');
           await this.send('Page.addScriptToEvaluateOnNewDocument', { source: generateStealthJs() });
         } catch {}
@@ -114,7 +129,7 @@ export class CDPBridge implements IBrowserFactory {
               entry.resolve(msg.result);
             }
           }
-          if (msg.method) {
+          if (msg.method && (!this._sessionId || !msg.sessionId || msg.sessionId === this._sessionId)) {
             const listeners = this._eventListeners.get(msg.method);
             if (listeners) {
               for (const fn of listeners) fn(msg.params);
@@ -139,6 +154,15 @@ export class CDPBridge implements IBrowserFactory {
   }
 
   async send(method: string, params: Record<string, unknown> = {}, timeoutMs: number = CDP_SEND_TIMEOUT): Promise<unknown> {
+    return this.sendRaw(method, params, timeoutMs, this._sessionId ?? undefined);
+  }
+
+  private async sendRaw(
+    method: string,
+    params: Record<string, unknown> = {},
+    timeoutMs: number = CDP_SEND_TIMEOUT,
+    sessionId?: string,
+  ): Promise<unknown> {
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
       throw new Error('CDP connection is not open');
     }
@@ -149,7 +173,7 @@ export class CDPBridge implements IBrowserFactory {
         reject(new Error(`CDP command '${method}' timed out after ${timeoutMs / 1000}s`));
       }, timeoutMs);
       this._pending.set(id, { resolve, reject, timer });
-      this._ws!.send(JSON.stringify({ id, method, params }));
+      this._ws!.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }));
     });
   }
 
