@@ -11,9 +11,6 @@ pipeline:
   - navigate: https://jimeng.jianying.com/ai-tool/generate?type=image&workspace=0
   - evaluate: |
       (async () => {
-        // --- helpers ---
-        const ERR = (code, msg) => [{ total: '\u26a0 ' + msg, vip_credit: '', purchase_credit: '', gift_credit: '', vip_level: '', vip_expire: '', _error: code }];
-
         // XHR wrapper — BDMS SDK patches XMLHttpRequest globally on jimeng pages
         // to inject signing headers (appid, sign, device-time, etc.).
         // Using XHR instead of fetch ensures the SDK can intercept and sign the request.
@@ -35,23 +32,18 @@ pipeline:
         }
 
         // 1) Fetch credit balance via XHR (BDMS-signed)
-        let creditData;
-        try {
-          creditData = await xhrPost('/commerce/v1/benefits/user_credit', {});
-        } catch (e) {
-          return ERR('NETWORK', 'credit request failed: ' + e.message);
-        }
+        const creditData = await xhrPost('/commerce/v1/benefits/user_credit', {});
 
         if (!creditData || creditData.ret === '1014') {
-          return ERR('AUTH', 'not logged in \u2014 open jimeng.jianying.com in Chrome and sign in first');
+          throw new Error('Not logged in — open jimeng.jianying.com in Chrome and sign in first');
         }
         if (creditData.ret !== '0' && creditData.ret !== 0) {
-          return ERR('API', 'credit API error: ret=' + creditData.ret + ' ' + (creditData.errmsg || ''));
+          throw new Error('Credit API error: ret=' + creditData.ret + ' ' + (creditData.errmsg || ''));
         }
 
         const credit = creditData?.data?.credit;
         if (!credit && credit !== 0) {
-          return ERR('EMPTY', 'credit field missing in response \u2014 page may have changed');
+          throw new Error('Credit field missing in response — page structure may have changed');
         }
 
         // 2) Fetch subscription info via XHR (best-effort, non-blocking)
@@ -69,9 +61,9 @@ pipeline:
           }
         } catch (_) { /* subscription info is supplementary */ }
 
-        const vc = credit.vipCredit ?? credit.vip_credit ?? 0;
-        const pc = credit.purchaseCredit ?? credit.purchase_credit ?? 0;
-        const gc = credit.giftCredit ?? credit.gift_credit ?? 0;
+        const vc = Number(credit.vipCredit ?? credit.vip_credit ?? 0);
+        const pc = Number(credit.purchaseCredit ?? credit.purchase_credit ?? 0);
+        const gc = Number(credit.giftCredit ?? credit.gift_credit ?? 0);
         const total = (typeof credit === 'number') ? credit : (vc + pc + gc);
 
         return [{
