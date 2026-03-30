@@ -1,8 +1,12 @@
 /**
- * LLM Client — thin wrapper around the Anthropic SDK.
+ * LLM Client — wrapper around the Anthropic SDK.
  *
- * Handles: API calls, JSON parsing, Zod validation, token tracking.
- * Supports multimodal messages (text + screenshot images).
+ * Features:
+ * - Prompt caching (system + last user message)
+ * - Multimodal support (text + screenshot images)
+ * - Screenshot size control (auto-resize for token efficiency)
+ * - Token tracking with cost estimation
+ * - JSON extraction and Zod validation
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -12,6 +16,8 @@ import { AgentResponse } from './types.js';
 export interface LLMClientConfig {
   model?: string;
   apiKey?: string;
+  /** Max screenshot dimension in pixels (default 1200) */
+  maxScreenshotDim?: number;
 }
 
 export interface ChatMessage {
@@ -24,17 +30,22 @@ export interface ChatMessage {
 interface TokenUsage {
   input: number;
   output: number;
+  cacheRead: number;
+  cacheCreation: number;
   estimatedCost: number;
 }
 
-// Cost per 1M tokens (approximate, Claude Sonnet 4)
+// Cost per 1M tokens (Claude Sonnet 4)
 const COST_PER_1M_INPUT = 3.0;
 const COST_PER_1M_OUTPUT = 15.0;
+const COST_PER_1M_CACHE_READ = 0.3;   // 90% cheaper than input
+const COST_PER_1M_CACHE_WRITE = 3.75; // 25% more than input
 
 export class LLMClient {
   private client: Anthropic;
   private model: string;
-  private _totalTokens: TokenUsage = { input: 0, output: 0, estimatedCost: 0 };
+  private maxScreenshotDim: number;
+  private _totalTokens: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, estimatedCost: 0 };
 
   constructor(config: LLMClientConfig = {}) {
     const apiKey = config.apiKey ?? process.env.ANTHROPIC_API_KEY;
@@ -44,15 +55,18 @@ export class LLMClient {
     const baseURL = process.env.ANTHROPIC_BASE_URL ?? undefined;
     this.client = new Anthropic({ apiKey, baseURL });
     this.model = config.model ?? 'claude-sonnet-4-20250514';
+    this.maxScreenshotDim = config.maxScreenshotDim ?? 1200;
   }
 
   async chat(
     systemPrompt: string,
     messages: ChatMessage[],
   ): Promise<AgentResponse> {
-    const apiMessages: MessageParam[] = messages.map(m => {
+    const apiMessages: MessageParam[] = messages.map((m, i) => {
+      const isLastUser = m.role === 'user' && i === messages.length - 1;
+
       if (m.role === 'user' && m.screenshot) {
-        // Multimodal: text + image
+        // Multimodal: image + text
         const content: ContentBlockParam[] = [
           {
             type: 'image',
@@ -62,28 +76,51 @@ export class LLMClient {
               data: m.screenshot,
             },
           },
-          { type: 'text', text: m.content },
+          {
+            type: 'text',
+            text: m.content,
+            ...(isLastUser ? { cache_control: { type: 'ephemeral' as const } } : {}),
+          },
         ];
         return { role: m.role, content };
       }
-      return { role: m.role, content: m.content };
+      return {
+        role: m.role,
+        content: isLastUser
+          ? [{ type: 'text' as const, text: m.content, cache_control: { type: 'ephemeral' as const } }]
+          : m.content,
+      };
     });
 
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: 4096,
-      system: systemPrompt,
+      system: [
+        {
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: apiMessages,
     });
 
-    // Track tokens
-    const inputTokens = response.usage?.input_tokens ?? 0;
-    const outputTokens = response.usage?.output_tokens ?? 0;
+    // Track tokens (including cache stats)
+    const usage = response.usage as unknown as Record<string, number> | undefined;
+    const inputTokens = usage?.input_tokens ?? 0;
+    const outputTokens = usage?.output_tokens ?? 0;
+    const cacheRead = usage?.cache_read_input_tokens ?? 0;
+    const cacheCreation = usage?.cache_creation_input_tokens ?? 0;
+
     this._totalTokens.input += inputTokens;
     this._totalTokens.output += outputTokens;
+    this._totalTokens.cacheRead += cacheRead;
+    this._totalTokens.cacheCreation += cacheCreation;
     this._totalTokens.estimatedCost =
       (this._totalTokens.input / 1_000_000) * COST_PER_1M_INPUT +
-      (this._totalTokens.output / 1_000_000) * COST_PER_1M_OUTPUT;
+      (this._totalTokens.output / 1_000_000) * COST_PER_1M_OUTPUT +
+      (this._totalTokens.cacheRead / 1_000_000) * COST_PER_1M_CACHE_READ +
+      (this._totalTokens.cacheCreation / 1_000_000) * COST_PER_1M_CACHE_WRITE;
 
     // Extract text content
     const textBlock = response.content.find(b => b.type === 'text');
@@ -91,7 +128,7 @@ export class LLMClient {
       throw new Error('No text content in LLM response');
     }
 
-    // Guard against empty/truncated responses (common with third-party proxies)
+    // Guard against empty/truncated responses
     if (!textBlock.text || textBlock.text.trim().length === 0) {
       throw new Error('LLM returned empty response (API proxy may have truncated output)');
     }
@@ -114,7 +151,15 @@ export class LLMClient {
     return result.data;
   }
 
-  getTokenUsage(): TokenUsage {
+  getTokenUsage(): { input: number; output: number; estimatedCost: number } {
+    return {
+      input: this._totalTokens.input,
+      output: this._totalTokens.output,
+      estimatedCost: this._totalTokens.estimatedCost,
+    };
+  }
+
+  getDetailedTokenUsage(): TokenUsage {
     return { ...this._totalTokens };
   }
 }
@@ -123,14 +168,11 @@ export class LLMClient {
  * Extract JSON from text that may contain markdown code fences or other wrapping.
  */
 function extractJson(text: string): string {
-  // Try to find JSON within markdown code block
   const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (codeBlockMatch) return codeBlockMatch[1].trim();
 
-  // Try to find a JSON object directly
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) return jsonMatch[0];
 
-  // Return as-is and let JSON.parse handle the error
   return text.trim();
 }

@@ -25,7 +25,7 @@ export class ActionExecutor {
         case 'navigate':
           return await this.executeNavigate(action);
         case 'scroll':
-          return await this.executeScroll(action);
+          return await this.executeScroll(action, elementMap);
         case 'wait':
           return await this.executeWait(action);
         case 'extract':
@@ -34,6 +34,16 @@ export class ActionExecutor {
           return await this.executeGoBack();
         case 'press_key':
           return await this.executePressKey(action);
+        case 'select_dropdown':
+          return await this.executeSelectDropdown(action, elementMap);
+        case 'switch_tab':
+          return await this.executeSwitchTab(action);
+        case 'open_tab':
+          return await this.executeOpenTab(action);
+        case 'close_tab':
+          return await this.executeCloseTab();
+        case 'search_page':
+          return await this.executeSearchPage(action);
         case 'done':
           return { action, success: true, extractedContent: action.result };
         default:
@@ -48,6 +58,8 @@ export class ActionExecutor {
     }
   }
 
+  // ── Click ───────────────────────────────────────────────────────────────
+
   private async executeClick(
     action: Extract<AgentAction, { type: 'click' }>,
     elementMap: Map<number, ElementInfo>,
@@ -57,10 +69,12 @@ export class ActionExecutor {
       return { action, success: false, error: `Element [${action.index}] not found in current snapshot` };
     }
 
-    // Try native CDP click, fallback to JS injection
-    await this.clickElement(action.index, el);
+    // Auto-detect <select> and suggest select_dropdown instead
+    if (el.tag === 'select') {
+      return { action, success: false, error: `Element [${action.index}] is a <select> — use "select_dropdown" action instead` };
+    }
 
-    // Brief wait for page to react
+    await this.clickElement(action.index, el);
     await this.page.wait(0.5);
     return { action, success: true };
   }
@@ -72,7 +86,7 @@ export class ActionExecutor {
         await this.page.nativeClick(el.center.x, el.center.y);
         return;
       } catch {
-        // CDP click failed (extension not updated?) — fallback to JS
+        // CDP click failed — fallback to JS
       }
     }
     await this.page.click(String(index));
@@ -90,6 +104,8 @@ export class ActionExecutor {
     }
     await this.page.typeText(String(index), text);
   }
+
+  // ── Type ────────────────────────────────────────────────────────────────
 
   private async executeType(
     action: Extract<AgentAction, { type: 'type' }>,
@@ -124,6 +140,8 @@ export class ActionExecutor {
     return { action, success: true };
   }
 
+  // ── Navigate ────────────────────────────────────────────────────────────
+
   private async executeNavigate(
     action: Extract<AgentAction, { type: 'navigate' }>,
   ): Promise<ActionResult> {
@@ -132,32 +150,52 @@ export class ActionExecutor {
     return { action, success: true };
   }
 
+  // ── Scroll ──────────────────────────────────────────────────────────────
+
   private async executeScroll(
     action: Extract<AgentAction, { type: 'scroll' }>,
+    elementMap: Map<number, ElementInfo>,
   ): Promise<ActionResult> {
     const amount = action.amount ?? 500;
-    await this.page.scroll(action.direction, amount);
+
+    if (action.index !== undefined) {
+      // Scroll within a specific element
+      const el = elementMap.get(action.index);
+      if (el) {
+        await this.page.evaluate(`
+          (function() {
+            var els = document.querySelectorAll('[data-opencli-ref="${action.index}"]');
+            if (els[0]) els[0].scrollBy(0, ${action.direction === 'up' ? -amount : amount});
+          })()
+        `);
+      }
+    } else {
+      await this.page.scroll(action.direction, amount);
+    }
+
     await this.page.wait(0.5);
     return { action, success: true };
   }
 
+  // ── Wait ────────────────────────────────────────────────────────────────
+
   private async executeWait(
     action: Extract<AgentAction, { type: 'wait' }>,
   ): Promise<ActionResult> {
-    const seconds = action.seconds ?? 2;
+    const seconds = Math.min(action.seconds ?? 2, 10); // Cap at 10s
     await this.page.wait(seconds);
     return { action, success: true };
   }
 
+  // ── Extract ─────────────────────────────────────────────────────────────
+
   private async executeExtract(
     action: Extract<AgentAction, { type: 'extract' }>,
   ): Promise<ActionResult> {
-    // Use page.evaluate to extract text content
     const content = await this.page.evaluate(`
       (function() {
         var body = document.body;
         if (!body) return '';
-        // Get visible text, truncated
         return body.innerText.slice(0, 5000);
       })()
     `) as string;
@@ -169,21 +207,116 @@ export class ActionExecutor {
     };
   }
 
+  // ── Go Back ─────────────────────────────────────────────────────────────
+
   private async executeGoBack(): Promise<ActionResult> {
     await this.page.evaluate('history.back()');
     await this.page.wait(2);
     return { action: { type: 'go_back' }, success: true };
   }
 
+  // ── Press Key ───────────────────────────────────────────────────────────
+
   private async executePressKey(
     action: Extract<AgentAction, { type: 'press_key' }>,
   ): Promise<ActionResult> {
     if (this.page.nativeKeyPress) {
-      await this.page.nativeKeyPress(action.key);
-    } else {
-      await this.page.pressKey(action.key);
+      try {
+        await this.page.nativeKeyPress(action.key);
+        await this.page.wait(0.5);
+        return { action, success: true };
+      } catch {
+        // fallback
+      }
     }
+    await this.page.pressKey(action.key);
     await this.page.wait(0.5);
     return { action, success: true };
+  }
+
+  // ── Select Dropdown ─────────────────────────────────────────────────────
+
+  private async executeSelectDropdown(
+    action: Extract<AgentAction, { type: 'select_dropdown' }>,
+    elementMap: Map<number, ElementInfo>,
+  ): Promise<ActionResult> {
+    const el = elementMap.get(action.index);
+    if (!el) {
+      return { action, success: false, error: `Element [${action.index}] not found` };
+    }
+
+    const optionText = JSON.stringify(action.option);
+    const result = await this.page.evaluate(`
+      (function() {
+        var selects = document.querySelectorAll('[data-opencli-ref="${action.index}"]');
+        var sel = selects[0];
+        if (!sel || sel.tagName !== 'SELECT') return { error: 'Not a <select> element' };
+        var opts = Array.from(sel.options);
+        var match = opts.find(function(o) { return o.text.trim() === ${optionText} || o.value === ${optionText}; });
+        if (!match) return { error: 'Option not found: ' + ${optionText}, available: opts.map(function(o) { return o.text.trim(); }) };
+        sel.value = match.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        return { selected: match.text };
+      })()
+    `) as { error?: string; selected?: string; available?: string[] } | null;
+
+    if (result?.error) {
+      return { action, success: false, error: result.error + (result.available ? ` — Available: ${result.available.join(', ')}` : '') };
+    }
+    return { action, success: true };
+  }
+
+  // ── Tab Management ──────────────────────────────────────────────────────
+
+  private async executeSwitchTab(
+    action: Extract<AgentAction, { type: 'switch_tab' }>,
+  ): Promise<ActionResult> {
+    await this.page.selectTab(action.tabIndex);
+    await this.page.wait(1);
+    return { action, success: true };
+  }
+
+  private async executeOpenTab(
+    action: Extract<AgentAction, { type: 'open_tab' }>,
+  ): Promise<ActionResult> {
+    await this.page.newTab();
+    if (action.url) {
+      await this.page.goto(action.url);
+      await this.page.wait(2);
+    }
+    return { action, success: true };
+  }
+
+  private async executeCloseTab(): Promise<ActionResult> {
+    await this.page.closeTab();
+    return { action: { type: 'close_tab' }, success: true };
+  }
+
+  // ── Search Page ─────────────────────────────────────────────────────────
+
+  private async executeSearchPage(
+    action: Extract<AgentAction, { type: 'search_page' }>,
+  ): Promise<ActionResult> {
+    const query = JSON.stringify(action.query);
+    const result = await this.page.evaluate(`
+      (function() {
+        var text = document.body.innerText;
+        var query = ${query}.toLowerCase();
+        var lines = text.split('\\n');
+        var matches = [];
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().includes(query)) {
+            matches.push(lines[i].trim().slice(0, 200));
+            if (matches.length >= 10) break;
+          }
+        }
+        return { found: matches.length, matches: matches };
+      })()
+    `) as { found: number; matches: string[] } | null;
+
+    if (!result || result.found === 0) {
+      return { action, success: true, extractedContent: `No matches found for "${action.query}"` };
+    }
+    return { action, success: true, extractedContent: `Found ${result.found} matches:\n${result.matches.join('\n')}` };
   }
 }
