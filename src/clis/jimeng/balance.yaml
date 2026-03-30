@@ -1,0 +1,92 @@
+site: jimeng
+name: balance
+description: 即梦AI 查看积分余额与会员信息
+domain: jimeng.jianying.com
+strategy: cookie
+browser: true
+
+columns: [total, vip_credit, purchase_credit, gift_credit, vip_level, vip_expire]
+
+pipeline:
+  - navigate: https://jimeng.jianying.com/ai-tool/generate?type=image&workspace=0
+  - evaluate: |
+      (async () => {
+        // --- helpers ---
+        const ERR = (code, msg) => [{ total: '\u26a0 ' + msg, vip_credit: '', purchase_credit: '', gift_credit: '', vip_level: '', vip_expire: '', _error: code }];
+
+        // XHR wrapper — BDMS SDK patches XMLHttpRequest globally on jimeng pages
+        // to inject signing headers (appid, sign, device-time, etc.).
+        // Using XHR instead of fetch ensures the SDK can intercept and sign the request.
+        function xhrPost(url, body) {
+          return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onload = () => {
+              try { resolve(JSON.parse(xhr.responseText)); }
+              catch (e) { reject(new Error('invalid JSON: ' + xhr.responseText.substring(0, 100))); }
+            };
+            xhr.onerror = () => reject(new Error('XHR network error'));
+            xhr.ontimeout = () => reject(new Error('XHR timeout'));
+            xhr.timeout = 10000;
+            xhr.send(typeof body === 'string' ? body : JSON.stringify(body));
+          });
+        }
+
+        // 1) Fetch credit balance via XHR (BDMS-signed)
+        let creditData;
+        try {
+          creditData = await xhrPost('/commerce/v1/benefits/user_credit', {});
+        } catch (e) {
+          return ERR('NETWORK', 'credit request failed: ' + e.message);
+        }
+
+        if (!creditData || creditData.ret === '1014') {
+          return ERR('AUTH', 'not logged in \u2014 open jimeng.jianying.com in Chrome and sign in first');
+        }
+        if (creditData.ret !== '0' && creditData.ret !== 0) {
+          return ERR('API', 'credit API error: ret=' + creditData.ret + ' ' + (creditData.errmsg || ''));
+        }
+
+        const credit = creditData?.data?.credit;
+        if (!credit && credit !== 0) {
+          return ERR('EMPTY', 'credit field missing in response \u2014 page may have changed');
+        }
+
+        // 2) Fetch subscription info via XHR (best-effort, non-blocking)
+        let vipLevel = '';
+        let vipExpire = '';
+        try {
+          const sub = await xhrPost('/commerce/v1/subscription/user_info', {});
+          if (sub.ret === '0' || sub.ret === 0) {
+            const d = sub.data || {};
+            const levels = { svip: '\u9ad8\u7ea7\u4f1a\u5458', vip: '\u57fa\u7840\u4f1a\u5458', standard_vip: '\u6807\u51c6\u4f1a\u5458' };
+            vipLevel = levels[d.cur_vip_level] || d.cur_vip_level || 'free';
+            if (d.end_time && d.end_time > 0) {
+              vipExpire = new Date(d.end_time * 1000).toLocaleString('zh-CN');
+            }
+          }
+        } catch (_) { /* subscription info is supplementary */ }
+
+        const vc = credit.vipCredit ?? credit.vip_credit ?? 0;
+        const pc = credit.purchaseCredit ?? credit.purchase_credit ?? 0;
+        const gc = credit.giftCredit ?? credit.gift_credit ?? 0;
+        const total = (typeof credit === 'number') ? credit : (vc + pc + gc);
+
+        return [{
+          total: String(total),
+          vip_credit: String(vc),
+          purchase_credit: String(pc),
+          gift_credit: String(gc),
+          vip_level: vipLevel,
+          vip_expire: vipExpire,
+        }];
+      })()
+  - map:
+      total: ${{ item.total }}
+      vip_credit: ${{ item.vip_credit }}
+      purchase_credit: ${{ item.purchase_credit }}
+      gift_credit: ${{ item.gift_credit }}
+      vip_level: ${{ item.vip_level }}
+      vip_expire: ${{ item.vip_expire }}
