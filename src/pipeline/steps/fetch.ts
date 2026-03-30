@@ -39,6 +39,15 @@ async function fetchSingle(
   const headersJs = JSON.stringify(renderedHeaders);
   const urlJs = JSON.stringify(finalUrl);
   const methodJs = JSON.stringify(method.toUpperCase());
+  // Security note: `credentials: "include"` sends the browser's session cookies
+  // with every in-page fetch.  This is intentional for authenticated scraping
+  // (e.g. fetching user-specific API endpoints that require the logged-in session),
+  // but it means the pipeline must only request URLs the user has authorised.
+  // Never pass user-controlled or untrusted URLs into this step — a malicious
+  // URL could harvest session cookies via a CSRF-style request.
+  // To opt out, set `credentials: omit` in the step headers or use a Node-side
+  // fetch (no page) which never carries browser cookies.
+  //
   // Return error status instead of throwing inside evaluate to avoid CDP wrapper
   // rewriting the message (CDP prepends "Evaluate error: " to thrown errors).
   const result = await page.evaluate(`
@@ -81,6 +90,7 @@ async function fetchBatchInBrowser(
       const results = new Array(urls.length);
       let idx = 0;
 
+      // credentials:"include" sends session cookies — only use with trusted URLs.
       async function worker() {
         while (idx < urls.length) {
           const i = idx++;

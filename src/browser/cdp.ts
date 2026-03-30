@@ -12,6 +12,7 @@ import { WebSocket, type RawData } from 'ws';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import type { BrowserCookie, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
+import { redactCookies } from '../types.js';
 import type { IBrowserFactory } from '../runtime.js';
 import { wrapForEval } from './utils.js';
 import { generateSnapshotJs, scrollToRefJs, getFormStateJs } from './dom-snapshot.js';
@@ -55,6 +56,7 @@ export class CDPBridge implements IBrowserFactory {
   private _idCounter = 0;
   private _pending = new Map<number, { resolve: (val: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private _eventListeners = new Map<string, Set<(params: unknown) => void>>();
+  private _sessionId: string | null = null;
 
   async connect(opts?: { timeout?: number; workspace?: string }): Promise<IPage> {
     if (this._ws) throw new Error('CDPBridge is already connected. Call close() before reconnecting.');
@@ -62,7 +64,16 @@ export class CDPBridge implements IBrowserFactory {
     const endpoint = process.env.OPENCLI_CDP_ENDPOINT;
     if (!endpoint) throw new Error('OPENCLI_CDP_ENDPOINT is not set');
 
+    // ── Security: enforce localhost-only CDP connections ─────────────
+    // Connecting to a remote host would expose all browser cookies and DOM
+    // content to a third party.  Refuse unless OPENCLI_CDP_ALLOW_REMOTE=1
+    // is explicitly set (power-users who need remote debugging).
+    if (process.env.OPENCLI_CDP_ALLOW_REMOTE !== '1') {
+      assertLocalhostEndpoint(endpoint);
+    }
+
     let wsUrl = endpoint;
+    const isBrowserEndpoint = /^wss?:\/\/.+\/devtools\/browser\//i.test(endpoint);
     if (endpoint.startsWith('http')) {
       const targets = await fetchJsonDirect(`${endpoint.replace(/\/$/, '')}/json`) as CDPTarget[];
       const target = selectCDPTarget(targets);
@@ -81,6 +92,19 @@ export class CDPBridge implements IBrowserFactory {
         clearTimeout(timeout);
         this._ws = ws;
         try {
+          if (isBrowserEndpoint) {
+            const target = await this.sendRaw('Target.createTarget', { url: 'about:blank' }) as { targetId?: string };
+            const targetId = typeof target?.targetId === 'string' ? target.targetId : '';
+            if (!targetId) throw new Error('CDP browser endpoint did not return a targetId');
+
+            const attached = await this.sendRaw('Target.attachToTarget', {
+              targetId,
+              flatten: true,
+            }) as { sessionId?: string };
+            const sessionId = typeof attached?.sessionId === 'string' ? attached.sessionId : '';
+            if (!sessionId) throw new Error('CDP browser endpoint did not return a sessionId');
+            this._sessionId = sessionId;
+          }
           await this.send('Page.enable');
           await this.send('Page.addScriptToEvaluateOnNewDocument', { source: generateStealthJs() });
         } catch {}
@@ -105,7 +129,7 @@ export class CDPBridge implements IBrowserFactory {
               entry.resolve(msg.result);
             }
           }
-          if (msg.method) {
+          if (msg.method && (!this._sessionId || !msg.sessionId || msg.sessionId === this._sessionId)) {
             const listeners = this._eventListeners.get(msg.method);
             if (listeners) {
               for (const fn of listeners) fn(msg.params);
@@ -130,6 +154,15 @@ export class CDPBridge implements IBrowserFactory {
   }
 
   async send(method: string, params: Record<string, unknown> = {}, timeoutMs: number = CDP_SEND_TIMEOUT): Promise<unknown> {
+    return this.sendRaw(method, params, timeoutMs, this._sessionId ?? undefined);
+  }
+
+  private async sendRaw(
+    method: string,
+    params: Record<string, unknown> = {},
+    timeoutMs: number = CDP_SEND_TIMEOUT,
+    sessionId?: string,
+  ): Promise<unknown> {
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
       throw new Error('CDP connection is not open');
     }
@@ -140,7 +173,7 @@ export class CDPBridge implements IBrowserFactory {
         reject(new Error(`CDP command '${method}' timed out after ${timeoutMs / 1000}s`));
       }, timeoutMs);
       this._pending.set(id, { resolve, reject, timer });
-      this._ws!.send(JSON.stringify({ id, method, params }));
+      this._ws!.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }));
     });
   }
 
@@ -206,13 +239,27 @@ class CDPPage implements IPage {
     return result.result?.value;
   }
 
-  async getCookies(opts: { domain?: string; url?: string } = {}): Promise<BrowserCookie[]> {
+  async getCookies(opts: { domain?: string; url?: string; redact?: boolean } = {}): Promise<BrowserCookie[]> {
     const result = await this.bridge.send('Network.getCookies', opts.url ? { urls: [opts.url] } : {});
-    const cookies = isRecord(result) && Array.isArray(result.cookies) ? result.cookies : [];
+    const rawCookies = isRecord(result) && Array.isArray(result.cookies) ? result.cookies : [];
     const domain = opts.domain;
-    return domain
-      ? cookies.filter((cookie): cookie is BrowserCookie => isCookie(cookie) && matchesCookieDomain(cookie.domain, domain))
-      : cookies;
+    const cookies: BrowserCookie[] = domain
+      ? rawCookies.filter((cookie): cookie is BrowserCookie => isCookie(cookie) && matchesCookieDomain(cookie.domain, domain))
+      : rawCookies.filter(isCookie);
+
+    // CDP Network.getCookies exposes HttpOnly cookies — warn operators.
+    const httpOnlyCount = cookies.filter((c) => c.httpOnly).length;
+    if (httpOnlyCount > 0 && process.env.OPENCLI_VERBOSE) {
+      console.error(
+        `[opencli] Warning: getCookies() returned ${httpOnlyCount} HttpOnly cookie(s) via CDP.` +
+        ' These may contain session tokens — avoid logging or storing raw values.',
+      );
+    }
+
+    if (opts.redact || process.env.OPENCLI_REDACT_COOKIES === '1') {
+      return redactCookies(cookies);
+    }
+    return cookies;
   }
 
   async snapshot(opts: SnapshotOptions = {}): Promise<unknown> {
@@ -435,6 +482,39 @@ export const __test__ = {
   selectCDPTarget,
   scoreCDPTarget,
 };
+
+/**
+ * Verify that the CDP endpoint resolves to a loopback address.
+ * This prevents accidental (or malicious) connections to remote hosts,
+ * which would expose all browser cookies and DOM state to a third party.
+ *
+ * Allowed: http://localhost:*, http://127.0.0.1:*, http://[::1]:*
+ *          ws://localhost:*, ws://127.0.0.1:*
+ * Blocked: anything else unless OPENCLI_CDP_ALLOW_REMOTE=1
+ */
+function assertLocalhostEndpoint(endpoint: string): void {
+  let hostname: string;
+  try {
+    const url = new URL(endpoint);
+    hostname = url.hostname.replace(/^\[|\]$/g, ''); // strip IPv6 brackets
+  } catch {
+    // If it's not a valid URL (e.g. bare ws:// fragment), do a string check
+    hostname = endpoint;
+  }
+
+  const LOOPBACK = ['localhost', '127.0.0.1', '::1', '0:0:0:0:0:0:0:1'];
+  const isLoopback = LOOPBACK.some(
+    (h) => hostname === h || hostname.toLowerCase() === h,
+  );
+
+  if (!isLoopback) {
+    throw new Error(
+      `Security: OPENCLI_CDP_ENDPOINT "${endpoint}" points to a non-loopback host.` +
+      ' Connecting to a remote CDP endpoint exposes all browser cookies and DOM data.' +
+      ' Set OPENCLI_CDP_ALLOW_REMOTE=1 to override (advanced users only).',
+    );
+  }
+}
 
 function fetchJsonDirect(url: string): Promise<unknown> {
   return new Promise((resolve, reject) => {

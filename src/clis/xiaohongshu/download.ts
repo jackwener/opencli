@@ -9,6 +9,38 @@ import { cli, Strategy } from '../../registry.js';
 import { formatCookieHeader } from '../../download/index.js';
 import { downloadMedia } from '../../download/media-download.js';
 
+interface XhsMediaItem {
+  type: 'image' | 'video';
+  url: string;
+}
+
+function isRealXhsVideoUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url)
+    && /\.(mp4|m3u8)(?:[?#]|$)/i.test(url)
+    && /(xhscdn|xiaohongshu|sns-video|video)/i.test(url);
+}
+
+function normalizeXhsMedia(media: XhsMediaItem[], performanceResources: string[] = []): XhsMediaItem[] {
+  const fallbackVideos = performanceResources
+    .filter((url) => isRealXhsVideoUrl(url))
+    .filter((url, index, list) => list.indexOf(url) === index);
+
+  let videoFallbackIndex = 0;
+
+  return media.map((item) => {
+    if (item.type !== 'video') return item;
+    if (isRealXhsVideoUrl(item.url)) return item;
+
+    const fallback = fallbackVideos[videoFallbackIndex];
+    if (fallback) {
+      videoFallbackIndex += 1;
+      return { ...item, url: fallback };
+    }
+
+    return item;
+  });
+}
+
 cli({
   site: 'xiaohongshu',
   name: 'download',
@@ -34,7 +66,8 @@ cli({
           noteId: '${noteId}',
           title: '',
           author: '',
-          media: []
+          media: [],
+          performanceResources: []
         };
 
         // Get title
@@ -79,7 +112,7 @@ cli({
 
         for (const selector of videoSelectors) {
           document.querySelectorAll(selector).forEach(v => {
-            const src = v.src || v.getAttribute('src') || '';
+            const src = v.currentSrc || v.src || v.getAttribute('src') || '';
             if (src) {
               result.media.push({ type: 'video', url: src });
             }
@@ -91,6 +124,12 @@ cli({
           result.media.push({ type: 'image', url: url });
         });
 
+        try {
+          result.performanceResources = performance.getEntriesByType('resource')
+            .map(entry => entry.name)
+            .filter(url => /\\.(mp4|m3u8)(?:[?#]|$)/i.test(url) && /(xhscdn|xiaohongshu|sns-video|video)/i.test(url));
+        } catch {}
+
         return result;
       })()
     `);
@@ -99,10 +138,15 @@ cli({
       return [{ index: 0, type: '-', status: 'failed', size: 'No media found' }];
     }
 
+    const media = normalizeXhsMedia(
+      Array.isArray(data.media) ? data.media as XhsMediaItem[] : [],
+      Array.isArray((data as any).performanceResources) ? (data as any).performanceResources as string[] : [],
+    );
+
     // Extract cookies for authenticated downloads
     const cookies = formatCookieHeader(await page.getCookies({ domain: 'xiaohongshu.com' }));
 
-    return downloadMedia(data.media, {
+    return downloadMedia(media, {
       output,
       subdir: noteId,
       cookies,
@@ -111,3 +155,8 @@ cli({
     });
   },
 });
+
+export const __test__ = {
+  normalizeXhsMedia,
+  isRealXhsVideoUrl,
+};
