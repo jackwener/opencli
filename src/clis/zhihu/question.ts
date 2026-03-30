@@ -18,17 +18,18 @@ cli({
     const stripHtml = (html: string) =>
       (html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim();
 
-    // Fetch question detail and answers in parallel via evaluate
+    // Only fetch answers here. The question detail endpoint is not used by the
+    // current CLI output and can fail independently, which would incorrectly
+    // turn a successful answers response into a login error.
     const result = await page.evaluate(`
       async () => {
-        const [qResp, aResp] = await Promise.all([
-          fetch('https://www.zhihu.com/api/v4/questions/${id}?include=data[*].detail,excerpt,answer_count,follower_count,visit_count', {credentials: 'include'}),
-          fetch('https://www.zhihu.com/api/v4/questions/${id}/answers?limit=${limit}&offset=0&sort_by=default&include=data[*].content,voteup_count,comment_count,author', {credentials: 'include'})
-        ]);
-        if (!qResp.ok || !aResp.ok) return { error: true };
-        const q = await qResp.json();
+        const aResp = await fetch(
+          'https://www.zhihu.com/api/v4/questions/${id}/answers?limit=${limit}&offset=0&sort_by=default&include=data[*].content,voteup_count,comment_count,author',
+          { credentials: 'include' }
+        );
+        if (!aResp.ok) return { error: true };
         const a = await aResp.json();
-        return { question: q, answers: a.data || [] };
+        return { answers: a.data || [] };
       }
     `);
 
