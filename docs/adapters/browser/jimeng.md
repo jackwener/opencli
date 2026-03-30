@@ -9,6 +9,7 @@
 | `opencli jimeng generate` | 即梦AI 文生图 — 输入 prompt 生成图片 |
 | `opencli jimeng history` | 查看生成历史 |
 | `opencli jimeng balance` | 查看积分余额与会员信息 |
+| `opencli jimeng new` | 新建会话（workspace） |
 
 ## Usage Examples
 
@@ -27,6 +28,9 @@ opencli jimeng history --limit 10
 
 # Check credit balance (JSON output)
 opencli jimeng balance -f json
+
+# Create a new conversation/workspace
+opencli jimeng new -f json
 ```
 
 ### Output Fields (balance)
@@ -38,6 +42,15 @@ opencli jimeng balance -f json
 | `vip_expire` | 会员到期时间（如 2026.04.25 14:17），仅从积分弹层中提取；无法定位时返回空 |
 
 > **Note**: 积分分类明细（订阅/充值/赠送）仅通过 BDMS 签名 API 返回，当前 DOM 抓取方式无法获取，故不输出。
+
+### Output Fields (new)
+
+| Field | Description |
+|-------|-------------|
+| `workspace_id` | 新会话的 workspace ID |
+| `workspace_url` | 新会话的完整 URL |
+
+> **Implementation**: Tier 2 Cookie API — 调用 `/mweb/v1/workspace/create`，无需 DOM 交互。
 
 ### Options (generate)
 
