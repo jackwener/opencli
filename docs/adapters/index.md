@@ -12,6 +12,7 @@ Run `opencli list` for the live registry.
 | **[bilibili](./browser/bilibili)** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` `download` | 🔐 Browser |
 | **[zhihu](./browser/zhihu)** | `hot` `search` `question` `download` | 🔐 Browser |
 | **[xiaohongshu](./browser/xiaohongshu)** | `search` `notifications` `feed` `user` `note` `comments` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | 🔐 Browser |
+| **[xiaoe](./browser/xiaoe)** | `courses` `detail` `catalog` `play-url` `content` | 🔐 Browser |
 | **[xueqiu](./browser/xueqiu)** | `feed` `hot-stock` `hot` `search` `stock` `comments` `watchlist` `earnings-date` `fund-holdings` `fund-snapshot` | 🔐 Browser |
 | **[youtube](./browser/youtube)** | `search` `video` `transcript` | 🔐 Browser |
 | **[v2ex](./browser/v2ex)** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | 🌐 / 🔐 |

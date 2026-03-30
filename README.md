@@ -135,6 +135,7 @@ git clone git@github.com:jackwener/opencli.git && cd opencli && npm install && n
 | **notebooklm** | `status` `list` `open` `select` `current` `get` `metadata` `source-list` `source-get` `source-fulltext` `source-guide` `history` `note-list` `notes-list` `notes-get` `summary` |
 | **spotify** | `auth` `status` `play` `pause` `next` `prev` `volume` `search` `queue` `shuffle` `repeat` |
 | **xianyu** | `search` `item` `chat` |
+| **xiaoe** | `courses` `detail` `catalog` `play-url` `content` |
 
 73+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
 
