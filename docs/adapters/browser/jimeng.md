@@ -34,11 +34,10 @@ opencli jimeng balance -f json
 | Field | Description |
 |-------|-------------|
 | `total` | 剩余积分总数（精确数字，如 13932） |
-| `vip_credit` | 订阅积分余额（当前不从UI读取，固定为 0） |
-| `purchase_credit` | 充值积分余额（当前不从UI读取，固定为 0） |
-| `gift_credit` | 赠送积分余额（当前不从UI读取，固定为 0） |
 | `vip_level` | 会员等级：高级会员 / 标准会员 / 基础会员 / free |
-| `vip_expire` | 会员到期时间（如 2026.04.25 14:17） |
+| `vip_expire` | 会员到期时间（如 2026.04.25 14:17），仅从积分弹层中提取；无法定位时返回空 |
+
+> **Note**: 积分分类明细（订阅/充值/赠送）仅通过 BDMS 签名 API 返回，当前 DOM 抓取方式无法获取，故不输出。
 
 ### Options (generate)
 

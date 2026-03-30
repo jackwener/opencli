@@ -5,7 +5,7 @@ domain: jimeng.jianying.com
 strategy: cookie
 browser: true
 
-columns: [total, vip_credit, purchase_credit, gift_credit, vip_level, vip_expire]
+columns: [total, vip_level, vip_expire]
 
 pipeline:
   - navigate: https://jimeng.jianying.com/ai-tool/generate?type=image&workspace=0
@@ -17,7 +17,6 @@ pipeline:
         // 2. Verify login — check for credit display element
         const creditAmountEl = document.querySelector('[class*="credit-amount-container"],[class*="credit-amount-text"]');
         if (!creditAmountEl) {
-          // No credit element visible — likely not logged in
           const loginCheck = await fetch('/mweb/v1/get_user_info', {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -38,15 +37,18 @@ pipeline:
         }));
         await new Promise(r => setTimeout(r, 1500));
 
-        // 4. Extract total from the detailed numeric display in the dropdown
-        //    The panel shows "13932" in a credits-* element (not the formatted "1.4万")
+        // 4. Find the dropdown panel that just opened
+        const panel = document.querySelector('[class*="credit-dropdown"],[class*="credit-panel"],[class*="creditPanel"],[class*="popover"]')
+          || creditAmountEl.closest('[class*="credit-"]')?.parentElement;
+
+        // 5. Extract total from the panel's numeric display
         let total = '0';
-        const creditNumEl = Array.from(document.querySelectorAll('[class*="credits-"],[class*="creditItem-"]'))
+        const searchRoot = panel || document;
+        const creditNumEl = Array.from(searchRoot.querySelectorAll('[class*="credits-"],[class*="creditItem-"]'))
           .find(el => el.children.length === 0 && /^\d+$/.test(el.textContent?.trim() || ''));
         if (creditNumEl) {
           total = creditNumEl.textContent.trim();
         } else {
-          // Fallback: parse formatted amount from header (e.g. "1.4万" → "14000")
           const headerAmountEl = document.querySelector('[class*="credit-amount-text"]');
           const raw = headerAmountEl?.textContent?.trim() || '0';
           if (raw.includes('万')) {
@@ -56,36 +58,32 @@ pipeline:
           }
         }
 
-        // 5. Extract VIP level from credit-container text (e.g. "1.4万高级会员" → "高级会员")
+        // 6. Extract VIP level from credit-container text
         const containerText = document.querySelector('[class*="credit-container"],[class*="credit-display-container"]')?.textContent?.trim() || '';
         const vipLevel = containerText.replace(/[\d万,.]+/g, '').trim() || 'free';
 
-        // 6. Extract VIP expiry: scan all text nodes for date pattern near the dropdown
+        // 7. Extract VIP expiry — scoped to the dropdown panel only, not full page
         let vipExpire = '';
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        let node;
-        while ((node = walker.nextNode())) {
-          const txt = node.textContent?.trim();
-          // Match "2026.04.25 14:17" or "2026-04-25" style dates (not benefit descriptions)
-          if (txt && /^\d{4}[.\-]\d{2}[.\-]\d{2}(\s\d{2}:\d{2})?$/.test(txt)) {
-            vipExpire = txt;
-            break;
+        const expireRoot = panel || creditAmountEl.closest('[class*="credit-"]')?.parentElement || null;
+        if (expireRoot) {
+          const walker = document.createTreeWalker(expireRoot, NodeFilter.SHOW_TEXT);
+          let node;
+          while ((node = walker.nextNode())) {
+            const txt = node.textContent?.trim();
+            if (txt && /^\d{4}[.\-]\d{2}[.\-]\d{2}(\s\d{2}:\d{2})?$/.test(txt)) {
+              vipExpire = txt;
+              break;
+            }
           }
         }
 
         return [{
           total,
-          vip_credit: '0',
-          purchase_credit: '0',
-          gift_credit: '0',
           vip_level: vipLevel,
           vip_expire: vipExpire,
         }];
       })()
   - map:
       total: ${{ item.total }}
-      vip_credit: ${{ item.vip_credit }}
-      purchase_credit: ${{ item.purchase_credit }}
-      gift_credit: ${{ item.gift_credit }}
       vip_level: ${{ item.vip_level }}
       vip_expire: ${{ item.vip_expire }}
