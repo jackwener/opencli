@@ -61,6 +61,8 @@ export interface CliCommand {
    * - `string`: navigate to this specific URL instead of the domain root
    */
   navigateBefore?: boolean | string;
+  /** Lower values appear earlier in command listings/help. */
+  order?: number;
 }
 
 /** Internal extension for lazy-loaded TS modules (not exposed in public API) */
@@ -102,6 +104,7 @@ export function cli(opts: CliOptions): CliCommand {
     deprecated: opts.deprecated,
     replacedBy: opts.replacedBy,
     navigateBefore: opts.navigateBefore,
+    order: opts.order,
   };
 
   const key = fullName(cmd);

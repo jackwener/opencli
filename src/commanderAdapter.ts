@@ -103,6 +103,9 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       }
 
       const result = await executeCommand(cmd, kwargs, verbose);
+      if (result === null || result === undefined) {
+        return;
+      }
 
       if (verbose && (!result || (Array.isArray(result) && result.length === 0))) {
         console.error(chalk.yellow('[Verbose] Warning: Command returned an empty result.'));
@@ -293,12 +296,44 @@ export function registerAllCommands(
   program: Command,
   siteGroups: Map<string, Command>,
 ): void {
-  for (const [, cmd] of getRegistry()) {
+  const commands = [...getRegistry().values()];
+  const siteCommands = new Map<string, typeof commands>();
+  for (const cmd of commands) {
+    const group = siteCommands.get(cmd.site) ?? [];
+    group.push(cmd);
+    siteCommands.set(cmd.site, group);
+  }
+
+  const fallbackOrder = new Map<string, number>();
+  for (const [site, group] of siteCommands) {
+    [...group]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((cmd, index) => fallbackOrder.set(`${site}/${cmd.name}`, index));
+  }
+
+  commands.sort((a, b) => {
+    const aOrder = a.order ?? fallbackOrder.get(fullName(a)) ?? Number.MAX_SAFE_INTEGER;
+    const bOrder = b.order ?? fallbackOrder.get(fullName(b)) ?? Number.MAX_SAFE_INTEGER;
+    return a.site.localeCompare(b.site) || aOrder - bOrder || a.name.localeCompare(b.name);
+  });
+
+  for (const cmd of commands) {
     let siteCmd = siteGroups.get(cmd.site);
     if (!siteCmd) {
       siteCmd = program.command(cmd.site).description(`${cmd.site} commands`);
       siteGroups.set(cmd.site, siteCmd);
     }
     registerCommandToProgram(siteCmd, cmd);
+  }
+
+  for (const [site, siteCmd] of siteGroups) {
+    const sorted = [...siteCmd.commands].sort((left: Command, right: Command) => {
+      const leftCmd = commands.find((cmd) => cmd.site === site && cmd.name === left.name());
+      const rightCmd = commands.find((cmd) => cmd.site === site && cmd.name === right.name());
+      const leftOrder = leftCmd?.order ?? fallbackOrder.get(`${site}/${left.name()}`) ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = rightCmd?.order ?? fallbackOrder.get(`${site}/${right.name()}`) ?? Number.MAX_SAFE_INTEGER;
+      return leftOrder - rightOrder || left.name().localeCompare(right.name());
+    });
+    (siteCmd.commands as Command[]) = sorted;
   }
 }

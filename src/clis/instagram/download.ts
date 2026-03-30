@@ -1,8 +1,9 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { cli, Strategy } from '../../registry.js';
 import { ArgumentError, AuthRequiredError, CliError, CommandExecutionError, EXIT_CODES } from '../../errors.js';
-import { downloadMedia } from '../../download/media-download.js';
-import type { MediaItem } from '../../download/media-download.js';
+import { httpDownload } from '../../download/index.js';
 import type { IPage } from '../../types.js';
 
 const INSTAGRAM_GRAPHQL_DOC_ID = '8845758582119845';
@@ -29,6 +30,16 @@ interface InstagramFetchResult {
   errorCode?: string;
   error?: string;
 }
+
+interface DownloadedMediaItem extends InstagramPageMediaItem {
+  filename: string;
+}
+
+function displayPath(filePath: string): string {
+  const home = os.homedir();
+  return filePath.startsWith(home) ? `~${filePath.slice(home.length)}` : filePath;
+}
+
 
 export function parseInstagramMediaTarget(input: string): InstagramMediaTarget {
   const raw = String(input || '').trim();
@@ -84,7 +95,7 @@ export function parseInstagramMediaTarget(input: string): InstagramMediaTarget {
   };
 }
 
-export function buildInstagramDownloadItems(shortcode: string, items: InstagramPageMediaItem[]): MediaItem[] {
+export function buildInstagramDownloadItems(shortcode: string, items: InstagramPageMediaItem[]): DownloadedMediaItem[] {
   return items
     .filter((item) => item?.url)
     .map((item, index) => {
@@ -103,7 +114,7 @@ export function buildInstagramDownloadItems(shortcode: string, items: InstagramP
         type: item.type,
         url: item.url,
         filename: `${shortcode}_${String(index + 1).padStart(2, '0')}${ext}`,
-      } satisfies MediaItem;
+      };
     });
 }
 
@@ -225,22 +236,37 @@ function handleFetchFailure(result: InstagramFetchResult): never {
   throw new CommandExecutionError(message);
 }
 
+async function downloadInstagramMedia(items: DownloadedMediaItem[], outputDir: string): Promise<void> {
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  for (const item of items) {
+    const destPath = path.join(outputDir, item.filename);
+    const result = await httpDownload(item.url, destPath, {
+      timeout: item.type === 'video' ? 120000 : 60000,
+    });
+
+    if (!result.success) {
+      throw new CommandExecutionError(`Failed to download ${item.filename}: ${result.error || 'unknown error'}`);
+    }
+  }
+}
+
 cli({
   site: 'instagram',
-  name: 'download',
-  description: '下载 Instagram 帖子 / Reel 的图片和视频',
+  name: 'dl',
+  description: 'Download images and videos from Instagram posts and reels',
   domain: 'www.instagram.com',
   strategy: Strategy.COOKIE,
   navigateBefore: false,
+  order: 9.5,
   args: [
     { name: 'url', positional: true, required: true, help: 'Instagram post / reel / tv URL' },
-    { name: 'output', default: './instagram-downloads', help: 'Output directory' },
+    { name: 'path', default: '/sdcard/Pictures/Instagram', help: 'Download directory' },
   ],
-  columns: ['index', 'type', 'status', 'size'],
   func: async (page, kwargs) => {
     const browserPage = ensurePage(page);
     const target = parseInstagramMediaTarget(String(kwargs.url ?? ''));
-    const output = String(kwargs.output ?? './instagram-downloads');
+    const outputRoot = String(kwargs.path ?? '/sdcard/Pictures/Instagram');
 
     await browserPage.goto(target.canonicalUrl);
 
@@ -249,16 +275,13 @@ cli({
 
     const shortcode = fetchResult.shortcode || target.shortcode;
     const mediaItems = buildInstagramDownloadItems(shortcode, fetchResult.items || []);
-
     if (mediaItems.length === 0) {
-      return [{ index: 0, type: '-', status: 'failed', size: 'No downloadable media found' }];
+      throw new CommandExecutionError('No downloadable media found');
     }
 
-    return downloadMedia(mediaItems, {
-      output,
-      subdir: shortcode,
-      filenamePrefix: shortcode,
-      timeout: 60000,
-    });
+    const savedDir = path.join(outputRoot, shortcode);
+    await downloadInstagramMedia(mediaItems, savedDir);
+    console.log(`📁 saved: ${displayPath(savedDir)}`);
+    return null;
   },
 });
