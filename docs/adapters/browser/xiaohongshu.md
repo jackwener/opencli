@@ -38,7 +38,7 @@ opencli xiaohongshu search 旅行 -f json
 # Other commands
 opencli xiaohongshu feed
 opencli xiaohongshu notifications
-opencli xiaohongshu download <note-id>
+opencli xiaohongshu download <note-id or url>
 ```
 
 ## Prerequisites
