@@ -23,7 +23,8 @@ vi.mock('node:os', async () => {
   };
 });
 
-import { installExternalCli, parseCommand, type ExternalCliConfig } from './external.js';
+import { installExternalCli, listExternalClis, parseCommand, type ExternalCliConfig } from './external.js';
+import { upsertInstallEntry } from './external-store.js';
 
 describe('parseCommand', () => {
   it('splits binaries and quoted arguments without invoking a shell', () => {
@@ -135,5 +136,38 @@ describe('installExternalCli', () => {
     expect(installExternalCli(ghCli, { isolated: true })).toBe(false);
     expect(mockExecFileSync).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(mockHomedir(), '.opencli', 'external.lock.json'))).toBe(false);
+  });
+
+  it('reports isolated installs in external CLI listings', () => {
+    expect(upsertInstallEntry({
+      name: 'vercel',
+      binaryName: 'vercel',
+      installType: 'isolated',
+      versions: [
+        {
+          version: '43.1.0',
+          installPath: '/tmp/vercel/43.1.0',
+          installedAt: '2026-03-10T00:00:00.000Z',
+          current: true,
+        },
+      ],
+    })).toBe(true);
+
+    expect(listExternalClis([
+      {
+        name: 'vercel',
+        binary: 'vercel',
+        description: 'Vercel CLI',
+      },
+    ])).toEqual([
+      {
+        name: 'vercel',
+        binary: 'vercel',
+        description: 'Vercel CLI',
+        installed: true,
+        version: '43.1.0',
+        installType: 'isolated',
+      },
+    ]);
   });
 });

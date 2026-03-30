@@ -335,6 +335,30 @@ export function installExternalCli(cli: ExternalCliConfig, opts: InstallOptions 
   return true;
 }
 
+export function listExternalClis(configs: ExternalCliConfig[] = loadExternalClis()): ListExternalCliEntry[] {
+  return configs.map((cli) => {
+    const installedInfo = externalStore.getInstalledInfo(cli.name);
+    if (installedInfo?.installType === 'isolated') {
+      return {
+        name: cli.name,
+        description: cli.description,
+        binary: cli.binary,
+        installed: true,
+        version: externalStore.getCurrentVersion(installedInfo) ?? undefined,
+        installType: 'isolated',
+      };
+    }
+
+    return {
+      name: cli.name,
+      description: cli.description,
+      binary: cli.binary,
+      installed: isBinaryInstalled(cli.binary),
+      installType: 'global',
+    };
+  });
+}
+
 export function executeExternalCli(name: string, args: string[], preloaded?: ExternalCliConfig[]): void {
   const configs = preloaded ?? loadExternalClis();
   const cli = configs.find((c) => c.name === name);
@@ -352,7 +376,10 @@ export function executeExternalCli(name: string, args: string[], preloaded?: Ext
       if (fs.existsSync(currentPath) || fs.existsSync(`${currentPath}.cmd`)) {
         binaryPath = currentPath;
       } else {
-        console.log(chalk.yellow(`⚠️  Isolated installation not found at ${currentPath}. Falling back to global.`));
+        console.error(chalk.red(`❌ Isolated installation not found at ${currentPath}.`));
+        console.error(chalk.dim(`Repair it with: opencli install ${name} --isolated --version ${externalStore.getCurrentVersion(installedInfo) ?? 'latest'}`));
+        process.exitCode = EXIT_CODES.SERVICE_UNAVAIL;
+        return;
       }
     }
   }

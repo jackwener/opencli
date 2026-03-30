@@ -13,7 +13,7 @@ import { render as renderOutput } from './output.js';
 import { getBrowserFactory, browserSession } from './runtime.js';
 import { PKG_VERSION } from './version.js';
 import { printCompletionScript } from './completion.js';
-import { loadExternalClis, executeExternalCli, installExternalCli, uninstallExternalCli, switchExternalCliVersion, registerExternalCli, isBinaryInstalled } from './external.js';
+import { loadExternalClis, executeExternalCli, installExternalCli, uninstallExternalCli, switchExternalCliVersion, registerExternalCli, listExternalClis, isBinaryInstalled } from './external.js';
 import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage } from './errors.js';
 
@@ -85,12 +85,15 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         console.log();
       }
 
-      const externalClis = loadExternalClis();
+      const externalClis = listExternalClis(loadExternalClis());
       if (externalClis.length > 0) {
         console.log(chalk.bold.cyan('  external CLIs'));
         for (const ext of externalClis) {
-          const isInstalled = isBinaryInstalled(ext.binary);
-          const tag = isInstalled ? chalk.green('[installed]') : chalk.yellow('[auto-install]');
+          const tag = ext.installed
+            ? ext.installType === 'isolated'
+              ? chalk.green(`[isolated${ext.version ? ` @${ext.version}` : ''}]`)
+              : chalk.green('[installed]')
+            : chalk.yellow('[auto-install]');
           console.log(`    ${ext.name} ${tag}${ext.description ? chalk.dim(` — ${ext.description}`) : ''}`);
         }
         console.log();

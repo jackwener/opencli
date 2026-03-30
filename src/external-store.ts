@@ -108,11 +108,17 @@ export function removeVersionEntry(name: string, version: string): boolean {
   const info = lock[name];
   if (!info) return false;
 
+  const removedEntry = info.versions.find(v => v.version === version);
   const originalLength = info.versions.length;
   info.versions = info.versions.filter(v => v.version !== version);
 
   if (info.versions.length === 0) {
     delete lock[name];
+  } else if (removedEntry?.current && !info.versions.some(v => v.current)) {
+    const nextCurrent = [...info.versions].sort((a, b) =>
+      new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime()
+    )[0];
+    nextCurrent.current = true;
   }
 
   return writeLockFile(lock) && originalLength !== info.versions.length;
