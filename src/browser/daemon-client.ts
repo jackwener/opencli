@@ -2,16 +2,66 @@
  * HTTP client for communicating with the opencli daemon.
  *
  * Provides a typed send() function that posts a Command and returns a Result.
+ *
+ * Token authentication:
+ *   The daemon writes a per-process Bearer token to ~/.opencli/daemon.token
+ *   (mode 0o600) at startup.  This client reads the token lazily on first use
+ *   and attaches it as `Authorization: Bearer <token>` on every request.
+ *   If the file does not exist (daemon started by an older binary), the header
+ *   is omitted and the daemon falls back to X-OpenCLI-only checks.
  */
 
 import { DEFAULT_DAEMON_PORT } from '../constants.js';
 import type { BrowserSessionInfo } from '../types.js';
 import { sleep } from '../utils.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
 
 const DAEMON_PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 const DAEMON_URL = `http://127.0.0.1:${DAEMON_PORT}`;
 
+const TOKEN_FILE = path.join(os.homedir(), '.opencli', 'daemon.token');
+
 let _idCounter = 0;
+/** Lazily-loaded token — undefined = not yet read, null = file absent or unreadable. */
+let _cachedToken: string | null | undefined = undefined;
+
+/**
+ * Read the daemon Bearer token from disk (lazy, cached per-process).
+ * Returns null when the file is absent (backward-compat with older daemons).
+ */
+function readDaemonToken(): string | null {
+  if (_cachedToken !== undefined) return _cachedToken;
+  try {
+    const raw = fs.readFileSync(TOKEN_FILE, 'utf-8').trim();
+    _cachedToken = raw || null;
+  } catch {
+    _cachedToken = null; // file not found or unreadable — non-fatal
+  }
+  return _cachedToken;
+}
+
+/**
+ * Build authentication headers for a daemon HTTP request.
+ * Always includes X-OpenCLI (CSRF guard).
+ * Includes Authorization: Bearer when a token file exists.
+ */
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'X-OpenCLI': '1' };
+  const token = readDaemonToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+}
+
+/**
+ * Invalidate the in-process token cache.
+ * Call this if the daemon is known to have restarted so the next request
+ * picks up the fresh token written by the new daemon process.
+ */
+export function resetTokenCache(): void {
+  _cachedToken = undefined;
+}
 
 function generateId(): string {
   return `cmd_${Date.now()}_${++_idCounter}`;
@@ -51,7 +101,7 @@ export async function isDaemonRunning(): Promise<boolean> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2000);
     const res = await fetch(`${DAEMON_URL}/status`, {
-      headers: { 'X-OpenCLI': '1' },
+      headers: authHeaders(),
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -69,7 +119,7 @@ export async function isExtensionConnected(): Promise<boolean> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2000);
     const res = await fetch(`${DAEMON_URL}/status`, {
-      headers: { 'X-OpenCLI': '1' },
+      headers: authHeaders(),
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -102,7 +152,7 @@ export async function sendCommand(
 
       const res = await fetch(`${DAEMON_URL}/command`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-OpenCLI': '1' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(command),
         signal: controller.signal,
       });
@@ -117,8 +167,12 @@ export async function sendCommand(
           || errMsg.includes('Extension not connected')
           || errMsg.includes('attach failed')
           || errMsg.includes('no longer exists');
-        if (isTransient && attempt < maxRetries) {
-          // Longer delay for extension recovery (service worker restart)
+        // 401 means the daemon restarted and generated a new token — clear cache
+        // so the next attempt re-reads the fresh token file.
+        if (res.status === 401) {
+          resetTokenCache();
+        }
+        if ((isTransient || res.status === 401) && attempt < maxRetries) {
           await sleep(1500);
           continue;
         }

@@ -1,5 +1,47 @@
 # Changelog
 
+## [Unreleased] — security/cookie-auth-hardening (2026-03-30)
+
+### Security
+
+#### 🔐 Daemon Bearer-Token 认证（防本地进程横向移动）
+
+**风险**：Daemon HTTP 端口 `19825` 仅凭 `X-OpenCLI` 自定义头部防御 CSRF。任何本地进程只需加上该头部即可控制浏览器自动化会话，执行任意 JS、读取 Cookie 等高权限操作。
+
+**修复**（`src/daemon.ts`、`src/browser/daemon-client.ts`）：
+- Daemon 启动时用 `crypto.randomBytes(32)` 生成 64 字符十六进制 Token，写入 `~/.opencli/daemon.token`（权限 `0o600`）。
+- 所有非 `/ping` HTTP 端点要求 `Authorization: Bearer <token>` 头部；验证采用恒时比较防时序攻击。
+- `daemon-client.ts` 懒加载并缓存 token；收到 `401` 时自动刷新缓存以应对 Daemon 重启。
+- Daemon 正常退出时删除 token 文件，避免旧 token 被复用。
+
+#### 🔐 Extension ID 固定（可选加固）
+
+**修复**（`src/daemon.ts`）：
+- 新增环境变量 `OPENCLI_EXTENSION_ID`：设置后 WebSocket 握手将精确匹配扩展 ID，拒绝其他 `chrome-extension://` 来源。
+
+#### 🍪 HttpOnly Cookie 访问警告 + 脱敏
+
+**风险**：CDP `Network.getCookies` 可读取 `httpOnly` Cookie（session / auth token），而这些 Cookie 正常情况下对 JS 不可见，存在被意外记录或泄露的风险。
+
+**修复**（`src/browser/page.ts`、`src/browser/cdp.ts`、`src/types.ts`）：
+- 开启 `OPENCLI_VERBOSE=1` 时输出 HttpOnly Cookie 数量警告。
+- 新增 `OPENCLI_REDACT_COOKIES=1` 环境变量和 `getCookies({ redact: true })` 选项，自动将 HttpOnly Cookie 及敏感名称（`session`、`token`、`auth`、`jwt` 等）的值替换为 `[REDACTED]`。
+- 新增 `isSensitiveCookieName()`、`redactCookies()` 工具函数供下游复用。
+
+#### 🌐 CDP Endpoint 强制 Localhost 校验
+
+**风险**：`OPENCLI_CDP_ENDPOINT` 无主机校验，若指向远程地址将把浏览器 Cookie 和 DOM 数据暴露给第三方。
+
+**修复**（`src/browser/cdp.ts`）：
+- 连接前校验主机名，仅允许 `localhost`、`127.0.0.1`、`::1`。
+- 如需连接远程实例（高级调试），可设置 `OPENCLI_CDP_ALLOW_REMOTE=1` 解除限制。
+
+#### ⚠️ Pipeline fetch 步骤 `credentials: "include"` 安全注释
+
+**修复**（`src/pipeline/steps/fetch.ts`）：
+- 添加注释说明 `credentials: "include"` 的预期用途（登录态 API 抓取）及风险（不可传入不受信任的 URL），防止误用导致 CSRF。
+
+
 ## [1.4.1](https://github.com/jackwener/opencli/compare/v1.4.0...v1.4.1) (2026-03-25)
 
 

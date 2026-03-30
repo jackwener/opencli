@@ -12,6 +12,12 @@
  *   3. No CORS headers — responses never include Access-Control-Allow-Origin
  *   4. Body size limit — 1 MB max to prevent OOM
  *   5. WebSocket verifyClient — reject upgrade before connection is established
+ *   6. Bearer token auth — random 32-byte token written to ~/.opencli/daemon.token
+ *      (mode 0o600) at startup; all non-/ping requests require
+ *      Authorization: Bearer <token>. Prevents lateral-movement attacks from
+ *      other local processes that happen to know the port.
+ *   7. Extension ID pinning — optional OPENCLI_EXTENSION_ID env var lets operators
+ *      restrict WebSocket connections to a specific extension build.
  *
  * Lifecycle:
  *   - Auto-spawned by opencli on first browser command
@@ -21,11 +27,72 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
+import { randomBytes } from 'node:crypto';
+import * as nodefs from 'node:fs';
+import * as nodepath from 'node:path';
+import * as nodeos from 'node:os';
 import { DEFAULT_DAEMON_PORT } from './constants.js';
 import { EXIT_CODES } from './errors.js';
 
 const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+// ─── Token Authentication ─────────────────────────────────────────────
+// Generate a cryptographically random 64-hex token per daemon process.
+// Write it to ~/.opencli/daemon.token (mode 0o600) so only the owning
+// user can read it. All HTTP endpoints (except /ping) require:
+//   Authorization: Bearer <token>
+// This stops other local processes from hijacking the browser session
+// even if they know the port number and add the X-OpenCLI header.
+
+const TOKEN_DIR = nodepath.join(nodeos.homedir(), '.opencli');
+const TOKEN_FILE = nodepath.join(TOKEN_DIR, 'daemon.token');
+
+const DAEMON_TOKEN: string = (() => {
+  const token = randomBytes(32).toString('hex');
+  try {
+    nodefs.mkdirSync(TOKEN_DIR, { recursive: true });
+    nodefs.writeFileSync(TOKEN_FILE, token, { encoding: 'utf-8', mode: 0o600 });
+  } catch (e) {
+    // Non-fatal: token is still used in-memory for header checks.
+    // Log to stderr so the operator knows the file wasn't persisted.
+    console.error('[daemon] Warning: could not write token file:', (e as Error).message);
+  }
+  return token;
+})();
+
+/** Constant-time comparison to guard against timing attacks. */
+function safeTokenEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+function checkBearerToken(req: IncomingMessage): boolean {
+  const auth = req.headers['authorization'] as string | undefined;
+  if (!auth) return false;
+  const [scheme, token] = auth.split(' ');
+  if (scheme?.toLowerCase() !== 'bearer' || !token) return false;
+  return safeTokenEqual(token, DAEMON_TOKEN);
+}
+
+// Optional extension ID pinning: set OPENCLI_EXTENSION_ID to restrict WebSocket
+// connections to exactly one extension build (e.g. after sideloading).
+const PINNED_EXTENSION_ID = process.env.OPENCLI_EXTENSION_ID?.trim() || null;
+
+function isAllowedExtensionOrigin(origin: string | undefined): boolean {
+  if (!origin) return true; // no origin = non-browser client (CLI curl-style), allow
+  if (!origin.startsWith('chrome-extension://')) return false;
+  if (PINNED_EXTENSION_ID) {
+    // origin is chrome-extension://<id>
+    const id = origin.slice('chrome-extension://'.length).replace(/\/$/, '');
+    return id === PINNED_EXTENSION_ID;
+  }
+  return true;
+}
 
 // ─── State ───────────────────────────────────────────────────────────
 
@@ -106,13 +173,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   const url = req.url ?? '/';
   const pathname = url.split('?')[0];
 
-  // Health-check endpoint — no X-OpenCLI header required.
+  // Health-check endpoint — no auth required, intentionally minimal.
   // Used by the extension to silently probe daemon reachability before
   // attempting a WebSocket connection (avoids uncatchable ERR_CONNECTION_REFUSED).
-  // Security note: this endpoint is reachable by any client that passes the
-  // origin check above (chrome-extension:// or no Origin header, e.g. curl).
-  // Timing side-channels can reveal daemon presence to local processes, which
-  // is an accepted risk given the daemon is loopback-only and short-lived.
+  // Returns only {ok:true} — no sensitive data, no state mutation.
   if (req.method === 'GET' && pathname === '/ping') {
     jsonResponse(res, 200, { ok: true });
     return;
@@ -124,6 +188,15 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // blocked even if Origin check is somehow bypassed.
   if (!req.headers['x-opencli']) {
     jsonResponse(res, 403, { ok: false, error: 'Forbidden: missing X-OpenCLI header' });
+    return;
+  }
+
+  // ─── Bearer Token check (layer-6 auth) ──────────────────────────────
+  // Reject requests that don't carry the per-process token.  This ensures
+  // no other local process (malware, shared host tenant, etc.) can control
+  // the daemon even if they discover the port and add the X-OpenCLI header.
+  if (!checkBearerToken(req)) {
+    jsonResponse(res, 401, { ok: false, error: 'Unauthorized: invalid or missing Bearer token' });
     return;
   }
 
@@ -203,8 +276,10 @@ const wss = new WebSocketServer({
     // enforce CORS on WebSocket, so a malicious webpage could connect to
     // ws://localhost:19825/ext and impersonate the Extension.  Real Chrome
     // Extensions send origin chrome-extension://<id>.
+    //
+    // If OPENCLI_EXTENSION_ID is set, further pin to that exact extension build.
     const origin = req.headers['origin'] as string | undefined;
-    return !origin || origin.startsWith('chrome-extension://');
+    return isAllowedExtensionOrigin(origin);
   },
 });
 
@@ -320,6 +395,8 @@ function shutdown(): void {
   pending.clear();
   if (extensionWs) extensionWs.close();
   httpServer.close();
+  // Remove the token file so stale tokens can't be reused after restart
+  try { nodefs.unlinkSync(TOKEN_FILE); } catch { /* ignore if already gone */ }
   process.exit(EXIT_CODES.SUCCESS);
 }
 

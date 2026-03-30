@@ -13,6 +13,47 @@ export interface BrowserCookie {
   secure?: boolean;
   httpOnly?: boolean;
   expirationDate?: number;
+  /** Set to true when value has been redacted for security logging. */
+  _redacted?: boolean;
+}
+
+/**
+ * Names (case-insensitive) whose values should be treated as secrets.
+ * Used by redactCookies() to replace values with '[REDACTED]' in logs/output.
+ */
+export const SENSITIVE_COOKIE_NAMES = new Set([
+  'session', 'sess', 'sid', 'auth', 'token', 'access_token', 'refresh_token',
+  'jwt', 'bearer', 'api_key', 'apikey', 'secret', 'password', 'passwd', 'pwd',
+  'credential', 'credentials', 'authorization',
+  // Common session cookie names used by popular platforms
+  'JSESSIONID', 'PHPSESSID', 'ASP.NET_SessionId', '__Secure-next-auth.session-token',
+  'supabase-auth-token', '__session', 'connect.sid',
+]);
+
+/**
+ * Returns true if the cookie name appears to hold a sensitive credential.
+ * Matching is case-insensitive and also catches partial matches
+ * (e.g. "app_session_id" → true).
+ */
+export function isSensitiveCookieName(name: string): boolean {
+  const lower = name.toLowerCase();
+  for (const s of SENSITIVE_COOKIE_NAMES) {
+    if (lower === s.toLowerCase() || lower.includes(s.toLowerCase())) return true;
+  }
+  return false;
+}
+
+/**
+ * Return a copy of the cookie list with sensitive values replaced by '[REDACTED]'.
+ * HttpOnly cookies are always redacted regardless of name, because they are
+ * typically session/auth cookies that websites intentionally protect from JS.
+ */
+export function redactCookies(cookies: BrowserCookie[]): BrowserCookie[] {
+  return cookies.map((c) => {
+    const shouldRedact = c.httpOnly || isSensitiveCookieName(c.name);
+    if (!shouldRedact) return c;
+    return { ...c, value: '[REDACTED]', _redacted: true };
+  });
 }
 
 export interface SnapshotOptions {

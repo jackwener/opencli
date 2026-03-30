@@ -12,6 +12,7 @@
 
 import { formatSnapshot } from '../snapshotFormatter.js';
 import type { BrowserCookie, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
+import { redactCookies } from '../types.js';
 import { sendCommand } from './daemon-client.js';
 import { wrapForEval } from './utils.js';
 import { saveBase64ToFile } from '../utils.js';
@@ -125,9 +126,28 @@ export class Page implements IPage {
     return sendCommand('exec', { code, ...this._cmdOpts() });
   }
 
-  async getCookies(opts: { domain?: string; url?: string } = {}): Promise<BrowserCookie[]> {
-    const result = await sendCommand('cookies', { ...this._wsOpt(), ...opts });
-    return Array.isArray(result) ? result : [];
+  async getCookies(opts: { domain?: string; url?: string; redact?: boolean } = {}): Promise<BrowserCookie[]> {
+    const result = await sendCommand('cookies', { ...this._wsOpt(), domain: opts.domain, url: opts.url });
+    const cookies: BrowserCookie[] = Array.isArray(result) ? result : [];
+
+    // Warn when HttpOnly cookies are included — these are session/auth tokens
+    // that websites intentionally protect from JavaScript access.
+    // CDP bypasses that protection; callers should handle them with care.
+    const httpOnlyCount = cookies.filter((c) => c.httpOnly).length;
+    if (httpOnlyCount > 0 && process.env.OPENCLI_VERBOSE) {
+      console.error(
+        `[opencli] Warning: getCookies() returned ${httpOnlyCount} HttpOnly cookie(s).` +
+        ' These may contain session tokens — avoid logging or storing raw values.',
+      );
+    }
+
+    // Redact by default when OPENCLI_REDACT_COOKIES=1 or opts.redact=true.
+    // This replaces sensitive / httpOnly cookie values with '[REDACTED]'
+    // so they are safe to log or include in snapshots.
+    if (opts.redact || process.env.OPENCLI_REDACT_COOKIES === '1') {
+      return redactCookies(cookies);
+    }
+    return cookies;
   }
 
   async snapshot(opts: SnapshotOptions = {}): Promise<unknown> {
