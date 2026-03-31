@@ -6,7 +6,7 @@
  *  - Dynamic completion logic that returns candidates for the current cursor position
  */
 
-import { getRegistry } from './registry.js';
+import { getRegistry, splitCommandPath } from './registry.js';
 import { CliError } from './errors.js';
 
 // ── Dynamic completion logic ───────────────────────────────────────────────
@@ -51,20 +51,22 @@ export function getCompletions(words: string[], cursor: number): string[] {
     return [];
   }
 
-  // cursor === 2 → completing the sub-command name under a site
-  if (cursor === 2) {
-    const subcommands: string[] = [];
-    for (const [, cmd] of getRegistry()) {
-      if (cmd.site === site) {
-        subcommands.push(cmd.name);
-        if (cmd.aliases?.length) subcommands.push(...cmd.aliases);
-      }
+  const prefix = words.slice(1, Math.max(1, cursor - 1));
+  const candidates = new Set<string>();
+
+  for (const [, cmd] of getRegistry()) {
+    if (cmd.site !== site) continue;
+
+    const paths = [cmd.name, ...(cmd.aliases ?? [])].map(splitCommandPath).filter(path => path.length > 0);
+    for (const path of paths) {
+      if (path.length < prefix.length + 1) continue;
+      const matches = prefix.every((segment, index) => path[index] === segment);
+      if (!matches) continue;
+      candidates.add(path[prefix.length]);
     }
-    return [...new Set(subcommands)].sort();
   }
 
-  // cursor >= 3 → no further completion
-  return [];
+  return [...candidates].sort();
 }
 
 // ── Shell script generators ────────────────────────────────────────────────

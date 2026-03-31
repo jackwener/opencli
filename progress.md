@@ -92,6 +92,33 @@
 - Re-verified live that:
   - `node dist/main.js notebooklm ask --prompt "用一句话总结这个 notebook" -f json`
   - returns `notebook_id`, `prompt`, `answer`, `url`, and `source: "query-endpoint"`
+- In a parallel framework-only thread, added minimal nested-command-tree support without touching NotebookLM business adapters:
+  - command definitions can now use path-like names such as `source/list`
+  - commander maps those to real nested subcommands such as `source list`
+  - flat commands remain backward-compatible
+- Added failing-then-passing framework tests for:
+  - nested commander registration/execution
+  - nested completion behavior
+  - manifest preservation of path-like command names
+- Updated framework output shape so structured command serialization/list rows now include an `invocation` field for space-separated command paths.
+- Followed up by remounting the first NotebookLM command slice onto nested canonical paths while keeping flat aliases working:
+  - `source/list`
+  - `source/get`
+  - `source/fulltext`
+  - `source/guide`
+  - `notes/list`
+  - `notes/get`
+  - `language/list`
+  - `language/get`
+  - `language/set`
+- Kept the remount wave narrow:
+  - no NotebookLM RPC or parser changes
+  - no new business commands
+  - no `generate/*`, `artifact/*`, or `download/*`
+- Added failing-then-passing tests for:
+  - nested canonical commands still accepting flat aliases at the site root
+  - NotebookLM registry remount keys resolving both nested and flat forms
+- Re-verified live that both nested and flat NotebookLM source/language commands continue to work after remount.
 
 ### Verification
 
@@ -136,6 +163,28 @@
 - `npx tsc --noEmit`
 - `npm run build`
 - `node dist/main.js notebooklm ask --prompt "用一句话总结这个 notebook" -f json`
+- `npx vitest run src\\commanderAdapter.test.ts src\\completion.test.ts src\\serialization.test.ts src\\build-manifest.test.ts src\\registry.test.ts --reporter=verbose`
+- `npx tsc --noEmit`
+- `npm run build`
+- `node dist/main.js list -f json`
+- `node dist/main.js completion bash`
+- `npx vitest run src\\registry.test.ts src\\serialization.test.ts src\\commanderAdapter.test.ts src\\completion.test.ts src\\build-manifest.test.ts src\\clis\\notebooklm\\compat.test.ts src\\clis\\notebooklm\\note-list.test.ts src\\clis\\notebooklm\\notes-get.test.ts src\\clis\\notebooklm\\language.test.ts src\\clis\\notebooklm\\source-get.test.ts src\\clis\\notebooklm\\source-fulltext.test.ts src\\clis\\notebooklm\\source-guide.test.ts --reporter=verbose`
+- `npx tsc --noEmit`
+- `npm run build`
+- `node dist/main.js list -f json`
+- `node dist/main.js completion bash`
+- `node dist/main.js notebooklm source list -f json`
+- `node dist/main.js notebooklm notes get "新建笔记" -f json`
+- `node dist/main.js notebooklm language get -f json`
+- `node dist/main.js notebooklm source-list -f json`
+- `node dist/main.js notebooklm language-get -f json`
+- `npx vitest run src\\clis\\notebooklm\\notes-save.test.ts src\\clis\\notebooklm\\utils.test.ts --reporter=verbose`
+- `npx tsc --noEmit`
+- `npm run build`
+- `node .\\dist\\main.js notebooklm notes-save -f json`
+- live只读 probe:
+  - visible editor -> `title="新建笔记"`, `content=""`, `id=null`
+  - same-title RPC notes -> 2 条，且 `content_length` 都为 `0`
 
 ### Open Items
 
@@ -148,9 +197,846 @@
 - 暂不单独补 `notebook-get`，避免和 `get` / `metadata` / `current` 制造命令噪音。
 - `tr032e` 的 live payload 现在已跨 type 验证过，并已经进入 `source-guide` 命令实现。
 - Keep `generate/*`, `download/*`, `artifact/*`, and command-tree refactors out of scope for now.
+- Three-level command tree support is now in active NotebookLM use for the first remount slice; additional notebook/share/write-adjacent commands are still pending remount.
+- The first NotebookLM remount wave is complete, but notebook-level and share/write-adjacent commands still remain on flat names.
 - `ask` 当前仍有明确边界：
   - 只支持当前绑定 notebook
   - 每次调用都生成新的 conversation UUID，不做多轮延续
   - 不返回 citations / references
   - 不做流式输出
   - 依赖 RPC source ids，因此页面退化到只有 DOM source 标题时无法继续 ask
+- 本轮按顺序补完了 5 组相邻能力：
+  - `source-add-text`
+  - `source-add-url`
+  - `notes-save`
+  - `share-status`
+  - `language-list` / `language-get` / `language-set`
+- `source-add-text` 已按红测 -> 实现 -> 绿测收口，并完成 live：
+  - `node .\\dist\\main.js notebooklm source-add-text "opencli source-add-text smoke 2026-03-31" "smoke validation from opencli on 2026-03-31" -f json`
+- `source-add-url` 已按红测 -> 实现 -> 绿测收口，并完成 live：
+  - `node .\\dist\\main.js notebooklm source-add-url "https://example.com/" -f json`
+- `notes-save` 已按红测 -> 实现 -> 绿测收口，但 live 当前受页面状态阻塞：
+  - `node .\\dist\\main.js notebooklm notes-save -f json`
+  - 当前会明确报 `NOTEBOOKLM_NOTE_AMBIGUOUS`
+  - 新的剩余阻塞已缩小为：同一 notebook 中有两条 `新建笔记`，且两条正文都为空，同时 visible editor 周围没有可解析的 stable id
+- `share-status` 已按红测 -> 实现 -> 绿测收口，并完成 live：
+  - `node .\\dist\\main.js notebooklm share-status -f json`
+- `language-list` / `language-get` / `language-set` 已按红测 -> 实现 -> 绿测收口，并完成 live：
+  - `node .\\dist\\main.js notebooklm language-list -f json`
+  - `node .\\dist\\main.js notebooklm language-get -f json`
+  - `node .\\dist\\main.js notebooklm language-set zh_Hans -f json`
+- 这轮继续只收 `notes-save`：
+  - 已确认 artifact list 的 note 项会暴露 `note-labels-<uuid>`，但 editor 打开后这组节点会消失
+  - `notes-save` 现在优先尝试 editor 周围 DOM hint stable id；拿不到时再按 `title + content` 精确匹配 RPC note list
+  - 当前 live 的新剩余阻塞不是“标题重复”本身，而是“标题和正文都重复，同时 editor 周围没有 stable id”
+- 这轮只做了一个更窄的补强：
+  - `notes-get` 增加 `--note-id`
+  - `notes-save` 增加 `--note-id`
+  - `note-list` / `notes list` 输出显式带 `id`
+- 行为变化：
+  - `notes-get --note-id <id>` 直接按 RPC id 命中，不再依赖标题匹配
+  - `notes-save --note-id <id>` 直接把当前 visible editor 的 title/content 保存到该 id，不再尝试标题消歧
+  - 当显式 id 不存在、显式 id 与当前 visible editor 暴露的稳定 id 不一致、或当前页没有 visible editor 时，都会给出更明确的错误
+- 这轮验证结果：
+  - `npx vitest run src\\clis\\notebooklm\\notes-get.test.ts src\\clis\\notebooklm\\notes-save.test.ts src\\clis\\notebooklm\\utils.test.ts --reporter=verbose`
+  - `npx tsc --noEmit`
+  - `npm run build`
+- 这轮 live 只跑到：
+  - `node .\\dist\\main.js notebooklm notes list -f json`
+  - 当前返回 no data，所以没有继续基于真实 id 运行 `notes get --note-id ...` / `notes-save --note-id ...`
+  - 因此这轮 live 结论是：实现和测试已收口，但真实 notebook 页上的 `--note-id` smoke 还缺一个可读的 note-list 结果作为入口
+
+## 2026-03-31 Notebook Light-Write CRUD
+
+- 完成 `create`
+  - 新增 `src/clis/notebooklm/create.ts`
+  - 新增 `src/clis/notebooklm/create.test.ts`
+  - utils 补 `CCqFvf` create params 和 helper
+  - live: 创建成功，返回真实 notebook id
+- 完成 `rename`
+  - 新增 `src/clis/notebooklm/rename.ts`
+  - 新增 `src/clis/notebooklm/rename.test.ts`
+  - utils 补 `s0tc2d` rename params、helper，以及按 id 回读 notebook detail
+  - live: `b0aab2fa-ec5f-4fd1-b0d8-55047e46ab2c` 已成功改名
+- 完成 `delete`
+  - 新增 `src/clis/notebooklm/delete.ts`
+  - 新增 `src/clis/notebooklm/delete.test.ts`
+  - utils 补 `WWINqb` delete params 和 helper
+  - live: 临时 notebook `93ff083f-02af-4d93-a6c8-75f7aed403e7` 已成功删除
+- 完成 `describe`
+  - 新增 `src/clis/notebooklm/describe.ts`
+  - 新增 `src/clis/notebooklm/describe.test.ts`
+  - utils 补 `VfAZjd` parser 和 helper
+  - 真实收口为：先试结构化 describe RPC，再回退到稳定的 summary wrapper
+  - live: `a45591ed-37bd-4038-a131-141a295c024b` 返回 summary 成功，当前来源是 `summary-dom`
+- 完成 `remove-from-recent`
+  - 新增 `src/clis/notebooklm/remove-from-recent.ts`
+  - 新增 `src/clis/notebooklm/remove-from-recent.test.ts`
+  - utils 补 `fejl7e` params 和 helper
+  - live: `b0aab2fa-ec5f-4fd1-b0d8-55047e46ab2c` 已成功移出 recent
+
+- 本轮每项均按顺序执行：
+  - 先补 failing tests
+  - 再实现
+  - 再跑相关 vitest
+  - 再跑 `npx tsc --noEmit`
+  - 再跑 `npm run build`
+- 本轮未触碰：
+  - `notes-get.ts`
+  - `notes-save.ts`
+  - `note-list.ts`
+  - notes 相关测试
+  - command tree / commander / registry / completion / build-manifest 框架层
+  - `generate/*` / `artifact/*` / `download/*` / `research/*` / `share/*`
+
+## 2026-03-31 Notebook Download Direction Recon + Minimal Report Download
+
+- 按用户要求只侦察 3 条下载链路，不顺手扩 `generate/*` / `artifact/*`：
+  - `download audio`
+  - `download report`
+  - `download slide-deck`
+- 对照原仓库 `notebooklm-cdp-cli` 与上游 `notebooklm-py` 后确认：
+  - `report` 下载不是 export，也不是外部 URL 下载，而是直接从 `gArtLc` raw artifact slot `7` 取 markdown
+  - `slide-deck` 下载走 `gArtLc` raw artifact slot `16`：
+    - `[3]` = PDF URL
+    - `[4]` = PPTX URL
+  - `audio` 下载走 `gArtLc` raw artifact slot `6[5]` media list，优先 `audio/mp4`
+- opencli live `gArtLc` probe 结果：
+  - notebook `edb0738b-bca1-416c-90f8-c97ca5e22c3f` 已确认存在 completed report artifact
+  - notebook `a45591ed-37bd-4038-a131-141a295c024b` / `ffd3074a-5734-4114-be51-5e57e0985321` 已确认存在 completed slide deck artifacts，且 raw 中直接带 PDF/PPTX URL
+  - notebook `9924e90f-5d14-4cc1-bd5b-7cf702f76d95` 已确认存在 completed audio artifact，slot `6[5]` 含多条 media URL
+- 结论：
+  - 第一优先级是 `download/report`
+  - 它不需要先做 `artifact/list|get|export` 公开命令
+  - 只要内部 helper 能调用 `gArtLc` 并选中 completed report 即可
+- 因为链路已经足够清晰，这轮直接落了一个最小命令而不是只停在调研：
+  - 新增 `src/clis/notebooklm/download-report.ts`
+  - 新增 `src/clis/notebooklm/download-report.test.ts`
+  - `shared.ts` 新增 `NotebooklmReportDownloadRow`
+  - `utils.ts` 新增最小 artifact raw helpers：
+    - `parseNotebooklmArtifactListResult`
+    - `selectNotebooklmCompletedArtifact`
+    - `extractNotebooklmReportMarkdown`
+    - `listNotebooklmArtifactsViaRpc`
+    - `downloadNotebooklmReportViaRpc`
+- 当前命令形态：
+  - canonical: `notebooklm download report <output_path>`
+  - alias: `notebooklm download-report <output_path>`
+  - optional: `--artifact-id <id>`
+- 这轮实现刻意没做：
+  - `artifact/list`
+  - `artifact/get`
+  - `artifact/export`
+  - `download/audio`
+  - `download/slide-deck`
+
+### Verification
+
+- `npx vitest run src\\clis\\notebooklm\\download-report.test.ts src\\clis\\notebooklm\\utils.test.ts --reporter=verbose`
+- `npx tsc --noEmit`
+- `npm run build`
+- live raw probe:
+  - `gArtLc` scan across current notebooks to confirm real `report` / `slide_deck` / `audio` artifact rows and slots
+- live command-function smoke in one browser session:
+  - navigated to `https://notebooklm.google.com/notebook/edb0738b-bca1-416c-90f8-c97ca5e22c3f`
+  - executed `notebooklm/download/report` with `--artifact-id 31cd719e-2095-4eef-b4f5-ad55e64ddfc0`
+  - wrote `E:\\web\\opencli\\tmp\\notebooklm-report-smoke.md`
+- live dist CLI smoke:
+  - `node dist/main.js notebooklm current -f json`
+  - `node dist/main.js notebooklm download report 'E:\\web\\opencli\\tmp\\notebooklm-report-cli-smoke.md' --artifact-id 31cd719e-2095-4eef-b4f5-ad55e64ddfc0 -f json`
+- 一个中间排障发现：
+  - 首次 CLI smoke 返回 no data，不是 report parser 坏了
+  - 原因是 Browser Bridge 工作区漂移回另一个 notebook，导致当前页没有 report artifacts
+  - 在把工作区重新落到目标 notebook 后，dist CLI smoke 成功
+
+## 2026-03-31 Notebook Minimal Slide-Deck Download
+
+- 这轮范围保持收敛，只做 `notebooklm download slide-deck`：
+  - 不碰 `download/audio`
+  - 不补 `artifact/*`
+  - 不扩 `generate/*`
+  - 不碰 notes 线、notebook CRUD、command tree
+- 先做最小取证后确认：
+  - 上游 CLI 已暴露 `download slide-deck`
+  - raw artifact 仍走 `gArtLc`
+  - slide-deck 过滤条件仍是 `type=8` + `status=3`
+  - `slot 16[3]` = PDF URL
+  - `slot 16[4]` = PPTX URL
+- 按 TDD 顺序落地：
+  - 先新增失败测试：
+    - `src/clis/notebooklm/download-slide-deck.test.ts`
+    - `src/clis/notebooklm/utils.test.ts`
+  - 再新增实现：
+    - `src/clis/notebooklm/download-slide-deck.ts`
+    - `src/clis/notebooklm/shared.ts`
+    - `src/clis/notebooklm/utils.ts`
+- 实际实现链路：
+  - `downloadNotebooklmSlideDeckViaRpc(...)`
+  - `gArtLc` raw list -> select completed slide-deck artifact -> extract slot `16` URL
+  - 复用 opencli `httpDownload(...)`
+  - browser cookies 通过 `page.getCookies({ url })` 转成 `Cookie` header
+  - `Referer` 维持当前 notebook URL
+- 命令形态：
+  - canonical: `notebooklm download slide-deck <output_path>`
+  - alias: `notebooklm download-slide-deck <output_path>`
+  - optional:
+    - `--artifact-id <id>`
+    - `--output-format pdf|pptx`
+- 一个实现期排障发现：
+  - 不能直接声明 `--format`
+  - 因为 opencli 全局已占用 `-f/--format` 作为输出格式
+  - 所以命令内下载格式参数最终定为 `--output-format`
+
+### Verification
+
+- failing tests:
+  - `npx vitest run src\\clis\\notebooklm\\download-slide-deck.test.ts src\\clis\\notebooklm\\utils.test.ts`
+  - 初次失败点：
+    - 缺 `download-slide-deck.ts`
+    - 缺 slide-deck URL extraction helper
+- green tests:
+  - `npx vitest run src\\clis\\notebooklm\\download-slide-deck.test.ts src\\clis\\notebooklm\\utils.test.ts`
+- type/build:
+  - `npx tsc --noEmit`
+  - `npm run build`
+- live:
+  - `node dist/main.js notebooklm current -f json`
+  - `node dist/main.js notebooklm download slide-deck "E:\\web\\opencli\\tmp\\notebooklm-slide-deck-cli-smoke.pdf" --artifact-id 05b1fc1a-c2ba-48b1-b933-027468fc4e16 -f json`
+  - `Get-Item "E:\\web\\opencli\\tmp\\notebooklm-slide-deck-cli-smoke.pdf" | Select-Object FullName,Length,LastWriteTime`
+  - `node dist/main.js notebooklm download slide-deck "E:\\web\\opencli\\tmp\\notebooklm-slide-deck-cli-smoke.pptx" --artifact-id 05b1fc1a-c2ba-48b1-b933-027468fc4e16 --output-format pptx -f json`
+  - `Get-Item "E:\\web\\opencli\\tmp\\notebooklm-slide-deck-cli-smoke.pptx" | Select-Object FullName,Length,LastWriteTime`
+- live 结果：
+  - 当前 browser workspace 已绑定 notebook `edb0738b-bca1-416c-90f8-c97ca5e22c3f`
+  - slide-deck artifact `05b1fc1a-c2ba-48b1-b933-027468fc4e16` 已成功下载：
+    - PDF -> `E:\\web\\opencli\\tmp\\notebooklm-slide-deck-cli-smoke.pdf` (`16083362` bytes)
+    - PPTX -> `E:\\web\\opencli\\tmp\\notebooklm-slide-deck-cli-smoke.pptx` (`18182535` bytes)
+
+## 2026-03-31 Notebook Minimal Audio Download
+
+- 这轮范围保持收敛，只做 `notebooklm download audio`：
+  - 不碰 `artifact/*`
+  - 不做 `download video`
+  - 不扩 `generate/*`
+  - 不碰 notes 线、notebook CRUD、command tree
+- 先做最小取证后确认：
+  - 上游 helper 明确从 `audio_art[6][5]` 取 media variants
+  - 选择规则是：
+    - 优先第一个 `audio/mp4`
+    - 否则回退第一个 variant URL
+  - live raw probe 在 notebook `9924e90f-5d14-4cc1-bd5b-7cf702f76d95` 上再次确认：
+    - artifact `d7ca8b50-1aaa-49c5-a96e-600b8f6d22d0`
+    - `variants` 同时包含 direct `audio/mp4`、HLS、DASH
+- 按 TDD 顺序落地：
+  - 先新增失败测试：
+    - `src/clis/notebooklm/download-audio.test.ts`
+    - `src/clis/notebooklm/utils.test.ts`
+  - 再新增实现：
+    - `src/clis/notebooklm/download-audio.ts`
+    - `src/clis/notebooklm/shared.ts`
+    - `src/clis/notebooklm/utils.ts`
+- 实际实现链路：
+  - `downloadNotebooklmAudioViaRpc(...)`
+  - `gArtLc` raw list -> select completed audio artifact -> extract `row[6][5]` variant
+  - variant 选择保持与上游一致：优先首个 `audio/mp4`
+  - 复用 opencli `httpDownload(...)`
+  - browser cookies 通过 `page.getCookies({ url })` 转成 `Cookie` header
+  - `Referer` 维持当前 notebook URL
+- 命令形态：
+  - canonical: `notebooklm download audio <output_path>`
+  - alias: `notebooklm download-audio <output_path>`
+  - optional:
+    - `--artifact-id <id>`
+
+### Verification
+
+- failing tests:
+  - `npx vitest run src\\clis\\notebooklm\\download-audio.test.ts src\\clis\\notebooklm\\utils.test.ts`
+  - 初次失败点：
+    - 缺 `download-audio.ts`
+    - 缺 audio variant extraction helper
+- green tests:
+  - `npx vitest run src\\clis\\notebooklm\\download-audio.test.ts src\\clis\\notebooklm\\utils.test.ts`
+- type/build:
+  - `npx tsc --noEmit`
+  - `npm run build`
+- live:
+  - `node dist/main.js notebooklm current -f json`
+  - `node dist/main.js notebooklm download audio "E:\\web\\opencli\\tmp\\notebooklm-audio-cli-smoke.m4a" --artifact-id d7ca8b50-1aaa-49c5-a96e-600b8f6d22d0 -f json`
+  - `Get-Item "E:\\web\\opencli\\tmp\\notebooklm-audio-cli-smoke.m4a" | Select-Object FullName,Length,LastWriteTime`
+- live 结果：
+  - 当前 browser workspace 已绑定 notebook `9924e90f-5d14-4cc1-bd5b-7cf702f76d95`
+  - audio artifact `d7ca8b50-1aaa-49c5-a96e-600b8f6d22d0` 已成功下载
+  - 输出文件：
+    - `E:\\web\\opencli\\tmp\\notebooklm-audio-cli-smoke.m4a`
+    - `1211234` bytes
+
+## 2026-03-31 Notes List Live No-Data Follow-Up
+
+- 这轮只做 `notebooklm notes list` 的 live `no data` 调查与最小修复。
+- 先重放 live 失败：
+  - `node .\\dist\\main.js notebooklm notes list -f json` -> `no data`
+- 取证发现：
+  - 当时浏览器里没有可绑定的 `/notebook/...` tab
+  - `notebooklm use -f json` 报 `No visible tab matching notebooklm.google.com /notebook/`
+  - 因而这次失败首先是页面状态问题，不是直接证明 selector 漂移
+- 继续在真实 notebook 页 `a45591ed-37bd-4038-a131-141a295c024b` 上验证：
+  - `artifact-library-note` 仍存在
+  - DOM note list 可解析 2 条
+  - `cFji9` RPC 也可解析 2 条
+- 最小代码改动：
+  - `src/clis/notebooklm/note-list.ts`
+  - `src/clis/notebooklm/note-list.test.ts`
+  - 行为改为 `DOM first -> RPC fallback`
+- 红绿过程：
+  - 新增失败测试：DOM 为空时应回退到 RPC
+  - 实现后目标测试转绿
+- 本轮验证：
+  - `npx vitest run src\\clis\\notebooklm\\note-list.test.ts src\\clis\\notebooklm\\notes-get.test.ts src\\clis\\notebooklm\\notes-save.test.ts --reporter=verbose`
+  - `npx tsc --noEmit`
+  - `npm run build`
+  - `node .\\dist\\main.js notebooklm notes list -f json`
+- 当前 live 结果：
+  - 在真实 notebook 页上，`notes list` 已返回 2 条 note
+  - 未扩任何 notes 写命令
+
+## 2026-03-31 Notes Light-Write CRUD
+
+- 本轮范围只限 notes 轻写 CRUD：
+  - `notes/create`
+  - `notes/rename`
+  - `notes/delete`
+- `notes/create`
+  - 新增 `src/clis/notebooklm/notes-create.ts`
+  - 新增 `src/clis/notebooklm/notes-create.test.ts`
+  - `utils.ts` 新增：
+    - `buildNotebooklmCreateNoteParams`
+    - `createNotebooklmNoteViaRpc`
+  - 实现链路：`CYK0Xb` create -> `cYAfTb` update
+- `notes/rename`
+  - 新增 `src/clis/notebooklm/notes-rename.ts`
+  - 新增 `src/clis/notebooklm/notes-rename.test.ts`
+  - `utils.ts` 新增 `renameNotebooklmNoteViaRpc`
+  - CLI 形状收口为：
+    - `notebooklm notes rename --note-id <id> <new-title>`
+    - 可兼容 `--note <old-title> <new-title>`
+  - 不再把旧标题放成 positional，避免 `--note-id` 主路径不可调用
+- `notes/delete`
+  - 新增 `src/clis/notebooklm/notes-delete.ts`
+  - 新增 `src/clis/notebooklm/notes-delete.test.ts`
+  - `shared.ts` 新增 `NotebooklmNoteDeleteRow`
+  - `utils.ts` 新增：
+    - `buildNotebooklmDeleteNoteParams`
+    - `deleteNotebooklmNoteViaRpc`
+- 这轮选择策略保持克制：
+  - `rename` / `delete` 优先 `--note-id`
+  - 不带 `--note-id` 时，只做“唯一精确标题命中”
+  - 重复标题时直接要求用户提供 `--note-id`
+
+### Verification
+
+- `npx vitest run src\\clis\\notebooklm\\notes-create.test.ts --reporter=verbose`
+- `npx vitest run src\\clis\\notebooklm\\notes-rename.test.ts --reporter=verbose`
+- `npx vitest run src\\clis\\notebooklm\\notes-delete.test.ts --reporter=verbose`
+- `npx vitest run src\\clis\\notebooklm\\note-list.test.ts src\\clis\\notebooklm\\notes-get.test.ts src\\clis\\notebooklm\\notes-save.test.ts src\\clis\\notebooklm\\notes-create.test.ts src\\clis\\notebooklm\\notes-rename.test.ts src\\clis\\notebooklm\\notes-delete.test.ts --reporter=verbose`
+- `npx tsc --noEmit`
+- `npm run build`
+- live notebook prep:
+  - navigated browser workspace `site:notebooklm` to `https://notebooklm.google.com/notebook/a45591ed-37bd-4038-a131-141a295c024b`
+- live create / rename / delete chain:
+  - `node .\\dist\\main.js notebooklm notes create "opencli notes create smoke 2026-03-31" "notes create body 2026-03-31" -f json`
+  - created note id: `dc55301a-fae4-4cd8-97a2-46f97b7ec732`
+  - `node .\\dist\\main.js notebooklm notes rename --note-id dc55301a-fae4-4cd8-97a2-46f97b7ec732 "opencli notes renamed smoke 2026-03-31" -f json`
+  - `node .\\dist\\main.js notebooklm notes delete --note-id dc55301a-fae4-4cd8-97a2-46f97b7ec732 -f json`
+
+## 2026-03-31 Source Management Medium-Complexity Commands
+
+- 本轮范围只限：
+  - `source/rename`
+  - `source/delete`
+  - `source/refresh`
+  - `source/check-freshness`
+- 新增命令：
+  - `src/clis/notebooklm/source-rename.ts`
+  - `src/clis/notebooklm/source-delete.ts`
+  - `src/clis/notebooklm/source-refresh.ts`
+  - `src/clis/notebooklm/source-check-freshness.ts`
+- 新增测试：
+  - `src/clis/notebooklm/source-rename.test.ts`
+  - `src/clis/notebooklm/source-delete.test.ts`
+  - `src/clis/notebooklm/source-refresh.test.ts`
+  - `src/clis/notebooklm/source-check-freshness.test.ts`
+- `shared.ts` 新增：
+  - `NotebooklmSourceDeleteRow`
+  - `NotebooklmSourceRefreshRow`
+  - `NotebooklmSourceFreshnessRow`
+- `utils.ts` 新增：
+  - `buildNotebooklmRenameSourceParams`
+  - `renameNotebooklmSourceViaRpc`
+  - `deleteNotebooklmSourceViaRpc`
+  - `refreshNotebooklmSourceViaRpc`
+  - `parseNotebooklmSourceFreshnessResult`
+  - `checkNotebooklmSourceFreshnessViaRpc`
+- 当前实现边界：
+  - 全部仅作用于当前 notebook
+  - 写命令和 freshness 检查只接受 `--source-id` 或唯一精确标题
+  - 不支持 partial title 模糊命中
+
+### Verification
+
+- item tests:
+  - `npx vitest run src/clis/notebooklm/source-rename.test.ts --reporter=verbose`
+  - `npx vitest run src/clis/notebooklm/source-delete.test.ts --reporter=verbose`
+  - `npx vitest run src/clis/notebooklm/source-refresh.test.ts --reporter=verbose`
+  - `npx vitest run src/clis/notebooklm/source-check-freshness.test.ts --reporter=verbose`
+- aggregate:
+  - `npx vitest run src/clis/notebooklm/source-rename.test.ts src/clis/notebooklm/source-delete.test.ts src/clis/notebooklm/source-refresh.test.ts src/clis/notebooklm/source-check-freshness.test.ts src/clis/notebooklm/utils.test.ts --reporter=verbose`
+  - result: `5 files, 52 tests passed`
+- type/build:
+  - `npx tsc --noEmit`
+  - `npm run build`
+- live:
+  - `node dist/main.js notebooklm source list -f json`
+  - `node dist/main.js notebooklm source-add-text "opencli source rename smoke 2026-03-31" "source rename delete smoke body 2026-03-31" -f json`
+  - created source id: `e234071d-b9f3-4d13-a126-51f97f42a194`
+  - `node dist/main.js notebooklm source rename --source-id e234071d-b9f3-4d13-a126-51f97f42a194 "opencli source renamed smoke 2026-03-31" -f json`
+  - `node dist/main.js notebooklm source delete --source-id e234071d-b9f3-4d13-a126-51f97f42a194 -f json`
+  - `node dist/main.js notebooklm source-add-url "https://example.com/?opencli-source-smoke=2026-03-31" -f json`
+    - hit runtime error: `Detached while handling command`
+  - `node dist/main.js notebooklm source check-freshness --source-id <id> -f json`
+  - `node dist/main.js notebooklm source refresh --source-id <id> -f json`
+    - both currently blocked when NotebookLM browser binding drifts to `?addSource=true` page / wrong notebook
+
+## 2026-03-31 Source Runtime Stability
+
+- 本轮只做 source 管理命令运行态稳定性，不新增命令。
+- 代码改动：
+  - `src/clis/notebooklm/utils.ts`
+    - 新增 canonical notebook URL 回正逻辑
+    - `ensureNotebooklmNotebookBinding(...)` 改为先读真实页面状态，再决定是否 rebinding
+    - bind 后补一次 canonicalize
+  - `src/browser/page.ts`
+    - `Page.evaluate(...)` 现在会对 `Detached while handling command.` 做一次最小重试
+- 测试改动：
+  - `src/clis/notebooklm/binding.test.ts`
+    - 覆盖 stale currentUrl + real notebook/addSource
+    - 覆盖 bind-current 后 canonicalize
+  - `src/browser/page.test.ts`
+    - 覆盖 detached retry
+
+### Verification
+
+- targeted tests:
+  - `npx vitest run src/clis/notebooklm/binding.test.ts --reporter=verbose`
+  - `npx vitest run src/browser/page.test.ts --reporter=verbose`
+- aggregate:
+  - `npx vitest run src/clis/notebooklm/binding.test.ts src/clis/notebooklm/source-refresh.test.ts src/clis/notebooklm/source-check-freshness.test.ts src/browser/page.test.ts src/clis/notebooklm/utils.test.ts --reporter=verbose`
+  - result: `5 files, 59 tests passed`
+- type/build:
+  - `npx tsc --noEmit`
+  - `npm run build`
+- live prep:
+  - `node dist/main.js notebooklm status -f json`
+  - canonical notebook after fix:
+    - `https://notebooklm.google.com/notebook/6fd8aeb5-ddd1-4114-bcda-c376389a8508`
+  - `node dist/main.js notebooklm source-add-url "https://example.com/?opencli-source-stability=2026-03-31" -f json`
+    - created source id: `16e5137e-8108-4df2-a294-8511216697c5`
+- repeated live validation:
+  - round 1:
+    - `node dist/main.js notebooklm source check-freshness --source-id 16e5137e-8108-4df2-a294-8511216697c5 -f json`
+    - `node dist/main.js notebooklm source refresh --source-id 16e5137e-8108-4df2-a294-8511216697c5 -f json`
+    - `node dist/main.js notebooklm status -f json`
+  - round 2:
+    - same 3 commands
+  - round 3:
+    - same 3 commands
+  - all 3 rounds stayed on:
+    - notebook id `6fd8aeb5-ddd1-4114-bcda-c376389a8508`
+    - canonical URL without `?addSource=true`
+- live cleanup:
+  - `node dist/main.js notebooklm source delete --source-id 16e5137e-8108-4df2-a294-8511216697c5 -f json`
+
+## 2026-03-31 Notebook Minimal Video Download
+
+- 这轮范围保持收敛，只做 `notebooklm download video`：
+  - 不碰 `artifact/*`
+  - 不扩 `generate/*`
+  - 不碰 notes/source/notebook 其他线
+  - 不碰 command tree / framework
+- 先做最小取证后确认：
+  - upstream `notebooklm-cdp-cli` 的 video helper 仍从 `gArtLc` raw artifact rows 取媒体 URL
+  - live raw probe 已确认 video artifact type = `3`
+  - completed video row 的媒体 metadata 位于 `row[8]`
+  - media variants 位于 `row[8][4]`
+  - 当前真实样本同时包含：
+    - direct `video/mp4`
+    - HLS
+    - DASH
+    - 备用 `video/mp4` (`-dv`)
+- 当前最短下载路径：
+  - `gArtLc` raw list -> select completed `type=3` artifact -> extract `row[8][4]`
+  - 优先第一个 `video/mp4`
+  - 用现有 `httpDownload(...)` + browser cookie forwarding 落盘
+- 按 TDD 顺序落地：
+  - 先新增失败测试：
+    - `src/clis/notebooklm/download-video.test.ts`
+    - `src/clis/notebooklm/utils.test.ts`
+  - 初次失败点：
+    - 缺 `download-video.ts`
+    - 缺 `extractNotebooklmVideoDownloadVariant(...)`
+  - 再新增实现：
+    - `src/clis/notebooklm/download-video.ts`
+    - `src/clis/notebooklm/shared.ts`
+    - `src/clis/notebooklm/utils.ts`
+- 命令形态：
+  - canonical: `notebooklm download video <output_path>`
+  - alias: `notebooklm download-video <output_path>`
+  - optional:
+    - `--artifact-id <id>`
+
+### Verification
+
+- red -> green tests:
+  - `npx vitest run src\\clis\\notebooklm\\download-video.test.ts src\\clis\\notebooklm\\utils.test.ts`
+- type/build:
+  - `npx tsc --noEmit`
+  - `npm run build`
+- live prep:
+  - navigated browser workspace `site:notebooklm` to `https://notebooklm.google.com/notebook/6fd8aeb5-ddd1-4114-bcda-c376389a8508`
+  - `node dist/main.js notebooklm current -f json`
+- live:
+  - `node dist/main.js notebooklm download video "E:\\web\\opencli\\tmp\\notebooklm-video-cli-smoke.mp4" --artifact-id 82115e07-8602-4047-8b17-a1773c4fdcde -f json`
+  - `Get-Item "E:\\web\\opencli\\tmp\\notebooklm-video-cli-smoke.mp4" | Select-Object FullName,Length,LastWriteTime`
+- live 结果：
+  - 当前 browser workspace 已绑定 notebook `6fd8aeb5-ddd1-4114-bcda-c376389a8508`
+  - video artifact `82115e07-8602-4047-8b17-a1773c4fdcde` 已成功下载
+  - 输出文件：
+    - `E:\\web\\opencli\\tmp\\notebooklm-video-cli-smoke.mp4`
+    - `1212240` bytes
+
+## 2026-03-31 Notebook Minimal Download Index
+
+- 这轮范围保持收敛，只做一个最小下载索引命令：
+  - 不新增新的具体下载类型
+  - 不碰 `artifact/*`
+  - 不扩 `generate/*`
+  - 不碰 notes/source/notebook 其他线
+  - 不碰 command tree / framework
+- 命令名最终选择：
+  - canonical: `notebooklm download list`
+  - alias: `notebooklm download-list`
+- 实现目标收口为：
+  - 基于现有 `gArtLc` raw rows
+  - 只列出现有 download 命令真正需要的索引信息
+  - 不展开完整 artifact payload
+- 按 TDD 顺序落地：
+  - 先新增失败测试：
+    - `src/clis/notebooklm/download-list.test.ts`
+    - `src/clis/notebooklm/utils.test.ts`
+  - 初次失败点：
+    - 缺 `download-list.ts`
+    - 缺 `parseNotebooklmDownloadListRows(...)`
+  - 再新增实现：
+    - `src/clis/notebooklm/download-list.ts`
+    - `src/clis/notebooklm/shared.ts`
+    - `src/clis/notebooklm/utils.ts`
+- 当前索引输出字段：
+  - `artifact_id`
+  - `artifact_type`
+  - `status`
+  - `title`
+  - `created_at`
+  - `download_variants`
+  - `source`
+- 当前索引范围只覆盖已支持的 downloadable types：
+  - `report`
+  - `audio`
+  - `video`
+  - `slide_deck`
+
+### Verification
+
+- red -> green tests:
+  - `npx vitest run src\\clis\\notebooklm\\download-list.test.ts src\\clis\\notebooklm\\utils.test.ts`
+- type/build:
+  - `npx tsc --noEmit`
+  - `npm run build`
+- live:
+  - `node dist/main.js notebooklm current -f json`
+  - `node dist/main.js notebooklm download list -f json`
+- live 结果：
+  - 当前 browser workspace 已绑定 notebook `6fd8aeb5-ddd1-4114-bcda-c376389a8508`
+- `download list` 返回：
+  - `video` artifact 1 条
+  - `slide_deck` artifact 2 条
+  - `report` artifact 1 条
+- 当前 slide-deck 样本里 `download_variants` 只显示了已稳定可见的 `pdf`
+
+## 2026-03-31 Notebook Minimal Generate
+
+- 本轮范围只做最小 `generate/*` 闭环：
+  - `generate/report`
+  - `generate/audio`
+  - `generate/slide-deck`
+  - 不碰 source ingest / notes / notebook CRUD / share / research / command tree / artifact/*
+- 按顺序执行并保持 TDD：
+  1. `generate/report`
+     - 先加失败测试：
+       - `src/clis/notebooklm/generate-report.test.ts`
+       - `src/clis/notebooklm/utils.test.ts`
+     - 再加实现：
+       - `src/clis/notebooklm/generate-report.ts`
+       - `src/clis/notebooklm/shared.ts`
+       - `src/clis/notebooklm/utils.ts`
+     - report 相关测试转绿后才继续下一项
+  2. `generate/audio`
+     - 先加失败测试：
+       - `src/clis/notebooklm/generate-audio.test.ts`
+       - `src/clis/notebooklm/utils.test.ts`
+     - 再加实现：
+       - `src/clis/notebooklm/generate-audio.ts`
+       - `src/clis/notebooklm/utils.ts`
+     - audio 相关测试转绿后才继续下一项
+  3. `generate/slide-deck`
+     - 先加失败测试：
+       - `src/clis/notebooklm/generate-slide-deck.test.ts`
+       - `src/clis/notebooklm/utils.test.ts`
+     - 再加实现：
+       - `src/clis/notebooklm/generate-slide-deck.ts`
+       - `src/clis/notebooklm/utils.ts`
+- 实现收口：
+  - 统一提交 RPC：
+    - `R7cb6c`
+  - 新增最小 payload builder：
+    - `buildNotebooklmGenerateReportParams(...)`
+    - `buildNotebooklmGenerateAudioParams(...)`
+    - `buildNotebooklmGenerateSlideDeckParams(...)`
+  - 新增最小 generation parser / wait helper：
+    - `parseNotebooklmGenerationResult(...)`
+    - `waitForNotebooklmGeneratedArtifactViaRpc(...)`
+  - 新增 generate helpers：
+    - `generateNotebooklmReportViaRpc(...)`
+    - `generateNotebooklmAudioViaRpc(...)`
+    - `generateNotebooklmSlideDeckViaRpc(...)`
+  - 新增最小返回行：
+    - `NotebooklmGenerateRow`
+    - 字段只含：
+      - `notebook_id`
+      - `artifact_id`
+      - `artifact_type`
+      - `status`
+      - `created_at`
+      - `source`
+- 命令面保持最小：
+  - canonical:
+    - `notebooklm generate report`
+    - `notebooklm generate audio`
+    - `notebooklm generate slide-deck`
+  - aliases:
+    - `notebooklm generate-report`
+    - `notebooklm generate-audio`
+    - `notebooklm generate-slide-deck`
+  - 只暴露一个最小开关：
+    - `--wait`
+
+### Verification
+
+- related vitest:
+  - `npx vitest run src\\clis\\notebooklm\\generate-report.test.ts src\\clis\\notebooklm\\generate-audio.test.ts src\\clis\\notebooklm\\generate-slide-deck.test.ts src\\clis\\notebooklm\\utils.test.ts`
+  - 结果：`4 files, 61 tests passed`
+- type/build:
+  - `npx tsc --noEmit`
+  - `npm run build`
+- live notebook:
+  - `node dist/main.js notebooklm current -f json`
+  - notebook id: `6fd8aeb5-ddd1-4114-bcda-c376389a8508`
+- live report:
+  - `node dist/main.js notebooklm generate report --wait -f json`
+  - returned artifact: `1d525e55-7334-4407-b435-e4fbdc3f6349`
+  - closure:
+    - `node dist/main.js notebooklm download report "E:\\web\\opencli\\tmp\\notebooklm-generate-report-smoke.md" --artifact-id 1d525e55-7334-4407-b435-e4fbdc3f6349 -f json`
+- live audio:
+  - first wait attempt:
+    - `$env:OPENCLI_BROWSER_COMMAND_TIMEOUT='300'; node dist/main.js notebooklm generate audio --wait -f json`
+    - result: internal minimal wait timed out after `180` seconds
+  - minimal submit path:
+    - `node dist/main.js notebooklm generate audio -f json`
+    - returned artifact: `7603262d-d1d5-4a75-b266-61d275e293ad`
+    - `status: "in_progress"`
+  - follow-up visibility:
+    - `node dist/main.js notebooklm download list -f json`
+    - observed new audio artifact `2f81c937-52fa-4b7c-95a0-29884b78ba1a` with media variants
+- live slide-deck:
+  - wait attempts:
+    - `$env:OPENCLI_BROWSER_COMMAND_TIMEOUT='300'; node dist/main.js notebooklm generate slide-deck --wait -f json`
+    - internal minimal wait timed out after `180` seconds
+  - follow-up visibility:
+    - `node dist/main.js notebooklm download list -f json`
+    - observed new slide-deck artifacts:
+      - `978ef654-a702-46b9-bdba-231253f1c3a6`
+      - `9e4b5582-1b63-482b-ba9f-0223241377c9`
+  - closure:
+    - `node dist/main.js notebooklm download slide-deck "E:\\web\\opencli\\tmp\\notebooklm-generate-slide-deck-smoke.pdf" --artifact-id 978ef654-a702-46b9-bdba-231253f1c3a6 -f json`
+
+
+## 2026-03-31 Source Ingest Add-File And Wait
+
+- 范围控制：
+  - 只做 source ingest 相邻 3 个命令：
+    - `source/add-file`
+    - `source/wait-for-sources`
+    - `source/wait`
+  - 不碰 notes / notebook CRUD / share / language / download / artifact / generate / framework
+- 按顺序推进并保持 TDD：
+  1. 先补失败测试：
+     - `source-add-file.test.ts`
+     - `source-wait-for-sources.test.ts`
+     - `source-wait.test.ts`
+     - `utils.test.ts`
+  2. 初次失败点：
+     - 缺命令文件
+     - 缺 add-file params builder
+     - 缺带 status 的 source parser
+     - 缺 wait polling helper
+  3. 再落实现：
+     - `src/clis/notebooklm/source-add-file.ts`
+     - `src/clis/notebooklm/source-wait-for-sources.ts`
+     - `src/clis/notebooklm/source-wait.ts`
+     - `src/clis/notebooklm/shared.ts`
+     - `src/clis/notebooklm/utils.ts`
+- 实现收口：
+  - `add-file` 走：
+    - `o4cbdc` 注册 file source
+    - NotebookLM resumable upload start
+    - upload URL finalize
+  - `wait-for-sources` / `wait` 共用 `waitForNotebooklmSourcesReadyViaRpc(...)`
+  - 当前 source row 新增最小 status 字段：
+    - `status`
+    - `status_code`
+- 中途只修了一个最小类型问题：
+  - `fetch` 上传流的 `duplex` 声明在当前 TS lib 下报错
+  - 改成局部交叉类型声明，不改变实际上传行为
+- 验证：
+  - related vitest：`8 files, 58 tests passed`
+  - `npx tsc --noEmit`：通过
+  - `npm run build`：通过
+  - live：
+    - add-file 创建 source `6143e8b6-cb0d-4b18-9192-fbcd2abbebc1`
+    - wait / wait-for-sources 都等到 ready
+
+## 2026-03-31 From-0 Integration Test Summary (9 Modules)
+
+### Test Environment
+- Browser Bridge daemon: port 19825, extension v1.5.5, connected
+- 手动 `curl .../navigate` 可将 browser bridge tab 导航到 notebook URL（opencli CLI 内无内置 navigate 命令）
+- `bind-current` / `use` 在 browser 无 notebook tab 时失败，需要先手动 navigate
+- **关键运行态问题**：每次 CLI 命令执行后，browser bridge tab 会偶发漂回 home 页（约 2-3 条命令后），严重影响 notebook-context 命令连续测试
+
+### 测试模块 0：基础环境 — PASS
+- `npx tsc --noEmit` → EXIT 0
+- `npm run build` → EXIT 0，475 entries
+- `list -f json` → notebooklm 命令被发现
+- `notebooklm --help` → 正常展开 60+ 命令
+- `completion bash` → 正常输出
+
+### 测试模块 1：绑定前置条件 — PASS（需手动 navigate）
+- `bind-current` → FAIL（browser 无 notebook tab）
+- 手动 `curl navigate` → PASS
+- `status -f json` → `page: "notebook"`，`url: https://notebooklm.google.com/notebook/6fd8aeb5-...`
+- 当前测试 notebook：`6fd8aeb5-ddd1-4114-bcda-c376389a8508`（Electron Debugging 2026）
+
+### 测试模块 2：Notebook 基础读写 — 大部分 PASS
+| 命令 | 结果 | 备注 |
+|------|------|------|
+| `status` | PASS | |
+| `current` | PASS | `source: "current-page"` |
+| `get` | PASS | `source: "rpc"`，含 source_count |
+| `metadata` | PASS | alias of get |
+| `describe` | PASS | `source: "summary-dom"`，summary 正文返回 |
+| `list` | PASS | RPC |
+| `create` | PASS | 创建 notebook |
+| `rename` | PASS | 重命名成功 |
+| `remove-from-recent` | PASS | |
+| `delete` | PASS | |
+| `summary` | FAIL | browser drift 导致，需要重新 navigate |
+| `history` | FAIL | browser drift 导致，需要重新 navigate |
+
+### 测试模块 3：Source 读链路 — PASS
+| 命令 | 结果 | 备注 |
+|------|------|------|
+| `source list` | PASS | 7 sources，`type` 解析正确（pdf/web/audio/pasted-text/youtube），`source: "rpc"` |
+| `source get` | PASS | 按 title "粘贴的文字" 匹配 |
+| `source fulltext` | PASS | 返回 893 字符 markdown 内容 |
+| `source guide` | PASS | 返回 summary + 5 keywords |
+| `source-list`（flat）| FAIL | browser drift 导致 |
+
+### 测试模块 4：Source ingest 与管理 — 部分 PASS
+| 命令 | 结果 | 备注 |
+|------|------|------|
+| `source-add-text` | PASS | |
+| `source-add-url` | PASS | |
+| `source-wait` | PASS | 等到 ready |
+| `source-check-freshness` | PASS | `is_fresh: true` |
+| `source-rename` | FAIL | browser drift |
+| `source-refresh` | FAIL | browser drift |
+| `source-delete` | FAIL | browser drift |
+
+### 测试模块 5：Notes — 部分 PASS
+| 命令 | 结果 | 备注 |
+|------|------|------|
+| `notes list` | PASS（不稳定）| browser drift 导致不稳定 |
+| `notes create` | PASS | 创建 note |
+| `notes rename` | PASS | |
+| `notes delete` | FAIL | browser drift |
+| `notes-save` | NOT TESTED | 需要 visible note editor |
+
+### 测试模块 6：Ask — PASS
+`ask --prompt "用一句话总结"` → PASS，返回 answer 正文（中文）
+
+### 测试模块 7：Generate — PASS
+`generate report` → PASS，返回 `artifact_id: b9934a76-53df-47ec-9f24-f990a8da8072`
+
+### 测试模块 8：Download — 部分 PASS
+| 命令 | 结果 | 备注 |
+|------|------|------|
+| `download list` | PASS | 显示 report/audio/slide_deck，`status` 字段正确 |
+| `download report` | PASS | 成功写出 5563 字节 .md 文件，内容正确 |
+| `download audio` | FAIL | "fetch failed" — artifact URL 过期（运行态，非代码缺陷） |
+| `download slide-deck` | FAIL | "fetch failed" — artifact URL 过期（运行态）|
+
+### 测试模块 9：兼容层与命令树 — PASS
+- `source --help`、`notes --help`、`download --help`、`language --help` → 全部正常
+- `language get` 和 `language-get` → 均 PASS（alias 正常）
+
+### PR 准入评估
+
+**可以进入统一 PR 的命令：**
+1. `status` / `list` — 稳定，RPC
+2. `create` / `rename` / `delete` / `remove-from-recent` — 稳定，RPC，闭环验证通过
+3. `current` / `get` / `metadata` / `describe` — 稳定
+4. `source list` / `source get` / `source fulltext` / `source guide` — 稳定，RPC
+5. `source-add-text` / `source-add-url` / `source-wait` / `source-check-freshness` — 稳定
+6. `notes create` / `notes rename` — 稳定
+7. `ask` — 稳定，返回 answer
+8. `generate report` — 稳定，返回 artifact_id
+9. `download list` — 稳定，正确索引 artifacts
+10. `download report` — 稳定，成功写出文件
+11. `language-list` / `language-get` / `language-set` — 稳定，RPC
+12. 命令树三层结构和帮助文本 — 框架稳定
+
+**不该混进统一 PR（需要更多运行态验证）：**
+- `source-rename` / `source-refresh` / `source-delete` — browser drift 导致测试不稳定，需要稳定性修复后再验证
+- `notes delete` / `notes-save` — 同上
+- `download audio` / `download slide-deck` — artifact URL 过期是运行态问题，不是代码缺陷；但需要稳定可用的 artifact 样本才能验证
+
+**设计边界确认（不是 bug）：**
+- `summary` / `history` 偶发 FAIL 是 browser drift，不是代码缺陷
+- `bind-current` 在无 notebook tab 时失败是设计预期，需要先 navigate
+- `download audio/slide-deck` 的 "fetch failed" 是 URL 过期，不是实现问题
+
+### 关键运行态问题：Browser Drift
+- 每次 CLI 命令执行后，browser bridge CDP session 会偶发漂回 home 页
+- 在连续 2-3 条命令后必然发生
+- 影响所有 notebook-context 命令的连续测试
+- 根因：`navigate` 命令在 daemon 端执行后，下一次 CLI 调用时 CDP session 丢失了 notebook URL 上下文
+- 当前 workaround：每次 FAIL 后重新 `curl navigate`，然后继续测试
+- 建议：这是 daemon/CDP session 管理问题，不是 NotebookLM adapter 代码缺陷

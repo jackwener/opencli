@@ -243,13 +243,15 @@ export async function callNotebooklmRpc(
   params: unknown[] | Record<string, unknown> | null,
   options: {
     hl?: string;
+    sourcePath?: string;
   } = {},
 ): Promise<NotebooklmRpcCallResult> {
   const auth = await getNotebooklmPageAuth(page);
   const requestBody = buildNotebooklmRpcBody(rpcId, params, auth.csrfToken);
+  const sourcePath = options.sourcePath ?? auth.sourcePath;
   const url =
     `https://${NOTEBOOKLM_DOMAIN}/_/LabsTailwindUi/data/batchexecute` +
-    `?rpcids=${rpcId}&source-path=${encodeURIComponent(auth.sourcePath)}` +
+    `?rpcids=${rpcId}&source-path=${encodeURIComponent(sourcePath)}` +
     `&hl=${encodeURIComponent(options.hl ?? 'en')}` +
     `&f.sid=${encodeURIComponent(auth.sessionId)}&rt=c`;
 
