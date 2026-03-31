@@ -243,6 +243,7 @@ describe('douyin draft registration', () => {
       (args: unknown[]) => String(args[0]),
     );
     expect(evaluateCalls.some((code: string) => code.includes('上传新封面'))).toBe(true);
+    expect(evaluateCalls.some((code: string) => code.includes("text.includes('快速检测检测')"))).toBe(false);
     expect(() => {
       for (const code of evaluateCalls) {
         new Function(wrapForEval(code));

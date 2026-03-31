@@ -217,8 +217,7 @@ async function getCoverCheckPanelText(page: IPage): Promise<string> {
     while (root && root !== document.body) {
       const text = (root.textContent || '').replace(/\\s+/g, ' ').trim();
       const hasCheckState = (
-        text.includes('快速检测检测')
-        || text.includes('检测中')
+        text.includes('检测中')
         || text.includes('重新检测')
         || text.includes('横/竖双封面缺失')
       );
