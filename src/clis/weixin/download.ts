@@ -143,78 +143,56 @@ export function pickFirstWechatMetaText(...candidates: Array<string | null | und
 
 /**
  * Build a self-contained helper for execution inside page.evaluate().
+ *
+ * NOTE: Do NOT use .toString() on TypeScript/compiled functions here — esbuild injects
+ * __name() helpers that are not available in the browser execution context and cause
+ * "ReferenceError: __name is not defined". Use String.raw template literals instead.
  */
 export function buildExtractWechatPublishTimeJs(): string {
-  return `(${function extractWechatPublishTimeInPage(
-    publishTimeText: string | null | undefined,
-    htmlStr: string,
-  ) {
-    function formatWechatTimestamp(rawTimestamp: string) {
-      const ts = Number.parseInt(rawTimestamp, 10);
+  return String.raw`(function(publishTimeText, htmlStr) {
+    function formatWechatTimestamp(rawTimestamp) {
+      var ts = Number.parseInt(rawTimestamp, 10);
       if (!Number.isFinite(ts) || ts <= 0) return '';
-
-      const timestampMs = rawTimestamp.length === 13 ? ts : ts * 1000;
-      const d = new Date(timestampMs);
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const utc8 = new Date(d.getTime() + 8 * 3600 * 1000);
-
-      return (
-        `${utc8.getUTCFullYear()}-` +
-        `${pad(utc8.getUTCMonth() + 1)}-` +
-        `${pad(utc8.getUTCDate())} ` +
-        `${pad(utc8.getUTCHours())}:` +
-        `${pad(utc8.getUTCMinutes())}:` +
-        `${pad(utc8.getUTCSeconds())}`
-      );
+      var timestampMs = rawTimestamp.length === 13 ? ts : ts * 1000;
+      var d = new Date(timestampMs);
+      var utc8 = new Date(d.getTime() + 8 * 3600 * 1000);
+      function pad(n) { return String(n).padStart(2, '0'); }
+      return utc8.getUTCFullYear() + '-' + pad(utc8.getUTCMonth() + 1) + '-' +
+        pad(utc8.getUTCDate()) + ' ' + pad(utc8.getUTCHours()) + ':' +
+        pad(utc8.getUTCMinutes()) + ':' + pad(utc8.getUTCSeconds());
     }
-
-    function extractWechatCreateTimeValue(html: string) {
-      const jsDecodeMatch = html.match(
-        /create_time\s*:\s*JsDecode\('([^']+)'\)(?=[\s,;}]|$)/,
-      );
-      if (jsDecodeMatch) return jsDecodeMatch[1];
-
-      const directValueMatch = html.match(
-        /create_time\s*[:=]\s*(?:"([^"]+)"|'([^']+)'|([0-9A-Za-z]+))(?=[\s,;}]|$)/,
-      );
-      if (!directValueMatch) return '';
-
-      return directValueMatch[1] || directValueMatch[2] || directValueMatch[3] || '';
+    function extractWechatCreateTimeValue(html) {
+      var m1 = html.match(/create_time\s*:\s*JsDecode\('([^']+)'\)(?=[\s,;}]|$)/);
+      if (m1) return m1[1];
+      var m2 = html.match(/create_time\s*[:=]\s*(?:"([^"]+)"|'([^']+)'|([0-9A-Za-z]+))(?=[\s,;}]|$)/);
+      if (!m2) return '';
+      return m2[1] || m2[2] || m2[3] || '';
     }
-
-    const normalizedPublishTime = (publishTimeText || '').trim();
+    var normalizedPublishTime = (publishTimeText || '').trim();
     if (normalizedPublishTime) return normalizedPublishTime;
-
-    const rawCreateTime = extractWechatCreateTimeValue(htmlStr);
+    var rawCreateTime = extractWechatCreateTimeValue(htmlStr);
     if (!/^\d{10}$|^\d{13}$/.test(rawCreateTime)) return '';
-
     return formatWechatTimestamp(rawCreateTime);
-  }.toString()})`;
+  })`;
 }
 
 /**
  * Build a self-contained access-issue detector for execution inside page.evaluate().
+ *
+ * NOTE: Do NOT use .toString() on TypeScript/compiled functions here — esbuild injects
+ * __name() helpers that are not available in the browser execution context.
  */
 export function buildDetectWechatAccessIssueJs(): string {
-  return `(${function detectWechatAccessIssueInPage(
-    pageText: string | null | undefined,
-    htmlStr: string,
-  ) {
-    const normalizedText = (pageText || '').replace(/\s+/g, ' ').trim();
-
-    if (
-      /环境异常/.test(normalizedText) &&
-      /(完成验证后即可继续访问|去验证)/.test(normalizedText)
-    ) {
+  return String.raw`(function(pageText, htmlStr) {
+    var normalizedText = (pageText || '').replace(/\s+/g, ' ').trim();
+    if (/环境异常/.test(normalizedText) && /(完成验证后即可继续访问|去验证)/.test(normalizedText)) {
       return 'environment verification required';
     }
-
     if (/secitptpage\/verify\.html/.test(htmlStr) || /id=["']js_verify["']/.test(htmlStr)) {
       return 'environment verification required';
     }
-
     return '';
-  }.toString()})`;
+  })`;
 }
 
 // ============================================================
