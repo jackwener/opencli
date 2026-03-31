@@ -42,12 +42,15 @@ cli({
       'rating': 'CAE%3D',
     };
 
-    let url = `https://www.youtube.com/results?search_query=${query}`;
-    if (kwargs.type && spMap[kwargs.type]) url += `&sp=${spMap[kwargs.type]}`;
-    else if (kwargs.upload && spMap[kwargs.upload]) url += `&sp=${spMap[kwargs.upload]}`;
-    if (kwargs.sort && sortMap[kwargs.sort]) url += `&sp=${sortMap[kwargs.sort]}`;
+    // YouTube only supports a single sp= parameter — pick the most specific filter.
+    // Priority: type > upload > sort (type is the most common use case)
+    let sp = '';
+    if (kwargs.type && spMap[kwargs.type]) sp = spMap[kwargs.type];
+    else if (kwargs.upload && spMap[kwargs.upload]) sp = spMap[kwargs.upload];
+    else if (kwargs.sort && sortMap[kwargs.sort]) sp = sortMap[kwargs.sort];
 
-    const isShorts = kwargs.type === 'shorts';
+    let url = `https://www.youtube.com/results?search_query=${query}`;
+    if (sp) url += `&sp=${sp}`;
 
     await page.goto(url);
     await page.wait(3);
@@ -91,14 +94,6 @@ cli({
       })()
     `);
     if (!Array.isArray(data)) return [];
-
-    // For Shorts: convert URL to /shorts/ format
-    if (isShorts) {
-      return data.map((v: any) => ({
-        ...v,
-        url: v.url.replace('youtube.com/watch?v=', 'youtube.com/shorts/'),
-      }));
-    }
     return data;
   },
 });
