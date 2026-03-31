@@ -9,7 +9,14 @@ vi.mock('chalk', () => ({
   },
 }));
 
-import { daemonStatus, daemonStop } from './daemon.js';
+const mockConnect = vi.fn();
+vi.mock('../browser/mcp.js', () => ({
+  BrowserBridge: class {
+    connect = mockConnect;
+  },
+}));
+
+import { daemonStatus, daemonStop, daemonRestart } from './daemon.js';
 
 describe('daemon commands', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -22,6 +29,7 @@ describe('daemon commands', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    mockConnect.mockReset();
   });
 
   describe('daemonStatus', () => {
@@ -164,6 +172,67 @@ describe('daemon commands', () => {
       await daemonStop();
 
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to stop daemon'));
+    });
+  });
+
+  describe('daemonRestart', () => {
+    const statusData = {
+      ok: true,
+      pid: 12345,
+      uptime: 100,
+      extensionConnected: true,
+      pending: 0,
+      lastCliRequestTime: Date.now(),
+      memoryMB: 50,
+      port: 19825,
+    };
+
+    it('starts daemon directly when not running', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+      mockConnect.mockResolvedValue(undefined);
+
+      await daemonRestart();
+
+      expect(mockConnect).toHaveBeenCalledWith({ timeout: 10 });
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Daemon restarted'));
+    });
+
+    it('stops then starts when daemon is running', async () => {
+      const mockFetch = vi.fn()
+        // First call: fetchStatus in daemonRestart — daemon is running
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(statusData) })
+        // Second call: requestShutdown — success
+        .mockResolvedValueOnce({ ok: true })
+        // Subsequent calls: polling fetchStatus until unreachable
+        .mockRejectedValue(new Error('ECONNREFUSED'));
+
+      vi.stubGlobal('fetch', mockFetch);
+      mockConnect.mockResolvedValue(undefined);
+
+      await daemonRestart();
+
+      // Verify shutdown was called
+      const shutdownCall = mockFetch.mock.calls[1];
+      expect(shutdownCall[0]).toContain('/shutdown');
+      expect(shutdownCall[1]).toMatchObject({ method: 'POST' });
+
+      expect(mockConnect).toHaveBeenCalledWith({ timeout: 10 });
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Daemon restarted'));
+    });
+
+    it('aborts when shutdown fails', async () => {
+      const mockFetch = vi.fn()
+        // fetchStatus — daemon is running
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(statusData) })
+        // requestShutdown — failure
+        .mockResolvedValueOnce({ ok: false });
+
+      vi.stubGlobal('fetch', mockFetch);
+
+      await daemonRestart();
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to stop daemon'));
+      expect(mockConnect).not.toHaveBeenCalled();
     });
   });
 });

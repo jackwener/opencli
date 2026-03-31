@@ -23,34 +23,36 @@ interface DaemonStatus {
 }
 
 async function fetchStatus(): Promise<DaemonStatus | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2000);
     const res = await fetch(`${DAEMON_URL}/status`, {
       headers: { 'X-OpenCLI': '1' },
       signal: controller.signal,
     });
-    clearTimeout(timer);
     if (!res.ok) return null;
     return await res.json() as DaemonStatus;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 async function requestShutdown(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(`${DAEMON_URL}/shutdown`, {
       method: 'POST',
       headers: { 'X-OpenCLI': '1' },
       signal: controller.signal,
     });
-    clearTimeout(timer);
     return res.ok;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -111,8 +113,12 @@ export async function daemonRestart(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    // Wait for daemon to exit
-    await new Promise(r => setTimeout(r, 500));
+    // Wait for daemon to actually exit (poll until unreachable)
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 200));
+      if (!(await fetchStatus())) break;
+    }
   }
 
   // Import BrowserBridge to spawn a new daemon
