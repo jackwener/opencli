@@ -19,8 +19,10 @@ pipeline:
       id: ${{ item.id }}
       rank: ${{ index + 1 }}
       title: ${{ item.title }}
+      node: ${{ item.node.title }}
       replies: ${{ item.replies }}
+      url: ${{ item.url }}
 
   - limit: ${{ args.limit }}
 
-columns: [id, rank, title, replies]
+columns: [id, rank, title, node, replies, url]
