@@ -119,6 +119,17 @@ export function fullName(cmd: CliCommand): string {
   return `${cmd.site}/${cmd.name}`;
 }
 
+export function splitCommandPath(name: string): string[] {
+  return name
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+export function formatCommandInvocation(cmd: CliCommand): string {
+  return [cmd.site, ...splitCommandPath(cmd.name)].join(' ');
+}
+
 export function strategyLabel(cmd: CliCommand): string {
   return cmd.strategy ?? Strategy.PUBLIC;
 }
