@@ -16,7 +16,7 @@ cli({
     { name: 'upload', default: '', help: 'Upload date: hour, today, week, month, year' },
     { name: 'sort', default: '', help: 'Sort by: relevance, date, views, rating' },
   ],
-  columns: ['rank', 'title', 'channel', 'views', 'duration', 'url'],
+  columns: ['rank', 'title', 'channel', 'views', 'duration', 'published', 'url'],
   func: async (page, kwargs) => {
     const limit = Math.min(kwargs.limit || 20, 50);
     const query = encodeURIComponent(kwargs.query);
@@ -70,6 +70,7 @@ cli({
                 channel: v.ownerText?.runs?.[0]?.text || '',
                 views: v.viewCountText?.simpleText || v.shortViewCountText?.simpleText || '',
                 duration: v.lengthText?.simpleText || 'LIVE',
+                published: v.publishedTimeText?.simpleText || '',
                 url: 'https://www.youtube.com/watch?v=' + v.videoId
               });
             } else if (item.reelItemRenderer) {
@@ -80,6 +81,7 @@ cli({
                 channel: r.navigationEndpoint?.reelWatchEndpoint?.overlay?.reelPlayerOverlayRenderer?.reelPlayerHeaderSupportedRenderers?.reelPlayerHeaderRenderer?.channelTitleText?.runs?.[0]?.text || '',
                 views: r.viewCountText?.simpleText || '',
                 duration: 'SHORT',
+                published: r.publishedTimeText?.simpleText || '',
                 url: 'https://www.youtube.com/shorts/' + r.videoId
               });
             }
