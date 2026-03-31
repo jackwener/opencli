@@ -61,10 +61,9 @@ describe('facebook search pipeline', () => {
 
     expect(page.goto).toHaveBeenNthCalledWith(1, 'https://www.facebook.com');
     expect(page.goto).toHaveBeenNthCalledWith(2, 'https://www.facebook.com/search/top?q=AI%20agent', {
-      waitUntil: 'none',
-      settleMs: undefined,
+      waitUntil: undefined,
+      settleMs: 4000,
     });
-    expect(page.wait).toHaveBeenCalledWith(4);
     expect(page.evaluate).toHaveBeenCalledTimes(1);
     expect(String((page.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? '')).not.toContain('window.location.href');
   });

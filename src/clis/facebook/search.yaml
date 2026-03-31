@@ -19,9 +19,7 @@ pipeline:
 
   - navigate:
       url: https://www.facebook.com/search/top?q=${{ args.query | urlencode }}
-      waitUntil: none
-
-  - wait: 4
+      settleMs: 4000
 
   - evaluate: |
       (async () => {
