@@ -206,6 +206,32 @@ async function prepareCustomCoverInput(page: IPage): Promise<string> {
 }
 
 /**
+ * Read the local quick-check panel text that reflects cover validation state.
+ */
+async function getCoverCheckPanelText(page: IPage): Promise<string> {
+  return ((await page.evaluate(`() => {
+    const marker = Array.from(document.querySelectorAll('div,span,p')).find(
+      (el) => (el.textContent || '').trim() === '快速检测'
+    );
+    let root = marker?.parentElement || null;
+    while (root && root !== document.body) {
+      const text = (root.textContent || '').replace(/\\s+/g, ' ').trim();
+      const hasCheckState = (
+        text.includes('检测')
+        || text.includes('重新检测')
+        || text.includes('封面检测中')
+        || text.includes('横/竖双封面缺失')
+      );
+      if (text.includes('快速检测') && hasCheckState) {
+        return text.slice(0, 400);
+      }
+      root = root.parentElement;
+    }
+    return '';
+  }`)) as string) || '';
+}
+
+/**
  * Wait for Douyin's cover-detection pipeline to expose a post-upload signal.
  * In the live creator page, custom cover upload first shows `封面检测中`, then
  * lands on a ready state such as `重新检测` or the warning copy for missing
@@ -214,15 +240,16 @@ async function prepareCustomCoverInput(page: IPage): Promise<string> {
 async function waitForCoverReady(
   page: IPage,
 ): Promise<void> {
-  let lastBodyText = '';
+  let lastPanelText = '';
   let sawBusy = false;
 
   for (let attempt = 0; attempt < COVER_READY_WAIT_ATTEMPTS; attempt += 1) {
-    const bodyText = (await page.evaluate(
-      `() => document.body?.innerText || ''`,
-    )) as string;
-    const busy = /封面检测中/.test(bodyText);
-    const ready = /重新检测|横\/竖双封面缺失/.test(bodyText);
+    const panelText = await getCoverCheckPanelText(page);
+    const busy = panelText.includes('检测中');
+    const ready = (
+      panelText.includes('重新检测')
+      || panelText.includes('横/竖双封面缺失')
+    );
 
     if (busy) {
       sawBusy = true;
@@ -231,13 +258,13 @@ async function waitForCoverReady(
       return;
     }
 
-    lastBodyText = bodyText;
+    lastPanelText = panelText;
     await page.wait({ time: 0.5 });
   }
 
   throw new CommandExecutionError(
     '等待抖音封面处理完成超时',
-    lastBodyText || 'unknown',
+    lastPanelText || 'unknown',
   );
 }
 
