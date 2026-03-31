@@ -53,7 +53,7 @@ describe('douyin draft registration', () => {
     expect(cmd).toBeDefined();
   });
 
-  it('uploads through the official creator draft page and saves the draft', async () => {
+  it('uploads through the official creator draft page and saves the draft session', async () => {
     const registry = getRegistry();
     const cmd = [...registry.values()].find(c => c.site === 'douyin' && c.name === 'draft');
     expect(cmd?.func).toBeTypeOf('function');
@@ -66,18 +66,17 @@ describe('douyin draft registration', () => {
     const page = createPageMock(
       [
         undefined,
-        { href: 'https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page', ready: true },
+        { href: 'https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page', ready: true, bodyText: '' },
         undefined,
         true,
         true,
         true,
-        { ok: true, text: '暂存离开' },
+        { ok: true, text: '暂存离开', creationId: 'creation-001' },
+        {
+          href: 'https://creator.douyin.com/creator-micro/content/upload?enter_from=publish',
+          bodyText: '你还有上次未发布的视频，是否继续编辑？继续编辑放弃',
+        },
       ],
-      {
-        getInterceptedRequests: vi.fn().mockResolvedValue([
-          { aweme_id: '746001' },
-        ]),
-      },
     );
 
     const rows = await cmd.func(page, {
@@ -95,7 +94,6 @@ describe('douyin draft registration', () => {
       selector: 'input[type="file"]',
       timeout: 20,
     });
-    expect(page.installInterceptor).toHaveBeenCalledWith('create_v2');
     expect(page.setFileInput).toHaveBeenCalledWith([videoPath], 'input[type="file"]');
 
     const evaluateCalls = (page.evaluate as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -107,8 +105,8 @@ describe('douyin draft registration', () => {
 
     expect(rows).toEqual([
       {
-        status: '✅ 草稿保存成功！',
-        aweme_id: '746001',
+        status: '✅ 草稿已保存，可在创作中心继续编辑',
+        draft_id: 'creation-001',
       },
     ]);
   });
@@ -128,18 +126,17 @@ describe('douyin draft registration', () => {
     const page = createPageMock(
       [
         undefined,
-        { href: 'https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page', ready: true },
+        { href: 'https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page', ready: true, bodyText: '' },
         undefined,
         { ok: true, selector: '[data-opencli-cover-input="1"]' },
         true,
         true,
-        { ok: true, text: '暂存离开' },
+        { ok: true, text: '暂存离开', creationId: 'creation-002' },
+        {
+          href: 'https://creator.douyin.com/creator-micro/content/upload?enter_from=publish',
+          bodyText: '你还有上次未发布的视频，是否继续编辑？继续编辑放弃',
+        },
       ],
-      {
-        getInterceptedRequests: vi.fn().mockResolvedValue([
-          { aweme_id: '746002' },
-        ]),
-      },
     );
 
     const rows = await cmd.func(page, {
@@ -160,8 +157,8 @@ describe('douyin draft registration', () => {
 
     expect(rows).toEqual([
       {
-        status: '✅ 草稿保存成功！',
-        aweme_id: '746002',
+        status: '✅ 草稿已保存，可在创作中心继续编辑',
+        draft_id: 'creation-002',
       },
     ]);
   });

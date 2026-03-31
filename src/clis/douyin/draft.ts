@@ -26,6 +26,16 @@ interface DraftComposerState {
   bodyText: string;
 }
 
+interface DraftSaveResult {
+  text: string;
+  creationId: string;
+}
+
+interface DraftResumeState {
+  href: string;
+  bodyText: string;
+}
+
 /**
  * Best-effort dismissal for coach marks and upload tips that can block clicks.
  */
@@ -82,12 +92,28 @@ async function fillDraftComposer(
       (el) => (el.placeholder || '').includes('填写作品标题')
     );
     if (!(titleInput instanceof HTMLInputElement)) return false;
-    titleInput.focus();
-    titleInput.value = '';
-    document.execCommand('selectAll', false);
-    document.execCommand('insertText', false, ${JSON.stringify(options.title)});
-    titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-    titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+    const propKey = Object.keys(titleInput).find((key) => key.startsWith('__reactProps$'));
+    const props = propKey ? titleInput[propKey] : null;
+    if (props?.onChange) {
+      props.onChange({
+        target: { value: ${JSON.stringify(options.title)} },
+        currentTarget: { value: ${JSON.stringify(options.title)} },
+      });
+    } else {
+      titleInput.focus();
+      titleInput.value = ${JSON.stringify(options.title)};
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (props?.onBlur) {
+      props.onBlur({
+        target: titleInput,
+        currentTarget: titleInput,
+        relatedTarget: null,
+      });
+    } else {
+      titleInput.dispatchEvent(new Event('blur', { bubbles: true }));
+    }
     return true;
   }`)) as boolean;
   if (!titleOk) {
@@ -162,70 +188,93 @@ async function prepareCustomCoverInput(page: IPage): Promise<string> {
 }
 
 /**
- * Click the draft button on the composer page.
+ * Click the draft button on the composer page and extract the current creation id.
  */
-async function clickSaveDraft(page: IPage): Promise<void> {
+async function clickSaveDraft(page: IPage): Promise<DraftSaveResult> {
   const result = (await page.evaluate(`() => {
+    const extractCreationId = () => {
+      const titleInput = Array.from(document.querySelectorAll('input')).find(
+        (el) => (el.placeholder || '').includes('填写作品标题')
+      );
+      if (!(titleInput instanceof HTMLInputElement)) return '';
+
+      const fiberKey = Object.keys(titleInput).find((key) => key.startsWith('__reactFiber$'));
+      let fiber = fiberKey ? titleInput[fiberKey] : null;
+      while (fiber) {
+        const props = fiber.memoizedProps;
+        if (typeof props?.creation_id === 'string' && props.creation_id) {
+          return props.creation_id;
+        }
+        fiber = fiber.return;
+      }
+      return '';
+    };
+
     const btn = Array.from(document.querySelectorAll('button')).find(
       (el) => (el.textContent || '').includes('暂存离开')
     );
     if (!(btn instanceof HTMLButtonElement)) {
       return { ok: false, reason: 'draft-button-missing' };
     }
-    btn.click();
-    return { ok: true, text: (btn.textContent || '').trim() };
-  }`)) as { ok?: boolean; reason?: string };
+    const creationId = extractCreationId();
+    const propKey = Object.keys(btn).find((key) => key.startsWith('__reactProps$'));
+    const props = propKey ? btn[propKey] : null;
+    if (props?.onClick) {
+      props.onClick({
+        preventDefault() {},
+        stopPropagation() {},
+        nativeEvent: null,
+        target: btn,
+        currentTarget: btn,
+      });
+    } else {
+      btn.click();
+    }
+    return {
+      ok: true,
+      text: (btn.textContent || '').trim(),
+      creationId,
+    };
+  }`)) as { ok?: boolean; reason?: string; text?: string; creationId?: string };
 
   if (!result?.ok) {
     throw new CommandExecutionError(
       `点击草稿按钮失败: ${result?.reason || 'unknown'}`,
     );
   }
-}
 
-function extractAwemeId(payloads: unknown[]): string {
-  for (const payload of payloads) {
-    if (!payload || typeof payload !== 'object') continue;
-    const row = payload as Record<string, unknown>;
-    const direct = row.aweme_id;
-    if (typeof direct === 'string' && direct) return direct;
-    const nested = row.data;
-    if (nested && typeof nested === 'object') {
-      const nestedAwemeId = (nested as Record<string, unknown>).aweme_id;
-      if (typeof nestedAwemeId === 'string' && nestedAwemeId) return nestedAwemeId;
-    }
-  }
-  return '';
+  return {
+    text: result.text || '暂存离开',
+    creationId: result.creationId || '',
+  };
 }
 
 /**
- * Wait for the save-draft request to complete and extract the new aweme id.
+ * Wait until creator center shows the resumable-draft prompt after saving.
  */
-async function waitForDraftResult(page: IPage): Promise<string> {
-  let lastState = { href: '', bodyText: '' };
-
+async function waitForDraftResult(
+  page: IPage,
+  creationId: string,
+): Promise<string> {
+  let lastState: DraftResumeState = { href: '', bodyText: '' };
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const intercepted = await page.getInterceptedRequests();
-    const awemeId = extractAwemeId(intercepted);
-    if (awemeId) return awemeId;
-
     lastState = (await page.evaluate(`() => ({
       href: location.href,
       bodyText: document.body?.innerText || ''
     })`)) as { href: string; bodyText: string };
 
     if (
-      lastState.href.includes('/creator-micro/content/manage')
-      && /草稿|暂存/.test(lastState.bodyText)
+      lastState.href.includes('/creator-micro/content/upload')
+      && /继续编辑/.test(lastState.bodyText)
     ) {
-      break;
+      return creationId;
     }
 
     await page.wait({ time: 1 });
   }
 
   throw new CommandExecutionError(
-    '草稿保存成功但未捕获 aweme_id',
+    '未检测到抖音草稿恢复提示',
     `当前页面: ${lastState.href || 'unknown'}`,
   );
 }
@@ -244,7 +293,7 @@ cli({
     { name: 'cover', default: '', help: '封面图片路径' },
     { name: 'visibility', default: 'public', choices: ['public', 'friends', 'private'] },
   ],
-  columns: ['status', 'aweme_id'],
+  columns: ['status', 'draft_id'],
   func: async (page: IPage, kwargs) => {
     const videoPath = path.resolve(kwargs.video as string);
     if (!fs.existsSync(videoPath)) {
@@ -284,7 +333,6 @@ cli({
     await page.goto(DRAFT_UPLOAD_URL);
     await page.wait({ selector: 'input[type="file"]', timeout: 20 });
     await dismissKnownModals(page);
-    await page.installInterceptor('create_v2');
     await page.setFileInput([videoPath], 'input[type="file"]');
     await waitForDraftComposer(page);
     await dismissKnownModals(page);
@@ -295,14 +343,14 @@ cli({
     }
     await fillDraftComposer(page, { title, caption, visibilityLabel });
     await page.wait({ time: 1 });
-    await clickSaveDraft(page);
+    const saveResult = await clickSaveDraft(page);
 
-    const awemeId = await waitForDraftResult(page);
+    const draftId = await waitForDraftResult(page, saveResult.creationId);
 
     return [
       {
-        status: '✅ 草稿保存成功！',
-        aweme_id: awemeId,
+        status: '✅ 草稿已保存，可在创作中心继续编辑',
+        draft_id: draftId,
       },
     ];
   },
