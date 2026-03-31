@@ -43,6 +43,7 @@ Run `opencli list` for the live registry.
 | **[tiktok](./browser/tiktok)** | `explore` `search` `profile` `user` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `live` `notifications` `friends` | 🔐 Browser |
 | **[google](./browser/google)** | `news` `search` `suggest` `trends` | 🌐 / 🔐 |
 | **[jd](./browser/jd)** | `item` | 🔐 Browser |
+| **[1688](./browser/1688)** | `search` `item` `store` | 🔐 Browser |
 | **[web](./browser/web)** | `read` | 🔐 Browser |
 | **[weixin](./browser/weixin)** | `download` | 🔐 Browser |
 | **[36kr](./browser/36kr)** | `news` `hot` `search` `article` | 🌐 / 🔐 |
