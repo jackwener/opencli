@@ -704,8 +704,7 @@ const CDP_ALLOWLIST = new Set([
   // Page metrics & screenshots
   'Page.getLayoutMetrics',
   'Page.captureScreenshot',
-  // Runtime (already used by 'exec', but needed for CDP passthrough too)
-  'Runtime.evaluate',
+  // Runtime.enable needed for CDP attach setup (Runtime.evaluate goes through 'exec' action)
   'Runtime.enable',
   // Emulation (used by screenshot full-page)
   'Emulation.setDeviceMetricsOverride',

@@ -164,17 +164,77 @@ export class LLMClient {
   getDetailedTokenUsage(): TokenUsage {
     return { ...this._totalTokens };
   }
+
+  /**
+   * Generate raw text from the LLM without AgentResponse schema validation.
+   * Used for code generation and repair where we want free-form output.
+   */
+  async generateRaw(
+    systemPrompt: string,
+    userMessage: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const requestOptions = signal ? { signal } : undefined;
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    }, requestOptions);
+
+    // Track tokens
+    const usage = response.usage as unknown as Record<string, number> | undefined;
+    const inputTokens = usage?.input_tokens ?? 0;
+    const outputTokens = usage?.output_tokens ?? 0;
+    const cacheRead = usage?.cache_read_input_tokens ?? 0;
+    const cacheCreation = usage?.cache_creation_input_tokens ?? 0;
+    this._totalTokens.input += inputTokens;
+    this._totalTokens.output += outputTokens;
+    this._totalTokens.cacheRead += cacheRead;
+    this._totalTokens.cacheCreation += cacheCreation;
+    this._totalTokens.estimatedCost =
+      (this._totalTokens.input / 1_000_000) * COST_PER_1M_INPUT +
+      (this._totalTokens.output / 1_000_000) * COST_PER_1M_OUTPUT +
+      (this._totalTokens.cacheRead / 1_000_000) * COST_PER_1M_CACHE_READ +
+      (this._totalTokens.cacheCreation / 1_000_000) * COST_PER_1M_CACHE_WRITE;
+
+    const textBlock = response.content.find(b => b.type === 'text');
+    if (!textBlock || textBlock.type !== 'text' || !textBlock.text.trim()) {
+      throw new Error('LLM returned empty response');
+    }
+    return textBlock.text;
+  }
 }
 
 /**
  * Extract JSON from text that may contain markdown code fences or other wrapping.
  */
 function extractJson(text: string): string {
+  // Try markdown code block first
   const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (codeBlockMatch) return codeBlockMatch[1].trim();
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) return jsonMatch[0];
+  // Find JSON by balanced brace matching (not greedy regex)
+  const trimmed = text.trim();
+  const start = trimmed.indexOf('{');
+  if (start === -1) return trimmed;
 
-  return text.trim();
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return trimmed.slice(start, i + 1);
+    }
+  }
+
+  // Fallback: return from first { to end
+  return trimmed.slice(start);
 }

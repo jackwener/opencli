@@ -137,15 +137,12 @@ const READ_NETWORK_CAPTURE_JS = `
 const READ_AUTH_CONTEXT_JS = `
 (function() {
   var cookies = document.cookie.split(';').map(function(c) { return c.trim().split('=')[0]; });
-  var csrf = null;
-  // Common CSRF token patterns
+  // Only detect presence of CSRF, never extract the actual value
   var csrfCookie = document.cookie.split(';').map(function(c) { return c.trim(); })
     .find(function(c) { return /^(ct0|csrf|_csrf|XSRF|xsrf)/i.test(c); });
-  if (csrfCookie) csrf = csrfCookie.split('=')[1];
-  // Also check meta tags
   var metaCsrf = document.querySelector('meta[name="csrf-token"]');
-  if (metaCsrf) csrf = metaCsrf.getAttribute('content');
-  return { cookieNames: cookies, csrfToken: csrf };
+  var csrfPresent = !!(csrfCookie || metaCsrf);
+  return { cookieNames: cookies, csrfPresent: csrfPresent };
 })()
 `;
 
@@ -158,12 +155,14 @@ export class TraceRecorder {
   private startTime = Date.now();
   private interceptorInstalled = false;
 
-  /** Install the network interceptor into the page. Call once after first navigation. */
+  /**
+   * Install the network interceptor into the page.
+   * Safe to call multiple times — the JS guard checks if already installed,
+   * and after navigation the old document is gone so it re-installs.
+   */
   async installInterceptor(page: IPage): Promise<void> {
-    if (this.interceptorInstalled) return;
     try {
       await page.evaluate(INSTALL_NETWORK_INTERCEPTOR_JS);
-      this.interceptorInstalled = true;
     } catch {
       // Non-fatal — we can still record actions without network capture
     }
@@ -246,11 +245,11 @@ export class TraceRecorder {
     try {
       const raw = await page.evaluate(READ_AUTH_CONTEXT_JS) as {
         cookieNames: string[];
-        csrfToken?: string;
+        csrfPresent: boolean;
       } | null;
       if (raw) {
         authContext.cookieNames = raw.cookieNames ?? [];
-        authContext.csrfPresent = !!raw.csrfToken;
+        authContext.csrfPresent = !!raw.csrfPresent;
       }
     } catch {
       // Non-fatal

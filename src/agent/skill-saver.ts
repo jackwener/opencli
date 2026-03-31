@@ -140,22 +140,12 @@ async function generateTsAdapter(
 
   const prompt = buildGenerationPrompt(trace, discovery, site, command);
 
-  const response = await llm.chat(
-    'You are an expert TypeScript developer specializing in OpenCLI adapter generation. You output ONLY valid TypeScript code, no explanations or markdown.',
-    [{ role: 'user', content: prompt }],
+  const rawOutput = await llm.generateRaw(
+    'You are an expert TypeScript developer specializing in OpenCLI adapter generation. Output ONLY valid TypeScript code. No JSON wrapping, no markdown fences, no explanations.',
+    prompt,
   );
 
-  // Extract code from the LLM response
-  const doneAction = response.actions.find(a => a.type === 'done');
-  if (doneAction && doneAction.type === 'done' && doneAction.result) {
-    return extractCode(doneAction.result);
-  }
-  // Fallback: try to extract code from the thinking field
-  if (response.thinking) {
-    const fromThinking = extractCode(response.thinking);
-    if (fromThinking.includes('cli(')) return fromThinking;
-  }
-  throw new Error('LLM did not return a done action with generated code');
+  return extractCode(rawOutput);
 }
 
 function buildGenerationPrompt(
@@ -234,8 +224,8 @@ cli({
     parts.push(`  Array Path: ${api.arrayPath ?? 'none'}`);
     parts.push(`  Array Length: ${api.arrayLength}`);
     parts.push(`  Field Overlap with target data: ${api.fieldOverlap}`);
-    parts.push(`\nAPI Response Sample (truncated):`);
-    parts.push(api.responseSample.slice(0, 2000));
+    parts.push(`\nAPI Response Sample (truncated, sensitive values redacted):`);
+    parts.push(redactSensitiveValues(api.responseSample).slice(0, 2000));
   } else {
     parts.push('No suitable API found — use UI strategy with page.evaluate()');
   }
@@ -289,8 +279,7 @@ cli({
 - CRITICAL: Import paths must end with .js — write '../../registry.js' not '../../registry'
 - site must be exactly '${site}' and name must be exactly '${command}'`);
 
-  // Respond with a done action containing the code as result
-  parts.push(`\nRespond with JSON: {"thinking": "...", "nextGoal": "generate adapter", "actions": [{"type": "done", "result": "<full TypeScript code here>"}]}`);
+  parts.push(`\nOutput ONLY the TypeScript code. No JSON wrapping, no markdown fences, no explanations.`);
 
   return parts.join('\n');
 }
@@ -317,19 +306,17 @@ ${code}
 ## Original Task
 ${trace.task}
 
-Fix the error and output ONLY the corrected TypeScript code. No explanations.
-Respond with JSON: {"thinking": "...", "nextGoal": "fix error", "actions": [{"type": "done", "result": "<fixed TypeScript code>"}]}`;
+Fix the error and output ONLY the corrected TypeScript code. No explanations, no markdown.`;
 
-  const response = await llm.chat(
-    'You are a TypeScript expert. Fix the code and output only valid TypeScript.',
-    [{ role: 'user', content: prompt }],
-  );
-
-  const doneAction = response.actions.find(a => a.type === 'done');
-  if (doneAction && doneAction.type === 'done' && doneAction.result) {
-    return extractCode(doneAction.result);
+  try {
+    const rawOutput = await llm.generateRaw(
+      'You are a TypeScript expert. Fix the code and output only valid TypeScript.',
+      prompt,
+    );
+    return extractCode(rawOutput);
+  } catch {
+    return code; // Return original if LLM didn't produce a fix
   }
-  return code; // Return original if LLM didn't produce a fix
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -353,9 +340,22 @@ function extractCode(text: string): string {
   return trimmed;
 }
 
+const SENSITIVE_KEYS = /^(token|access_token|refresh_token|password|secret|authorization|cookie|set-cookie|x-auth|api_key|apikey|session_id|csrf)/i;
+
+/** Redact sensitive values from a JSON string or object. */
+function redactSensitiveValues(text: string): string {
+  try {
+    const obj = JSON.parse(text);
+    return JSON.stringify(obj, (key, val) =>
+      SENSITIVE_KEYS.test(key) ? '[REDACTED]' : val
+    );
+  } catch {
+    return text;
+  }
+}
+
 /** Strip sensitive data from trace before writing to disk. */
 function sanitizeTrace(trace: RichTrace): RichTrace {
-  const SENSITIVE_KEYS = /^(token|access_token|refresh_token|password|secret|authorization|cookie|set-cookie|x-auth|api_key|apikey)/i;
   return {
     ...trace,
     authContext: {

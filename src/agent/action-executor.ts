@@ -120,9 +120,19 @@ export class ActionExecutor {
     await this.clickElement(action.index, el);
     await this.page.wait(0.2);
 
-    // Clear existing content
-    await this.page.pressKey('Control+a');
-    await this.page.wait(0.1);
+    // Clear existing content (use same input method as typing for consistency)
+    if (this.page.nativeKeyPress) {
+      try {
+        await this.page.nativeKeyPress('a', ['Ctrl']);
+        await this.page.wait(0.1);
+      } catch {
+        await this.page.pressKey('Control+a');
+        await this.page.wait(0.1);
+      }
+    } else {
+      await this.page.pressKey('Control+a');
+      await this.page.wait(0.1);
+    }
 
     // Type the text
     await this.typeIntoElement(action.index, action.text);

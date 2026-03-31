@@ -120,6 +120,11 @@ export class AgentLoop {
     // Phase 1: Build context
     const domContext = await buildDomContext(this.page);
 
+    // Re-install network interceptor (it's destroyed on navigation)
+    if (this.traceRecorder) {
+      await this.traceRecorder.installInterceptor(this.page);
+    }
+
     // Screenshot (optional)
     let screenshot: string | null = null;
     if (this.config.useScreenshot) {
@@ -281,7 +286,7 @@ export class AgentLoop {
       if (a.type === 'scroll') return `scroll:${a.direction}`;
       if (a.type === 'navigate') return `nav`;
       return a.type;
-    }).sort().join(',');
+    }).join(',');
     return createHash('sha256').update(key).digest('hex').slice(0, 16);
   }
 
@@ -402,6 +407,7 @@ export class AgentLoop {
     const urls = new Set<string>();
     const actions: string[] = [];
     const errors: string[] = [];
+    const memories: string[] = [];
 
     for (const msg of messages) {
       if (msg.role === 'user') {
@@ -411,6 +417,7 @@ export class AgentLoop {
         try {
           const parsed = JSON.parse(msg.content);
           if (parsed.nextGoal) actions.push(parsed.nextGoal);
+          if (parsed.memory) memories.push(parsed.memory);
           if (parsed.evaluationPreviousGoal?.toLowerCase().includes('fail')) {
             errors.push(parsed.evaluationPreviousGoal);
           }
@@ -422,7 +429,7 @@ export class AgentLoop {
     if (urls.size > 0) parts.push(`Pages visited: ${[...urls].join(', ')}`);
     if (actions.length > 0) parts.push(`Actions taken: ${actions.slice(-5).join('; ')}`);
     if (errors.length > 0) parts.push(`Past errors: ${errors.slice(-3).join('; ')}`);
-    parts.push('Refer to your memory field for important facts from earlier steps.');
+    if (memories.length > 0) parts.push(`Key memories from earlier steps:\n${memories.slice(-5).join('\n')}`);
 
     return parts.join('\n');
   }
