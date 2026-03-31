@@ -16,6 +16,48 @@ export interface GeminiTurn {
   Text: string;
 }
 
+const GEMINI_RESPONSE_NOISE_PATTERNS = [
+  /Gemini can make mistakes\.?/gi,
+  /Google Terms/gi,
+  /Google Privacy Policy/gi,
+  /Opens in a new window/gi,
+];
+
+export function sanitizeGeminiResponseText(value: string, promptText: string): string {
+  let sanitized = value;
+  for (const pattern of GEMINI_RESPONSE_NOISE_PATTERNS) {
+    sanitized = sanitized.replace(pattern, '');
+  }
+  sanitized = sanitized.trim();
+
+  const prompt = promptText.trim();
+  if (!prompt) return sanitized;
+  if (sanitized === prompt) return '';
+
+  for (const separator of ['\n\n', '\n', '\r\n\r\n', '\r\n']) {
+    const prefix = `${prompt}${separator}`;
+    if (sanitized.startsWith(prefix)) {
+      return sanitized.slice(prefix.length).trim();
+    }
+  }
+
+  return sanitized;
+}
+
+export function collectGeminiTranscriptAdditions(
+  beforeLines: string[],
+  currentLines: string[],
+  promptText: string,
+): string {
+  const beforeSet = new Set(beforeLines);
+  const additions = currentLines
+    .filter((line) => !beforeSet.has(line))
+    .map((line) => sanitizeGeminiResponseText(line, promptText))
+    .filter((line) => line && line !== promptText);
+
+  return additions.join('\n').trim();
+}
+
 function getStateScript(): string {
   return `
     (() => {
@@ -446,29 +488,16 @@ export async function waitForGeminiResponse(
   promptText: string,
   timeoutSeconds: number,
 ): Promise<string> {
-  const beforeSet = new Set(beforeLines);
-
-  const sanitizeCandidate = (value: string): string => value
-    .replace(promptText, '')
-    .replace(/Gemini can make mistakes\.?/gi, '')
-    .replace(/Google Terms/gi, '')
-    .replace(/Google Privacy Policy/gi, '')
-    .replace(/Opens in a new window/gi, '')
-    .trim();
-
   const getCandidate = async (): Promise<string> => {
     const turns = await getGeminiVisibleTurns(page);
     const assistantCandidate = [...turns].reverse().find((turn) => turn.Role === 'Assistant');
-    const visibleCandidate = assistantCandidate ? sanitizeCandidate(assistantCandidate.Text) : '';
+    const visibleCandidate = assistantCandidate
+      ? sanitizeGeminiResponseText(assistantCandidate.Text, promptText)
+      : '';
     if (visibleCandidate && visibleCandidate !== promptText) return visibleCandidate;
 
     const lines = await getGeminiTranscriptLines(page);
-    const additions = lines
-      .filter((line) => !beforeSet.has(line))
-      .map((line) => sanitizeCandidate(line))
-      .filter((line) => line && line !== promptText);
-
-    return additions[additions.length - 1] || '';
+    return collectGeminiTranscriptAdditions(beforeLines, lines, promptText);
   };
 
   const pollIntervalSeconds = 2;
