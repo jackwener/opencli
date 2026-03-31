@@ -1,0 +1,177 @@
+{
+  "timestamp": "2026-03-31T08:52:03.077Z",
+  "score": "13/20",
+  "trainScore": "12/15",
+  "testScore": "1/5",
+  "tasks": [
+    {
+      "name": "example-title",
+      "passed": true,
+      "steps": 1,
+      "cost": 0.0076,
+      "duration": 6363,
+      "set": "train"
+    },
+    {
+      "name": "google-search",
+      "passed": true,
+      "steps": 5,
+      "cost": 0.1521,
+      "duration": 26193,
+      "set": "train"
+    },
+    {
+      "name": "hn-top-stories",
+      "passed": true,
+      "steps": 1,
+      "cost": 0.0427,
+      "duration": 8438,
+      "set": "train"
+    },
+    {
+      "name": "wikipedia-extract",
+      "passed": true,
+      "steps": 3,
+      "cost": 0.2667,
+      "duration": 23448,
+      "set": "train"
+    },
+    {
+      "name": "github-stars",
+      "passed": true,
+      "steps": 2,
+      "cost": 0.1241,
+      "duration": 23343,
+      "set": "train"
+    },
+    {
+      "name": "ddg-search",
+      "passed": true,
+      "steps": 5,
+      "cost": 0.3063,
+      "duration": 62593,
+      "set": "train"
+    },
+    {
+      "name": "form-fill-simple",
+      "passed": true,
+      "steps": 1,
+      "cost": 0.0063,
+      "duration": 7694,
+      "set": "train"
+    },
+    {
+      "name": "form-fill-complex",
+      "passed": false,
+      "steps": 6,
+      "cost": 0.0309,
+      "error": "Partially completed the pizza order form. Successfully filled: Customer Name='OpenCLI', Telephone='555-0100'. Failed to complete: Email, Size, Topping, Delivery time, and Comments due to browser exten",
+      "duration": 62005,
+      "set": "train"
+    },
+    {
+      "name": "books-scrape",
+      "passed": true,
+      "steps": 1,
+      "cost": 0.0187,
+      "duration": 10642,
+      "set": "train"
+    },
+    {
+      "name": "quotes-scrape",
+      "passed": true,
+      "steps": 6,
+      "cost": 0.0366,
+      "duration": 206665,
+      "set": "train"
+    },
+    {
+      "name": "scroll-extract-footer",
+      "passed": true,
+      "steps": 3,
+      "cost": 0.0323,
+      "duration": 14089,
+      "set": "train"
+    },
+    {
+      "name": "github-trending",
+      "passed": true,
+      "steps": 3,
+      "cost": 0.4507,
+      "duration": 31701,
+      "set": "train"
+    },
+    {
+      "name": "hn-click-first",
+      "passed": false,
+      "steps": 6,
+      "cost": 0.0818,
+      "error": "Failed to complete task - encountered TypeError when attempting to click story link",
+      "duration": 12609,
+      "set": "train"
+    },
+    {
+      "name": "example-follow-link",
+      "passed": false,
+      "steps": 6,
+      "cost": 0.0108,
+      "error": "Task could not be completed due to browser automation errors. Successfully loaded the initial example.com page and identified the target link ('Learn more' at index [1]) which appears to be the 'More ",
+      "duration": 16547,
+      "set": "train"
+    },
+    {
+      "name": "jsonplaceholder-endpoints",
+      "passed": true,
+      "steps": 4,
+      "cost": 0.0463,
+      "duration": 42083,
+      "set": "train"
+    },
+    {
+      "name": "bench-wikipedia-nav",
+      "passed": false,
+      "steps": 7,
+      "cost": 0.093,
+      "error": "Task incomplete. Successfully navigated to Wikipedia main page and entered 'Rust programming language' into the search field. However, encountered a persistent JavaScript error ('Cannot read propertie",
+      "duration": 18662,
+      "set": "test"
+    },
+    {
+      "name": "bench-reddit-extract",
+      "passed": false,
+      "steps": 2,
+      "cost": 0.137,
+      "error": "Successfully extracted the titles of the top 5 posts from the Reddit front page",
+      "duration": 17659,
+      "set": "test"
+    },
+    {
+      "name": "bench-imdb-search",
+      "passed": false,
+      "steps": 5,
+      "cost": 0.0519,
+      "error": "Failed to complete the task. Successfully navigated to IMDb homepage and identified the search box (element 54), but encountered persistent technical errors when attempting to interact with it. The er",
+      "duration": 38008,
+      "set": "test"
+    },
+    {
+      "name": "bench-npm-package",
+      "passed": true,
+      "steps": 7,
+      "cost": 0.1533,
+      "duration": 29996,
+      "set": "test"
+    },
+    {
+      "name": "bench-stackoverflow",
+      "passed": false,
+      "steps": 10,
+      "cost": 0.893,
+      "error": "unknown failure",
+      "duration": 144110,
+      "set": "test"
+    }
+  ],
+  "totalCost": 2.9421,
+  "duration": "13min"
+}

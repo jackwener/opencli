@@ -1,0 +1,172 @@
+{
+  "timestamp": "2026-03-31T09:10:39.192Z",
+  "score": "18/20",
+  "trainScore": "14/15",
+  "testScore": "4/5",
+  "tasks": [
+    {
+      "name": "example-title",
+      "passed": true,
+      "steps": 1,
+      "cost": 0.0079,
+      "duration": 4507,
+      "set": "train"
+    },
+    {
+      "name": "google-search",
+      "passed": true,
+      "steps": 8,
+      "cost": 0.3842,
+      "duration": 44900,
+      "set": "train"
+    },
+    {
+      "name": "hn-top-stories",
+      "passed": true,
+      "steps": 2,
+      "cost": 0.0849,
+      "duration": 12569,
+      "set": "train"
+    },
+    {
+      "name": "wikipedia-extract",
+      "passed": true,
+      "steps": 3,
+      "cost": 0.1713,
+      "duration": 22343,
+      "set": "train"
+    },
+    {
+      "name": "github-stars",
+      "passed": true,
+      "steps": 3,
+      "cost": 0.3023,
+      "duration": 37427,
+      "set": "train"
+    },
+    {
+      "name": "ddg-search",
+      "passed": true,
+      "steps": 5,
+      "cost": 0.4112,
+      "duration": 38865,
+      "set": "train"
+    },
+    {
+      "name": "form-fill-simple",
+      "passed": true,
+      "steps": 2,
+      "cost": 0.0127,
+      "duration": 40394,
+      "set": "train"
+    },
+    {
+      "name": "form-fill-complex",
+      "passed": false,
+      "steps": 8,
+      "cost": 0.0424,
+      "error": "Partially completed form filling. Successfully filled Customer Name='OpenCLI' and Telephone='555-0100'. Failed to complete remaining fields (Email, Size, Topping, Delivery time, Comments) due to Chrom",
+      "duration": 91085,
+      "set": "train"
+    },
+    {
+      "name": "books-scrape",
+      "passed": true,
+      "steps": 2,
+      "cost": 0.0508,
+      "duration": 22712,
+      "set": "train"
+    },
+    {
+      "name": "quotes-scrape",
+      "passed": true,
+      "steps": 1,
+      "cost": 0.0111,
+      "duration": 7876,
+      "set": "train"
+    },
+    {
+      "name": "scroll-extract-footer",
+      "passed": true,
+      "steps": 3,
+      "cost": 0.0366,
+      "duration": 13939,
+      "set": "train"
+    },
+    {
+      "name": "github-trending",
+      "passed": true,
+      "steps": 2,
+      "cost": 0.1895,
+      "duration": 20311,
+      "set": "train"
+    },
+    {
+      "name": "hn-click-first",
+      "passed": true,
+      "steps": 3,
+      "cost": 0.0705,
+      "duration": 15551,
+      "set": "train"
+    },
+    {
+      "name": "example-follow-link",
+      "passed": true,
+      "steps": 2,
+      "cost": 0.0113,
+      "duration": 8123,
+      "set": "train"
+    },
+    {
+      "name": "jsonplaceholder-endpoints",
+      "passed": true,
+      "steps": 4,
+      "cost": 0.0565,
+      "duration": 38954,
+      "set": "train"
+    },
+    {
+      "name": "bench-wikipedia-nav",
+      "passed": true,
+      "steps": 10,
+      "cost": 0.7918,
+      "duration": 98556,
+      "set": "test"
+    },
+    {
+      "name": "bench-reddit-extract",
+      "passed": true,
+      "steps": 3,
+      "cost": 0.1538,
+      "duration": 23678,
+      "set": "test"
+    },
+    {
+      "name": "bench-imdb-search",
+      "passed": true,
+      "steps": 5,
+      "cost": 0.2665,
+      "duration": 60886,
+      "set": "test"
+    },
+    {
+      "name": "bench-npm-package",
+      "passed": true,
+      "steps": 7,
+      "cost": 0.2576,
+      "duration": 80975,
+      "set": "test"
+    },
+    {
+      "name": "bench-stackoverflow",
+      "passed": false,
+      "steps": 9,
+      "cost": 1.756,
+      "error": "Task cannot be completed - Stack Overflow is blocking access with a CAPTCHA verification page that requires human interaction. As an automated agent, I cannot complete the CAPTCHA verification. The ta",
+      "duration": 228632,
+      "set": "test"
+    }
+  ],
+  "totalCost": 5.0689,
+  "duration": "15min"
+}

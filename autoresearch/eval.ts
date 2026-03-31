@@ -195,8 +195,8 @@ function parseOperateOutput(output: string): any {
   const costMatch = output.match(/Cost:\s*~\$([0-9.]+)/);
   if (costMatch) result.tokenUsage = { estimatedCost: parseFloat(costMatch[1]) };
 
-  // Extract "Extracted data:" section
-  const dataMatch = output.match(/Extracted data:\n([\s\S]*?)(?:\n\n|\nSteps:)/);
+  // Extract "Extracted data:" section — try multiple patterns
+  const dataMatch = output.match(/Extracted data:\s*\n([\s\S]*?)(?:\n\nSteps:|\nSteps:)/);
   if (dataMatch) {
     const dataStr = dataMatch[1].trim();
     try {
@@ -206,8 +206,25 @@ function parseOperateOutput(output: string): any {
     }
   }
 
+  // If no "Extracted data:" section, try to get data from the result text
+  if (!result.extractedData) {
+    // The result text after ✓ might contain the extracted info
+    const allText = output.split('Steps:')[0];
+    const successText = allText.split('✓ Task completed successfully\n')[1];
+    if (successText) {
+      const cleaned = successText.trim();
+      if (cleaned) {
+        try {
+          result.extractedData = JSON.parse(cleaned);
+        } catch {
+          result.extractedData = cleaned;
+        }
+      }
+    }
+  }
+
   // Extract result text (line after ✓ or ✗)
-  const resultMatch = output.match(/[✓✗] .+\n\n(.+)/);
+  const resultMatch = output.match(/[✓✗] .+\n\n([\s\S]*?)(?:\n\nExtracted data:|\n\nSteps:)/);
   if (resultMatch) result.result = resultMatch[1].trim();
 
   return result;

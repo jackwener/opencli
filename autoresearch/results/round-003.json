@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-03-31T08:54:47.449Z",
+  "score": "1/1",
+  "trainScore": "1/1",
+  "testScore": "0/0",
+  "tasks": [
+    {
+      "name": "example-follow-link",
+      "passed": true,
+      "steps": 2,
+      "cost": 0.0115,
+      "duration": 8804,
+      "set": "train"
+    }
+  ],
+  "totalCost": 0.0115,
+  "duration": "0min"
+}

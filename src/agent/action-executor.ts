@@ -90,14 +90,14 @@ export class ActionExecutor {
     await this.page.wait(0.3);
   }
 
-  /** Click an element: scroll into view first, then try native CDP, fallback to JS */
+  /** Click an element: scroll into view, try CDP click, fallback to JS click, final fallback to evaluate */
   private async clickElement(index: number, el: ElementInfo): Promise<void> {
     // Always scroll into view first — CDP mouse events only work within the viewport
     await this.scrollIntoView(index);
 
+    // Strategy 1: Native CDP click with fresh coordinates
     if (this.page.nativeClick) {
       try {
-        // Re-read position after scroll (element may have moved)
         const freshPos = await this.page.evaluate(`
           (function() {
             var el = document.querySelector('[data-opencli-ref="${index}"]');
@@ -107,15 +107,38 @@ export class ActionExecutor {
           })()
         `) as { x: number; y: number } | null;
 
-        if (freshPos) {
+        if (freshPos && freshPos.x > 0 && freshPos.y > 0) {
           await this.page.nativeClick(freshPos.x, freshPos.y);
           return;
         }
       } catch {
-        // CDP click failed — fallback to JS
+        // CDP click failed — try next strategy
       }
     }
-    await this.page.click(String(index));
+
+    // Strategy 2: JS click via page.click (uses dom-helpers clickJs)
+    try {
+      await this.page.click(String(index));
+      return;
+    } catch {
+      // page.click also failed — try final fallback
+    }
+
+    // Strategy 3: Direct JS evaluate click (most robust, works even if ref format differs)
+    await this.page.evaluate(`
+      (function() {
+        var el = document.querySelector('[data-opencli-ref="${index}"]');
+        if (el) { el.click(); return; }
+        // Fallback: try finding by link text if it's a link
+        var links = document.querySelectorAll('a');
+        for (var i = 0; i < links.length; i++) {
+          if (links[i].textContent.trim().includes(${JSON.stringify(el.text.slice(0, 30))})) {
+            links[i].click();
+            return;
+          }
+        }
+      })()
+    `);
   }
 
   /** Type into an element: try native CDP, fallback to JS injection */
