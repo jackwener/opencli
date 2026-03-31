@@ -15,17 +15,18 @@
  *
  * Lifecycle:
  *   - Auto-spawned by opencli on first browser command
- *   - Auto-exits after 5 minutes of idle
+ *   - Auto-exits after idle timeout (default 4h, configurable via OPENCLI_DAEMON_TIMEOUT)
  *   - Listens on localhost:19825
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
-import { DEFAULT_DAEMON_PORT } from './constants.js';
+import { DEFAULT_DAEMON_PORT, DEFAULT_DAEMON_IDLE_TIMEOUT } from './constants.js';
 import { EXIT_CODES } from './errors.js';
+import { IdleManager } from './idle-manager.js';
 
 const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
-const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const IDLE_TIMEOUT = Number(process.env.OPENCLI_DAEMON_TIMEOUT ?? DEFAULT_DAEMON_IDLE_TIMEOUT);
 
 // ─── State ───────────────────────────────────────────────────────────
 
@@ -36,8 +37,6 @@ const pending = new Map<string, {
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 }>();
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
-
 // Extension log ring buffer
 interface LogEntry { level: string; msg: string; ts: number; }
 const LOG_BUFFER_SIZE = 200;
@@ -50,13 +49,10 @@ function pushLog(entry: LogEntry): void {
 
 // ─── Idle auto-exit ──────────────────────────────────────────────────
 
-function resetIdleTimer(): void {
-  if (idleTimer) clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    console.error('[daemon] Idle timeout, shutting down');
-    process.exit(EXIT_CODES.SUCCESS);
-  }, IDLE_TIMEOUT);
-}
+const idleManager = new IdleManager(IDLE_TIMEOUT, () => {
+  console.error('[daemon] Idle timeout (no CLI requests + no Extension), shutting down');
+  process.exit(EXIT_CODES.SUCCESS);
+});
 
 // ─── HTTP Server ─────────────────────────────────────────────────────
 
@@ -128,11 +124,18 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   if (req.method === 'GET' && pathname === '/status') {
+    const uptime = process.uptime();
+    const mem = process.memoryUsage();
     jsonResponse(res, 200, {
       ok: true,
+      pid: process.pid,
+      uptime,
       extensionConnected: extensionWs?.readyState === WebSocket.OPEN,
       extensionVersion,
       pending: pending.size,
+      lastCliRequestTime: idleManager.lastCliRequestTime,
+      memoryMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
+      port: PORT,
     });
     return;
   }
@@ -153,8 +156,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
+  if (req.method === 'POST' && pathname === '/shutdown') {
+    jsonResponse(res, 200, { ok: true, message: 'Shutting down' });
+    setTimeout(() => shutdown(), 100);
+    return;
+  }
+
   if (req.method === 'POST' && url === '/command') {
-    resetIdleTimer();
+    idleManager.onCliRequest();
     try {
       const body = JSON.parse(await readBody(req));
       if (!body.id) {
@@ -212,6 +221,7 @@ wss.on('connection', (ws: WebSocket) => {
   console.error('[daemon] Extension connected');
   extensionWs = ws;
   extensionVersion = null; // cleared until hello message arrives
+  idleManager.setExtensionConnected(true);
 
   // ── Heartbeat: ping every 15s, close if 2 pongs missed ──
   let missedPongs = 0;
@@ -270,6 +280,7 @@ wss.on('connection', (ws: WebSocket) => {
     if (extensionWs === ws) {
       extensionWs = null;
       extensionVersion = null;
+      idleManager.setExtensionConnected(false);
       // Reject all pending requests since the extension is gone
       for (const [id, p] of pending) {
         clearTimeout(p.timer);
@@ -284,6 +295,7 @@ wss.on('connection', (ws: WebSocket) => {
     if (extensionWs === ws) {
       extensionWs = null;
       extensionVersion = null;
+      idleManager.setExtensionConnected(false);
       // Reject pending requests in case 'close' does not follow this 'error'
       for (const [, p] of pending) {
         clearTimeout(p.timer);
@@ -298,7 +310,7 @@ wss.on('connection', (ws: WebSocket) => {
 
 httpServer.listen(PORT, '127.0.0.1', () => {
   console.error(`[daemon] Listening on http://127.0.0.1:${PORT}`);
-  resetIdleTimer();
+  idleManager.onCliRequest();
 });
 
 httpServer.on('error', (err: NodeJS.ErrnoException) => {
