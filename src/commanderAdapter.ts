@@ -69,7 +69,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
     }
   }
   subCmd
-    .option('-f, --format <fmt>', 'Output format: table, json, yaml, md, csv', 'table')
+    .option('-f, --format <fmt>', 'Output format: table, plain, json, yaml, md, csv', 'table')
     .option('-v, --verbose', 'Debug output', false);
 
   subCmd.addHelpText('after', formatRegistryHelpText(cmd));
@@ -109,8 +109,8 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       }
 
       const resolved = getRegistry().get(fullName(cmd)) ?? cmd;
-      if (format === 'table' && resolved.outputMode === 'plain') {
-        format = 'plain';
+      if (format === 'table' && resolved.defaultFormat) {
+        format = resolved.defaultFormat;
       }
 
       if (verbose && (!result || (Array.isArray(result) && result.length === 0))) {

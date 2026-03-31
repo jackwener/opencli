@@ -54,7 +54,7 @@ export const imageCommand = cli({
   strategy: Strategy.COOKIE,
   browser: true,
   navigateBefore: false,
-  outputMode: 'plain',
+  defaultFormat: 'plain',
   timeoutSeconds: 240,
   args: [
     { name: 'prompt', positional: true, required: true, help: 'Image prompt to send to Gemini' },

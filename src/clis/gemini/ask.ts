@@ -18,7 +18,7 @@ export const askCommand = cli({
   strategy: Strategy.COOKIE,
   browser: true,
   navigateBefore: false,
-  outputMode: 'plain',
+  defaultFormat: 'plain',
   timeoutSeconds: 180,
   args: [
     { name: 'prompt', required: true, positional: true, help: 'Prompt to send' },

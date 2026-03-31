@@ -153,3 +153,50 @@ describe('commanderAdapter command aliases', () => {
     expect(mockExecuteCommand).toHaveBeenCalledWith(cmd, {}, false);
   });
 });
+
+describe('commanderAdapter default formats', () => {
+  const cmd: CliCommand = {
+    site: 'gemini',
+    name: 'ask',
+    description: 'Ask Gemini',
+    browser: false,
+    args: [],
+    columns: ['response'],
+    defaultFormat: 'plain',
+    func: vi.fn(),
+  };
+
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockExecuteCommand.mockResolvedValue([{ response: 'hello' }]);
+    mockRenderOutput.mockReset();
+    delete process.env.OPENCLI_VERBOSE;
+    process.exitCode = undefined;
+  });
+
+  it('uses the command defaultFormat when the user keeps the default table format', async () => {
+    const program = new Command();
+    const siteCmd = program.command('gemini');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'gemini', 'ask']);
+
+    expect(mockRenderOutput).toHaveBeenCalledWith(
+      [{ response: 'hello' }],
+      expect.objectContaining({ fmt: 'plain' }),
+    );
+  });
+
+  it('respects an explicit user format over the command defaultFormat', async () => {
+    const program = new Command();
+    const siteCmd = program.command('gemini');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'gemini', 'ask', '--format', 'json']);
+
+    expect(mockRenderOutput).toHaveBeenCalledWith(
+      [{ response: 'hello' }],
+      expect.objectContaining({ fmt: 'json' }),
+    );
+  });
+});
