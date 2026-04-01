@@ -31,7 +31,7 @@ export const builtinApps: Record<string, ElectronAppEntry> = {
   'discord-app': { port: 9232, processName: 'Discord',      bundleId: 'com.discord.app',                 displayName: 'Discord' },
   'doubao-app':  { port: 9225, processName: 'Doubao',       bundleId: 'com.volcengine.doubao',          displayName: 'Doubao' },
   antigravity:   { port: 9224, processName: 'Antigravity',  bundleId: 'dev.antigravity.app',            displayName: 'Antigravity' },
-  chatgpt:       { port: 9224, processName: 'ChatGPT',      bundleId: 'com.openai.chat',                displayName: 'ChatGPT' },
+  chatgpt:       { port: 9236, processName: 'ChatGPT',      bundleId: 'com.openai.chat',                displayName: 'ChatGPT' },
 };
 
 /** Merge builtin + user-defined apps. User entries are additive only. */
@@ -76,6 +76,11 @@ export function getElectronApp(site: string): ElectronAppEntry | undefined {
 
 export function isElectronApp(site: string): boolean {
   return site in ensureLoaded();
+}
+
+/** Get all registered apps (builtin + user-defined). */
+export function getAllElectronApps(): Record<string, ElectronAppEntry> {
+  return ensureLoaded();
 }
 
 /** Reset loaded apps (for testing). */

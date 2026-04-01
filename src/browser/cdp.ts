@@ -29,7 +29,7 @@ import {
   waitForSelectorJs,
 } from './dom-helpers.js';
 import { isRecord, saveBase64ToFile } from '../utils.js';
-import { builtinApps } from '../electron-apps.js';
+import { getAllElectronApps } from '../electron-apps.js';
 
 export interface CDPTarget {
   type?: string;
@@ -406,8 +406,8 @@ function scoreCDPTarget(target: CDPTarget, preferredPattern?: RegExp): number {
 
   if (title && title !== 'devtools') score += 25;
 
-  // Boost score for known Electron app names from the registry
-  const appNames = Object.values(builtinApps).map(a => a.processName.toLowerCase());
+  // Boost score for known Electron app names from the registry (builtin + user-defined)
+  const appNames = Object.values(getAllElectronApps()).map(a => (a.displayName ?? a.processName).toLowerCase());
   for (const name of appNames) {
     if (title.includes(name)) { score += 120; break; }
   }
