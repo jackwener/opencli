@@ -5,6 +5,7 @@
   "description": "Browser automation bridge for the OpenCLI CLI tool. Executes commands in isolated Chrome windows via a local daemon.",
   "permissions": [
     "debugger",
+    "scripting",
     "tabs",
     "cookies",
     "activeTab",
