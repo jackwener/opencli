@@ -121,12 +121,6 @@ type AutomationSession = {
   preferredTabId: number | null;
 };
 
-type ResolvedTabContext = {
-  tabId: number;
-  windowId: number;
-  owned: boolean;
-};
-
 const automationSessions = new Map<string, AutomationSession>();
 const WINDOW_IDLE_TIMEOUT = 30000; // 30s — quick cleanup after command finishes
 
@@ -401,16 +395,12 @@ async function maybeBindWorkspaceToExistingTab(workspace: string): Promise<numbe
   return bestTab.id;
 }
 
-function getAttachPolicy(target: ResolvedTabContext): executor.AttachPolicy {
-  return { allowDomCleanup: target.owned };
-}
-
 /**
  * Resolve target tab in the automation window.
  * If explicit tabId is given, use that directly.
  * Otherwise, find or create a tab in the dedicated automation window.
  */
-async function resolveTabContext(tabId: number | undefined, workspace: string): Promise<ResolvedTabContext> {
+async function resolveTabId(tabId: number | undefined, workspace: string): Promise<number> {
   // Even when an explicit tabId is provided, validate it is still debuggable.
   // This prevents issues when extensions hijack the tab URL to chrome-extension://
   // or when the tab has been closed by the user.
@@ -421,28 +411,7 @@ async function resolveTabContext(tabId: number | undefined, workspace: string): 
       const matchesSession = session
         ? (session.preferredTabId !== null ? session.preferredTabId === tabId : tab.windowId === session.windowId)
         : false;
-      if (isDebuggableUrl(tab.url) && matchesSession) {
-        return {
-          tabId,
-          windowId: tab.windowId,
-          owned: session?.owned ?? false,
-        };
-      }
-      if (session?.owned && isDebuggableUrl(tab.url)) {
-        if (tab.windowId !== session.windowId) {
-          console.warn(`[opencli] Tab ${tabId} drifted from window ${session.windowId} to ${tab.windowId}; adopting new window`);
-          setWorkspaceSession(workspace, {
-            windowId: tab.windowId,
-            owned: true,
-            preferredTabId: null,
-          });
-        }
-        return {
-          tabId,
-          windowId: tab.windowId,
-          owned: true,
-        };
-      }
+      if (isDebuggableUrl(tab.url) && matchesSession) return tabId;
       if (session && !matchesSession) {
         console.warn(`[opencli] Tab ${tabId} is not bound to workspace ${workspace}, re-resolving`);
       } else if (!isDebuggableUrl(tab.url)) {
@@ -456,28 +425,14 @@ async function resolveTabContext(tabId: number | undefined, workspace: string): 
   }
 
   const adoptedTabId = await maybeBindWorkspaceToExistingTab(workspace);
-  if (adoptedTabId !== null) {
-    const adoptedSession = automationSessions.get(workspace);
-    if (!adoptedSession) throw new Error(`Workspace ${workspace} lost its session during tab adoption`);
-    return {
-      tabId: adoptedTabId,
-      windowId: adoptedSession.windowId,
-      owned: adoptedSession.owned,
-    };
-  }
+  if (adoptedTabId !== null) return adoptedTabId;
 
   const existingSession = automationSessions.get(workspace);
-  if (existingSession && existingSession.preferredTabId !== null) {
+  if (existingSession?.preferredTabId !== null) {
     try {
       const preferredTabId = existingSession.preferredTabId;
       const preferredTab = await chrome.tabs.get(preferredTabId);
-      if (isDebuggableUrl(preferredTab.url)) {
-        return {
-          tabId: preferredTab.id!,
-          windowId: preferredTab.windowId,
-          owned: existingSession.owned,
-        };
-      }
+      if (isDebuggableUrl(preferredTab.url)) return preferredTab.id!;
     } catch {
       automationSessions.delete(workspace);
     }
@@ -489,13 +444,7 @@ async function resolveTabContext(tabId: number | undefined, workspace: string): 
   // Prefer an existing debuggable tab
   const tabs = await chrome.tabs.query({ windowId });
   const debuggableTab = tabs.find(t => t.id && isDebuggableUrl(t.url));
-  if (debuggableTab?.id) {
-    return {
-      tabId: debuggableTab.id,
-      windowId,
-      owned: true,
-    };
-  }
+  if (debuggableTab?.id) return debuggableTab.id;
 
   // No debuggable tab — another extension may have hijacked the tab URL.
   // Try to reuse by navigating to a data: URI (not interceptable by New Tab Override).
@@ -505,13 +454,7 @@ async function resolveTabContext(tabId: number | undefined, workspace: string): 
     await new Promise(resolve => setTimeout(resolve, 300));
     try {
       const updated = await chrome.tabs.get(reuseTab.id);
-      if (isDebuggableUrl(updated.url)) {
-        return {
-          tabId: reuseTab.id,
-          windowId,
-          owned: true,
-        };
-      }
+      if (isDebuggableUrl(updated.url)) return reuseTab.id;
       console.warn(`[opencli] data: URI was intercepted (${updated.url}), creating fresh tab`);
     } catch {
       // Tab was closed during navigation
@@ -521,91 +464,7 @@ async function resolveTabContext(tabId: number | undefined, workspace: string): 
   // Fallback: create a new tab
   const newTab = await chrome.tabs.create({ windowId, url: BLANK_PAGE, active: true });
   if (!newTab.id) throw new Error('Failed to create tab in automation window');
-  return {
-    tabId: newTab.id,
-    windowId,
-    owned: true,
-  };
-}
-
-async function resolveTabId(tabId: number | undefined, workspace: string): Promise<number> {
-  return (await resolveTabContext(tabId, workspace)).tabId;
-}
-
-async function waitForNavigationComplete(
-  tabId: number,
-  targetUrl: string,
-  beforeNormalized?: string,
-): Promise<{ timedOut: boolean }> {
-  let timedOut = false;
-  await new Promise<void>((resolve) => {
-    let settled = false;
-    let checkTimer: ReturnType<typeof setTimeout> | null = null;
-    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      chrome.tabs.onUpdated.removeListener(listener);
-      if (checkTimer) clearTimeout(checkTimer);
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      resolve();
-    };
-
-    const isNavigationDone = (url: string | undefined): boolean => {
-      if (beforeNormalized === undefined) return isTargetUrl(url, targetUrl);
-      return isTargetUrl(url, targetUrl) || normalizeUrlForComparison(url) !== beforeNormalized;
-    };
-
-    const listener = (id: number, info: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
-      if (id !== tabId) return;
-      if (info.status === 'complete' && isNavigationDone(tab.url ?? info.url)) {
-        finish();
-      }
-    };
-    chrome.tabs.onUpdated.addListener(listener);
-
-    checkTimer = setTimeout(async () => {
-      try {
-        const currentTab = await chrome.tabs.get(tabId);
-        if (currentTab.status === 'complete' && isNavigationDone(currentTab.url)) {
-          finish();
-        }
-      } catch { /* tab gone */ }
-    }, 100);
-
-    timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      console.warn(`[opencli] Navigate to ${targetUrl} timed out after 15s`);
-      finish();
-    }, 15000);
-  });
-  return { timedOut };
-}
-
-async function recoverOwnedNavigationTarget(workspace: string, targetUrl: string): Promise<ResolvedTabContext | null> {
-  const session = automationSessions.get(workspace);
-  if (!session?.owned) return null;
-
-  const tabs = await chrome.tabs.query({ windowId: session.windowId });
-  const matchingTab = tabs.find((tab) => tab.id && isDebuggableUrl(tab.url) && isTargetUrl(tab.url, targetUrl));
-  if (matchingTab?.id) {
-    return {
-      tabId: matchingTab.id,
-      windowId: matchingTab.windowId,
-      owned: true,
-    };
-  }
-
-  const newTab = await chrome.tabs.create({ windowId: session.windowId, url: targetUrl, active: true });
-  if (!newTab.id) return null;
-  await waitForNavigationComplete(newTab.id, targetUrl);
-  const currentTab = await chrome.tabs.get(newTab.id);
-  return {
-    tabId: newTab.id,
-    windowId: currentTab.windowId,
-    owned: true,
-  };
+  return newTab.id;
 }
 
 async function listAutomationTabs(workspace: string): Promise<chrome.tabs.Tab[]> {
@@ -634,9 +493,9 @@ async function listAutomationWebTabs(workspace: string): Promise<chrome.tabs.Tab
 
 async function handleExec(cmd: Command, workspace: string): Promise<Result> {
   if (!cmd.code) return { id: cmd.id, ok: false, error: 'Missing code' };
-  const target = await resolveTabContext(cmd.tabId, workspace);
+  const tabId = await resolveTabId(cmd.tabId, workspace);
   try {
-    const data = await executor.evaluateAsync(target.tabId, cmd.code, getAttachPolicy(target));
+    const data = await executor.evaluateAsync(tabId, cmd.code);
     return { id: cmd.id, ok: true, data };
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -648,9 +507,9 @@ async function handleNavigate(cmd: Command, workspace: string): Promise<Result> 
   if (!isSafeNavigationUrl(cmd.url)) {
     return { id: cmd.id, ok: false, error: 'Blocked URL scheme -- only http:// and https:// are allowed' };
   }
-  let target = await resolveTabContext(cmd.tabId, workspace);
+  const tabId = await resolveTabId(cmd.tabId, workspace);
 
-  const beforeTab = await chrome.tabs.get(target.tabId);
+  const beforeTab = await chrome.tabs.get(tabId);
   const beforeNormalized = normalizeUrlForComparison(beforeTab.url);
   const targetUrl = cmd.url;
 
@@ -659,7 +518,7 @@ async function handleNavigate(cmd: Command, workspace: string): Promise<Result> 
     return {
       id: cmd.id,
       ok: true,
-      data: { title: beforeTab.title, url: beforeTab.url, tabId: target.tabId, timedOut: false },
+      data: { title: beforeTab.title, url: beforeTab.url, tabId, timedOut: false },
     };
   }
 
@@ -669,28 +528,63 @@ async function handleNavigate(cmd: Command, workspace: string): Promise<Result> 
   // state and causes the next Runtime.evaluate to fail with
   // "Inspected target navigated or closed". Resetting here forces a clean
   // re-attach after navigation.
-  await executor.detach(target.tabId);
+  await executor.detach(tabId);
 
-  await chrome.tabs.update(target.tabId, { url: targetUrl });
+  await chrome.tabs.update(tabId, { url: targetUrl });
 
   // Wait until navigation completes. Resolve when status is 'complete' AND either:
   // - the URL matches the target (handles same-URL / canonicalized navigations), OR
   // - the URL differs from the pre-navigation URL (handles redirects).
-  let { timedOut } = await waitForNavigationComplete(target.tabId, targetUrl, beforeNormalized);
-  let tab = await chrome.tabs.get(target.tabId);
-  if (!isDebuggableUrl(tab.url) && target.owned) {
-    console.warn(`[opencli] Owned tab ${target.tabId} ended on non-debuggable URL (${tab.url}), attempting recovery`);
-    const recoveredTarget = await recoverOwnedNavigationTarget(workspace, targetUrl);
-    if (recoveredTarget) {
-      target = recoveredTarget;
-      tab = await chrome.tabs.get(target.tabId);
-      timedOut = timedOut || !isTargetUrl(tab.url, targetUrl);
-    }
-  }
+  let timedOut = false;
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    let checkTimer: ReturnType<typeof setTimeout> | null = null;
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      if (checkTimer) clearTimeout(checkTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      resolve();
+    };
+
+    const isNavigationDone = (url: string | undefined): boolean => {
+      return isTargetUrl(url, targetUrl) || normalizeUrlForComparison(url) !== beforeNormalized;
+    };
+
+    const listener = (id: number, info: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+      if (id !== tabId) return;
+      if (info.status === 'complete' && isNavigationDone(tab.url ?? info.url)) {
+        finish();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+
+    // Also check if the tab already navigated (e.g. instant cache hit)
+    checkTimer = setTimeout(async () => {
+      try {
+        const currentTab = await chrome.tabs.get(tabId);
+        if (currentTab.status === 'complete' && isNavigationDone(currentTab.url)) {
+          finish();
+        }
+      } catch { /* tab gone */ }
+    }, 100);
+
+    // Timeout fallback with warning
+    timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      console.warn(`[opencli] Navigate to ${targetUrl} timed out after 15s`);
+      finish();
+    }, 15000);
+  });
+
+  const tab = await chrome.tabs.get(tabId);
   return {
     id: cmd.id,
     ok: true,
-    data: { title: tab.title, url: tab.url, tabId: target.tabId, timedOut },
+    data: { title: tab.title, url: tab.url, tabId, timedOut },
   };
 }
 
@@ -779,13 +673,13 @@ async function handleCookies(cmd: Command): Promise<Result> {
 }
 
 async function handleScreenshot(cmd: Command, workspace: string): Promise<Result> {
-  const target = await resolveTabContext(cmd.tabId, workspace);
+  const tabId = await resolveTabId(cmd.tabId, workspace);
   try {
-    const data = await executor.screenshot(target.tabId, {
+    const data = await executor.screenshot(tabId, {
       format: cmd.format,
       quality: cmd.quality,
       fullPage: cmd.fullPage,
-    }, getAttachPolicy(target));
+    });
     return { id: cmd.id, ok: true, data };
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -812,9 +706,9 @@ async function handleSetFileInput(cmd: Command, workspace: string): Promise<Resu
   if (!cmd.files || !Array.isArray(cmd.files) || cmd.files.length === 0) {
     return { id: cmd.id, ok: false, error: 'Missing or empty files array' };
   }
-  const target = await resolveTabContext(cmd.tabId, workspace);
+  const tabId = await resolveTabId(cmd.tabId, workspace);
   try {
-    await executor.setFileInputFiles(target.tabId, cmd.files, cmd.selector, getAttachPolicy(target));
+    await executor.setFileInputFiles(tabId, cmd.files, cmd.selector);
     return { id: cmd.id, ok: true, data: { count: cmd.files.length } };
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -876,7 +770,6 @@ export const __test__ = {
   handleSessions,
   handleBindCurrent,
   resolveTabId,
-  resolveTabContext,
   resetWindowIdleTimer,
   getSession: (workspace: string = 'default') => automationSessions.get(workspace) ?? null,
   getAutomationWindowId: (workspace: string = 'default') => automationSessions.get(workspace)?.windowId ?? null,

@@ -13,10 +13,6 @@ const BLANK_PAGE = 'data:text/html,<html></html>';
 const FOREIGN_EXTENSION_URL_PREFIX = 'chrome-extension://';
 const ATTACH_RECOVERY_DELAY_MS = 120;
 
-export type AttachPolicy = {
-  allowDomCleanup?: boolean;
-};
-
 /** Check if a URL can be attached via CDP — only allow http(s) and our internal blank page. */
 function isDebuggableUrl(url?: string): boolean {
   if (!url) return true;  // empty/undefined = tab still loading, allow it
@@ -84,9 +80,7 @@ async function tryAttach(tabId: number): Promise<void> {
   await chrome.debugger.attach({ tabId }, '1.3');
 }
 
-async function ensureAttached(tabId: number, policy: AttachPolicy = {}): Promise<void> {
-  const allowDomCleanup = policy.allowDomCleanup !== false;
-
+async function ensureAttached(tabId: number): Promise<void> {
   // Verify the tab URL is debuggable before attempting attach
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -115,6 +109,12 @@ async function ensureAttached(tabId: number, policy: AttachPolicy = {}): Promise
     }
   }
 
+  const preAttachCleanup = await removeForeignExtensionEmbeds(tabId);
+  if (preAttachCleanup.removed > 0) {
+    console.warn(`[opencli] Removed ${preAttachCleanup.removed} foreign extension frame(s) before attach on tab ${tabId}`);
+    await delay(ATTACH_RECOVERY_DELAY_MS);
+  }
+
   try {
     await tryAttach(tabId);
   } catch (e: unknown) {
@@ -123,9 +123,6 @@ async function ensureAttached(tabId: number, policy: AttachPolicy = {}): Promise
       ? '. Tip: another Chrome extension may be interfering — try disabling other extensions'
       : '';
     if (msg.includes('chrome-extension://')) {
-      if (!allowDomCleanup) {
-        throw new Error(`attach failed: ${msg}${hint}`);
-      }
       const recoveryCleanup = await removeForeignExtensionEmbeds(tabId);
       if (recoveryCleanup.removed > 0) {
         console.warn(`[opencli] Removed ${recoveryCleanup.removed} foreign extension frame(s) after attach failure on tab ${tabId}`);
@@ -168,8 +165,8 @@ async function ensureAttached(tabId: number, policy: AttachPolicy = {}): Promise
   }
 }
 
-export async function evaluate(tabId: number, expression: string, policy?: AttachPolicy): Promise<unknown> {
-  await ensureAttached(tabId, policy);
+export async function evaluate(tabId: number, expression: string): Promise<unknown> {
+  await ensureAttached(tabId);
 
   const result = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
     expression,
@@ -199,9 +196,8 @@ export const evaluateAsync = evaluate;
 export async function screenshot(
   tabId: number,
   options: { format?: 'png' | 'jpeg'; quality?: number; fullPage?: boolean } = {},
-  policy?: AttachPolicy,
 ): Promise<string> {
-  await ensureAttached(tabId, policy);
+  await ensureAttached(tabId);
 
   const format = options.format ?? 'png';
 
@@ -256,9 +252,8 @@ export async function setFileInputFiles(
   tabId: number,
   files: string[],
   selector?: string,
-  policy?: AttachPolicy,
 ): Promise<void> {
-  await ensureAttached(tabId, policy);
+  await ensureAttached(tabId);
 
   // Enable DOM domain (required for DOM.querySelector and DOM.setFileInputFiles)
   await chrome.debugger.sendCommand({ tabId }, 'DOM.enable');
