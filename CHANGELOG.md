@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.8](https://github.com/jackwener/opencli/compare/v1.5.7...v1.5.8) (2026-04-01)
+
+
+### Bug Fixes
+
+* **extension:** avoid mutating healthy tabs before debugger attach and add regression coverage ([#662](https://github.com/jackwener/opencli/issues/662))
+
+
 ## [1.5.7](https://github.com/jackwener/opencli/compare/v1.5.6...v1.5.7) (2026-04-01)
 
 
