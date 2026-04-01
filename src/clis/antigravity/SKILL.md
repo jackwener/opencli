@@ -7,7 +7,7 @@ description: How to automate Antigravity using OpenCLI
 This skill allows AI agents to control the [Antigravity](https://github.com/chengazhen/Antigravity) desktop app (and any Electron app with CDP enabled) programmatically via OpenCLI. 
 
 ## Requirements
-opencli automatically detects, launches (with `--remote-debugging-port=9224`), and connects to Antigravity.
+opencli automatically detects, launches (with `--remote-debugging-port=9234`), and connects to Antigravity.
 If Antigravity is already running without CDP, opencli will prompt to restart it.
 
 If the endpoint exposes multiple inspectable targets, set:

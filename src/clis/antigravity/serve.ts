@@ -466,7 +466,7 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
         isRefused
           ? `Cannot connect to Antigravity at ${endpoint}.\n` +
             '  1. Make sure Antigravity is running\n' +
-            '  2. Launch with: --remote-debugging-port=9224'
+            '  2. Launch with: --remote-debugging-port=9234'
           : `CDP connection failed: ${errMsg}`
       );
     }
