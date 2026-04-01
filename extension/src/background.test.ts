@@ -411,22 +411,23 @@ describe('background tab isolation', () => {
     });
   });
 
-  it('does not adopt an unrelated tab into an owned workspace', async () => {
-    const { chrome } = createChromeMock();
+  it('adopts a drifted owned tab instead of discarding it', async () => {
+    const { chrome, tabs } = createChromeMock();
+    tabs[0].windowId = 7;
     vi.stubGlobal('chrome', chrome);
 
     const mod = await import('./background');
     mod.__test__.setAutomationWindowId('site:twitter', 1);
 
-    const target = await mod.__test__.resolveTabContext(2, 'site:twitter');
+    const target = await mod.__test__.resolveTabContext(1, 'site:twitter');
 
     expect(target).toEqual({
       tabId: 1,
-      windowId: 1,
+      windowId: 7,
       owned: true,
     });
     expect(mod.__test__.getSession('site:twitter')).toEqual(expect.objectContaining({
-      windowId: 1,
+      windowId: 7,
       owned: true,
       preferredTabId: null,
     }));

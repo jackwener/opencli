@@ -428,6 +428,21 @@ async function resolveTabContext(tabId: number | undefined, workspace: string): 
           owned: session?.owned ?? false,
         };
       }
+      if (session?.owned && isDebuggableUrl(tab.url)) {
+        if (tab.windowId !== session.windowId) {
+          console.warn(`[opencli] Tab ${tabId} drifted from window ${session.windowId} to ${tab.windowId}; adopting new window`);
+          setWorkspaceSession(workspace, {
+            windowId: tab.windowId,
+            owned: true,
+            preferredTabId: null,
+          });
+        }
+        return {
+          tabId,
+          windowId: tab.windowId,
+          owned: true,
+        };
+      }
       if (session && !matchesSession) {
         console.warn(`[opencli] Tab ${tabId} is not bound to workspace ${workspace}, re-resolving`);
       } else if (!isDebuggableUrl(tab.url)) {
