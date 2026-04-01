@@ -266,22 +266,25 @@ describe('executeCommand', () => {
     expect(typeof seen[0].finishedAt).toBe('number');
   });
 
-  it('fails fast for chatwise commands when OPENCLI_CDP_ENDPOINT is missing', async () => {
+  it('uses launcher for registered Electron apps (chatwise)', async () => {
+    // Mock the launcher to return a fake endpoint (avoids real HTTP/process calls)
+    const launcher = await import('./launcher.js');
+    const spy = vi.spyOn(launcher, 'resolveElectronEndpoint')
+      .mockResolvedValue('http://127.0.0.1:9228');
+
     const cmd = cli({
       site: 'chatwise',
       name: 'status',
       description: 'chatwise status',
       browser: true,
       strategy: Strategy.PUBLIC,
-      requiredEnv: [
-        {
-          name: 'OPENCLI_CDP_ENDPOINT',
-          help: 'Set OPENCLI_CDP_ENDPOINT before running chatwise commands.',
-        },
-      ],
       func: async () => [{ ok: true }],
     });
 
-    await expect(executeCommand(cmd, {})).rejects.toThrow('requires environment variable OPENCLI_CDP_ENDPOINT');
+    // CDPBridge.connect() will fail (no actual CDP server), but the launcher
+    // should have been called with 'chatwise'.
+    await expect(executeCommand(cmd, {})).rejects.toThrow();
+    expect(spy).toHaveBeenCalledWith('chatwise');
+    spy.mockRestore();
   });
 });

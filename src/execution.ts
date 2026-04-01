@@ -20,6 +20,8 @@ import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMM
 import { emitHook, type HookContext } from './hooks.js';
 import { checkDaemonStatus } from './browser/discover.js';
 import { log } from './logger.js';
+import { isElectronApp } from './electron-apps.js';
+import { resolveElectronEndpoint } from './launcher.js';
 
 const _loadedModules = new Set<string>();
 
@@ -169,24 +171,29 @@ export async function executeCommand(
   let result: unknown;
   try {
     if (shouldUseBrowserSession(cmd)) {
-      // ── Fail-fast: only when daemon is UP but extension is not connected ──
-      // If daemon is not running, let browserSession() handle auto-start as usual.
-      // We only short-circuit when the daemon confirms the extension is missing —
-      // that's a clear setup gap, not a transient startup state.
-      // Use a short timeout: localhost responds in <50ms when running.
-      // 300ms avoids a full 2s wait on cold-start (daemon not yet running).
-      const status = await checkDaemonStatus({ timeout: 300 });
-      if (status.running && !status.extensionConnected) {
-        throw new BrowserConnectError(
-          'Browser Bridge extension not connected',
-          'Install the Browser Bridge:\n' +
-          '  1. Download: https://github.com/jackwener/opencli/releases\n' +
-          '  2. chrome://extensions → Developer Mode → Load unpacked\n' +
-          '  Then run: opencli doctor',
-        );
+      const electron = isElectronApp(cmd.site);
+      let cdpEndpoint: string | undefined;
+
+      if (electron) {
+        // Electron apps: auto-detect, prompt restart if needed, launch with CDP
+        cdpEndpoint = await resolveElectronEndpoint(cmd.site);
+      } else {
+        // Browser Bridge: fail-fast when daemon is up but extension is missing.
+        // 300ms timeout avoids a full 2s wait on cold-start.
+        const status = await checkDaemonStatus({ timeout: 300 });
+        if (status.running && !status.extensionConnected) {
+          throw new BrowserConnectError(
+            'Browser Bridge extension not connected',
+            'Install the Browser Bridge:\n' +
+            '  1. Download: https://github.com/jackwener/opencli/releases\n' +
+            '  2. chrome://extensions → Developer Mode → Load unpacked\n' +
+            '  Then run: opencli doctor',
+          );
+        }
       }
+
       ensureRequiredEnv(cmd);
-      const BrowserFactory = getBrowserFactory();
+      const BrowserFactory = getBrowserFactory(cmd.site);
       result = await browserSession(BrowserFactory, async (page) => {
         const preNavUrl = resolvePreNav(cmd);
         if (preNavUrl) {
@@ -195,8 +202,6 @@ export async function executeCommand(
             if (debug) log.debug('[pre-nav] Already on target domain, skipping navigation');
           } else {
             try {
-              // goto() already includes smart DOM-settle detection (waitForDomStable).
-              // No additional fixed sleep needed.
               await page.goto(preNavUrl);
             } catch (err) {
               if (debug) log.debug(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
@@ -207,7 +212,7 @@ export async function executeCommand(
           timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,
           label: fullName(cmd),
         });
-      }, { workspace: `site:${cmd.site}` });
+      }, { workspace: `site:${cmd.site}`, cdpEndpoint });
     } else {
       // Non-browser commands: apply timeout only when explicitly configured.
       const timeout = cmd.timeoutSeconds;

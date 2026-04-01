@@ -29,6 +29,7 @@ import {
   waitForSelectorJs,
 } from './dom-helpers.js';
 import { isRecord, saveBase64ToFile } from '../utils.js';
+import { builtinApps } from '../electron-apps.js';
 
 export interface CDPTarget {
   type?: string;
@@ -56,11 +57,11 @@ export class CDPBridge implements IBrowserFactory {
   private _pending = new Map<number, { resolve: (val: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private _eventListeners = new Map<string, Set<(params: unknown) => void>>();
 
-  async connect(opts?: { timeout?: number; workspace?: string }): Promise<IPage> {
+  async connect(opts?: { timeout?: number; workspace?: string; cdpEndpoint?: string }): Promise<IPage> {
     if (this._ws) throw new Error('CDPBridge is already connected. Call close() before reconnecting.');
 
-    const endpoint = process.env.OPENCLI_CDP_ENDPOINT;
-    if (!endpoint) throw new Error('OPENCLI_CDP_ENDPOINT is not set');
+    const endpoint = opts?.cdpEndpoint ?? process.env.OPENCLI_CDP_ENDPOINT;
+    if (!endpoint) throw new Error('CDP endpoint not provided (pass cdpEndpoint or set OPENCLI_CDP_ENDPOINT)');
 
     let wsUrl = endpoint;
     if (endpoint.startsWith('http')) {
@@ -404,19 +405,15 @@ function scoreCDPTarget(target: CDPTarget, preferredPattern?: RegExp): number {
   if (url === '' || url === 'about:blank') score -= 40;
 
   if (title && title !== 'devtools') score += 25;
-  if (title.includes('antigravity')) score += 120;
-  if (title.includes('codex')) score += 120;
-  if (title.includes('cursor')) score += 120;
-  if (title.includes('chatwise')) score += 120;
-  if (title.includes('notion')) score += 120;
-  if (title.includes('discord')) score += 120;
 
-  if (url.includes('antigravity')) score += 100;
-  if (url.includes('codex')) score += 100;
-  if (url.includes('cursor')) score += 100;
-  if (url.includes('chatwise')) score += 100;
-  if (url.includes('notion')) score += 100;
-  if (url.includes('discord')) score += 100;
+  // Boost score for known Electron app names from the registry
+  const appNames = Object.values(builtinApps).map(a => a.processName.toLowerCase());
+  for (const name of appNames) {
+    if (title.includes(name)) { score += 120; break; }
+  }
+  for (const name of appNames) {
+    if (url.includes(name)) { score += 100; break; }
+  }
 
   return score;
 }

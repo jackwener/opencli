@@ -28,7 +28,7 @@ export const builtinApps: Record<string, ElectronAppEntry> = {
   codex:         { port: 9222, processName: 'Codex',        bundleId: 'com.openai.codex',               displayName: 'Codex' },
   chatwise:      { port: 9228, processName: 'ChatWise',     bundleId: 'com.chatwise.app',               displayName: 'ChatWise' },
   notion:        { port: 9230, processName: 'Notion',       bundleId: 'notion.id',                      displayName: 'Notion' },
-  'discord-app': { port: 9232, processName: 'Discord',      bundleId: 'com.iscord.app',                 displayName: 'Discord' },
+  'discord-app': { port: 9232, processName: 'Discord',      bundleId: 'com.discord.app',                 displayName: 'Discord' },
   'doubao-app':  { port: 9225, processName: 'Doubao',       bundleId: 'com.volcengine.doubao',          displayName: 'Doubao' },
   antigravity:   { port: 9224, processName: 'Antigravity',  bundleId: 'dev.antigravity.app',            displayName: 'Antigravity' },
   chatgpt:       { port: 9224, processName: 'ChatGPT',      bundleId: 'com.openai.chat',                displayName: 'ChatGPT' },
