@@ -75,4 +75,6 @@ export interface IPage {
   closeWindow?(): Promise<void>;
   /** Returns the current page URL, or null if unavailable. */
   getCurrentUrl?(): Promise<string | null>;
+  /** Returns the active tab ID, or undefined if not yet resolved. */
+  getActiveTabId?(): number | undefined;
 }

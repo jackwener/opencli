@@ -107,6 +107,10 @@ export class Page implements IPage {
     }
   }
 
+  getActiveTabId(): number | undefined {
+    return this._tabId;
+  }
+
   async getCurrentUrl(): Promise<string | null> {
     if (this._lastUrl) return this._lastUrl;
     try {
