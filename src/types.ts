@@ -72,6 +72,11 @@ export interface IPage {
    * Chrome reads the files directly — no base64 encoding or payload size limits.
    */
   setFileInput?(files: string[], selector?: string): Promise<void>;
+  /**
+   * Insert text via native CDP Input.insertText into the currently focused element.
+   * Useful for rich editors that ignore synthetic DOM value/text mutations.
+   */
+  insertText?(text: string): Promise<void>;
   closeWindow?(): Promise<void>;
   /** Returns the current page URL, or null if unavailable. */
   getCurrentUrl?(): Promise<string | null>;

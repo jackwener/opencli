@@ -19,7 +19,7 @@ function generateId(): string {
 
 export interface DaemonCommand {
   id: string;
-  action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'bind-current';
+  action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'insert-text' | 'bind-current';
   tabId?: number;
   code?: string;
   workspace?: string;
@@ -36,6 +36,8 @@ export interface DaemonCommand {
   files?: string[];
   /** CSS selector for file input element (set-file-input action) */
   selector?: string;
+  /** Raw text payload for insert-text action */
+  text?: string;
 }
 
 export interface DaemonResult {
@@ -150,4 +152,3 @@ export async function listSessions(): Promise<BrowserSessionInfo[]> {
 export async function bindCurrentTab(workspace: string, opts: { matchDomain?: string; matchPathPrefix?: string } = {}): Promise<unknown> {
   return sendCommand('bind-current', { workspace, ...opts });
 }
-

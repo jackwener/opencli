@@ -201,6 +201,14 @@ export async function setFileInputFiles(
   });
 }
 
+export async function insertText(
+  tabId: number,
+  text: string,
+): Promise<void> {
+  await ensureAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, 'Input.insertText', { text });
+}
+
 export async function detach(tabId: number): Promise<void> {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);

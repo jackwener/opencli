@@ -7,8 +7,8 @@ var DAEMON_WS_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}/ext`;
 var DAEMON_PING_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}/ping`;
 /** Base reconnect delay for extension WebSocket (ms) */
 var WS_RECONNECT_BASE_DELAY = 2e3;
-/** Max reconnect delay (ms) */
-var WS_RECONNECT_MAX_DELAY = 6e4;
+/** Max reconnect delay (ms) — kept short since daemon is long-lived */
+var WS_RECONNECT_MAX_DELAY = 5e3;
 //#endregion
 //#region src/cdp.ts
 /**
@@ -66,6 +66,10 @@ async function ensureAttached(tabId) {
 	attached.add(tabId);
 	try {
 		await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
+	} catch {}
+	try {
+		await chrome.debugger.sendCommand({ tabId }, "Debugger.enable");
+		await chrome.debugger.sendCommand({ tabId }, "Debugger.setBreakpointsActive", { active: false });
 	} catch {}
 }
 async function evaluate(tabId, expression) {
@@ -130,6 +134,10 @@ async function setFileInputFiles(tabId, files, selector) {
 		files,
 		nodeId: result.nodeId
 	});
+}
+async function insertText(tabId, text) {
+	await ensureAttached(tabId);
+	await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text });
 }
 async function detach(tabId) {
 	if (!attached.has(tabId)) return;
@@ -344,6 +352,7 @@ async function handleCommand(cmd) {
 			case "close-window": return await handleCloseWindow(cmd, workspace);
 			case "sessions": return await handleSessions(cmd);
 			case "set-file-input": return await handleSetFileInput(cmd, workspace);
+			case "insert-text": return await handleInsertText(cmd, workspace);
 			case "bind-current": return await handleBindCurrent(cmd, workspace);
 			default: return {
 				id: cmd.id,
@@ -803,6 +812,28 @@ async function handleSetFileInput(cmd, workspace) {
 			id: cmd.id,
 			ok: true,
 			data: { count: cmd.files.length }
+		};
+	} catch (err) {
+		return {
+			id: cmd.id,
+			ok: false,
+			error: err instanceof Error ? err.message : String(err)
+		};
+	}
+}
+async function handleInsertText(cmd, workspace) {
+	if (typeof cmd.text !== "string") return {
+		id: cmd.id,
+		ok: false,
+		error: "Missing text payload"
+	};
+	const tabId = await resolveTabId(cmd.tabId, workspace);
+	try {
+		await insertText(tabId, cmd.text);
+		return {
+			id: cmd.id,
+			ok: true,
+			data: { inserted: true }
 		};
 	} catch (err) {
 		return {

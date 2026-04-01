@@ -371,6 +371,16 @@ export class Page implements IPage {
     }
   }
 
+  async insertText(text: string): Promise<void> {
+    const result = await sendCommand('insert-text', {
+      text,
+      ...this._cmdOpts(),
+    }) as { inserted?: boolean };
+    if (!result?.inserted) {
+      throw new Error('insertText returned no inserted flag — command may not be supported by the extension');
+    }
+  }
+
   async waitForCapture(timeout: number = 10): Promise<void> {
     const maxMs = timeout * 1000;
     await sendCommand('exec', {

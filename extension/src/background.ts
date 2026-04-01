@@ -263,6 +263,8 @@ async function handleCommand(cmd: Command): Promise<Result> {
         return await handleSessions(cmd);
       case 'set-file-input':
         return await handleSetFileInput(cmd, workspace);
+      case 'insert-text':
+        return await handleInsertText(cmd, workspace);
       case 'bind-current':
         return await handleBindCurrent(cmd, workspace);
       default:
@@ -709,6 +711,19 @@ async function handleSetFileInput(cmd: Command, workspace: string): Promise<Resu
   try {
     await executor.setFileInputFiles(tabId, cmd.files, cmd.selector);
     return { id: cmd.id, ok: true, data: { count: cmd.files.length } };
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleInsertText(cmd: Command, workspace: string): Promise<Result> {
+  if (typeof cmd.text !== 'string') {
+    return { id: cmd.id, ok: false, error: 'Missing text payload' };
+  }
+  const tabId = await resolveTabId(cmd.tabId, workspace);
+  try {
+    await executor.insertText(tabId, cmd.text);
+    return { id: cmd.id, ok: true, data: { inserted: true } };
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
   }

@@ -5,7 +5,7 @@
  * Everything else is just JS code sent via 'exec'.
  */
 
-export type Action = 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'bind-current';
+export type Action = 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'insert-text' | 'bind-current';
 
 export interface Command {
   /** Unique request ID */
@@ -40,6 +40,8 @@ export interface Command {
   files?: string[];
   /** CSS selector for file input element (set-file-input action) */
   selector?: string;
+  /** Raw text payload for insert-text action */
+  text?: string;
 }
 
 export interface Result {
