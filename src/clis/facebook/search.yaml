@@ -17,12 +17,13 @@ args:
 pipeline:
   - navigate: https://www.facebook.com
 
+  - navigate:
+      url: https://www.facebook.com/search/top?q=${{ args.query | urlencode }}
+      settleMs: 4000
+
   - evaluate: |
       (async () => {
-        const query = ${{ args.query | json }};
         const limit = ${{ args.limit }};
-        window.location.href = 'https://www.facebook.com/search/top?q=' + encodeURIComponent(query);
-        await new Promise(r => setTimeout(r, 4000));
         // Search results are typically in role="article" or role="listitem"
         let items = document.querySelectorAll('[role="article"]');
         if (items.length === 0) {

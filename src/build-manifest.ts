@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'js-yaml';
 import { getErrorMessage } from './errors.js';
+import { fullName, getRegistry, type CliCommand } from './registry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIS_DIR = path.resolve(__dirname, 'clis');
@@ -22,6 +23,7 @@ const OUTPUT = path.resolve(__dirname, '..', 'dist', 'cli-manifest.json');
 export interface ManifestEntry {
   site: string;
   name: string;
+  aliases?: string[];
   description: string;
   domain?: string;
   strategy: string;
@@ -48,120 +50,55 @@ export interface ManifestEntry {
   navigateBefore?: boolean | string;
 }
 
-import type { YamlCliDefinition } from './yaml-schema.js';
+import { type YamlCliDefinition, parseYamlArgs } from './yaml-schema.js';
 
 import { isRecord } from './utils.js';
 
+const CLI_MODULE_PATTERN = /\bcli\s*\(/;
 
-function extractBalancedBlock(
-  source: string,
-  startIndex: number,
-  openChar: string,
-  closeChar: string,
-): string | null {
-  let depth = 0;
-  let quote: string | null = null;
-  let escaped = false;
-
-  for (let i = startIndex; i < source.length; i++) {
-    const ch = source[i];
-
-    if (quote) {
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (ch === '\\') {
-        escaped = true;
-        continue;
-      }
-      if (ch === quote) quote = null;
-      continue;
-    }
-
-    if (ch === '"' || ch === '\'' || ch === '`') {
-      quote = ch;
-      continue;
-    }
-
-    if (ch === openChar) {
-      depth++;
-    } else if (ch === closeChar) {
-      depth--;
-      if (depth === 0) {
-        return source.slice(startIndex + 1, i);
-      }
-    }
-  }
-
-  return null;
+function toManifestArgs(args: CliCommand['args']): ManifestEntry['args'] {
+  return args.map(arg => ({
+    name: arg.name,
+    type: arg.type ?? 'str',
+    default: arg.default,
+    required: !!arg.required,
+    positional: arg.positional || undefined,
+    help: arg.help ?? '',
+    choices: arg.choices,
+  }));
 }
 
-function extractTsArgsBlock(source: string): string | null {
-  const argsMatch = source.match(/args\s*:/);
-  if (!argsMatch || argsMatch.index === undefined) return null;
-
-  const bracketIndex = source.indexOf('[', argsMatch.index);
-  if (bracketIndex === -1) return null;
-
-  return extractBalancedBlock(source, bracketIndex, '[', ']');
+function toTsModulePath(filePath: string, site: string): string {
+  const baseName = path.basename(filePath, path.extname(filePath));
+  return `${site}/${baseName}.js`;
 }
 
-function parseInlineChoices(body: string): string[] | undefined {
-  const choicesMatch = body.match(/choices\s*:\s*\[([^\]]*)\]/);
-  if (!choicesMatch) return undefined;
-
-  const values = choicesMatch[1]
-    .split(',')
-    .map(s => s.trim().replace(/^['"`]|['"`]$/g, ''))
-    .filter(Boolean);
-
-  return values.length > 0 ? values : undefined;
+function isCliCommandValue(value: unknown, site: string): value is CliCommand {
+  return isRecord(value)
+    && typeof value.site === 'string'
+    && value.site === site
+    && typeof value.name === 'string'
+    && Array.isArray(value.args);
 }
 
-export function parseTsArgsBlock(argsBlock: string): ManifestEntry['args'] {
-  const args: ManifestEntry['args'] = [];
-  let cursor = 0;
-
-  while (cursor < argsBlock.length) {
-    const nameMatch = argsBlock.slice(cursor).match(/\{\s*name\s*:\s*['"`]([^'"`]+)['"`]/);
-    if (!nameMatch || nameMatch.index === undefined) break;
-
-    const objectStart = cursor + nameMatch.index;
-    const body = extractBalancedBlock(argsBlock, objectStart, '{', '}');
-    if (body == null) break;
-
-    const typeMatch = body.match(/type\s*:\s*['"`](\w+)['"`]/);
-    const defaultMatch = body.match(/default\s*:\s*([^,}]+)/);
-    const requiredMatch = body.match(/required\s*:\s*(true|false)/);
-    const helpMatch = body.match(/help\s*:\s*['"`]([^'"`]*)['"`]/);
-    const positionalMatch = body.match(/positional\s*:\s*(true|false)/);
-
-    let defaultVal: unknown = undefined;
-    if (defaultMatch) {
-      const raw = defaultMatch[1].trim();
-      if (raw === 'true') defaultVal = true;
-      else if (raw === 'false') defaultVal = false;
-      else if (/^\d+$/.test(raw)) defaultVal = parseInt(raw, 10);
-      else if (/^\d+\.\d+$/.test(raw)) defaultVal = parseFloat(raw);
-      else defaultVal = raw.replace(/^['"`]|['"`]$/g, '');
-    }
-
-    args.push({
-      name: nameMatch[1],
-      type: typeMatch?.[1] ?? 'str',
-      default: defaultVal,
-      required: requiredMatch?.[1] === 'true',
-      positional: positionalMatch?.[1] === 'true' || undefined,
-      help: helpMatch?.[1] ?? '',
-      choices: parseInlineChoices(body),
-    });
-
-    cursor = objectStart + body.length;
-    if (cursor <= objectStart) break; // safety: prevent infinite loop
-  }
-
-  return args;
+function toManifestEntry(cmd: CliCommand, modulePath: string): ManifestEntry {
+  return {
+    site: cmd.site,
+    name: cmd.name,
+    aliases: cmd.aliases,
+    description: cmd.description ?? '',
+    domain: cmd.domain,
+    strategy: (cmd.strategy ?? 'public').toString().toLowerCase(),
+    browser: cmd.browser ?? true,
+    args: toManifestArgs(cmd.args),
+    columns: cmd.columns,
+    timeout: cmd.timeoutSeconds,
+    deprecated: cmd.deprecated,
+    replacedBy: cmd.replacedBy,
+    type: 'ts',
+    modulePath,
+    navigateBefore: cmd.navigateBefore,
+  };
 }
 
 function scanYaml(filePath: string, site: string): ManifestEntry | null {
@@ -175,20 +112,7 @@ function scanYaml(filePath: string, site: string): ManifestEntry | null {
     const strategy = strategyStr.toUpperCase();
     const browser = cliDef.browser ?? (strategy !== 'PUBLIC');
 
-    const args: ManifestEntry['args'] = [];
-    if (cliDef.args && typeof cliDef.args === 'object') {
-      for (const [argName, argDef] of Object.entries(cliDef.args)) {
-        args.push({
-          name: argName,
-          type: argDef?.type ?? 'str',
-          default: argDef?.default,
-          required: argDef?.required ?? false,
-          positional: argDef?.positional === true || undefined,
-          help: argDef?.description ?? argDef?.help ?? '',
-          choices: argDef?.choices,
-        });
-      }
-    }
+    const args = parseYamlArgs(cliDef.args);
 
     return {
       site: cliDef.site ?? site,
@@ -197,6 +121,9 @@ function scanYaml(filePath: string, site: string): ManifestEntry | null {
       domain: cliDef.domain,
       strategy: strategy.toLowerCase(),
       browser,
+      aliases: isRecord(cliDef) && Array.isArray((cliDef as Record<string, unknown>).aliases)
+        ? ((cliDef as Record<string, unknown>).aliases as unknown[]).filter((value): value is string => typeof value === 'string')
+        : undefined,
       args,
       columns: cliDef.columns,
       pipeline: cliDef.pipeline,
@@ -212,83 +139,49 @@ function scanYaml(filePath: string, site: string): ManifestEntry | null {
   }
 }
 
-export function scanTs(filePath: string, site: string): ManifestEntry | null {
-  // TS adapters self-register via cli() at import time.
-  // We statically parse the source to extract metadata for the manifest stub.
-  const baseName = path.basename(filePath, path.extname(filePath));
-  const relativePath = `${site}/${baseName}.js`;
-
+export async function loadTsManifestEntries(
+  filePath: string,
+  site: string,
+  importer: (moduleHref: string) => Promise<unknown> = moduleHref => import(moduleHref),
+): Promise<ManifestEntry[]> {
   try {
     const src = fs.readFileSync(filePath, 'utf-8');
 
     // Helper/test modules should not appear as CLI commands in the manifest.
-    if (!/\bcli\s*\(/.test(src)) return null;
+    if (!CLI_MODULE_PATTERN.test(src)) return [];
 
-    const entry: ManifestEntry = {
-      site,
-      name: baseName,
-      description: '',
-      strategy: 'cookie',
-      browser: true,
-      args: [],
-      type: 'ts',
-      modulePath: relativePath,
-    };
+    const modulePath = toTsModulePath(filePath, site);
+    const registry = getRegistry();
+    const before = new Map(registry.entries());
+    const mod = await importer(pathToFileURL(filePath).href);
 
-    // Extract description
-    const descMatch = src.match(/description\s*:\s*['"`]([^'"`]*)['"`]/);
-    if (descMatch) entry.description = descMatch[1];
+    const exportedCommands = Object.values(isRecord(mod) ? mod : {})
+      .filter(value => isCliCommandValue(value, site));
 
-    // Extract domain
-    const domainMatch = src.match(/domain\s*:\s*['"`]([^'"`]*)['"`]/);
-    if (domainMatch) entry.domain = domainMatch[1];
+    const runtimeCommands = exportedCommands.length > 0
+      ? exportedCommands
+      : [...registry.entries()]
+        .filter(([key, cmd]) => {
+          if (cmd.site !== site) return false;
+          const previous = before.get(key);
+          return !previous || previous !== cmd;
+        })
+        .map(([, cmd]) => cmd);
 
-    // Extract strategy
-    const stratMatch = src.match(/strategy\s*:\s*Strategy\.(\w+)/);
-    if (stratMatch) entry.strategy = stratMatch[1].toLowerCase();
-
-    // Extract browser: false (some adapters bypass browser entirely)
-    const browserMatch = src.match(/browser\s*:\s*(true|false)/);
-    if (browserMatch) entry.browser = browserMatch[1] === 'true';
-    else entry.browser = entry.strategy !== 'public';
-
-    // Extract columns
-    const colMatch = src.match(/columns\s*:\s*\[([^\]]*)\]/);
-    if (colMatch) {
-      entry.columns = colMatch[1].split(',').map(s => s.trim().replace(/^['"`]|['"`]$/g, '')).filter(Boolean);
-    }
-
-    // Extract args array items: { name: '...', ... }
-    const argsBlock = extractTsArgsBlock(src);
-    if (argsBlock) {
-      entry.args = parseTsArgsBlock(argsBlock);
-    }
-
-    // Extract navigateBefore: false / true / 'https://...'
-    const navBoolMatch = src.match(/navigateBefore\s*:\s*(true|false)/);
-    if (navBoolMatch) {
-      entry.navigateBefore = navBoolMatch[1] === 'true';
-    } else {
-      const navStringMatch = src.match(/navigateBefore\s*:\s*['"`]([^'"`]+)['"`]/);
-      if (navStringMatch) entry.navigateBefore = navStringMatch[1];
-    }
-
-    const deprecatedBoolMatch = src.match(/deprecated\s*:\s*(true|false)/);
-    if (deprecatedBoolMatch) {
-      entry.deprecated = deprecatedBoolMatch[1] === 'true';
-    } else {
-      const deprecatedStringMatch = src.match(/deprecated\s*:\s*['"`]([^'"`]+)['"`]/);
-      if (deprecatedStringMatch) entry.deprecated = deprecatedStringMatch[1];
-    }
-
-    const replacedByMatch = src.match(/replacedBy\s*:\s*['"`]([^'"`]+)['"`]/);
-    if (replacedByMatch) entry.replacedBy = replacedByMatch[1];
-
-    return entry;
+    const seen = new Set<string>();
+    return runtimeCommands
+      .filter((cmd) => {
+        const key = fullName(cmd);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(cmd => toManifestEntry(cmd, modulePath));
   } catch (err) {
     // If parsing fails, log a warning (matching scanYaml behaviour) and skip the entry.
     process.stderr.write(`Warning: failed to scan ${filePath}: ${getErrorMessage(err)}\n`);
-    return null;
+    return [];
   }
 }
 
@@ -301,7 +194,7 @@ export function shouldReplaceManifestEntry(current: ManifestEntry, next: Manifes
   return current.type === 'yaml' && next.type === 'ts';
 }
 
-export function buildManifest(): ManifestEntry[] {
+export async function buildManifest(): Promise<ManifestEntry[]> {
   const manifest = new Map<string, ManifestEntry>();
 
   if (fs.existsSync(CLIS_DIR)) {
@@ -326,8 +219,8 @@ export function buildManifest(): ManifestEntry[] {
           (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts') && file !== 'index.ts') ||
           (file.endsWith('.js') && !file.endsWith('.d.js') && !file.endsWith('.test.js') && file !== 'index.js')
         ) {
-          const entry = scanTs(filePath, site);
-          if (entry) {
+          const entries = await loadTsManifestEntries(filePath, site);
+          for (const entry of entries) {
             const key = `${entry.site}/${entry.name}`;
             const existing = manifest.get(key);
             if (!existing || shouldReplaceManifestEntry(existing, entry)) {
@@ -342,11 +235,11 @@ export function buildManifest(): ManifestEntry[] {
     }
   }
 
-  return [...manifest.values()];
+  return [...manifest.values()].sort((a, b) => a.site.localeCompare(b.site) || a.name.localeCompare(b.name));
 }
 
-function main(): void {
-  const manifest = buildManifest();
+async function main(): Promise<void> {
+  const manifest = await buildManifest();
   fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
   fs.writeFileSync(OUTPUT, JSON.stringify(manifest, null, 2));
 
@@ -380,5 +273,5 @@ function main(): void {
 
 const entrypoint = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null;
 if (entrypoint === import.meta.url) {
-  main();
+  void main();
 }

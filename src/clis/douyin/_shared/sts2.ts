@@ -12,9 +12,17 @@ const STS2_URL =
  */
 export async function getSts2Credentials(page: IPage): Promise<Sts2Credentials> {
   const js = `fetch(${JSON.stringify(STS2_URL)}, { credentials: 'include' }).then(r => r.json())`;
-  const res = await page.evaluate(js) as { data: Sts2Credentials };
-  if (!res?.data?.access_key_id) {
+  const res = await page.evaluate(js) as Sts2Credentials | { data?: Sts2Credentials };
+  const credentials = (
+    typeof res === 'object' &&
+    res !== null &&
+    'data' in res &&
+    res.data
+  )
+    ? res.data
+    : (res as Sts2Credentials);
+  if (!credentials?.access_key_id) {
     throw new AuthRequiredError('creator.douyin.com', 'STS2 credentials missing');
   }
-  return res.data;
+  return credentials;
 }

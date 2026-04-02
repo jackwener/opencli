@@ -1,8 +1,8 @@
 /**
- * YouTube video metadata — read ytInitialPlayerResponse + ytInitialData from video page.
+ * YouTube video metadata — fetch watch HTML and parse bootstrap data without opening the watch UI.
  */
 import { cli, Strategy } from '../../registry.js';
-import { parseVideoId } from './utils.js';
+import { extractJsonAssignmentFromHtml, parseVideoId, prepareYoutubeApiPage } from './utils.js';
 import { CommandExecutionError } from '../../errors.js';
 
 cli({
@@ -17,24 +17,29 @@ cli({
   columns: ['field', 'value'],
   func: async (page, kwargs) => {
     const videoId = parseVideoId(kwargs.url);
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    await page.goto(videoUrl);
-    await page.wait(3);
+    await prepareYoutubeApiPage(page);
 
     const data = await page.evaluate(`
       (async () => {
-        const player = window.ytInitialPlayerResponse;
-        const yt = window.ytInitialData;
-        if (!player) return { error: 'ytInitialPlayerResponse not found' };
+        const extractJsonAssignmentFromHtml = ${extractJsonAssignmentFromHtml.toString()};
+
+        const watchResp = await fetch('/watch?v=' + encodeURIComponent(${JSON.stringify(videoId)}), {
+          credentials: 'include',
+        });
+        if (!watchResp.ok) return { error: 'Watch HTML returned HTTP ' + watchResp.status };
+
+        const html = await watchResp.text();
+        const player = extractJsonAssignmentFromHtml(html, 'ytInitialPlayerResponse');
+        const yt = extractJsonAssignmentFromHtml(html, 'ytInitialData');
+        if (!player) return { error: 'ytInitialPlayerResponse not found in watch HTML' };
 
         const details = player.videoDetails || {};
         const microformat = player.microformat?.playerMicroformatRenderer || {};
+        const contents = yt?.contents?.twoColumnWatchNextResults?.results?.results?.contents || [];
 
-        // Try to get full description from ytInitialData
+        // Try to get full description from watch bootstrap data
         let fullDescription = details.shortDescription || '';
         try {
-          const contents = yt?.contents?.twoColumnWatchNextResults
-            ?.results?.results?.contents;
           if (contents) {
             for (const c of contents) {
               const desc = c.videoSecondaryInfoRenderer?.attributedDescription?.content;
@@ -46,8 +51,6 @@ cli({
         // Get like count if available
         let likes = '';
         try {
-          const contents = yt?.contents?.twoColumnWatchNextResults
-            ?.results?.results?.contents;
           if (contents) {
             for (const c of contents) {
               const buttons = c.videoPrimaryInfoRenderer?.videoActions
@@ -75,8 +78,6 @@ cli({
         // Get channel subscriber count if available
         let subscribers = '';
         try {
-          const contents = yt?.contents?.twoColumnWatchNextResults
-            ?.results?.results?.contents;
           if (contents) {
             for (const c of contents) {
               const owner = c.videoSecondaryInfoRenderer?.owner

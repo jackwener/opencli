@@ -1,10 +1,14 @@
-import { afterEach, describe, it, expect, vi } from 'vitest';
-import { BrowserBridge, __test__, generateStealthJs } from './browser/index.js';
+import { describe, it, expect, vi } from 'vitest';
+import { BrowserBridge, generateStealthJs } from './browser/index.js';
+import { extractTabEntries, diffTabIndexes, appendLimited } from './browser/tabs.js';
+import { withTimeoutMs } from './runtime.js';
+import { __test__ as cdpTest } from './browser/cdp.js';
+import { isRetryableSettleError } from './browser/page.js';
 import * as daemonClient from './browser/daemon-client.js';
 
 describe('browser helpers', () => {
   it('extracts tab entries from string snapshots', () => {
-    const entries = __test__.extractTabEntries('Tab 0 https://example.com\nTab 1 Chrome Extension');
+    const entries = extractTabEntries('Tab 0 https://example.com\nTab 1 Chrome Extension');
 
     expect(entries).toEqual([
       { index: 0, identity: 'https://example.com' },
@@ -13,7 +17,7 @@ describe('browser helpers', () => {
   });
 
   it('extracts tab entries from MCP markdown format', () => {
-    const entries = __test__.extractTabEntries(
+    const entries = extractTabEntries(
       '- 0: (current) [Playwright MCP extension](chrome-extension://abc/connect.html)\n- 1: [知乎 - 首页](https://www.zhihu.com/)'
     );
 
@@ -24,7 +28,7 @@ describe('browser helpers', () => {
   });
 
   it('closes only tabs that were opened during the session', () => {
-    const tabsToClose = __test__.diffTabIndexes(
+    const tabsToClose = diffTabIndexes(
       ['https://example.com', 'Chrome Extension'],
       [
         { index: 0, identity: 'https://example.com' },
@@ -38,15 +42,21 @@ describe('browser helpers', () => {
   });
 
   it('keeps only the tail of stderr buffers', () => {
-    expect(__test__.appendLimited('12345', '67890', 8)).toBe('34567890');
+    expect(appendLimited('12345', '67890', 8)).toBe('34567890');
   });
 
   it('times out slow promises', async () => {
-    await expect(__test__.withTimeoutMs(new Promise(() => {}), 10, 'timeout')).rejects.toThrow('timeout');
+    await expect(withTimeoutMs(new Promise(() => {}), 10, 'timeout')).rejects.toThrow('timeout');
+  });
+
+  it('retries settle only for target-invalidated errors', () => {
+    expect(isRetryableSettleError(new Error('{"code":-32000,"message":"Inspected target navigated or closed"}'))).toBe(true);
+    expect(isRetryableSettleError(new Error('attach failed: target no longer exists'))).toBe(false);
+    expect(isRetryableSettleError(new Error('malformed exec payload'))).toBe(false);
   });
 
   it('prefers the real Electron app target over DevTools and blank pages', () => {
-    const target = __test__.selectCDPTarget([
+    const target = cdpTest.selectCDPTarget([
       {
         type: 'page',
         title: 'DevTools - localhost:9224',
@@ -73,7 +83,7 @@ describe('browser helpers', () => {
   it('honors OPENCLI_CDP_TARGET when multiple inspectable targets exist', () => {
     vi.stubEnv('OPENCLI_CDP_TARGET', 'codex');
 
-    const target = __test__.selectCDPTarget([
+    const target = cdpTest.selectCDPTarget([
       {
         type: 'app',
         title: 'Cursor',
@@ -94,43 +104,43 @@ describe('browser helpers', () => {
 
 describe('BrowserBridge state', () => {
   it('transitions to closed after close()', async () => {
-    const mcp = new BrowserBridge();
+    const bridge = new BrowserBridge();
 
-    expect(mcp.state).toBe('idle');
+    expect(bridge.state).toBe('idle');
 
-    await mcp.close();
+    await bridge.close();
 
-    expect(mcp.state).toBe('closed');
+    expect(bridge.state).toBe('closed');
   });
 
   it('rejects connect() after the session has been closed', async () => {
-    const mcp = new BrowserBridge();
-    await mcp.close();
+    const bridge = new BrowserBridge();
+    await bridge.close();
 
-    await expect(mcp.connect()).rejects.toThrow('Session is closed');
+    await expect(bridge.connect()).rejects.toThrow('Session is closed');
   });
 
   it('rejects connect() while already connecting', async () => {
-    const mcp = new BrowserBridge();
-    (mcp as any)._state = 'connecting';
+    const bridge = new BrowserBridge();
+    (bridge as any)._state = 'connecting';
 
-    await expect(mcp.connect()).rejects.toThrow('Already connecting');
+    await expect(bridge.connect()).rejects.toThrow('Already connecting');
   });
 
   it('rejects connect() while closing', async () => {
-    const mcp = new BrowserBridge();
-    (mcp as any)._state = 'closing';
+    const bridge = new BrowserBridge();
+    (bridge as any)._state = 'closing';
 
-    await expect(mcp.connect()).rejects.toThrow('Session is closing');
+    await expect(bridge.connect()).rejects.toThrow('Session is closing');
   });
 
   it('fails fast when daemon is running but extension is disconnected', async () => {
     vi.spyOn(daemonClient, 'isExtensionConnected').mockResolvedValue(false);
     vi.spyOn(daemonClient, 'isDaemonRunning').mockResolvedValue(true);
 
-    const mcp = new BrowserBridge();
+    const bridge = new BrowserBridge();
 
-    await expect(mcp.connect()).rejects.toThrow('Browser Extension is not connected');
+    await expect(bridge.connect({ timeout: 0.1 })).rejects.toThrow('Browser Extension is not connected');
   });
 });
 

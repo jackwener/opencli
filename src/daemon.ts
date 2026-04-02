@@ -15,27 +15,28 @@
  *
  * Lifecycle:
  *   - Auto-spawned by opencli on first browser command
- *   - Auto-exits after 5 minutes of idle
+ *   - Auto-exits after idle timeout (default 4h, configurable via OPENCLI_DAEMON_TIMEOUT)
  *   - Listens on localhost:19825
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
-import { DEFAULT_DAEMON_PORT } from './constants.js';
+import { DEFAULT_DAEMON_PORT, DEFAULT_DAEMON_IDLE_TIMEOUT } from './constants.js';
+import { EXIT_CODES } from './errors.js';
+import { IdleManager } from './idle-manager.js';
 
 const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
-const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const IDLE_TIMEOUT = Number(process.env.OPENCLI_DAEMON_TIMEOUT ?? DEFAULT_DAEMON_IDLE_TIMEOUT);
 
 // ─── State ───────────────────────────────────────────────────────────
 
 let extensionWs: WebSocket | null = null;
+let extensionVersion: string | null = null;
 const pending = new Map<string, {
   resolve: (data: unknown) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 }>();
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
-
 // Extension log ring buffer
 interface LogEntry { level: string; msg: string; ts: number; }
 const LOG_BUFFER_SIZE = 200;
@@ -48,13 +49,10 @@ function pushLog(entry: LogEntry): void {
 
 // ─── Idle auto-exit ──────────────────────────────────────────────────
 
-function resetIdleTimer(): void {
-  if (idleTimer) clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    console.error('[daemon] Idle timeout, shutting down');
-    process.exit(0);
-  }, IDLE_TIMEOUT);
-}
+const idleManager = new IdleManager(IDLE_TIMEOUT, () => {
+  console.error('[daemon] Idle timeout (no CLI requests + no Extension), shutting down');
+  process.exit(EXIT_CODES.SUCCESS);
+});
 
 // ─── HTTP Server ─────────────────────────────────────────────────────
 
@@ -101,7 +99,22 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  // Require custom header on all HTTP requests.  Browsers cannot attach
+  const url = req.url ?? '/';
+  const pathname = url.split('?')[0];
+
+  // Health-check endpoint — no X-OpenCLI header required.
+  // Used by the extension to silently probe daemon reachability before
+  // attempting a WebSocket connection (avoids uncatchable ERR_CONNECTION_REFUSED).
+  // Security note: this endpoint is reachable by any client that passes the
+  // origin check above (chrome-extension:// or no Origin header, e.g. curl).
+  // Timing side-channels can reveal daemon presence to local processes, which
+  // is an accepted risk given the daemon is loopback-only and short-lived.
+  if (req.method === 'GET' && pathname === '/ping') {
+    jsonResponse(res, 200, { ok: true });
+    return;
+  }
+
+  // Require custom header on all other HTTP requests.  Browsers cannot attach
   // custom headers in "simple" requests, and our preflight returns no
   // Access-Control-Allow-Headers, so scripted fetch() from web pages is
   // blocked even if Origin check is somehow bypassed.
@@ -110,14 +123,19 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  const url = req.url ?? '/';
-  const pathname = url.split('?')[0];
-
   if (req.method === 'GET' && pathname === '/status') {
+    const uptime = process.uptime();
+    const mem = process.memoryUsage();
     jsonResponse(res, 200, {
       ok: true,
+      pid: process.pid,
+      uptime,
       extensionConnected: extensionWs?.readyState === WebSocket.OPEN,
+      extensionVersion,
       pending: pending.size,
+      lastCliRequestTime: idleManager.lastCliRequestTime,
+      memoryMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
+      port: PORT,
     });
     return;
   }
@@ -138,8 +156,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
+  if (req.method === 'POST' && pathname === '/shutdown') {
+    jsonResponse(res, 200, { ok: true, message: 'Shutting down' });
+    setTimeout(() => shutdown(), 100);
+    return;
+  }
+
   if (req.method === 'POST' && url === '/command') {
-    resetIdleTimer();
+    idleManager.onCliRequest();
     try {
       const body = JSON.parse(await readBody(req));
       if (!body.id) {
@@ -196,6 +220,8 @@ const wss = new WebSocketServer({
 wss.on('connection', (ws: WebSocket) => {
   console.error('[daemon] Extension connected');
   extensionWs = ws;
+  extensionVersion = null; // cleared until hello message arrives
+  idleManager.setExtensionConnected(true);
 
   // ── Heartbeat: ping every 15s, close if 2 pongs missed ──
   let missedPongs = 0;
@@ -222,6 +248,12 @@ wss.on('connection', (ws: WebSocket) => {
     try {
       const msg = JSON.parse(data.toString());
 
+      // Handle hello message from extension (version handshake)
+      if (msg.type === 'hello') {
+        extensionVersion = typeof msg.version === 'string' ? msg.version : null;
+        return;
+      }
+
       // Handle log messages from extension
       if (msg.type === 'log') {
         const prefix = msg.level === 'error' ? '❌' : msg.level === 'warn' ? '⚠️' : '📋';
@@ -247,6 +279,8 @@ wss.on('connection', (ws: WebSocket) => {
     clearInterval(heartbeatInterval);
     if (extensionWs === ws) {
       extensionWs = null;
+      extensionVersion = null;
+      idleManager.setExtensionConnected(false);
       // Reject all pending requests since the extension is gone
       for (const [id, p] of pending) {
         clearTimeout(p.timer);
@@ -258,7 +292,17 @@ wss.on('connection', (ws: WebSocket) => {
 
   ws.on('error', () => {
     clearInterval(heartbeatInterval);
-    if (extensionWs === ws) extensionWs = null;
+    if (extensionWs === ws) {
+      extensionWs = null;
+      extensionVersion = null;
+      idleManager.setExtensionConnected(false);
+      // Reject pending requests in case 'close' does not follow this 'error'
+      for (const [, p] of pending) {
+        clearTimeout(p.timer);
+        p.reject(new Error('Extension disconnected'));
+      }
+      pending.clear();
+    }
   });
 });
 
@@ -266,16 +310,16 @@ wss.on('connection', (ws: WebSocket) => {
 
 httpServer.listen(PORT, '127.0.0.1', () => {
   console.error(`[daemon] Listening on http://127.0.0.1:${PORT}`);
-  resetIdleTimer();
+  idleManager.onCliRequest();
 });
 
 httpServer.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`[daemon] Port ${PORT} already in use — another daemon is likely running. Exiting.`);
-    process.exit(1);
+    process.exit(EXIT_CODES.SERVICE_UNAVAIL);
   }
   console.error('[daemon] Server error:', err.message);
-  process.exit(1);
+  process.exit(EXIT_CODES.GENERIC_ERROR);
 });
 
 // Graceful shutdown
@@ -288,7 +332,7 @@ function shutdown(): void {
   pending.clear();
   if (extensionWs) extensionWs.close();
   httpServer.close();
-  process.exit(0);
+  process.exit(EXIT_CODES.SUCCESS);
 }
 
 process.on('SIGTERM', shutdown);

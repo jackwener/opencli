@@ -10,11 +10,74 @@ const attached = new Set<number>();
 
 /** Internal blank page used when no user URL is provided. */
 const BLANK_PAGE = 'data:text/html,<html></html>';
+const FOREIGN_EXTENSION_URL_PREFIX = 'chrome-extension://';
+const ATTACH_RECOVERY_DELAY_MS = 120;
 
 /** Check if a URL can be attached via CDP — only allow http(s) and our internal blank page. */
 function isDebuggableUrl(url?: string): boolean {
   if (!url) return true;  // empty/undefined = tab still loading, allow it
   return url.startsWith('http://') || url.startsWith('https://') || url === BLANK_PAGE;
+}
+
+type CleanupResult = { removed: number };
+
+async function removeForeignExtensionEmbeds(tabId: number): Promise<CleanupResult> {
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab.url || (!tab.url.startsWith('http://') && !tab.url.startsWith('https://'))) {
+    return { removed: 0 };
+  }
+  if (!chrome.scripting?.executeScript) return { removed: 0 };
+
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      args: [`${FOREIGN_EXTENSION_URL_PREFIX}${chrome.runtime.id}/`],
+      func: (ownExtensionPrefix: string) => {
+        const extensionPrefix = 'chrome-extension://';
+        const selectors = ['iframe', 'frame', 'embed', 'object'];
+        const visitedRoots = new Set<Document | ShadowRoot>();
+        const roots: Array<Document | ShadowRoot> = [document];
+        let removed = 0;
+
+        while (roots.length > 0) {
+          const root = roots.pop();
+          if (!root || visitedRoots.has(root)) continue;
+          visitedRoots.add(root);
+
+          for (const selector of selectors) {
+            const nodes = root.querySelectorAll(selector);
+            for (const node of nodes) {
+              const src = node.getAttribute('src') || node.getAttribute('data') || '';
+              if (!src.startsWith(extensionPrefix) || src.startsWith(ownExtensionPrefix)) continue;
+              node.remove();
+              removed++;
+            }
+          }
+
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+          let current = walker.nextNode();
+          while (current) {
+            const element = current as Element & { shadowRoot?: ShadowRoot | null };
+            if (element.shadowRoot) roots.push(element.shadowRoot);
+            current = walker.nextNode();
+          }
+        }
+
+        return { removed };
+      },
+    });
+    return result?.result ?? { removed: 0 };
+  } catch {
+    return { removed: 0 };
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function tryAttach(tabId: number): Promise<void> {
+  await chrome.debugger.attach({ tabId }, '1.3');
 }
 
 async function ensureAttached(tabId: number): Promise<void> {
@@ -47,16 +110,27 @@ async function ensureAttached(tabId: number): Promise<void> {
   }
 
   try {
-    await chrome.debugger.attach({ tabId }, '1.3');
+    await tryAttach(tabId);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     const hint = msg.includes('chrome-extension://')
       ? '. Tip: another Chrome extension may be interfering — try disabling other extensions'
       : '';
-    if (msg.includes('Another debugger is already attached')) {
+    if (msg.includes('chrome-extension://')) {
+      const recoveryCleanup = await removeForeignExtensionEmbeds(tabId);
+      if (recoveryCleanup.removed > 0) {
+        console.warn(`[opencli] Removed ${recoveryCleanup.removed} foreign extension frame(s) after attach failure on tab ${tabId}`);
+      }
+      await delay(ATTACH_RECOVERY_DELAY_MS);
+      try {
+        await tryAttach(tabId);
+      } catch {
+        throw new Error(`attach failed: ${msg}${hint}`);
+      }
+    } else if (msg.includes('Another debugger is already attached')) {
       try { await chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
       try {
-        await chrome.debugger.attach({ tabId }, '1.3');
+        await tryAttach(tabId);
       } catch {
         throw new Error(`attach failed: ${msg}${hint}`);
       }
@@ -70,6 +144,18 @@ async function ensureAttached(tabId: number): Promise<void> {
     await chrome.debugger.sendCommand({ tabId }, 'Runtime.enable');
   } catch {
     // Some pages may not need explicit enable
+  }
+
+  // Disable breakpoints so that `debugger;` statements in page code don't
+  // pause execution.  Anti-bot scripts use `debugger;` traps to detect CDP —
+  // they measure the time gap caused by the pause. Deactivating breakpoints
+  // makes the engine skip `debugger;` entirely, neutralising the timing
+  // side-channel without patching page JS.
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Debugger.enable');
+    await chrome.debugger.sendCommand({ tabId }, 'Debugger.setBreakpointsActive', { active: false });
+  } catch {
+    // Non-fatal: best-effort hardening
   }
 }
 
@@ -145,6 +231,48 @@ export async function screenshot(
       await chrome.debugger.sendCommand({ tabId }, 'Emulation.clearDeviceMetricsOverride').catch(() => {});
     }
   }
+}
+
+/**
+ * Set local file paths on a file input element via CDP DOM.setFileInputFiles.
+ * This bypasses the need to send large base64 payloads through the message channel —
+ * Chrome reads the files directly from the local filesystem.
+ *
+ * @param tabId - Target tab ID
+ * @param files - Array of absolute local file paths
+ * @param selector - CSS selector to find the file input (optional, defaults to first file input)
+ */
+export async function setFileInputFiles(
+  tabId: number,
+  files: string[],
+  selector?: string,
+): Promise<void> {
+  await ensureAttached(tabId);
+
+  // Enable DOM domain (required for DOM.querySelector and DOM.setFileInputFiles)
+  await chrome.debugger.sendCommand({ tabId }, 'DOM.enable');
+
+  // Get the document root
+  const doc = await chrome.debugger.sendCommand({ tabId }, 'DOM.getDocument') as {
+    root: { nodeId: number };
+  };
+
+  // Find the file input element
+  const query = selector || 'input[type="file"]';
+  const result = await chrome.debugger.sendCommand({ tabId }, 'DOM.querySelector', {
+    nodeId: doc.root.nodeId,
+    selector: query,
+  }) as { nodeId: number };
+
+  if (!result.nodeId) {
+    throw new Error(`No element found matching selector: ${query}`);
+  }
+
+  // Set files directly via CDP — Chrome reads from local filesystem
+  await chrome.debugger.sendCommand({ tabId }, 'DOM.setFileInputFiles', {
+    files,
+    nodeId: result.nodeId,
+  });
 }
 
 export async function detach(tabId: number): Promise<void> {

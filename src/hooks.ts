@@ -44,6 +44,7 @@ const _hooks: Map<HookName, HookFn[]> =
 
 function addHook(name: HookName, fn: HookFn): void {
   const list = _hooks.get(name) ?? [];
+  if (list.includes(fn)) return;
   list.push(fn);
   _hooks.set(name, list);
 }

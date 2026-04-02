@@ -19,10 +19,15 @@ pipeline:
         id: ${{ args.id }}
 
   - map:
+      id: ${{ item.id }}
       title: ${{ item.title }}
+      content: ${{ item.content }}
+      member: ${{ item.member.username }}
+      created: ${{ item.created }}
+      node: ${{ item.node.title }}
       replies: ${{ item.replies }}
       url: ${{ item.url }}
 
   - limit: 1
 
-columns: [title, replies, url]
+columns: [id, title, content, member, created, node, replies, url]

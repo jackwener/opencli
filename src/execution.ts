@@ -10,17 +10,20 @@
  * 6. Lifecycle hooks (onBeforeExecute / onAfterExecute)
  */
 
-import { type CliCommand, type InternalCliCommand, type Arg, Strategy, getRegistry, fullName } from './registry.js';
+import { type CliCommand, type InternalCliCommand, type Arg, type CommandArgs, Strategy, getRegistry, fullName } from './registry.js';
 import type { IPage } from './types.js';
 import { pathToFileURL } from 'node:url';
 import { executePipeline } from './pipeline/index.js';
-import { AdapterLoadError, ArgumentError, CommandExecutionError, getErrorMessage } from './errors.js';
+import { AdapterLoadError, ArgumentError, BrowserConnectError, CommandExecutionError, getErrorMessage } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
 import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMMAND_TIMEOUT } from './runtime.js';
 import { emitHook, type HookContext } from './hooks.js';
+import { checkDaemonStatus } from './browser/discover.js';
+import { log } from './logger.js';
+import { isElectronApp } from './electron-apps.js';
+import { resolveElectronEndpoint } from './launcher.js';
 
 const _loadedModules = new Set<string>();
-type CommandArgs = Record<string, unknown>;
 
 export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): CommandArgs {
   const result: CommandArgs = { ...kwargs };
@@ -128,6 +131,23 @@ function ensureRequiredEnv(cmd: CliCommand): void {
   );
 }
 
+/**
+ * Check if the browser is already on the target domain, avoiding redundant navigation.
+ * Returns true if current page hostname matches the pre-nav URL hostname.
+ */
+async function isAlreadyOnDomain(page: IPage, targetUrl: string): Promise<boolean> {
+  if (!page.getCurrentUrl) return false;
+  try {
+    const currentUrl = await page.getCurrentUrl();
+    if (!currentUrl) return false;
+    const currentHost = new URL(currentUrl).hostname;
+    const targetHost = new URL(targetUrl).hostname;
+    return currentHost === targetHost;
+  } catch {
+    return false;
+  }
+}
+
 export async function executeCommand(
   cmd: CliCommand,
   rawKwargs: CommandArgs,
@@ -151,25 +171,60 @@ export async function executeCommand(
   let result: unknown;
   try {
     if (shouldUseBrowserSession(cmd)) {
+      const electron = isElectronApp(cmd.site);
+      let cdpEndpoint: string | undefined;
+
+      if (electron) {
+        // Electron apps: auto-detect, prompt restart if needed, launch with CDP
+        cdpEndpoint = await resolveElectronEndpoint(cmd.site);
+      } else {
+        // Browser Bridge: fail-fast when daemon is up but extension is missing.
+        // 300ms timeout avoids a full 2s wait on cold-start.
+        const status = await checkDaemonStatus({ timeout: 300 });
+        if (status.running && !status.extensionConnected) {
+          throw new BrowserConnectError(
+            'Browser Bridge extension not connected',
+            'Install the Browser Bridge:\n' +
+            '  1. Download: https://github.com/jackwener/opencli/releases\n' +
+            '  2. chrome://extensions → Developer Mode → Load unpacked\n' +
+            '  Then run: opencli doctor',
+          );
+        }
+      }
+
       ensureRequiredEnv(cmd);
-      const BrowserFactory = getBrowserFactory();
+      const BrowserFactory = getBrowserFactory(cmd.site);
       result = await browserSession(BrowserFactory, async (page) => {
         const preNavUrl = resolvePreNav(cmd);
         if (preNavUrl) {
-          try {
-            await page.goto(preNavUrl);
-            await page.wait(2);
-          } catch (err) {
-            if (debug) console.error(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
+          const skip = await isAlreadyOnDomain(page, preNavUrl);
+          if (skip) {
+            if (debug) log.debug('[pre-nav] Already on target domain, skipping navigation');
+          } else {
+            try {
+              await page.goto(preNavUrl);
+            } catch (err) {
+              if (debug) log.debug(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
+            }
           }
         }
         return runWithTimeout(runCommand(cmd, page, kwargs, debug), {
           timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,
           label: fullName(cmd),
         });
-      }, { workspace: `site:${cmd.site}` });
+      }, { workspace: `site:${cmd.site}`, cdpEndpoint });
     } else {
-      result = await runCommand(cmd, null, kwargs, debug);
+      // Non-browser commands: apply timeout only when explicitly configured.
+      const timeout = cmd.timeoutSeconds;
+      if (timeout !== undefined && timeout > 0) {
+        result = await runWithTimeout(runCommand(cmd, null, kwargs, debug), {
+          timeout,
+          label: fullName(cmd),
+          hint: `Increase the adapter's timeoutSeconds setting (currently ${timeout}s)`,
+        });
+      } else {
+        result = await runCommand(cmd, null, kwargs, debug);
+      }
     }
   } catch (err) {
     hookCtx.error = err;

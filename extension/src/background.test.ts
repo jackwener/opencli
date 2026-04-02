@@ -35,8 +35,12 @@ function createChromeMock() {
     { id: 3, windowId: 1, url: 'chrome://extensions', title: 'chrome', active: false, status: 'complete' },
   ];
 
-  const query = vi.fn(async (queryInfo: { windowId?: number } = {}) => {
-    return tabs.filter((tab) => queryInfo.windowId === undefined || tab.windowId === queryInfo.windowId);
+  const query = vi.fn(async (queryInfo: { windowId?: number; active?: boolean } = {}) => {
+    return tabs.filter((tab) => {
+      if (queryInfo.windowId !== undefined && tab.windowId !== queryInfo.windowId) return false;
+      if (queryInfo.active !== undefined && !!tab.active !== queryInfo.active) return false;
+      return true;
+    });
   });
   const create = vi.fn(async ({ windowId, url, active }: { windowId?: number; url?: string; active?: boolean }) => {
     const tab: MockTab = {
@@ -84,6 +88,8 @@ function createChromeMock() {
     runtime: {
       onInstalled: { addListener: vi.fn() } as Listener<() => void>,
       onStartup: { addListener: vi.fn() } as Listener<() => void>,
+      onMessage: { addListener: vi.fn() } as Listener<(msg: unknown, sender: unknown, sendResponse: (value: unknown) => void) => void>,
+      getManifest: vi.fn(() => ({ version: 'test-version' })),
     },
     cookies: {
       getAll: vi.fn(async () => []),
@@ -192,5 +198,43 @@ describe('background tab isolation', () => {
       expect.objectContaining({ workspace: 'site:twitter', windowId: 1 }),
       expect.objectContaining({ workspace: 'site:zhihu', windowId: 2 }),
     ]));
+  });
+
+  it('keeps site:notebooklm inside its owned automation window instead of rebinding to a user tab', async () => {
+    const { chrome, tabs } = createChromeMock();
+    tabs[0].url = 'https://notebooklm.google.com/';
+    tabs[0].title = 'NotebookLM Home';
+    tabs[1].url = 'https://notebooklm.google.com/notebook/nb-live';
+    tabs[1].title = 'Live Notebook';
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:notebooklm', 1);
+
+    const tabId = await mod.__test__.resolveTabId(undefined, 'site:notebooklm');
+
+    expect(tabId).toBe(1);
+    expect(mod.__test__.getSession('site:notebooklm')).toEqual(expect.objectContaining({
+      windowId: 1,
+    }));
+  });
+
+  it('idle timeout closes the automation window for site:notebooklm', async () => {
+    const { chrome, tabs } = createChromeMock();
+    tabs[0].url = 'https://notebooklm.google.com/';
+    tabs[0].title = 'NotebookLM Home';
+    tabs[0].active = true;
+
+    vi.useFakeTimers();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:notebooklm', 1);
+
+    mod.__test__.resetWindowIdleTimer('site:notebooklm');
+    await vi.advanceTimersByTimeAsync(30001);
+
+    expect(chrome.windows.remove).toHaveBeenCalledWith(1);
+    expect(mod.__test__.getSession('site:notebooklm')).toBeNull();
   });
 });

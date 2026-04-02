@@ -1,61 +1,111 @@
 /**
- * 携程旅行搜索 — browser cookie, multi-strategy.
+ * 携程旅行搜索 — public destination and hotel suggestion lookup.
  */
+import { ArgumentError, CliError, EmptyResultError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
+
+interface CtripSearchResultItem {
+  displayName?: string;
+  word?: string;
+  cityName?: string;
+  displayType?: string;
+  type?: string;
+  commentScore?: number | string;
+  cStar?: number | string;
+  price?: number | string;
+  minPrice?: number | string;
+}
+
+function clampLimit(raw: unknown, fallback = 15): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(Math.floor(parsed), 50));
+}
+
+function mapSearchResults(results: unknown[], limit: number) {
+  return results
+    .filter((item): item is CtripSearchResultItem => !!item && typeof item === 'object')
+    .slice(0, limit)
+    .map((item, index) => ({
+      rank: index + 1,
+      name: String(item.displayName || item.word || item.cityName || '').replace(/\s+/g, ' ').trim(),
+      type: String(item.displayType || item.type || '').replace(/\s+/g, ' ').trim(),
+      score: item.commentScore ?? item.cStar ?? '',
+      price: item.price ?? item.minPrice ?? '',
+      url: '',
+    }))
+    .filter((item) => item.name);
+}
 
 cli({
   site: 'ctrip',
   name: 'search',
-  description: '携程旅行搜索',
-  domain: 'www.ctrip.com',
-  strategy: Strategy.COOKIE,
+  description: '搜索携程目的地、景区和酒店联想结果',
+  strategy: Strategy.PUBLIC,
+  browser: false,
   args: [
     { name: 'query', required: true, positional: true, help: 'Search keyword (city or attraction)' },
     { name: 'limit', type: 'int', default: 15, help: 'Number of results' },
   ],
   columns: ['rank', 'name', 'type', 'score', 'price', 'url'],
-  func: async (page, kwargs) => {
-    const limit = kwargs.limit || 15;
-    await page.goto('https://www.ctrip.com');
-    await page.wait(2);
-    const data = await page.evaluate(`
-      (async () => {
-        const query = '${kwargs.query.replace(/'/g, "\\'")}';
-        const limit = ${limit};
+  func: async (_page, kwargs) => {
+    const query = String(kwargs.query || '').trim();
+    if (!query) {
+      throw new ArgumentError('Search keyword cannot be empty');
+    }
 
-        // Strategy 1: Suggestion API
-        try {
-          const suggestUrl = 'https://m.ctrip.com/restapi/h5api/searchapp/search?action=onekeyali&keyword=' + encodeURIComponent(query);
-          const resp = await fetch(suggestUrl, {credentials: 'include'});
-          if (resp.ok) {
-            const d = await resp.json();
-            const raw = d.data || d.result || d;
-            if (raw && typeof raw === 'object') {
-              // Flatten all result categories
-              const items = [];
-              for (const key of Object.keys(raw)) {
-                const list = Array.isArray(raw[key]) ? raw[key] : [];
-                for (const item of list) {
-                  if (items.length >= limit) break;
-                  items.push({
-                    rank: items.length + 1,
-                    name: item.word || item.name || item.title || '',
-                    type: item.type || item.tpName || key,
-                    score: item.score || '',
-                    price: item.price || item.minPrice || '',
-                    url: item.url || item.surl || '',
-                  });
-                }
-              }
-              if (items.length > 0) return items;
-            }
-          }
-        } catch(e) {}
+    const limit = clampLimit(kwargs.limit);
+    const response = await fetch('https://m.ctrip.com/restapi/soa2/21881/json/gaHotelSearchEngine', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        keyword: query,
+        searchType: 'D',
+        platform: 'online',
+        pageID: '102001',
+        head: {
+          Locale: 'zh-CN',
+          LocaleController: 'zh_cn',
+          Currency: 'CNY',
+          PageId: '102001',
+          clientID: 'opencli-ctrip-search',
+          group: 'ctrip',
+          Frontend: {
+            sessionID: 1,
+            pvid: 1,
+          },
+          HotelExtension: {
+            group: 'CTRIP',
+            WebpSupport: false,
+          },
+        },
+      }),
+    });
 
-        return {error: 'No results for: ' + query};
-      })()
-    `);
-    if (!Array.isArray(data)) return [];
-    return data;
+    if (!response.ok) {
+      throw new CliError(
+        'FETCH_ERROR',
+        `ctrip search failed with status ${response.status}`,
+        'Retry the command or verify ctrip.com is reachable',
+      );
+    }
+
+    const payload = await response.json();
+    const rawResults = Array.isArray(payload?.Response?.searchResults) ? payload.Response.searchResults : [];
+    const results = mapSearchResults(rawResults, limit);
+    if (!results.length) {
+      throw new EmptyResultError(
+        'ctrip search',
+        'Try a destination, scenic spot, or hotel keyword such as "苏州" or "朱家尖"',
+      );
+    }
+    return results;
   },
 });
+
+export const __test__ = {
+  clampLimit,
+  mapSearchResults,
+};

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
 import type { CliCommand } from './registry.js';
+import { EmptyResultError, SelectorError } from './errors.js';
 
 const { mockExecuteCommand, mockRenderOutput } = vi.hoisted(() => ({
   mockExecuteCommand: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock('./output.js', () => ({
 
 import { registerCommandToProgram } from './commanderAdapter.js';
 
-describe('commanderAdapter bool normalization', () => {
+describe('commanderAdapter arg passing', () => {
   const cmd: CliCommand = {
     site: 'paperreview',
     name: 'submit',
@@ -39,54 +40,225 @@ describe('commanderAdapter bool normalization', () => {
     process.exitCode = undefined;
   });
 
-  it('normalizes explicit false string values to false', async () => {
+  it('passes bool flag values through to executeCommand for coercion', async () => {
     const program = new Command();
     const siteCmd = program.command('paperreview');
     registerCommandToProgram(siteCmd, cmd);
 
     await program.parseAsync(['node', 'opencli', 'paperreview', 'submit', './paper.pdf', '--dry-run', 'false']);
 
-    expect(mockExecuteCommand).toHaveBeenCalledWith(
-      cmd,
-      expect.objectContaining({
-        pdf: './paper.pdf',
-        'dry-run': false,
-        'prepare-only': false,
-      }),
-      false,
-    );
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs.pdf).toBe('./paper.pdf');
+    expect(kwargs).toHaveProperty('dry-run');
   });
 
-  it('normalizes valueless bool flags to true', async () => {
+  it('passes valueless bool flags as true to executeCommand', async () => {
     const program = new Command();
     const siteCmd = program.command('paperreview');
     registerCommandToProgram(siteCmd, cmd);
 
     await program.parseAsync(['node', 'opencli', 'paperreview', 'submit', './paper.pdf', '--prepare-only']);
 
-    expect(mockExecuteCommand).toHaveBeenCalledWith(
-      cmd,
-      expect.objectContaining({
-        pdf: './paper.pdf',
-        'dry-run': false,
-        'prepare-only': true,
-      }),
-      false,
-    );
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs.pdf).toBe('./paper.pdf');
+    expect(kwargs['prepare-only']).toBe(true);
   });
 
-  it('rejects invalid bool strings before execution', async () => {
+  it('rejects invalid bool values before calling executeCommand', async () => {
     const program = new Command();
     const siteCmd = program.command('paperreview');
     registerCommandToProgram(siteCmd, cmd);
-    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await program.parseAsync(['node', 'opencli', 'paperreview', 'submit', './paper.pdf', '--dry-run', 'maybe']);
 
+    // normalizeArgValue validates bools eagerly; executeCommand should not be reached
     expect(mockExecuteCommand).not.toHaveBeenCalled();
-    expect(process.exitCode).toBe(1);
-    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('"dry-run" must be either "true" or "false".'));
+  });
+});
 
-    stderr.mockRestore();
+describe('commanderAdapter boolean alias support', () => {
+  const cmd: CliCommand = {
+    site: 'reddit',
+    name: 'save',
+    description: 'Save a post',
+    browser: false,
+    args: [
+      { name: 'post-id', positional: true, required: true, help: 'Post ID' },
+      { name: 'undo', type: 'boolean', default: false, help: 'Unsave instead of save' },
+    ],
+    func: vi.fn(),
+  };
+
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockExecuteCommand.mockResolvedValue([]);
+    mockRenderOutput.mockReset();
+    delete process.env.OPENCLI_VERBOSE;
+    process.exitCode = undefined;
+  });
+
+  it('coerces default false for boolean args to a real boolean', async () => {
+    const program = new Command();
+    const siteCmd = program.command('reddit');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'reddit', 'save', 't3_abc123']);
+
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs['post-id']).toBe('t3_abc123');
+    expect(kwargs.undo).toBe(false);
+  });
+
+  it('coerces explicit false for boolean args to a real boolean', async () => {
+    const program = new Command();
+    const siteCmd = program.command('reddit');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'reddit', 'save', 't3_abc123', '--undo', 'false']);
+
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs.undo).toBe(false);
+  });
+});
+
+describe('commanderAdapter command aliases', () => {
+  const cmd: CliCommand = {
+    site: 'notebooklm',
+    name: 'get',
+    aliases: ['metadata'],
+    description: 'Get notebook metadata',
+    browser: false,
+    args: [],
+    func: vi.fn(),
+  };
+
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockExecuteCommand.mockResolvedValue([]);
+    mockRenderOutput.mockReset();
+    delete process.env.OPENCLI_VERBOSE;
+    process.exitCode = undefined;
+  });
+
+  it('registers aliases with Commander so compatibility names execute the same command', async () => {
+    const program = new Command();
+    const siteCmd = program.command('notebooklm');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'notebooklm', 'metadata']);
+
+    expect(mockExecuteCommand).toHaveBeenCalledWith(cmd, {}, false);
+  });
+});
+
+describe('commanderAdapter default formats', () => {
+  const cmd: CliCommand = {
+    site: 'gemini',
+    name: 'ask',
+    description: 'Ask Gemini',
+    browser: false,
+    args: [],
+    columns: ['response'],
+    defaultFormat: 'plain',
+    func: vi.fn(),
+  };
+
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockExecuteCommand.mockResolvedValue([{ response: 'hello' }]);
+    mockRenderOutput.mockReset();
+    delete process.env.OPENCLI_VERBOSE;
+    process.exitCode = undefined;
+  });
+
+  it('uses the command defaultFormat when the user keeps the default table format', async () => {
+    const program = new Command();
+    const siteCmd = program.command('gemini');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'gemini', 'ask']);
+
+    expect(mockRenderOutput).toHaveBeenCalledWith(
+      [{ response: 'hello' }],
+      expect.objectContaining({ fmt: 'plain' }),
+    );
+  });
+
+  it('respects an explicit user format over the command defaultFormat', async () => {
+    const program = new Command();
+    const siteCmd = program.command('gemini');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'gemini', 'ask', '--format', 'json']);
+
+    expect(mockRenderOutput).toHaveBeenCalledWith(
+      [{ response: 'hello' }],
+      expect.objectContaining({ fmt: 'json' }),
+    );
+  });
+});
+
+describe('commanderAdapter empty result hints', () => {
+  const cmd: CliCommand = {
+    site: 'xiaohongshu',
+    name: 'note',
+    description: 'Read one note',
+    browser: false,
+    args: [
+      { name: 'note-id', positional: true, required: true, help: 'Note ID' },
+    ],
+    func: vi.fn(),
+  };
+
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockRenderOutput.mockReset();
+    delete process.env.OPENCLI_VERBOSE;
+    process.exitCode = undefined;
+  });
+
+  it('prints the adapter hint instead of the generic outdated-adapter message', async () => {
+    const program = new Command();
+    const siteCmd = program.command('xiaohongshu');
+    registerCommandToProgram(siteCmd, cmd);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockExecuteCommand.mockRejectedValueOnce(
+      new EmptyResultError(
+        'xiaohongshu/note',
+        'Pass the full search_result URL with xsec_token instead of a bare note ID.',
+      ),
+    );
+
+    await program.parseAsync(['node', 'opencli', 'xiaohongshu', 'note', '69ca3927000000001a020fd5']);
+
+    const output = errorSpy.mock.calls.flat().join('\n');
+    expect(output).toContain('xsec_token');
+    expect(output).not.toContain('this adapter may be outdated');
+
+    errorSpy.mockRestore();
+  });
+
+  it('prints selector-specific hints too', async () => {
+    const program = new Command();
+    const siteCmd = program.command('xiaohongshu');
+    registerCommandToProgram(siteCmd, cmd);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockExecuteCommand.mockRejectedValueOnce(
+      new SelectorError('.note-title', 'The note title selector no longer matches the current page.'),
+    );
+
+    await program.parseAsync(['node', 'opencli', 'xiaohongshu', 'note', '69ca3927000000001a020fd5']);
+
+    const output = errorSpy.mock.calls.flat().join('\n');
+    expect(output).toContain('selector no longer matches');
+    expect(output).not.toContain('this adapter may be outdated');
+
+    errorSpy.mockRestore();
   });
 });

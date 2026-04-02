@@ -10,7 +10,7 @@
  *   --mode raw: every caption segment as-is with precise timestamps
  */
 import { cli, Strategy } from '../../registry.js';
-import { parseVideoId } from './utils.js';
+import { parseVideoId, prepareYoutubeApiPage } from './utils.js';
 import {
   groupTranscriptSegments,
   formatGroupedTranscript,
@@ -34,9 +34,7 @@ cli({
   // so we let the renderer auto-detect columns from the data keys.
   func: async (page, kwargs) => {
     const videoId = parseVideoId(kwargs.url);
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    await page.goto(videoUrl);
-    await page.wait(3);
+    await prepareYoutubeApiPage(page);
 
     const lang = kwargs.lang || '';
     const mode = kwargs.mode || 'grouped';

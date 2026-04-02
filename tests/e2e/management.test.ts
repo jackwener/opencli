@@ -101,6 +101,6 @@ describe('management commands E2E', () => {
   // ── unknown command ──
   it('unknown command shows error', async () => {
     const { stderr, code } = await runCli(['nonexistent-command-xyz']);
-    expect(code).toBe(1);
+    expect(code).toBe(2);
   });
 });

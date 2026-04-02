@@ -1,14 +1,68 @@
 const DAEMON_PORT = 19825;
 const DAEMON_HOST = "localhost";
 const DAEMON_WS_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}/ext`;
+const DAEMON_PING_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}/ping`;
 const WS_RECONNECT_BASE_DELAY = 2e3;
-const WS_RECONNECT_MAX_DELAY = 6e4;
+const WS_RECONNECT_MAX_DELAY = 5e3;
 
 const attached = /* @__PURE__ */ new Set();
 const BLANK_PAGE$1 = "data:text/html,<html></html>";
+const FOREIGN_EXTENSION_URL_PREFIX = "chrome-extension://";
+const ATTACH_RECOVERY_DELAY_MS = 120;
 function isDebuggableUrl$1(url) {
   if (!url) return true;
   return url.startsWith("http://") || url.startsWith("https://") || url === BLANK_PAGE$1;
+}
+async function removeForeignExtensionEmbeds(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab.url || !tab.url.startsWith("http://") && !tab.url.startsWith("https://")) {
+    return { removed: 0 };
+  }
+  if (!chrome.scripting?.executeScript) return { removed: 0 };
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      args: [`${FOREIGN_EXTENSION_URL_PREFIX}${chrome.runtime.id}/`],
+      func: (ownExtensionPrefix) => {
+        const extensionPrefix = "chrome-extension://";
+        const selectors = ["iframe", "frame", "embed", "object"];
+        const visitedRoots = /* @__PURE__ */ new Set();
+        const roots = [document];
+        let removed = 0;
+        while (roots.length > 0) {
+          const root = roots.pop();
+          if (!root || visitedRoots.has(root)) continue;
+          visitedRoots.add(root);
+          for (const selector of selectors) {
+            const nodes = root.querySelectorAll(selector);
+            for (const node of nodes) {
+              const src = node.getAttribute("src") || node.getAttribute("data") || "";
+              if (!src.startsWith(extensionPrefix) || src.startsWith(ownExtensionPrefix)) continue;
+              node.remove();
+              removed++;
+            }
+          }
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+          let current = walker.nextNode();
+          while (current) {
+            const element = current;
+            if (element.shadowRoot) roots.push(element.shadowRoot);
+            current = walker.nextNode();
+          }
+        }
+        return { removed };
+      }
+    });
+    return result?.result ?? { removed: 0 };
+  } catch {
+    return { removed: 0 };
+  }
+}
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+async function tryAttach(tabId) {
+  await chrome.debugger.attach({ tabId }, "1.3");
 }
 async function ensureAttached(tabId) {
   try {
@@ -34,17 +88,28 @@ async function ensureAttached(tabId) {
     }
   }
   try {
-    await chrome.debugger.attach({ tabId }, "1.3");
+    await tryAttach(tabId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const hint = msg.includes("chrome-extension://") ? ". Tip: another Chrome extension may be interfering — try disabling other extensions" : "";
-    if (msg.includes("Another debugger is already attached")) {
+    if (msg.includes("chrome-extension://")) {
+      const recoveryCleanup = await removeForeignExtensionEmbeds(tabId);
+      if (recoveryCleanup.removed > 0) {
+        console.warn(`[opencli] Removed ${recoveryCleanup.removed} foreign extension frame(s) after attach failure on tab ${tabId}`);
+      }
+      await delay(ATTACH_RECOVERY_DELAY_MS);
+      try {
+        await tryAttach(tabId);
+      } catch {
+        throw new Error(`attach failed: ${msg}${hint}`);
+      }
+    } else if (msg.includes("Another debugger is already attached")) {
       try {
         await chrome.debugger.detach({ tabId });
       } catch {
       }
       try {
-        await chrome.debugger.attach({ tabId }, "1.3");
+        await tryAttach(tabId);
       } catch {
         throw new Error(`attach failed: ${msg}${hint}`);
       }
@@ -55,6 +120,11 @@ async function ensureAttached(tabId) {
   attached.add(tabId);
   try {
     await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
+  } catch {
+  }
+  try {
+    await chrome.debugger.sendCommand({ tabId }, "Debugger.enable");
+    await chrome.debugger.sendCommand({ tabId }, "Debugger.setBreakpointsActive", { active: false });
   } catch {
   }
 }
@@ -100,6 +170,23 @@ async function screenshot(tabId, options = {}) {
       });
     }
   }
+}
+async function setFileInputFiles(tabId, files, selector) {
+  await ensureAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, "DOM.enable");
+  const doc = await chrome.debugger.sendCommand({ tabId }, "DOM.getDocument");
+  const query = selector || 'input[type="file"]';
+  const result = await chrome.debugger.sendCommand({ tabId }, "DOM.querySelector", {
+    nodeId: doc.root.nodeId,
+    selector: query
+  });
+  if (!result.nodeId) {
+    throw new Error(`No element found matching selector: ${query}`);
+  }
+  await chrome.debugger.sendCommand({ tabId }, "DOM.setFileInputFiles", {
+    files,
+    nodeId: result.nodeId
+  });
 }
 async function detach(tabId) {
   if (!attached.has(tabId)) return;
@@ -149,8 +236,14 @@ console.error = (...args) => {
   _origError(...args);
   forwardLog("error", args);
 };
-function connect() {
+async function connect() {
   if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
+  try {
+    const res = await fetch(DAEMON_PING_URL, { signal: AbortSignal.timeout(1e3) });
+    if (!res.ok) return;
+  } catch {
+    return;
+  }
   try {
     ws = new WebSocket(DAEMON_WS_URL);
   } catch {
@@ -164,6 +257,7 @@ function connect() {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
+    ws?.send(JSON.stringify({ type: "hello", version: chrome.runtime.getManifest().version }));
   };
   ws.onmessage = async (event) => {
     try {
@@ -191,11 +285,11 @@ function scheduleReconnect() {
   const delay = Math.min(WS_RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts - 1), WS_RECONNECT_MAX_DELAY);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    connect();
+    void connect();
   }, delay);
 }
 const automationSessions = /* @__PURE__ */ new Map();
-const WINDOW_IDLE_TIMEOUT = 12e4;
+const WINDOW_IDLE_TIMEOUT = 3e4;
 function getWorkspaceKey(workspace) {
   return workspace?.trim() || "default";
 }
@@ -258,7 +352,7 @@ function initialize() {
   initialized = true;
   chrome.alarms.create("keepalive", { periodInMinutes: 0.4 });
   registerListeners();
-  connect();
+  void connect();
   console.log("[opencli] OpenCLI extension initialized");
 }
 chrome.runtime.onInstalled.addListener(() => {
@@ -268,7 +362,7 @@ chrome.runtime.onStartup.addListener(() => {
   initialize();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "keepalive") connect();
+  if (alarm.name === "keepalive") void connect();
 });
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "getStatus") {
@@ -298,6 +392,8 @@ async function handleCommand(cmd) {
         return await handleCloseWindow(cmd, workspace);
       case "sessions":
         return await handleSessions(cmd);
+      case "set-file-input":
+        return await handleSetFileInput(cmd, workspace);
       default:
         return { id: cmd.id, ok: false, error: `Unknown action: ${cmd.action}` };
     }
@@ -338,9 +434,10 @@ async function resolveTabId(tabId, workspace) {
     try {
       const tab = await chrome.tabs.get(tabId);
       const session = automationSessions.get(workspace);
-      if (isDebuggableUrl(tab.url) && session && tab.windowId === session.windowId) return tabId;
-      if (session && tab.windowId !== session.windowId) {
-        console.warn(`[opencli] Tab ${tabId} belongs to window ${tab.windowId}, not automation window ${session.windowId}, re-resolving`);
+      const matchesSession = session ? tab.windowId === session.windowId : false;
+      if (isDebuggableUrl(tab.url) && matchesSession) return tabId;
+      if (session && !matchesSession) {
+        console.warn(`[opencli] Tab ${tabId} is not bound to workspace ${workspace}, re-resolving`);
       } else if (!isDebuggableUrl(tab.url)) {
         console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
       }
@@ -559,6 +656,18 @@ async function handleCloseWindow(cmd, workspace) {
     automationSessions.delete(workspace);
   }
   return { id: cmd.id, ok: true, data: { closed: true } };
+}
+async function handleSetFileInput(cmd, workspace) {
+  if (!cmd.files || !Array.isArray(cmd.files) || cmd.files.length === 0) {
+    return { id: cmd.id, ok: false, error: "Missing or empty files array" };
+  }
+  const tabId = await resolveTabId(cmd.tabId, workspace);
+  try {
+    await setFileInputFiles(tabId, cmd.files, cmd.selector);
+    return { id: cmd.id, ok: true, data: { count: cmd.files.length } };
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 async function handleSessions(cmd) {
   const now = Date.now();

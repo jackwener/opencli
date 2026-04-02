@@ -39,8 +39,12 @@ cli({
       throw new CommandExecutionError(`获取视频播放信息失败: ${payload.message} (${payload.code})`);
     }
 
+    const needLoginSubtitle = payload.data?.need_login_subtitle === true;
     const subtitles = payload.data?.subtitle?.subtitles || [];
     if (subtitles.length === 0) {
+      if (needLoginSubtitle) {
+        throw new AuthRequiredError('bilibili.com', 'Bilibili subtitles are hidden behind login for this video. Please log in to bilibili.com in Chrome and retry.');
+      }
       throw new EmptyResultError('bilibili subtitle', '此视频没有发现外挂或智能字幕。');
     }
 

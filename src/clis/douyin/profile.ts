@@ -14,7 +14,14 @@ cli({
   func: async (page: IPage, _kwargs) => {
     const url = 'https://creator.douyin.com/web/api/media/user/info/?aid=1128';
     const res = (await browserFetch(page, 'GET', url)) as {
-      user_info: {
+      user_info?: {
+        uid: string;
+        nickname: string;
+        follower_count: number;
+        following_count: number;
+        aweme_count: number;
+      };
+      user?: {
         uid: string;
         nickname: string;
         follower_count: number;
@@ -22,7 +29,7 @@ cli({
         aweme_count: number;
       };
     };
-    const u = res.user_info;
+    const u = res.user_info ?? res.user;
     if (!u) throw new CommandExecutionError('用户信息获取失败，请确认已登录 creator.douyin.com');
     return [
       {

@@ -6,14 +6,15 @@
  * and returns it in Anthropic format.
  *
  * Usage:
- *   OPENCLI_CDP_ENDPOINT=http://127.0.0.1:9224 opencli antigravity serve --port 8082
+ *   opencli antigravity serve --port 8082
  *   ANTHROPIC_BASE_URL=http://localhost:8082 claude
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { CDPBridge } from '../../browser/cdp.js';
 import type { IPage } from '../../types.js';
-import { getErrorMessage } from '../../errors.js';
+import { resolveElectronEndpoint } from '../../launcher.js';
+import { EXIT_CODES, getErrorMessage } from '../../errors.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -436,13 +437,7 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
       }
     }
 
-    const endpoint = process.env.OPENCLI_CDP_ENDPOINT;
-    if (!endpoint) {
-      throw new Error(
-        'OPENCLI_CDP_ENDPOINT is not set.\n' +
-        'Usage: OPENCLI_CDP_ENDPOINT=http://127.0.0.1:9224 opencli antigravity serve'
-      );
-    }
+    const endpoint = await resolveElectronEndpoint('antigravity');
 
     // Note: Antigravity chat panel lives inside editor windows, not in Launchpad.
     // If multiple editor windows are open, set OPENCLI_CDP_TARGET to the window title.
@@ -461,7 +456,7 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
     console.error(`[serve] Connecting via CDP (target pattern: "${process.env.OPENCLI_CDP_TARGET}")...`);
     cdp = new CDPBridge();
     try {
-      page = await cdp.connect({ timeout: 15_000 });
+      page = await cdp.connect({ timeout: 15_000, cdpEndpoint: endpoint });
     } catch (err: unknown) {
       cdp = null;
       const errMsg = getErrorMessage(err);
@@ -471,7 +466,7 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
         isRefused
           ? `Cannot connect to Antigravity at ${endpoint}.\n` +
             '  1. Make sure Antigravity is running\n' +
-            '  2. Launch with: --remote-debugging-port=9224'
+            '  2. Launch with: --remote-debugging-port=9234'
           : `CDP connection failed: ${errMsg}`
       );
     }
@@ -594,7 +589,7 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
     console.error('\n[serve] Shutting down...');
     cdp?.close().catch(() => {});
     server.close();
-    process.exit(0);
+    process.exit(EXIT_CODES.SUCCESS);
   };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);

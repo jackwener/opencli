@@ -15,7 +15,8 @@ import { PKG_VERSION } from './version.js';
 import { printCompletionScript } from './completion.js';
 import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
 import { registerAllCommands } from './commanderAdapter.js';
-import { getErrorMessage } from './errors.js';
+import { EXIT_CODES, getErrorMessage } from './errors.js';
+import { daemonStatus, daemonStop, daemonRestart } from './commands/daemon.js';
 
 export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
   const program = new Command();
@@ -36,7 +37,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .option('--json', 'JSON output (deprecated)')
     .action((opts) => {
       const registry = getRegistry();
-      const commands = [...registry.values()].sort((a, b) => fullName(a).localeCompare(fullName(b)));
+      const commands = [...new Set(registry.values())].sort((a, b) => fullName(a).localeCompare(fullName(b)));
       const fmt = opts.json && opts.format === 'table' ? 'json' : opts.format;
       const isStructured = fmt === 'json' || fmt === 'yaml';
 
@@ -47,6 +48,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
               command: fullName(c),
               site: c.site,
               name: c.name,
+              aliases: c.aliases?.join(', ') ?? '',
               description: c.description,
               strategy: strategyLabel(c),
               browser: !!c.browser,
@@ -54,7 +56,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
             }));
         renderOutput(rows, {
           fmt,
-          columns: ['command', 'site', 'name', 'description', 'strategy', 'browser', 'args',
+          columns: ['command', 'site', 'name', 'aliases', 'description', 'strategy', 'browser', 'args',
                      ...(isStructured ? ['columns', 'domain'] : [])],
           title: 'opencli/list',
           source: 'opencli list',
@@ -76,10 +78,12 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       for (const [site, cmds] of sites) {
         console.log(chalk.bold.cyan(`  ${site}`));
         for (const cmd of cmds) {
-          const tag = strategyLabel(cmd) === 'public'
+          const label = strategyLabel(cmd);
+          const tag = label === 'public'
             ? chalk.green('[public]')
-            : chalk.yellow(`[${strategyLabel(cmd)}]`);
-          console.log(`    ${cmd.name} ${tag}${cmd.description ? chalk.dim(` — ${cmd.description}`) : ''}`);
+            : chalk.yellow(`[${label}]`);
+          const aliases = cmd.aliases?.length ? chalk.dim(` (aliases: ${cmd.aliases.join(', ')})`) : '';
+          console.log(`    ${cmd.name} ${tag}${aliases}${cmd.description ? chalk.dim(` — ${cmd.description}`) : ''}`);
         }
         console.log();
       }
@@ -119,7 +123,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       const { verifyClis, renderVerifyReport } = await import('./verify.js');
       const r = await verifyClis({ builtinClis: BUILTIN_CLIS, userClis: USER_CLIS, target, smoke: opts.smoke });
       console.log(renderVerifyReport(r));
-      process.exitCode = r.ok ? 0 : 1;
+      process.exitCode = r.ok ? EXIT_CODES.SUCCESS : EXIT_CODES.GENERIC_ERROR;
     });
 
   // ── Built-in: explore / synthesize / generate / cascade ───────────────────
@@ -179,7 +183,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         workspace,
       });
       console.log(renderGenerateSummary(r));
-      process.exitCode = r.ok ? 0 : 1;
+      process.exitCode = r.ok ? EXIT_CODES.SUCCESS : EXIT_CODES.GENERIC_ERROR;
     });
 
   // ── Built-in: record ─────────────────────────────────────────────────────
@@ -203,7 +207,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         timeoutMs: parseInt(opts.timeout, 10),
       });
       console.log(renderRecordSummary(result));
-      process.exitCode = result.candidateCount > 0 ? 0 : 1;
+      process.exitCode = result.candidateCount > 0 ? EXIT_CODES.SUCCESS : EXIT_CODES.EMPTY_RESULT;
     });
 
   program
@@ -252,18 +256,26 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
 
   pluginCmd
     .command('install')
-    .description('Install a plugin from GitHub')
+    .description('Install a plugin from a git repository')
     .argument('<source>', 'Plugin source (e.g. github:user/repo)')
     .action(async (source: string) => {
       const { installPlugin } = await import('./plugin.js');
       const { discoverPlugins } = await import('./discovery.js');
       try {
-        const name = installPlugin(source);
+        const result = installPlugin(source);
         await discoverPlugins();
-        console.log(chalk.green(`✅ Plugin "${name}" installed successfully. Commands are ready to use.`));
+        if (Array.isArray(result)) {
+          if (result.length === 0) {
+            console.log(chalk.yellow('No plugins were installed (all skipped or incompatible).'));
+          } else {
+            console.log(chalk.green(`\u2705 Installed ${result.length} plugin(s) from monorepo: ${result.join(', ')}`));
+          }
+        } else {
+          console.log(chalk.green(`\u2705 Plugin "${result}" installed successfully. Commands are ready to use.`));
+        }
       } catch (err) {
         console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
-        process.exitCode = 1;
+        process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
     });
 
@@ -278,7 +290,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         console.log(chalk.green(`✅ Plugin "${name}" uninstalled.`));
       } catch (err) {
         console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
-        process.exitCode = 1;
+        process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
     });
 
@@ -290,12 +302,12 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .action(async (name: string | undefined, opts: { all?: boolean }) => {
       if (!name && !opts.all) {
         console.error(chalk.red('Error: Please specify a plugin name or use the --all flag.'));
-        process.exitCode = 1;
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
       if (name && opts.all) {
         console.error(chalk.red('Error: Cannot specify both a plugin name and --all.'));
-        process.exitCode = 1;
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
 
@@ -326,7 +338,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         console.log();
         if (hasErrors) {
           console.error(chalk.red('Completed with some errors.'));
-          process.exitCode = 1;
+          process.exitCode = EXIT_CODES.GENERIC_ERROR;
         } else {
           console.log(chalk.green('✅ All plugins updated successfully.'));
         }
@@ -339,7 +351,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         console.log(chalk.green(`✅ Plugin "${name}" updated successfully.`));
       } catch (err) {
         console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
-        process.exitCode = 1;
+        process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
     });
 
@@ -368,16 +380,85 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       console.log();
       console.log(chalk.bold('  Installed plugins'));
       console.log();
+
+      // Group by monorepo
+      const standalone = plugins.filter((p) => !p.monorepoName);
+      const monoGroups = new Map<string, typeof plugins>();
       for (const p of plugins) {
+        if (!p.monorepoName) continue;
+        const g = monoGroups.get(p.monorepoName) ?? [];
+        g.push(p);
+        monoGroups.set(p.monorepoName, g);
+      }
+
+      for (const p of standalone) {
         const version = p.version ? chalk.green(` @${p.version}`) : '';
+        const desc = p.description ? chalk.dim(` — ${p.description}`) : '';
         const cmds = p.commands.length > 0 ? chalk.dim(` (${p.commands.join(', ')})`) : '';
         const src = p.source ? chalk.dim(` ← ${p.source}`) : '';
-        console.log(`  ${chalk.cyan(p.name)}${version}${cmds}${src}`);
+        console.log(`  ${chalk.cyan(p.name)}${version}${desc}${cmds}${src}`);
       }
+
+      for (const [mono, group] of monoGroups) {
+        console.log();
+        console.log(chalk.bold.magenta(`  📦 ${mono}`) + chalk.dim(' (monorepo)'));
+        for (const p of group) {
+          const version = p.version ? chalk.green(` @${p.version}`) : '';
+          const desc = p.description ? chalk.dim(` — ${p.description}`) : '';
+          const cmds = p.commands.length > 0 ? chalk.dim(` (${p.commands.join(', ')})`) : '';
+          console.log(`    ${chalk.cyan(p.name)}${version}${desc}${cmds}`);
+        }
+      }
+
       console.log();
       console.log(chalk.dim(`  ${plugins.length} plugin(s) installed`));
       console.log();
     });
+
+  pluginCmd
+    .command('create')
+    .description('Create a new plugin scaffold')
+    .argument('<name>', 'Plugin name (lowercase, hyphens allowed)')
+    .option('-d, --dir <path>', 'Output directory (default: ./<name>)')
+    .option('--description <text>', 'Plugin description')
+    .action(async (name: string, opts: { dir?: string; description?: string }) => {
+      const { createPluginScaffold } = await import('./plugin-scaffold.js');
+      try {
+        const result = createPluginScaffold(name, {
+          dir: opts.dir,
+          description: opts.description,
+        });
+        console.log(chalk.green(`✅ Plugin scaffold created at ${result.dir}`));
+        console.log();
+        console.log(chalk.bold('  Files created:'));
+        for (const f of result.files) {
+          console.log(`    ${chalk.cyan(f)}`);
+        }
+        console.log();
+        console.log(chalk.dim('  Next steps:'));
+        console.log(chalk.dim(`    cd ${result.dir}`));
+        console.log(chalk.dim(`    opencli plugin install file://${result.dir}`));
+        console.log(chalk.dim(`    opencli ${name} hello`));
+      } catch (err) {
+        console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
+        process.exitCode = EXIT_CODES.GENERIC_ERROR;
+      }
+    });
+
+  // ── Built-in: daemon ──────────────────────────────────────────────────────
+  const daemonCmd = program.command('daemon').description('Manage the opencli daemon');
+  daemonCmd
+    .command('status')
+    .description('Show daemon status')
+    .action(async () => { await daemonStatus(); });
+  daemonCmd
+    .command('stop')
+    .description('Stop the daemon')
+    .action(async () => { await daemonStop(); });
+  daemonCmd
+    .command('restart')
+    .description('Restart the daemon')
+    .action(async () => { await daemonRestart(); });
 
   // ── External CLIs ─────────────────────────────────────────────────────────
 
@@ -391,7 +472,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       const ext = externalClis.find(e => e.name === name);
       if (!ext) {
         console.error(chalk.red(`External CLI '${name}' not found in registry.`));
-        process.exitCode = 1;
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
       installExternalCli(ext);
@@ -417,7 +498,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       executeExternalCli(name, args, externalClis);
     } catch (err) {
       console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
-      process.exitCode = 1;
+      process.exitCode = EXIT_CODES.GENERIC_ERROR;
     }
   }
 
@@ -462,7 +543,7 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       console.error(chalk.dim(`  Tip: '${binary}' exists on your PATH. Use 'opencli register ${binary}' to add it as an external CLI.`));
     }
     program.outputHelp();
-    process.exitCode = 1;
+    process.exitCode = EXIT_CODES.USAGE_ERROR;
   });
 
   program.parse();

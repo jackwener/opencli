@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { formatDate, fetchWebApi } from './utils.js';
+import { buildWebShelfEntries, formatDate, fetchWebApi } from './utils.js';
 
 describe('formatDate', () => {
   it('formats a typical Unix timestamp in UTC+8', () => {
@@ -69,5 +69,85 @@ describe('fetchWebApi', () => {
     }));
 
     await expect(fetchWebApi('/search/global')).rejects.toThrow('Invalid JSON');
+  });
+});
+
+describe('buildWebShelfEntries', () => {
+  it('keeps mixed shelf item reader urls aligned when shelf indexes include non-book roles', () => {
+    const result = buildWebShelfEntries(
+      {
+        cacheFound: true,
+        rawBooks: [
+          { bookId: 'MP_WXS_1', title: '公众号文章一', author: '作者甲' },
+          { bookId: 'BOOK_2', title: '普通书二', author: '作者乙' },
+          { bookId: 'MP_WXS_3', title: '公众号文章三', author: '作者丙' },
+        ],
+        shelfIndexes: [
+          { bookId: 'MP_WXS_1', idx: 0, role: 'mp' },
+          { bookId: 'BOOK_2', idx: 1, role: 'book' },
+          { bookId: 'MP_WXS_3', idx: 2, role: 'mp' },
+        ],
+      },
+      [
+        'https://weread.qq.com/web/reader/mp1',
+        'https://weread.qq.com/web/reader/book2',
+        'https://weread.qq.com/web/reader/mp3',
+      ],
+    );
+
+    expect(result).toEqual([
+      {
+        bookId: 'MP_WXS_1',
+        title: '公众号文章一',
+        author: '作者甲',
+        readerUrl: 'https://weread.qq.com/web/reader/mp1',
+      },
+      {
+        bookId: 'BOOK_2',
+        title: '普通书二',
+        author: '作者乙',
+        readerUrl: 'https://weread.qq.com/web/reader/book2',
+      },
+      {
+        bookId: 'MP_WXS_3',
+        title: '公众号文章三',
+        author: '作者丙',
+        readerUrl: 'https://weread.qq.com/web/reader/mp3',
+      },
+    ]);
+  });
+
+  it('falls back to raw cache order when shelf indexes are incomplete', () => {
+    const result = buildWebShelfEntries(
+      {
+        cacheFound: true,
+        rawBooks: [
+          { bookId: 'BOOK_1', title: '第一本', author: '作者甲' },
+          { bookId: 'BOOK_2', title: '第二本', author: '作者乙' },
+        ],
+        shelfIndexes: [
+          { bookId: 'BOOK_2', idx: 0, role: 'book' },
+        ],
+      },
+      [
+        'https://weread.qq.com/web/reader/book1',
+        'https://weread.qq.com/web/reader/book2',
+      ],
+    );
+
+    expect(result).toEqual([
+      {
+        bookId: 'BOOK_1',
+        title: '第一本',
+        author: '作者甲',
+        readerUrl: 'https://weread.qq.com/web/reader/book1',
+      },
+      {
+        bookId: 'BOOK_2',
+        title: '第二本',
+        author: '作者乙',
+        readerUrl: 'https://weread.qq.com/web/reader/book2',
+      },
+    ]);
   });
 });

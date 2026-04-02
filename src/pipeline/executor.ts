@@ -7,6 +7,8 @@ import type { IPage } from '../types.js';
 import { getStep, type StepHandler } from './registry.js';
 import { log } from '../logger.js';
 import { ConfigError } from '../errors.js';
+import { BROWSER_ONLY_STEPS } from '../capabilityRouting.js';
+import { isTransientBrowserError } from '../browser/errors.js';
 
 export interface PipelineContext {
   args?: Record<string, unknown>;
@@ -14,9 +16,6 @@ export interface PipelineContext {
   /** Max retry attempts per step (default: 2 for browser steps, 0 for others) */
   stepRetries?: number;
 }
-
-/** Steps that interact with the browser and may fail transiently */
-const BROWSER_STEPS = new Set(['navigate', 'evaluate', 'click', 'type', 'press', 'wait', 'snapshot']);
 
 export async function executePipeline(
   page: IPage | null,
@@ -50,8 +49,8 @@ export async function executePipeline(
     }
   } catch (err) {
     // Attempt cleanup: close automation window on pipeline failure
-    if (page && typeof (page as unknown as Record<string, unknown>).closeWindow === 'function') {
-      try { await (page as unknown as { closeWindow: () => Promise<void> }).closeWindow(); } catch { /* ignore */ }
+    if (page?.closeWindow) {
+      try { await page.closeWindow(); } catch { /* ignore */ }
     }
     throw err;
   }
@@ -67,7 +66,7 @@ async function executeStepWithRetry(
   op: string,
   configRetries?: number,
 ): Promise<unknown> {
-  const maxRetries = configRetries ?? (BROWSER_STEPS.has(op) ? 2 : 0);
+  const maxRetries = configRetries ?? (BROWSER_ONLY_STEPS.has(op) ? 2 : 0);
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -75,13 +74,7 @@ async function executeStepWithRetry(
     } catch (err) {
       if (attempt >= maxRetries) throw err;
       // Only retry on transient browser errors
-      const msg = err instanceof Error ? err.message : '';
-      const isTransient = msg.includes('Extension disconnected')
-        || msg.includes('attach failed')
-        || msg.includes('no longer exists')
-        || msg.includes('CDP connection')
-        || msg.includes('Daemon command failed');
-      if (!isTransient) throw err;
+      if (!isTransientBrowserError(err)) throw err;
       // Brief delay before retry
       await new Promise(resolve => setTimeout(resolve, 1000));
     }

@@ -1,6 +1,9 @@
 import { CommandExecutionError } from '../../errors.js';
 import type { IPage } from '../../types.js';
 
+const FEED_POST_LINK_SELECTOR = 'a[href*="/home/post/"], a[href*="/p/"]';
+const ARCHIVE_POST_LINK_SELECTOR = 'a[href*="/p/"]';
+
 export function buildSubstackBrowseUrl(category?: string): string {
   if (!category || category === 'all') return 'https://substack.com/';
   const slug = category === 'tech' ? 'technology' : category;
@@ -10,7 +13,7 @@ export function buildSubstackBrowseUrl(category?: string): string {
 export async function loadSubstackFeed(page: IPage, url: string, limit: number): Promise<any[]> {
   if (!page) throw new CommandExecutionError('Browser session required for substack feed');
   await page.goto(url);
-  await page.wait(5);
+  await page.wait({ selector: FEED_POST_LINK_SELECTOR, timeout: 5 });
   const data = await page.evaluate(`
     (async () => {
       await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -79,7 +82,7 @@ export async function loadSubstackFeed(page: IPage, url: string, limit: number):
 export async function loadSubstackArchive(page: IPage, baseUrl: string, limit: number): Promise<any[]> {
   if (!page) throw new CommandExecutionError('Browser session required for substack archive');
   await page.goto(`${baseUrl}/archive`);
-  await page.wait(5);
+  await page.wait({ selector: ARCHIVE_POST_LINK_SELECTOR, timeout: 5 });
   const data = await page.evaluate(`
     (async () => {
       await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -131,3 +134,8 @@ export async function loadSubstackArchive(page: IPage, baseUrl: string, limit: n
 
   return Array.isArray(data) ? data : [];
 }
+
+export const __test__ = {
+  FEED_POST_LINK_SELECTOR,
+  ARCHIVE_POST_LINK_SELECTOR,
+};

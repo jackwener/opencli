@@ -1,8 +1,7 @@
 /**
- * opencli doctor — diagnose and fix browser connectivity.
+ * opencli doctor — diagnose browser connectivity.
  *
- * Simplified for the daemon-based architecture. No more token management,
- * MCP path discovery, or config file scanning.
+ * Simplified for the daemon-based architecture.
  */
 
 import chalk from 'chalk';
@@ -14,7 +13,6 @@ import { getErrorMessage } from './errors.js';
 import { getRuntimeLabel } from './runtime-detect.js';
 
 export type DoctorOptions = {
-  fix?: boolean;
   yes?: boolean;
   live?: boolean;
   sessions?: boolean;
@@ -31,6 +29,7 @@ export type DoctorReport = {
   cliVersion?: string;
   daemonRunning: boolean;
   extensionConnected: boolean;
+  extensionVersion?: string;
   connectivity?: ConnectivityResult;
   sessions?: Array<{ workspace: string; windowId: number; tabCount: number; idleMsRemaining: number }>;
   issues: string[];
@@ -42,11 +41,11 @@ export type DoctorReport = {
 export async function checkConnectivity(opts?: { timeout?: number }): Promise<ConnectivityResult> {
   const start = Date.now();
   try {
-    const mcp = new BrowserBridge();
-    const page = await mcp.connect({ timeout: opts?.timeout ?? 8 });
+    const bridge = new BrowserBridge();
+    const page = await bridge.connect({ timeout: opts?.timeout ?? 8 });
     // Try a simple eval to verify end-to-end connectivity
     await page.evaluate('1 + 1');
-    await mcp.close();
+    await bridge.close();
     return { ok: true, durationMs: Date.now() - start };
   } catch (err) {
     return { ok: false, error: getErrorMessage(err), durationMs: Date.now() - start };
@@ -58,9 +57,9 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
   let initialStatus = await checkDaemonStatus();
   if (!initialStatus.running) {
     try {
-      const mcp = new BrowserBridge();
-      await mcp.connect({ timeout: 5 });
-      await mcp.close();
+      const bridge = new BrowserBridge();
+      await bridge.connect({ timeout: 5 });
+      await bridge.close();
     } catch {
       // Auto-start failed; we'll report it below.
     }
@@ -86,7 +85,7 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
     issues.push(
       'Daemon is running but the Chrome extension is not connected.\n' +
       'Please install the opencli Browser Bridge extension:\n' +
-      '  1. Download from GitHub Releases\n' +
+      '  1. Download from https://github.com/jackwener/opencli/releases\n' +
       '  2. Open chrome://extensions/ → Enable Developer Mode\n' +
       '  3. Click "Load unpacked" → select the extension folder',
     );
@@ -95,10 +94,22 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
     issues.push(`Browser connectivity test failed: ${connectivity.error ?? 'unknown'}`);
   }
 
+  if (status.extensionVersion && opts.cliVersion) {
+    const extMajor = status.extensionVersion.split('.')[0];
+    const cliMajor = opts.cliVersion.split('.')[0];
+    if (extMajor !== cliMajor) {
+      issues.push(
+        `Extension major version mismatch: extension v${status.extensionVersion} ≠ CLI v${opts.cliVersion}\n` +
+        '  Download the latest extension from: https://github.com/jackwener/opencli/releases',
+      );
+    }
+  }
+
   return {
     cliVersion: opts.cliVersion,
     daemonRunning: status.running,
     extensionConnected: status.extensionConnected,
+    extensionVersion: status.extensionVersion,
     connectivity,
     sessions,
     issues,
@@ -114,7 +125,8 @@ export function renderBrowserDoctorReport(report: DoctorReport): string {
 
   // Extension status
   const extIcon = report.extensionConnected ? chalk.green('[OK]') : chalk.yellow('[MISSING]');
-  lines.push(`${extIcon} Extension: ${report.extensionConnected ? 'connected' : 'not connected'}`);
+  const extVersion = report.extensionVersion ? chalk.dim(` (v${report.extensionVersion})`) : '';
+  lines.push(`${extIcon} Extension: ${report.extensionConnected ? 'connected' : 'not connected'}${extVersion}`);
 
   // Connectivity
   if (report.connectivity) {

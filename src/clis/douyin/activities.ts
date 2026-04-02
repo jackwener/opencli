@@ -12,12 +12,21 @@ cli({
   func: async (page, _kwargs) => {
     const url = 'https://creator.douyin.com/web/api/media/activity/get/?aid=1128';
     const res = await browserFetch(page, 'GET', url) as {
-      activity_list: Array<{ activity_id: string; title: string; end_time: number }>
+      activity_list: Array<{
+        activity_id: string;
+        title?: string;
+        activity_name?: string;
+        end_time?: number;
+        show_end_time?: string;
+      }>
     };
     return (res.activity_list ?? []).map(a => ({
       activity_id: a.activity_id,
-      title: a.title,
-      end_time: new Date(a.end_time * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Tokyo' }),
+      title: a.title ?? a.activity_name ?? '',
+      end_time:
+        typeof a.end_time === 'number'
+          ? new Date(a.end_time * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Tokyo' })
+          : (a.show_end_time ?? ''),
     }));
   },
 });

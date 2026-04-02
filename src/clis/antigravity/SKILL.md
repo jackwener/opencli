@@ -7,17 +7,10 @@ description: How to automate Antigravity using OpenCLI
 This skill allows AI agents to control the [Antigravity](https://github.com/chengazhen/Antigravity) desktop app (and any Electron app with CDP enabled) programmatically via OpenCLI. 
 
 ## Requirements
-The target Electron application MUST be launched with the remote-debugging-port flag:
-\`\`\`bash
-/Applications/Antigravity.app/Contents/MacOS/Electron --remote-debugging-port=9224
-\`\`\`
+opencli automatically detects, launches (with `--remote-debugging-port=9234`), and connects to Antigravity.
+If Antigravity is already running without CDP, opencli will prompt to restart it.
 
-The agent must configure the endpoint environment variable locally before invoking standard commands:
-\`\`\`bash
-export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
-\`\`\`
-
-If the endpoint exposes multiple inspectable targets, also set:
+If the endpoint exposes multiple inspectable targets, set:
 \`\`\`bash
 export OPENCLI_CDP_TARGET="antigravity"
 \`\`\`
@@ -33,7 +26,6 @@ export OPENCLI_CDP_TARGET="antigravity"
 
 ### Generating and Saving Code
 \`\`\`bash
-export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
 opencli antigravity send "Write a python script to fetch HN top stories"
 # wait ~10-15 seconds for output to render
 opencli antigravity extract-code > hn_fetcher.py
@@ -42,6 +34,5 @@ opencli antigravity extract-code > hn_fetcher.py
 ### Reading Real-time Logs
 Agents can run long-running streaming watch instances:
 \`\`\`bash
-export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
 opencli antigravity watch
 \`\`\`

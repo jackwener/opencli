@@ -6,7 +6,7 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import yaml from 'js-yaml';
 import chalk from 'chalk';
 import { log } from './logger.js';
-import { getErrorMessage } from './errors.js';
+import { EXIT_CODES, getErrorMessage } from './errors.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,7 +31,10 @@ function getUserRegistryPath(): string {
   return path.join(home, '.opencli', 'external-clis.yaml');
 }
 
+let _cachedExternalClis: ExternalCliConfig[] | null = null;
+
 export function loadExternalClis(): ExternalCliConfig[] {
+  if (_cachedExternalClis) return _cachedExternalClis;
   const configs = new Map<string, ExternalCliConfig>();
 
   // 1. Load built-in
@@ -60,7 +63,8 @@ export function loadExternalClis(): ExternalCliConfig[] {
     log.warn(`Failed to parse user external-clis.yaml: ${getErrorMessage(err)}`);
   }
 
-  return Array.from(configs.values()).sort((a, b) => a.name.localeCompare(b.name));
+  _cachedExternalClis = Array.from(configs.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return _cachedExternalClis;
 }
 
 export function isBinaryInstalled(binary: string): boolean {
@@ -176,7 +180,7 @@ export function executeExternalCli(name: string, args: string[], preloaded?: Ext
     // 2. Try to auto install
     const success = installExternalCli(cli);
     if (!success) {
-      process.exitCode = 1;
+      process.exitCode = EXIT_CODES.SERVICE_UNAVAIL;
       return;
     }
   }
@@ -185,7 +189,7 @@ export function executeExternalCli(name: string, args: string[], preloaded?: Ext
   const result = spawnSync(cli.binary, args, { stdio: 'inherit' });
   if (result.error) {
     console.error(chalk.red(`Failed to execute '${cli.binary}': ${result.error.message}`));
-    process.exitCode = 1;
+    process.exitCode = EXIT_CODES.GENERIC_ERROR;
     return;
   }
   
@@ -237,5 +241,6 @@ export function registerExternalCli(name: string, opts?: RegisterOptions): void 
 
   const dump = yaml.dump(items, { indent: 2, sortKeys: true });
   fs.writeFileSync(userPath, dump, 'utf8');
+  _cachedExternalClis = null; // Invalidate cache so next load reflects the change
   console.log(chalk.dim(userPath));
 }

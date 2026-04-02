@@ -1,6 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
-import { chatwiseRequiredEnv } from './shared.js';
 
 export const readCommand = cli({
   site: 'chatwise',
@@ -9,7 +8,6 @@ export const readCommand = cli({
   domain: 'localhost',
   strategy: Strategy.UI,
   browser: true,
-  requiredEnv: chatwiseRequiredEnv,
   args: [],
   columns: ['Content'],
   func: async (page: IPage) => {

@@ -16,10 +16,13 @@ pipeline:
       url: https://www.v2ex.com/api/topics/latest.json
 
   - map:
+      id: ${{ item.id }}
       rank: ${{ index + 1 }}
       title: ${{ item.title }}
+      node: ${{ item.node.title }}
       replies: ${{ item.replies }}
+      url: ${{ item.url }}
 
   - limit: ${{ args.limit }}
 
-columns: [rank, title, replies]
+columns: [id, rank, title, node, replies, url]

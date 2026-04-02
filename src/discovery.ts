@@ -11,19 +11,23 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'js-yaml';
 import { type CliCommand, type InternalCliCommand, type Arg, Strategy, registerCommand } from './registry.js';
 import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
 import type { ManifestEntry } from './build-manifest.js';
 
+/** User runtime directory: ~/.opencli */
+export const USER_OPENCLI_DIR = path.join(os.homedir(), '.opencli');
+/** User CLIs directory: ~/.opencli/clis */
+export const USER_CLIS_DIR = path.join(USER_OPENCLI_DIR, 'clis');
 /** Plugins directory: ~/.opencli/plugins/ */
-export const PLUGINS_DIR = path.join(os.homedir(), '.opencli', 'plugins');
+export const PLUGINS_DIR = path.join(USER_OPENCLI_DIR, 'plugins');
 /** Matches files that register commands via cli() or lifecycle hooks */
 const PLUGIN_MODULE_PATTERN = /\b(?:cli|onStartup|onBeforeExecute|onAfterExecute)\s*\(/;
 
-import type { YamlCliDefinition } from './yaml-schema.js';
+import { type YamlCliDefinition, parseYamlArgs } from './yaml-schema.js';
 
 function parseStrategy(rawStrategy: string | undefined, fallback: Strategy = Strategy.COOKIE): Strategy {
   if (!rawStrategy) return fallback;
@@ -32,6 +36,47 @@ function parseStrategy(rawStrategy: string | undefined, fallback: Strategy = Str
 }
 
 import { isRecord } from './utils.js';
+
+function resolveHostRuntimeModulePath(moduleName: string): string {
+  const runtimeDir = path.dirname(fileURLToPath(import.meta.url));
+  for (const ext of ['.js', '.ts']) {
+    const candidate = path.join(runtimeDir, `${moduleName}${ext}`);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return path.join(runtimeDir, `${moduleName}.js`);
+}
+
+async function writeCompatShimIfNeeded(filePath: string, content: string): Promise<void> {
+  try {
+    const existing = await fs.promises.readFile(filePath, 'utf-8');
+    if (existing === content) return;
+  } catch {
+    // Fall through to write missing shim
+  }
+  await fs.promises.writeFile(filePath, content, 'utf-8');
+}
+
+/**
+ * Create runtime shim files under ~/.opencli so legacy user TS CLIs can keep
+ * importing ../../registry(.js) and ../../errors(.js).
+ */
+export async function ensureUserCliCompatShims(baseDir: string = USER_OPENCLI_DIR): Promise<void> {
+  await fs.promises.mkdir(baseDir, { recursive: true });
+
+  const registryUrl = pathToFileURL(resolveHostRuntimeModulePath('registry-api')).href;
+  const errorsUrl = pathToFileURL(resolveHostRuntimeModulePath('errors')).href;
+
+  await Promise.all([
+    writeCompatShimIfNeeded(path.join(baseDir, 'registry'), `export * from '${registryUrl}';\n`),
+    writeCompatShimIfNeeded(path.join(baseDir, 'registry.js'), `export * from '${registryUrl}';\n`),
+    writeCompatShimIfNeeded(path.join(baseDir, 'errors'), `export * from '${errorsUrl}';\n`),
+    writeCompatShimIfNeeded(path.join(baseDir, 'errors.js'), `export * from '${errorsUrl}';\n`),
+    writeCompatShimIfNeeded(
+      path.join(baseDir, 'package.json'),
+      `${JSON.stringify({ name: 'opencli-user-runtime', private: true, type: 'module' }, null, 2)}\n`,
+    ),
+  ]);
+}
 
 /**
  * Discover and register CLI commands.
@@ -68,6 +113,7 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         const cmd: CliCommand = {
           site: entry.site,
           name: entry.name,
+          aliases: entry.aliases,
           description: entry.description ?? '',
           domain: entry.domain,
           strategy,
@@ -90,6 +136,7 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         const cmd: InternalCliCommand = {
           site: entry.site,
           name: entry.name,
+          aliases: entry.aliases,
           description: entry.description ?? '',
           domain: entry.domain,
           strategy,
@@ -127,24 +174,20 @@ async function discoverClisFromFs(dir: string): Promise<void> {
       const site = entry.name;
       const siteDir = path.join(dir, site);
       const files = await fs.promises.readdir(siteDir);
-      const filePromises: Promise<unknown>[] = [];
-      for (const file of files) {
+      await Promise.all(files.map(async (file) => {
         const filePath = path.join(siteDir, file);
         if (file.endsWith('.yaml') || file.endsWith('.yml')) {
-          filePromises.push(registerYamlCli(filePath, site));
+          await registerYamlCli(filePath, site);
         } else if (
           (file.endsWith('.js') && !file.endsWith('.d.js')) ||
           (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts'))
         ) {
-          if (!(await isCliModule(filePath))) continue;
-          filePromises.push(
-            import(pathToFileURL(filePath).href).catch((err) => {
-              log.warn(`Failed to load module ${filePath}: ${getErrorMessage(err)}`);
-            })
-          );
+          if (!(await isCliModule(filePath))) return;
+          await import(pathToFileURL(filePath).href).catch((err) => {
+            log.warn(`Failed to load module ${filePath}: ${getErrorMessage(err)}`);
+          });
         }
-      }
-      await Promise.all(filePromises);
+      }));
     });
   await Promise.all(sitePromises);
 }
@@ -162,24 +205,14 @@ async function registerYamlCli(filePath: string, defaultSite: string): Promise<v
     const strategy = parseStrategy(strategyStr);
     const browser = cliDef.browser ?? (strategy !== Strategy.PUBLIC);
 
-    const args: Arg[] = [];
-    if (cliDef.args && typeof cliDef.args === 'object') {
-      for (const [argName, argDef] of Object.entries(cliDef.args)) {
-        args.push({
-          name: argName,
-          type: argDef?.type ?? 'str',
-          default: argDef?.default,
-          required: argDef?.required ?? false,
-          positional: argDef?.positional ?? false,
-          help: argDef?.description ?? argDef?.help ?? '',
-          choices: argDef?.choices,
-        });
-      }
-    }
+    const args = parseYamlArgs(cliDef.args);
 
     const cmd: CliCommand = {
       site,
       name,
+      aliases: isRecord(cliDef) && Array.isArray((cliDef as Record<string, unknown>).aliases)
+        ? ((cliDef as Record<string, unknown>).aliases as unknown[]).filter((value): value is string => typeof value === 'string')
+        : undefined,
       description: cliDef.description ?? '',
       domain: cliDef.domain,
       strategy,
@@ -208,10 +241,11 @@ async function registerYamlCli(filePath: string, defaultSite: string): Promise<v
 export async function discoverPlugins(): Promise<void> {
   try { await fs.promises.access(PLUGINS_DIR); } catch { return; }
   const entries = await fs.promises.readdir(PLUGINS_DIR, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    await discoverPluginDir(path.join(PLUGINS_DIR, entry.name), entry.name);
-  }
+  await Promise.all(entries.map(async (entry) => {
+    const pluginDir = path.join(PLUGINS_DIR, entry.name);
+    if (!(await isDiscoverablePluginDir(entry, pluginDir))) return;
+    await discoverPluginDir(pluginDir, entry.name);
+  }));
 }
 
 /**
@@ -221,33 +255,29 @@ export async function discoverPlugins(): Promise<void> {
 async function discoverPluginDir(dir: string, site: string): Promise<void> {
   const files = await fs.promises.readdir(dir);
   const fileSet = new Set(files);
-  const promises: Promise<unknown>[] = [];
-  for (const file of files) {
+  await Promise.all(files.map(async (file) => {
     const filePath = path.join(dir, file);
     if (file.endsWith('.yaml') || file.endsWith('.yml')) {
-      promises.push(registerYamlCli(filePath, site));
+      await registerYamlCli(filePath, site);
     } else if (file.endsWith('.js') && !file.endsWith('.d.js')) {
-      if (!(await isCliModule(filePath))) continue;
-      promises.push(
-        import(pathToFileURL(filePath).href).catch((err) => {
-          log.warn(`Plugin ${site}/${file}: ${getErrorMessage(err)}`);
-        })
-      );
+      if (!(await isCliModule(filePath))) return;
+      await import(pathToFileURL(filePath).href).catch((err) => {
+        log.warn(`Plugin ${site}/${file}: ${getErrorMessage(err)}`);
+      });
     } else if (
       file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts')
     ) {
-      // Skip .ts if a compiled .js sibling exists (production mode can't load .ts)
       const jsFile = file.replace(/\.ts$/, '.js');
-      if (fileSet.has(jsFile)) continue;
-      if (!(await isCliModule(filePath))) continue;
-      promises.push(
-        import(pathToFileURL(filePath).href).catch((err) => {
-          log.warn(`Plugin ${site}/${file}: ${getErrorMessage(err)}`);
-        })
+      // Prefer compiled .js — skip the .ts source file
+      if (fileSet.has(jsFile)) return;
+      // No compiled .js found — cannot import raw .ts in production Node.js.
+      // This typically means esbuild transpilation failed during plugin install.
+      log.warn(
+        `Plugin ${site}/${file}: no compiled .js found. ` +
+        `Run "opencli plugin update ${site}" to re-transpile, or install esbuild.`
       );
     }
-  }
-  await Promise.all(promises);
+  }));
 }
 
 async function isCliModule(filePath: string): Promise<boolean> {
@@ -256,6 +286,21 @@ async function isCliModule(filePath: string): Promise<boolean> {
     return PLUGIN_MODULE_PATTERN.test(source);
   } catch (err) {
     log.warn(`Failed to inspect module ${filePath}: ${getErrorMessage(err)}`);
+    return false;
+  }
+}
+
+async function isDiscoverablePluginDir(entry: fs.Dirent, pluginDir: string): Promise<boolean> {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+
+  try {
+    return (await fs.promises.stat(pluginDir)).isDirectory();
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      log.warn(`Failed to inspect plugin link ${pluginDir}: ${getErrorMessage(err)}`);
+    }
     return false;
   }
 }

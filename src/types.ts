@@ -1,5 +1,5 @@
 /**
- * Page interface: type-safe abstraction over Playwright MCP browser page.
+ * Page interface: type-safe abstraction over browser page.
  *
  * All pipeline steps and CLI adapters should use this interface
  * instead of `any` for browser interactions.
@@ -26,6 +26,7 @@ export interface SnapshotOptions {
 
 export interface WaitOptions {
   text?: string;
+  selector?: string;   // wait until document.querySelector(selector) matches
   time?: number;
   timeout?: number;
 }
@@ -64,5 +65,16 @@ export interface IPage {
   autoScroll(options?: { times?: number; delayMs?: number }): Promise<void>;
   installInterceptor(pattern: string): Promise<void>;
   getInterceptedRequests(): Promise<any[]>;
+  waitForCapture(timeout?: number): Promise<void>;
   screenshot(options?: ScreenshotOptions): Promise<string>;
+  /**
+   * Set local file paths on a file input element via CDP DOM.setFileInputFiles.
+   * Chrome reads the files directly — no base64 encoding or payload size limits.
+   */
+  setFileInput?(files: string[], selector?: string): Promise<void>;
+  closeWindow?(): Promise<void>;
+  /** Returns the current page URL, or null if unavailable. */
+  getCurrentUrl?(): Promise<string | null>;
+  /** Returns the active tab ID, or undefined if not yet resolved. */
+  getActiveTabId?(): number | undefined;
 }

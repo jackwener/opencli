@@ -4,6 +4,12 @@ export const DOUBAO_DOMAIN = 'www.doubao.com';
 export const DOUBAO_CHAT_URL = 'https://www.doubao.com/chat';
 export const DOUBAO_NEW_CHAT_URL = 'https://www.doubao.com/chat/new-thread/create-by-msg';
 
+export interface DoubaoConversation {
+  Id: string;
+  Title: string;
+  Url: string;
+}
+
 export interface DoubaoTurn {
   Role: 'User' | 'Assistant' | 'System';
   Text: string;
@@ -603,6 +609,371 @@ export async function waitForDoubaoResponse(
   }
 
   return lastCandidate;
+}
+
+function getConversationListScript(): string {
+  return `
+    (() => {
+      const sidebar = document.querySelector('[data-testid="flow_chat_sidebar"]');
+      if (!sidebar) return [];
+
+      const items = Array.from(
+        sidebar.querySelectorAll('a[data-testid="chat_list_thread_item"]')
+      );
+
+      return items
+        .map(a => {
+          const href = a.getAttribute('href') || '';
+          const match = href.match(/\\/chat\\/(\\d{10,})/);
+          if (!match) return null;
+          const id = match[1];
+          const textContent = (a.textContent || a.innerText || '').trim();
+          const title = textContent
+            .replace(/\\s+/g, ' ')
+            .substring(0, 200);
+          return { id, title, href };
+        })
+        .filter(Boolean);
+    })()
+  `;
+}
+
+export async function getDoubaoConversationList(page: IPage): Promise<DoubaoConversation[]> {
+  await ensureDoubaoChatPage(page);
+  const raw = await page.evaluate(getConversationListScript()) as
+    Array<{ id: string; title: string; href: string }>;
+
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((item) => ({
+    Id: item.id,
+    Title: item.title,
+    Url: `${DOUBAO_CHAT_URL}/${item.id}`,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Conversation detail helpers
+// ---------------------------------------------------------------------------
+
+export interface DoubaoMessage {
+  Role: 'User' | 'Assistant' | 'System';
+  Text: string;
+  HasMeetingCard: boolean;
+}
+
+export interface DoubaoMeetingInfo {
+  title: string;
+  time: string;
+}
+
+export function parseDoubaoConversationId(input: string): string {
+  const match = input.match(/(\d{10,})/);
+  return match ? match[1] : input;
+}
+
+function getConversationDetailScript(): string {
+  return `
+    (() => {
+      const clean = (v) => (v || '').replace(/\\u00a0/g, ' ').replace(/\\n{3,}/g, '\\n\\n').trim();
+
+      const messageList = document.querySelector('[data-testid="message-list"]');
+      if (!messageList) return { messages: [], meeting: null };
+
+      const meetingCard = messageList.querySelector('[data-testid="meeting-minutes-card"]');
+      let meeting = null;
+      if (meetingCard) {
+        const raw = clean(meetingCard.textContent || '');
+        const match = raw.match(/^(.+?)(?:会议时间：|\\s*$)(.*)/);
+        meeting = {
+          title: match ? match[1].trim() : raw,
+          time: match && match[2] ? match[2].trim() : '',
+        };
+      }
+
+      const unions = Array.from(messageList.querySelectorAll('[data-testid="union_message"]'));
+      const messages = unions.map(u => {
+        const isSend = !!u.querySelector('[data-testid="send_message"]');
+        const isReceive = !!u.querySelector('[data-testid="receive_message"]');
+        const textEl = u.querySelector('[data-testid="message_text_content"]');
+        const text = textEl ? clean(textEl.innerText || textEl.textContent || '') : '';
+        return {
+          role: isSend ? 'User' : isReceive ? 'Assistant' : 'System',
+          text,
+          hasMeetingCard: !!u.querySelector('[data-testid="meeting-minutes-card"]'),
+        };
+      }).filter(m => m.text);
+
+      return { messages, meeting };
+    })()
+  `;
+}
+
+export async function navigateToConversation(page: IPage, conversationId: string): Promise<void> {
+  const url = `${DOUBAO_CHAT_URL}/${conversationId}`;
+  const currentUrl = await page.evaluate('window.location.href').catch(() => '');
+  if (typeof currentUrl === 'string' && currentUrl.includes(`/chat/${conversationId}`)) {
+    await page.wait(1);
+    return;
+  }
+  await page.goto(url, { waitUntil: 'load', settleMs: 3000 });
+  await page.wait(2);
+}
+
+export async function getConversationDetail(
+  page: IPage,
+  conversationId: string,
+): Promise<{ messages: DoubaoMessage[]; meeting: DoubaoMeetingInfo | null }> {
+  await navigateToConversation(page, conversationId);
+  const raw = await page.evaluate(getConversationDetailScript()) as {
+    messages: Array<{ role: string; text: string; hasMeetingCard: boolean }>;
+    meeting: { title: string; time: string } | null;
+  };
+
+  const messages: DoubaoMessage[] = (raw.messages || []).map((m) => ({
+    Role: m.role as 'User' | 'Assistant' | 'System',
+    Text: m.text,
+    HasMeetingCard: m.hasMeetingCard,
+  }));
+
+  return { messages, meeting: raw.meeting };
+}
+
+// ---------------------------------------------------------------------------
+// Meeting minutes panel helpers
+// ---------------------------------------------------------------------------
+
+function clickMeetingCardScript(): string {
+  return `
+    (() => {
+      const card = document.querySelector('[data-testid="meeting-minutes-card"]');
+      if (!card) return false;
+      card.click();
+      return true;
+    })()
+  `;
+}
+
+function readMeetingSummaryScript(): string {
+  return `
+    (() => {
+      const panel = document.querySelector('[data-testid="canvas_panel_container"]');
+      if (!panel) return { error: 'no panel' };
+
+      const summary = panel.querySelector('[data-testid="meeting-summary-todos"]');
+      const summaryText = summary
+        ? (summary.innerText || summary.textContent || '').trim()
+        : '';
+
+      return { summary: summaryText };
+    })()
+  `;
+}
+
+function clickTextNotesTabScript(): string {
+  return `
+    (() => {
+      const panel = document.querySelector('[data-testid="canvas_panel_container"]');
+      if (!panel) return false;
+      const tabs = panel.querySelectorAll('[role="tab"], .semi-tabs-tab');
+      for (const tab of tabs) {
+        if ((tab.textContent || '').trim().includes('文字')) {
+          tab.click();
+          return true;
+        }
+      }
+      return false;
+    })()
+  `;
+}
+
+function readTextNotesScript(): string {
+  return `
+    (() => {
+      const panel = document.querySelector('[data-testid="canvas_panel_container"]');
+      if (!panel) return '';
+      const textNotes = panel.querySelector('[data-testid="meeting-text-notes"]');
+      if (!textNotes) return '';
+      return (textNotes.innerText || textNotes.textContent || '').trim();
+    })()
+  `;
+}
+
+function normalizeTranscriptLines(text: string): string[] {
+  return text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+}
+
+function containsLineSequence(haystack: string[], needle: string[]): boolean {
+  if (needle.length === 0) return true;
+  if (needle.length > haystack.length) return false;
+
+  for (let start = 0; start <= haystack.length - needle.length; start += 1) {
+    let matched = true;
+    for (let offset = 0; offset < needle.length; offset += 1) {
+      if (haystack[start + offset] !== needle[offset]) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return true;
+  }
+
+  return false;
+}
+
+export function mergeTranscriptSnapshots(existing: string, incoming: string): string {
+  const currentLines = normalizeTranscriptLines(existing);
+  const nextLines = normalizeTranscriptLines(incoming);
+
+  if (nextLines.length === 0) return currentLines.join('\n');
+  if (currentLines.length === 0) return nextLines.join('\n');
+  if (containsLineSequence(currentLines, nextLines)) return currentLines.join('\n');
+
+  const maxOverlap = Math.min(currentLines.length, nextLines.length);
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    let matched = true;
+    for (let index = 0; index < overlap; index += 1) {
+      if (currentLines[currentLines.length - overlap + index] !== nextLines[index]) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) {
+      return [...currentLines, ...nextLines.slice(overlap)].join('\n');
+    }
+  }
+
+  return [...currentLines, ...nextLines].join('\n');
+}
+
+function clickChapterTabScript(): string {
+  return `
+    (() => {
+      const panel = document.querySelector('[data-testid="canvas_panel_container"]');
+      if (!panel) return false;
+      const tabs = panel.querySelectorAll('[role="tab"], .semi-tabs-tab');
+      for (const tab of tabs) {
+        if ((tab.textContent || '').trim().includes('章节')) {
+          tab.click();
+          return true;
+        }
+      }
+      return false;
+    })()
+  `;
+}
+
+function readChapterScript(): string {
+  return `
+    (() => {
+      const panel = document.querySelector('[data-testid="canvas_panel_container"]');
+      if (!panel) return '';
+      const chapter = panel.querySelector('[data-testid="meeting-ai-chapter"]');
+      if (!chapter) return '';
+      return (chapter.innerText || chapter.textContent || '').trim();
+    })()
+  `;
+}
+
+function triggerTranscriptDownloadScript(): string {
+  return `
+    (() => {
+      const panel = document.querySelector('[data-testid="canvas_panel_container"]');
+      if (!panel) return { error: 'no panel' };
+
+      const downloadIcon = panel.querySelector('[class*="DownloadMeetingAudio"] span[role="img"]');
+      if (!downloadIcon) return { error: 'no download icon' };
+
+      downloadIcon.click();
+      return { clicked: 'icon' };
+    })()
+  `;
+}
+
+function clickTranscriptDownloadBtnScript(): string {
+  return `
+    (() => {
+      const btn = document.querySelector('[data-testid="minutes-download-text-btn"]');
+      if (!btn) return { error: 'no download text btn' };
+      btn.click();
+      return { clicked: 'transcript' };
+    })()
+  `;
+}
+
+export async function openMeetingPanel(page: IPage, conversationId: string): Promise<boolean> {
+  await navigateToConversation(page, conversationId);
+  const clicked = await page.evaluate(clickMeetingCardScript()) as boolean;
+  if (!clicked) return false;
+  await page.wait(2);
+  return true;
+}
+
+export async function getMeetingSummary(page: IPage): Promise<string> {
+  const result = await page.evaluate(readMeetingSummaryScript()) as { summary?: string; error?: string };
+  return result.summary || '';
+}
+
+export async function getMeetingChapters(page: IPage): Promise<string> {
+  await page.evaluate(clickChapterTabScript());
+  await page.wait(1.5);
+  return await page.evaluate(readChapterScript()) as string;
+}
+
+function scrollTextNotesPanelScript(): string {
+  return `
+    (() => {
+      const panel = document.querySelector('[data-testid="canvas_panel_container"]');
+      if (!panel) return 0;
+      const textNotes = panel.querySelector('[data-testid="meeting-text-notes"]');
+      if (!textNotes) return 0;
+
+      const scrollable = textNotes.closest('[class*="overflow"]')
+        || textNotes.parentElement
+        || textNotes;
+      const maxScroll = scrollable.scrollHeight - scrollable.clientHeight;
+      if (maxScroll > 0) {
+        scrollable.scrollTop = scrollable.scrollHeight;
+      }
+      return maxScroll;
+    })()
+  `;
+}
+
+export async function getMeetingTranscript(page: IPage): Promise<string> {
+  await page.evaluate(clickTextNotesTabScript());
+  await page.wait(2);
+
+  let merged = '';
+  let stableRounds = 0;
+  for (let i = 0; i < 10; i++) {
+    await page.evaluate(scrollTextNotesPanelScript());
+    await page.wait(1);
+    const snapshot = await page.evaluate(readTextNotesScript()) as string;
+    const nextMerged = mergeTranscriptSnapshots(merged, snapshot);
+
+    if (nextMerged === merged && snapshot.length > 0) {
+      stableRounds += 1;
+      if (stableRounds >= 2) break;
+    } else {
+      stableRounds = 0;
+      merged = nextMerged;
+    }
+  }
+
+  return merged;
+}
+
+export async function triggerTranscriptDownload(page: IPage): Promise<boolean> {
+  const iconResult = await page.evaluate(triggerTranscriptDownloadScript()) as { clicked?: string; error?: string };
+  if (iconResult.error) return false;
+  await page.wait(1);
+
+  const btnResult = await page.evaluate(clickTranscriptDownloadBtnScript()) as { clicked?: string; error?: string };
+  return !btnResult.error;
 }
 
 export async function startNewDoubaoChat(page: IPage): Promise<string> {

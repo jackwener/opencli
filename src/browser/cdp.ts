@@ -11,21 +11,14 @@
 import { WebSocket, type RawData } from 'ws';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import type { BrowserCookie, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
+import type { BrowserCookie, IPage, ScreenshotOptions } from '../types.js';
+import type { IBrowserFactory } from '../runtime.js';
 import { wrapForEval } from './utils.js';
-import { generateSnapshotJs, scrollToRefJs, getFormStateJs } from './dom-snapshot.js';
 import { generateStealthJs } from './stealth.js';
-import {
-  clickJs,
-  typeTextJs,
-  pressKeyJs,
-  waitForTextJs,
-  scrollJs,
-  autoScrollJs,
-  networkRequestsJs,
-  waitForDomStableJs,
-} from './dom-helpers.js';
+import { waitForDomStableJs } from './dom-helpers.js';
 import { isRecord, saveBase64ToFile } from '../utils.js';
+import { getAllElectronApps } from '../electron-apps.js';
+import { BasePage } from './base-page.js';
 
 export interface CDPTarget {
   type?: string;
@@ -47,17 +40,17 @@ interface RuntimeEvaluateResult {
 
 const CDP_SEND_TIMEOUT = 30_000;
 
-export class CDPBridge {
+export class CDPBridge implements IBrowserFactory {
   private _ws: WebSocket | null = null;
   private _idCounter = 0;
   private _pending = new Map<number, { resolve: (val: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private _eventListeners = new Map<string, Set<(params: unknown) => void>>();
 
-  async connect(opts?: { timeout?: number; workspace?: string }): Promise<IPage> {
+  async connect(opts?: { timeout?: number; workspace?: string; cdpEndpoint?: string }): Promise<IPage> {
     if (this._ws) throw new Error('CDPBridge is already connected. Call close() before reconnecting.');
 
-    const endpoint = process.env.OPENCLI_CDP_ENDPOINT;
-    if (!endpoint) throw new Error('OPENCLI_CDP_ENDPOINT is not set');
+    const endpoint = opts?.cdpEndpoint ?? process.env.OPENCLI_CDP_ENDPOINT;
+    if (!endpoint) throw new Error('CDP endpoint not provided (pass cdpEndpoint or set OPENCLI_CDP_ENDPOINT)');
 
     let wsUrl = endpoint;
     if (endpoint.startsWith('http')) {
@@ -170,9 +163,11 @@ export class CDPBridge {
   }
 }
 
-class CDPPage implements IPage {
+class CDPPage extends BasePage {
   private _pageEnabled = false;
-  constructor(private bridge: CDPBridge) {}
+  constructor(private bridge: CDPBridge) {
+    super();
+  }
 
   async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
     if (!this._pageEnabled) {
@@ -182,6 +177,7 @@ class CDPPage implements IPage {
     const loadPromise = this.bridge.waitForEvent('Page.loadEventFired', 30_000).catch(() => {});
     await this.bridge.send('Page.navigate', { url });
     await loadPromise;
+    this._lastUrl = url;
     if (options?.waitUntil !== 'none') {
       const maxMs = options?.settleMs ?? 1000;
       await this.evaluate(waitForDomStableJs(maxMs, Math.min(500, maxMs)));
@@ -210,64 +206,6 @@ class CDPPage implements IPage {
       : cookies;
   }
 
-  async snapshot(opts: SnapshotOptions = {}): Promise<unknown> {
-    const snapshotJs = generateSnapshotJs({
-      viewportExpand: opts.viewportExpand ?? 800,
-      maxDepth: Math.max(1, Math.min(Number(opts.maxDepth) || 50, 200)),
-      interactiveOnly: opts.interactive ?? false,
-      maxTextLength: opts.maxTextLength ?? 120,
-      includeScrollInfo: true,
-      bboxDedup: true,
-    });
-    return this.evaluate(snapshotJs);
-  }
-
-  async click(ref: string): Promise<void> {
-    await this.evaluate(clickJs(ref));
-  }
-
-  async typeText(ref: string, text: string): Promise<void> {
-    await this.evaluate(typeTextJs(ref, text));
-  }
-
-  async pressKey(key: string): Promise<void> {
-    await this.evaluate(pressKeyJs(key));
-  }
-
-  async scrollTo(ref: string): Promise<unknown> {
-    return this.evaluate(scrollToRefJs(ref));
-  }
-
-  async getFormState(): Promise<Record<string, unknown>> {
-    return (await this.evaluate(getFormStateJs())) as Record<string, unknown>;
-  }
-
-  async wait(options: number | WaitOptions): Promise<void> {
-    if (typeof options === 'number') {
-      await new Promise((resolve) => setTimeout(resolve, options * 1000));
-      return;
-    }
-    if (typeof options.time === 'number') {
-      const waitTime = options.time;
-      await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
-      return;
-    }
-    if (options.text) {
-      const timeout = (options.timeout ?? 30) * 1000;
-      await this.evaluate(waitForTextJs(options.text, timeout));
-    }
-  }
-
-  async scroll(direction: string = 'down', amount: number = 500): Promise<void> {
-    await this.evaluate(scrollJs(direction, amount));
-  }
-
-  async autoScroll(options?: { times?: number; delayMs?: number }): Promise<void> {
-    const times = options?.times ?? 3;
-    const delayMs = options?.delayMs ?? 2000;
-    await this.evaluate(autoScrollJs(times, delayMs));
-  }
-
   async screenshot(options: ScreenshotOptions = {}): Promise<string> {
     const result = await this.bridge.send('Page.captureScreenshot', {
       format: options.format ?? 'png',
@@ -279,11 +217,6 @@ class CDPPage implements IPage {
       await saveBase64ToFile(base64, options.path);
     }
     return base64;
-  }
-
-  async networkRequests(includeStatic: boolean = false): Promise<unknown[]> {
-    const result = await this.evaluate(networkRequestsJs(includeStatic));
-    return Array.isArray(result) ? result : [];
   }
 
   async tabs(): Promise<unknown[]> {
@@ -300,24 +233,6 @@ class CDPPage implements IPage {
 
   async selectTab(_index: number): Promise<void> {
     // Not supported in direct CDP mode
-  }
-
-  async consoleMessages(_level?: string): Promise<unknown[]> {
-    return [];
-  }
-
-  async installInterceptor(pattern: string): Promise<void> {
-    const { generateInterceptorJs } = await import('../interceptor.js');
-    await this.evaluate(generateInterceptorJs(JSON.stringify(pattern), {
-      arrayName: '__opencli_xhr',
-      patchGuard: '__opencli_interceptor_patched',
-    }));
-  }
-
-  async getInterceptedRequests(): Promise<unknown[]> {
-    const { generateReadInterceptedJs } = await import('../interceptor.js');
-    const result = await this.evaluate(generateReadInterceptedJs('__opencli_xhr'));
-    return Array.isArray(result) ? result : [];
   }
 }
 
@@ -376,19 +291,15 @@ function scoreCDPTarget(target: CDPTarget, preferredPattern?: RegExp): number {
   if (url === '' || url === 'about:blank') score -= 40;
 
   if (title && title !== 'devtools') score += 25;
-  if (title.includes('antigravity')) score += 120;
-  if (title.includes('codex')) score += 120;
-  if (title.includes('cursor')) score += 120;
-  if (title.includes('chatwise')) score += 120;
-  if (title.includes('notion')) score += 120;
-  if (title.includes('discord')) score += 120;
 
-  if (url.includes('antigravity')) score += 100;
-  if (url.includes('codex')) score += 100;
-  if (url.includes('cursor')) score += 100;
-  if (url.includes('chatwise')) score += 100;
-  if (url.includes('notion')) score += 100;
-  if (url.includes('discord')) score += 100;
+  // Boost score for known Electron app names from the registry (builtin + user-defined)
+  const appNames = Object.values(getAllElectronApps()).map(a => (a.displayName ?? a.processName).toLowerCase());
+  for (const name of appNames) {
+    if (title.includes(name)) { score += 120; break; }
+  }
+  for (const name of appNames) {
+    if (url.includes(name)) { score += 100; break; }
+  }
 
   return score;
 }

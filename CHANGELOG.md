@@ -1,5 +1,60 @@
 # Changelog
 
+## [1.5.9](https://github.com/jackwener/opencli/compare/v1.5.8...v1.5.9) (2026-04-02)
+
+
+### Features
+
+* **amazon:** add browser adapter — bestsellers, search, product, offer, discussion ([#659](https://github.com/jackwener/opencli/issues/659))
+* **skills:** create skills/ directory structure with opencli-usage, opencli-explorer, opencli-oneshot ([#670](https://github.com/jackwener/opencli/issues/670))
+* **record:** add minimal record write candidates ([#665](https://github.com/jackwener/opencli/issues/665))
+
+
+### Refactoring
+
+* src cleanup — deduplicate errors, cache VM, extract BasePage, remove Playwright MCP legacy ([#667](https://github.com/jackwener/opencli/issues/667))
+* remove bind-current, restore owned-only browser automation model ([#664](https://github.com/jackwener/opencli/issues/664))
+
+
+### Chores
+
+* remove .agents directory ([#668](https://github.com/jackwener/opencli/issues/668))
+
+
+## [1.5.8](https://github.com/jackwener/opencli/compare/v1.5.7...v1.5.8) (2026-04-01)
+
+
+### Bug Fixes
+
+* **extension:** avoid mutating healthy tabs before debugger attach and add regression coverage ([#662](https://github.com/jackwener/opencli/issues/662))
+
+
+## [1.5.7](https://github.com/jackwener/opencli/compare/v1.5.6...v1.5.7) (2026-04-01)
+
+
+### Features
+
+* **daemon:** replace 5min idle timeout with long-lived daemon model (4h default, dual-condition exit) ([#641](https://github.com/jackwener/opencli/issues/641))
+* **daemon:** add `opencli daemon status/stop/restart` CLI commands ([#641](https://github.com/jackwener/opencli/issues/641))
+* **youtube:** add search filters — `--type` shorts/video/channel, `--upload`, `--sort` ([#616](https://github.com/jackwener/opencli/issues/616))
+* **notebooklm:** add read commands and compatibility layer ([#622](https://github.com/jackwener/opencli/issues/622))
+* **instagram:** add media download command ([#623](https://github.com/jackwener/opencli/issues/623))
+* **stealth:** harden CDP debugger detection countermeasures ([#644](https://github.com/jackwener/opencli/issues/644))
+* **v2ex:** add id, node, url, content, member fields to topic output ([#646](https://github.com/jackwener/opencli/issues/646), [#648](https://github.com/jackwener/opencli/issues/648))
+* **electron:** auto-launcher — zero-config CDP connection ([#653](https://github.com/jackwener/opencli/issues/653))
+
+
+### Bug Fixes
+
+* **douyin:** repair creator draft flow — switch from broken API pipeline to UI-driven approach ([#640](https://github.com/jackwener/opencli/issues/640))
+* **douyin:** support current creator API response shapes for activities, profile, collections, hashtag, videos ([#618](https://github.com/jackwener/opencli/issues/618))
+* **bilibili:** distinguish login-gated subtitles from empty results ([#645](https://github.com/jackwener/opencli/issues/645))
+* **facebook:** avoid in-page redirect in search — use navigate step instead of window.location.href ([#642](https://github.com/jackwener/opencli/issues/642))
+* **substack:** update selectors for DOM redesign ([#624](https://github.com/jackwener/opencli/issues/624))
+* **weread:** recover book details from cached shelf fallback ([#628](https://github.com/jackwener/opencli/issues/628))
+* **docs:** use relative links in adapter index ([#629](https://github.com/jackwener/opencli/issues/629))
+
+
 ## [1.4.1](https://github.com/jackwener/opencli/compare/v1.4.0...v1.4.1) (2026-03-25)
 
 

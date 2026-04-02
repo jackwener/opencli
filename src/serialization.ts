@@ -39,6 +39,7 @@ export function serializeCommand(cmd: CliCommand) {
     command: fullName(cmd),
     site: cmd.site,
     name: cmd.name,
+    aliases: cmd.aliases ?? [],
     description: cmd.description,
     strategy: strategyLabel(cmd),
     browser: !!cmd.browser,
@@ -62,6 +63,11 @@ export function formatArgSummary(args: Arg[]): string {
     .join(' ');
 }
 
+function summarizeChoices(choices: string[]): string {
+  if (choices.length <= 4) return choices.join(', ');
+  return `${choices.slice(0, 4).join(', ')}, ... (+${choices.length - 4} more)`;
+}
+
 /** Generate the --help appendix showing registry metadata not exposed by Commander. */
 export function formatRegistryHelpText(cmd: CliCommand): string {
   const lines: string[] = [];
@@ -69,7 +75,7 @@ export function formatRegistryHelpText(cmd: CliCommand): string {
   for (const a of choicesArgs) {
     const prefix = a.positional ? `<${a.name}>` : `--${a.name}`;
     const def = a.default != null ? `  (default: ${a.default})` : '';
-    lines.push(`  ${prefix}: ${a.choices!.join(', ')}${def}`);
+    lines.push(`  ${prefix}: ${summarizeChoices(a.choices!)}${def}`);
   }
   const meta: string[] = [];
   meta.push(`Strategy: ${strategyLabel(cmd)}`);
@@ -77,6 +83,7 @@ export function formatRegistryHelpText(cmd: CliCommand): string {
   if (cmd.domain) meta.push(`Domain: ${cmd.domain}`);
   if (cmd.deprecated) meta.push(`Deprecated: ${typeof cmd.deprecated === 'string' ? cmd.deprecated : 'yes'}`);
   if (cmd.replacedBy) meta.push(`Use instead: ${cmd.replacedBy}`);
+  if (cmd.aliases?.length) meta.push(`Aliases: ${cmd.aliases.join(', ')}`);
   lines.push(meta.join(' | '));
   if (cmd.columns?.length) lines.push(`Output columns: ${cmd.columns.join(', ')}`);
   return '\n' + lines.join('\n') + '\n';

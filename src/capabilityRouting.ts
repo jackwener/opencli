@@ -1,6 +1,7 @@
 import { Strategy, type CliCommand } from './registry.js';
 
-const BROWSER_ONLY_STEPS = new Set([
+/** Pipeline steps that require a live browser session. */
+export const BROWSER_ONLY_STEPS = new Set([
   'navigate',
   'click',
   'type',

@@ -60,7 +60,10 @@ describe('plugin management E2E', () => {
     const lock = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf-8'));
     expect(lock[PLUGIN_NAME]).toBeDefined();
     expect(lock[PLUGIN_NAME].commitHash).toBeTruthy();
-    expect(lock[PLUGIN_NAME].source).toContain('opencli-plugin-hot-digest');
+    expect(lock[PLUGIN_NAME].source).toMatchObject({
+      kind: 'git',
+    });
+    expect(lock[PLUGIN_NAME].source.url).toContain('opencli-plugin-hot-digest');
     expect(lock[PLUGIN_NAME].installedAt).toBeTruthy();
   }, 60_000);
 
@@ -131,7 +134,7 @@ describe('plugin management E2E', () => {
 
   it('plugin update without name or --all shows error', async () => {
     const { stderr, code } = await runPluginCli(['plugin', 'update']);
-    expect(code).toBe(1);
+    expect(code).toBe(2);
     expect(stderr).toContain('specify a plugin name');
   });
 });

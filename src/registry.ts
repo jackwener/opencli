@@ -33,6 +33,7 @@ export type CommandArgs = Record<string, any>;
 export interface CliCommand {
   site: string;
   name: string;
+  aliases?: string[];
   description: string;
   domain?: string;
   strategy?: Strategy;
@@ -61,6 +62,8 @@ export interface CliCommand {
    * - `string`: navigate to this specific URL instead of the domain root
    */
   navigateBefore?: boolean | string;
+  /** Override the default CLI output format when the user does not pass -f/--format. */
+  defaultFormat?: 'table' | 'plain' | 'json' | 'yaml' | 'yml' | 'md' | 'markdown' | 'csv';
 }
 
 /** Internal extension for lazy-loaded TS modules (not exposed in public API) */
@@ -85,9 +88,11 @@ const _registry: Map<string, CliCommand> =
 export function cli(opts: CliOptions): CliCommand {
   const strategy = opts.strategy ?? (opts.browser === false ? Strategy.PUBLIC : Strategy.COOKIE);
   const browser = opts.browser ?? (strategy !== Strategy.PUBLIC);
+  const aliases = normalizeAliases(opts.aliases, opts.name);
   const cmd: CliCommand = {
     site: opts.site,
     name: opts.name,
+    aliases,
     description: opts.description ?? '',
     domain: opts.domain,
     strategy,
@@ -102,10 +107,10 @@ export function cli(opts: CliOptions): CliCommand {
     deprecated: opts.deprecated,
     replacedBy: opts.replacedBy,
     navigateBefore: opts.navigateBefore,
+    defaultFormat: opts.defaultFormat,
   };
 
-  const key = fullName(cmd);
-  _registry.set(key, cmd);
+  registerCommand(cmd);
   return cmd;
 }
 
@@ -122,5 +127,32 @@ export function strategyLabel(cmd: CliCommand): string {
 }
 
 export function registerCommand(cmd: CliCommand): void {
-  _registry.set(fullName(cmd), cmd);
+  const canonicalKey = fullName(cmd);
+  const existing = _registry.get(canonicalKey);
+  if (existing) {
+    for (const [key, value] of _registry.entries()) {
+      if (value === existing && key !== canonicalKey) _registry.delete(key);
+    }
+  }
+
+  const aliases = normalizeAliases(cmd.aliases, cmd.name);
+  cmd.aliases = aliases.length > 0 ? aliases : undefined;
+  _registry.set(canonicalKey, cmd);
+  for (const alias of aliases) {
+    _registry.set(`${cmd.site}/${alias}`, cmd);
+  }
+}
+
+function normalizeAliases(aliases: string[] | undefined, commandName: string): string[] {
+  if (!Array.isArray(aliases) || aliases.length === 0) return [];
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const alias of aliases) {
+    const value = typeof alias === 'string' ? alias.trim() : '';
+    if (!value || value === commandName || seen.has(value)) continue;
+    seen.add(value);
+    normalized.push(value);
+  }
+  return normalized;
 }

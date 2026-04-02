@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { IPage } from '../../types.js';
 import { getRegistry } from '../../registry.js';
-import './search.js';
+import { noteIdToDate } from './search.js';
 
 function createPageMock(evaluateResults: any[]): IPage {
   const evaluate = vi.fn();
@@ -31,6 +31,7 @@ function createPageMock(evaluateResults: any[]): IPage {
     getInterceptedRequests: vi.fn().mockResolvedValue([]),
     getCookies: vi.fn().mockResolvedValue([]),
     screenshot: vi.fn().mockResolvedValue(''),
+    waitForCapture: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -40,15 +41,16 @@ describe('xiaohongshu search', () => {
     expect(cmd?.func).toBeTypeOf('function');
 
     const page = createPageMock([
-      {
-        loginWall: true,
-        results: [],
-      },
+      // First evaluate: early login-wall check (returns true)
+      true,
     ]);
 
     await expect(cmd!.func!(page, { query: '特斯拉', limit: 5 })).rejects.toThrow(
       'Xiaohongshu search results are blocked behind a login wall'
     );
+
+    // autoScroll must NOT be called when a login wall is detected early
+    expect(page.autoScroll).not.toHaveBeenCalled();
   });
 
   it('returns ranked results with search_result url and author_url preserved', async () => {
@@ -61,6 +63,9 @@ describe('xiaohongshu search', () => {
       'https://www.xiaohongshu.com/user/profile/635a9c720000000018028b40?xsec_token=user-token&xsec_source=pc_search';
 
     const page = createPageMock([
+      // First evaluate: early login-wall check (returns false → no wall)
+      false,
+      // Second evaluate: main DOM extraction
       {
         loginWall: false,
         results: [
@@ -86,6 +91,7 @@ describe('xiaohongshu search', () => {
         title: '某鱼买FSD被坑了4万',
         author: '随风',
         likes: '261',
+        published_at: '2025-10-10',
         url: detailUrl,
         author_url: authorUrl,
       },
@@ -97,6 +103,9 @@ describe('xiaohongshu search', () => {
     expect(cmd?.func).toBeTypeOf('function');
 
     const page = createPageMock([
+      // First evaluate: early login-wall check (returns false → no wall)
+      false,
+      // Second evaluate: main DOM extraction
       {
         loginWall: false,
         results: [
@@ -130,5 +139,42 @@ describe('xiaohongshu search', () => {
     // limit=1 should return only the first valid-titled result
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ rank: 1, title: 'Result A' });
+  });
+});
+
+describe('noteIdToDate (ObjectID timestamp parsing)', () => {
+  it('parses a known note ID to the correct China-timezone date', () => {
+    // 0x697f6c74 = 1769958516 → 2026-02-01 in UTC+8
+    expect(noteIdToDate('https://www.xiaohongshu.com/search_result/697f6c74000000002103de17')).toBe('2026-02-01');
+    // 0x68e90be8 → 2025-10-10 in UTC+8
+    expect(noteIdToDate('https://www.xiaohongshu.com/explore/68e90be80000000004022e66')).toBe('2025-10-10');
+  });
+
+  it('returns China date when UTC+8 crosses into the next day', () => {
+    // 0x69b739f0 = 2026-03-15 23:00 UTC = 2026-03-16 07:00 CST
+    // Without UTC+8 offset this would incorrectly return 2026-03-15
+    expect(noteIdToDate('https://www.xiaohongshu.com/search_result/69b739f00000000000000000')).toBe('2026-03-16');
+  });
+
+  it('handles /note/ path variant', () => {
+    expect(noteIdToDate('https://www.xiaohongshu.com/note/697f6c74000000002103de17')).toBe('2026-02-01');
+  });
+
+  it('handles URL with query parameters', () => {
+    expect(noteIdToDate('https://www.xiaohongshu.com/search_result/697f6c74000000002103de17?xsec_token=abc')).toBe('2026-02-01');
+  });
+
+  it('returns empty string for non-matching URLs', () => {
+    expect(noteIdToDate('https://www.xiaohongshu.com/user/profile/635a9c720000000018028b40')).toBe('');
+    expect(noteIdToDate('https://www.xiaohongshu.com/')).toBe('');
+  });
+
+  it('returns empty string for IDs shorter than 24 hex chars', () => {
+    expect(noteIdToDate('https://www.xiaohongshu.com/search_result/abcdef')).toBe('');
+  });
+
+  it('returns empty string when timestamp is out of range', () => {
+    // All zeros → ts = 0
+    expect(noteIdToDate('https://www.xiaohongshu.com/search_result/000000000000000000000000')).toBe('');
   });
 });
