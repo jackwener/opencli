@@ -105,6 +105,15 @@ describe('login-required commands — graceful failure', () => {
     await expectGracefulAuthFailure(['xiaohongshu', 'notifications', '--limit', '3', '-f', 'json']);
   }, 60_000);
 
+  // ── yuanbao (requires login) ──
+  it('yuanbao new fails gracefully without login', async () => {
+    await expectGracefulAuthFailure(['yuanbao', 'new', '-f', 'json']);
+  }, 60_000);
+
+  it('yuanbao ask fails gracefully without login', async () => {
+    await expectGracefulAuthFailure(['yuanbao', 'ask', '你好', '-f', 'json']);
+  }, 60_000);
+
   // ── pixiv (requires login) ──
   it('pixiv ranking fails gracefully without login', async () => {
     await expectGracefulAuthFailure(['pixiv', 'ranking', '--limit', '3', '-f', 'json']);

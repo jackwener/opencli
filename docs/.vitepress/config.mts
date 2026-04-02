@@ -74,6 +74,7 @@ export default defineConfig({
                 { text: 'Grok', link: '/adapters/browser/grok' },
                 { text: 'Amazon', link: '/adapters/browser/amazon' },
                 { text: 'Gemini', link: '/adapters/browser/gemini' },
+                { text: 'Yuanbao', link: '/adapters/browser/yuanbao' },
                 { text: 'NotebookLM', link: '/adapters/browser/notebooklm' },
                 { text: 'WeRead', link: '/adapters/browser/weread' },
                 { text: 'Douban', link: '/adapters/browser/douban' },
