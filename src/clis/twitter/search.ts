@@ -54,7 +54,8 @@ async function navigateToSearch(page: Pick<IPage, 'evaluate' | 'wait'>, query: s
 
       const nativeSetter = Object.getOwnPropertyDescriptor(
         window.HTMLInputElement.prototype, 'value'
-      ).set;
+      )?.set;
+      if (!nativeSetter) return { ok: false };
       nativeSetter.call(input, ${queryStr});
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
