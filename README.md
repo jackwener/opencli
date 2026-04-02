@@ -104,6 +104,26 @@ npx skills add jackwener/opencli --skill opencli-explorer    # Adapter developme
 npx skills add jackwener/opencli --skill opencli-oneshot     # Quick command reference
 ```
 
+#### Using with coding assistants
+
+OpenCLI's generated command references are in:
+- `skills/opencli-skill/SKILL.md`
+- `skills/opencli-skill/references/commands/*.md`
+
+For Claude Code project memory, append (do not overwrite):
+
+```bash
+cat >> CLAUDE.md <<'EOF'
+
+## OpenCLI skill notes
+For OpenCLI command requests:
+1. Read `skills/opencli-skill/SKILL.md`
+2. Read `skills/opencli-skill/references/commands/<platform>.md`
+3. Use exact command + required args and prefer `-f json`
+4. Run `opencli doctor` before first browser command
+EOF
+```
+
 ---
 
 ### For Developers
