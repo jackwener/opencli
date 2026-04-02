@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.5.9](https://github.com/jackwener/opencli/compare/v1.5.8...v1.5.9) (2026-04-02)
+
+
+### Features
+
+* **amazon:** add browser adapter — bestsellers, search, product, offer, discussion ([#659](https://github.com/jackwener/opencli/issues/659))
+* **skills:** create skills/ directory structure with opencli-usage, opencli-explorer, opencli-oneshot ([#670](https://github.com/jackwener/opencli/issues/670))
+* **record:** add minimal record write candidates ([#665](https://github.com/jackwener/opencli/issues/665))
+
+
+### Refactoring
+
+* src cleanup — deduplicate errors, cache VM, extract BasePage, remove Playwright MCP legacy ([#667](https://github.com/jackwener/opencli/issues/667))
+* remove bind-current, restore owned-only browser automation model ([#664](https://github.com/jackwener/opencli/issues/664))
+
+
+### Chores
+
+* remove .agents directory ([#668](https://github.com/jackwener/opencli/issues/668))
+
+
 ## [1.5.8](https://github.com/jackwener/opencli/compare/v1.5.7...v1.5.8) (2026-04-01)
 
 

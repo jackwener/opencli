@@ -1,7 +1,7 @@
 ---
 name: opencli-usage
 description: "OpenCLI usage guide — installation, prerequisites, and command reference organized by platform"
-version: 1.5.6
+version: 1.5.9
 author: jackwener
 tags: [cli, browser, web, chrome-extension, cdp, AI, agent]
 ---
