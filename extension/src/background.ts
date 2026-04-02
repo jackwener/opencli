@@ -19,11 +19,9 @@ import * as executor from './cdp';
 const STORAGE_KEYS = { host: 'daemonHost', port: 'daemonPort' } as const;
 
 let ws: WebSocket | null = null;
-let activeWsUrl: string | null = null;
-/** URL we are currently connecting to (before onopen). */
-let pendingWsUrl: string | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
+let connectAttemptId = 0;
 
 async function getDaemonSettings(): Promise<{ host: string; port: number }> {
   const result = await chrome.storage.local.get({
@@ -65,16 +63,15 @@ console.error = (...args: unknown[]) => { _origError(...args); forwardLog('error
  * call site remains unchanged and the guard can never be accidentally skipped.
  */
 async function connect(): Promise<void> {
+  const attemptId = ++connectAttemptId;
   const { host, port } = await getDaemonSettings();
+  if (attemptId !== connectAttemptId) return;
   const { ping: pingUrl, ws: wsUrl } = buildDaemonEndpoints(host, port);
 
   if (ws) {
-    if (ws.readyState === WebSocket.OPEN && activeWsUrl === wsUrl) return;
-    if (ws.readyState === WebSocket.CONNECTING && pendingWsUrl === wsUrl) return;
+    if (ws.url === wsUrl && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     const previousSocket = ws;
     ws = null;
-    activeWsUrl = null;
-    pendingWsUrl = null;
     try {
       previousSocket.close();
     } catch { /* ignore */ }
@@ -82,21 +79,19 @@ async function connect(): Promise<void> {
 
   try {
     const res = await fetch(pingUrl, { signal: AbortSignal.timeout(1000) });
+    if (attemptId !== connectAttemptId) return;
     if (!res.ok) return; // unexpected response — not our daemon
   } catch {
     return; // daemon not running — skip WebSocket to avoid console noise
   }
 
   try {
-    pendingWsUrl = wsUrl;
     const socket = new WebSocket(wsUrl);
     ws = socket;
 
     socket.onopen = () => {
       if (ws !== socket) return;
       console.log('[opencli] Connected to daemon');
-      pendingWsUrl = null;
-      activeWsUrl = wsUrl;
       reconnectAttempts = 0; // Reset on successful connection
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
@@ -122,8 +117,6 @@ async function connect(): Promise<void> {
       if (ws !== socket) return;
       console.log('[opencli] Disconnected from daemon');
       ws = null;
-      activeWsUrl = null;
-      pendingWsUrl = null;
       scheduleReconnect();
     };
 
@@ -132,7 +125,6 @@ async function connect(): Promise<void> {
       socket.close();
     };
   } catch {
-    pendingWsUrl = null;
     scheduleReconnect();
     return;
   }
@@ -270,9 +262,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (!changes[STORAGE_KEYS.host] && !changes[STORAGE_KEYS.port]) return;
   const previousSocket = ws;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   ws = null;
-  activeWsUrl = null;
-  pendingWsUrl = null;
   try {
     previousSocket?.close();
   } catch { /* ignore */ }
@@ -692,9 +686,10 @@ export const __test__ = {
   resolveTabId,
   getConnectionState: () => ({
     ws,
-    activeWsUrl,
-    pendingWsUrl,
+    wsUrl: ws?.url ?? null,
+    readyState: ws?.readyState ?? null,
     reconnectAttempts,
+    connectAttemptId,
     reconnecting: reconnectTimer !== null,
   }),
   resetWindowIdleTimer,

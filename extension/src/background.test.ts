@@ -33,6 +33,19 @@ class MockWebSocket {
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function createChromeMock() {
   let nextTabId = 10;
   const storageState = {
@@ -281,8 +294,49 @@ describe('background tab isolation', () => {
 
     expect(mod.__test__.getConnectionState()).toEqual(expect.objectContaining({
       ws: secondSocket,
-      activeWsUrl: 'ws://127.0.0.1:19825/ext',
-      pendingWsUrl: null,
+      wsUrl: 'ws://127.0.0.1:19825/ext',
+      readyState: MockWebSocket.OPEN,
+      reconnecting: false,
+    }));
+  });
+
+  it('ignores stale in-flight connect attempts after settings change', async () => {
+    const { chrome, storageState } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const oldFetch = createDeferred<{ ok: boolean }>();
+    const newFetch = createDeferred<{ ok: boolean }>();
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url === 'http://localhost:19825/ping') return oldFetch.promise;
+      if (url === 'http://127.0.0.1:19825/ping') return newFetch.promise;
+      throw new Error(`Unexpected fetch url: ${url}`);
+    }));
+
+    const mod = await import('./background');
+
+    const firstConnect = mod.__test__.connect();
+    await flushPromises();
+
+    storageState.daemonHost = '127.0.0.1';
+    const secondConnect = mod.__test__.connect();
+    await flushPromises();
+
+    newFetch.resolve({ ok: true });
+    await secondConnect;
+
+    const newSocket = MockWebSocket.instances.at(-1)!;
+    newSocket.readyState = MockWebSocket.OPEN;
+    newSocket.onopen?.();
+
+    oldFetch.resolve({ ok: true });
+    await firstConnect;
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(newSocket.url).toBe('ws://127.0.0.1:19825/ext');
+    expect(mod.__test__.getConnectionState()).toEqual(expect.objectContaining({
+      ws: newSocket,
+      wsUrl: 'ws://127.0.0.1:19825/ext',
+      readyState: MockWebSocket.OPEN,
       reconnecting: false,
     }));
   });

@@ -239,10 +239,9 @@ function registerListeners() {
 
 const STORAGE_KEYS = { host: "daemonHost", port: "daemonPort" };
 let ws = null;
-let activeWsUrl = null;
-let pendingWsUrl = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
+let connectAttemptId = 0;
 async function getDaemonSettings() {
   const result = await chrome.storage.local.get({
     [STORAGE_KEYS.host]: DEFAULT_DAEMON_HOST,
@@ -277,15 +276,14 @@ console.error = (...args) => {
   forwardLog("error", args);
 };
 async function connect() {
+  const attemptId = ++connectAttemptId;
   const { host, port } = await getDaemonSettings();
+  if (attemptId !== connectAttemptId) return;
   const { ping: pingUrl, ws: wsUrl } = buildDaemonEndpoints(host, port);
   if (ws) {
-    if (ws.readyState === WebSocket.OPEN && activeWsUrl === wsUrl) return;
-    if (ws.readyState === WebSocket.CONNECTING && pendingWsUrl === wsUrl) return;
+    if (ws.url === wsUrl && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     const previousSocket = ws;
     ws = null;
-    activeWsUrl = null;
-    pendingWsUrl = null;
     try {
       previousSocket.close();
     } catch {
@@ -293,19 +291,17 @@ async function connect() {
   }
   try {
     const res = await fetch(pingUrl, { signal: AbortSignal.timeout(1e3) });
+    if (attemptId !== connectAttemptId) return;
     if (!res.ok) return;
   } catch {
     return;
   }
   try {
-    pendingWsUrl = wsUrl;
     const socket = new WebSocket(wsUrl);
     ws = socket;
     socket.onopen = () => {
       if (ws !== socket) return;
       console.log("[opencli] Connected to daemon");
-      pendingWsUrl = null;
-      activeWsUrl = wsUrl;
       reconnectAttempts = 0;
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
@@ -328,8 +324,6 @@ async function connect() {
       if (ws !== socket) return;
       console.log("[opencli] Disconnected from daemon");
       ws = null;
-      activeWsUrl = null;
-      pendingWsUrl = null;
       scheduleReconnect();
     };
     socket.onerror = () => {
@@ -337,7 +331,6 @@ async function connect() {
       socket.close();
     };
   } catch {
-    pendingWsUrl = null;
     scheduleReconnect();
     return;
   }
@@ -433,9 +426,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (!changes[STORAGE_KEYS.host] && !changes[STORAGE_KEYS.port]) return;
   const previousSocket = ws;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   ws = null;
-  activeWsUrl = null;
-  pendingWsUrl = null;
   try {
     previousSocket?.close();
   } catch {
