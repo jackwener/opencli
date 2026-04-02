@@ -11,5 +11,6 @@
     "declaration": false,
     "types": ["chrome"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
 }
