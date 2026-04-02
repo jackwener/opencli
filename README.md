@@ -45,7 +45,7 @@ There are many great browser automation tools. Here's when opencli is the right 
 
 - **Zero LLM cost** — No tokens consumed at runtime. Run 10,000 times and pay nothing.
 - **Deterministic** — Same command, same output schema, every time. Pipeable, scriptable, CI-friendly.
-- **Broad coverage** — 50+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
+- **Broad coverage** — 70+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
 
 > For a detailed comparison with Browser-Use, Crawl4AI, Firecrawl, and others, see the [Comparison Guide](./docs/comparison.md).
 
@@ -98,7 +98,7 @@ opencli operate state                                 # 2. See interactive eleme
 opencli operate eval "document.title"                 # 3. Extract data
 ```
 
-More commands: `click`, `type`, `select`, `keys`, `wait`, `get`, `screenshot`, `scroll`, `back`, `close`.
+More commands: `click`, `type`, `select`, `keys`, `wait`, `get`, `screenshot`, `scroll`, `back`, `eval`, `network`, `init`, `verify`, `close`.
 
 See [`skills/opencli-operate/SKILL.md`](./skills/opencli-operate/SKILL.md) for full documentation.
 
@@ -118,6 +118,7 @@ npx skills add jackwener/opencli
 
 # Or install specific skills
 npx skills add jackwener/opencli --skill opencli-usage      # Command reference
+npx skills add jackwener/opencli --skill opencli-operate     # Browser automation for AI agents
 npx skills add jackwener/opencli --skill opencli-explorer    # Adapter development guide
 npx skills add jackwener/opencli --skill opencli-oneshot     # Quick command reference
 ```
@@ -160,7 +161,7 @@ git clone git@github.com:jackwener/opencli.git && cd opencli && npm install && n
 | **notebooklm** | `status` `list` `open` `select` `current` `get` `metadata` `source-list` `source-get` `source-fulltext` `source-guide` `history` `note-list` `notes-list` `notes-get` `summary` |
 | **spotify** | `auth` `status` `play` `pause` `next` `prev` `volume` `search` `queue` `shuffle` `repeat` |
 
-66+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
+70+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
 
 ## CLI Hub
 
