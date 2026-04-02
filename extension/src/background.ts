@@ -22,6 +22,11 @@ let legacyReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let legacyReconnectAttempts = 0;
 const MAX_EAGER_ATTEMPTS = 6;
 
+// Outbound result frames that failed to send via offscreen/legacy WS.
+// Flushed when the transport reconnects.
+const pendingResults: string[] = [];
+const MAX_PENDING_RESULTS = 100;
+
 function prefersOffscreenTransport(): boolean {
   return !forceLegacyTransport && !!(chrome as any).offscreen;
 }
@@ -89,6 +94,7 @@ async function legacyConnect(): Promise<void> {
       legacyReconnectTimer = null;
     }
     legacyWs?.send(JSON.stringify({ type: 'hello', version: chrome.runtime.getManifest().version }));
+    void flushPendingResults();
   };
 
   legacyWs.onmessage = async (event) => {
@@ -134,25 +140,63 @@ async function connectTransport(): Promise<void> {
   }
 }
 
-/** Send a serialised result/hello string over the WebSocket. */
-async function wsSend(payload: string): Promise<void> {
+/** Send a serialised result/hello string over the WebSocket. Returns true if sent. */
+async function wsSend(payload: string): Promise<boolean> {
   if (!prefersOffscreenTransport()) {
     if (legacyWs?.readyState === WebSocket.OPEN) {
       legacyWs.send(payload);
-    } else {
-      void legacyConnect();
+      return true;
     }
-    return;
+    // Buffer the payload so it can be retried once the connection is back.
+    bufferResult(payload);
+    void legacyConnect();
+    return false;
   }
 
   try {
     const resp = await chrome.runtime.sendMessage({ type: 'ws-send', payload }) as { ok: boolean };
-    if (!resp?.ok) {
-      // Offscreen WS is down — trigger reconnect
-      void offscreenConnect();
-    }
-  } catch {
+    if (resp?.ok) return true;
+    bufferResult(payload);
     void offscreenConnect();
+    return false;
+  } catch {
+    bufferResult(payload);
+    void offscreenConnect();
+    return false;
+  }
+}
+
+function bufferResult(payload: string): void {
+  if (pendingResults.length >= MAX_PENDING_RESULTS) {
+    pendingResults.shift(); // oldest-first eviction
+  }
+  pendingResults.push(payload);
+}
+
+/** Drain buffered result frames after transport reconnects. */
+async function flushPendingResults(): Promise<void> {
+  while (pendingResults.length > 0) {
+    const payload = pendingResults[0];
+    const sent = await wsSendDirect(payload);
+    if (!sent) break; // transport still down, stop flushing
+    pendingResults.shift();
+  }
+}
+
+/** Low-level send without buffering — used by flushPendingResults to avoid recursion. */
+async function wsSendDirect(payload: string): Promise<boolean> {
+  if (!prefersOffscreenTransport()) {
+    if (legacyWs?.readyState === WebSocket.OPEN) {
+      legacyWs.send(payload);
+      return true;
+    }
+    return false;
+  }
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: 'ws-send', payload }) as { ok: boolean };
+    return resp?.ok === true;
+  } catch {
+    return false;
   }
 }
 
@@ -284,8 +328,10 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keepalive') {
+    // Allow offscreen transport to be retried periodically instead of permanent lockout.
+    forceLegacyTransport = false;
     // Ensure offscreen doc is alive and WS is connected after any SW suspend/resume.
-    void connectTransport();
+    void connectTransport().then(() => flushPendingResults());
   }
 });
 
@@ -305,18 +351,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   // ── Incoming WS frame from offscreen ──
+  // Ack only AFTER handleCommand() completes and the result is sent (or buffered).
+  // This keeps the frame in offscreen's pendingFrames until we've truly handled it.
   if (msg?.type === 'ws-message') {
-    sendResponse({ ok: true });
-    void (async () => {
+    (async () => {
       try {
         const command = JSON.parse(msg.data as string) as Command;
         const result = await handleCommand(command);
         await wsSend(JSON.stringify(result));
+        sendResponse({ ok: true });
       } catch (err) {
         console.error('[opencli] Message handling error:', err);
+        sendResponse({ ok: false, error: String(err) });
       }
     })();
-    return false;
+    return true; // async response
   }
 
   // ── Log forwarding from offscreen (pass through to WS) ──

@@ -28,6 +28,7 @@ let flushingFrames = false;
 
 const MAX_EAGER_ATTEMPTS = 6;
 const FRAME_RETRY_DELAY = 1000;
+const MAX_PENDING_FRAMES = 100;
 
 // ─── Logging ─────────────────────────────────────────────────────────
 
@@ -92,6 +93,10 @@ async function connect(): Promise<void> {
   };
 
   ws.onmessage = (event) => {
+    if (pendingFrames.length >= MAX_PENDING_FRAMES) {
+      console.warn('[opencli/offscreen] pendingFrames at capacity, dropping oldest frame');
+      pendingFrames.shift();
+    }
     pendingFrames.push(event.data as string);
     void flushPendingFrames();
   };
