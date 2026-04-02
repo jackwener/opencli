@@ -31,6 +31,7 @@ describe('management commands E2E', () => {
     expect(stdout).toContain('hackernews');
     expect(stdout).toContain('bilibili');
     expect(stdout).toContain('twitter');
+    expect(stdout).toContain('toutiao');
     expect(stdout).toContain('commands across');
   });
 
