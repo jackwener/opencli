@@ -68,8 +68,8 @@ cli({
       }
       try {
         await page.setFileInput(absPaths, 'input[data-testid="fileInput"]');
-      } catch {
-        throw new CommandExecutionError('Failed to attach images. The extension may not support file input.');
+      } catch (e) {
+        throw new CommandExecutionError(`Failed to attach images: ${e}`);
       }
 
       // Poll until image upload completes (tweet button becomes enabled) or timeout
