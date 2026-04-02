@@ -19,11 +19,12 @@ Requires: Chrome running + OpenCLI Browser Bridge extension installed.
 ## Critical Rules
 
 1. **ALWAYS use `state` to inspect the page, NEVER use `screenshot`** — `state` returns structured DOM with `[N]` element indices, is instant and costs zero tokens. `screenshot` requires vision processing and is slow. Only use `screenshot` when the user explicitly asks to save a visual.
-2. **Verify inputs with `get value`, not screenshots** — after `type`, run `get value <index>` to confirm.
-3. **Run `state` after every page change** — after `open`, `click` (on links), `scroll`, always run `state` to see the new elements and their indices. Never guess indices.
-4. **Chain safe commands with `&&`** — `type 3 "a" && type 4 "b" && click 7` is one call instead of three. But always run `state` first to get correct indices before chaining.
-5. **Prefer `eval` for bulk data extraction** — `eval "JSON.stringify(...)"` is instant. `state` is for interaction. Don't call `state` repeatedly to "read" data — use `eval`.
-6. **Prefer `network` to discover APIs** — most sites have JSON APIs. API-based adapters are more reliable than DOM scraping.
+2. **ALWAYS use `click`/`type`/`select` for interaction, NEVER use `eval` to click or type** — `eval "el.click()"` bypasses scrollIntoView and CDP click pipeline, causing failures on off-screen elements. Use `state` to find the `[N]` index, then `click <N>`.
+3. **Verify inputs with `get value`, not screenshots** — after `type`, run `get value <index>` to confirm.
+4. **Run `state` after every page change** — after `open`, `click` (on links), `scroll`, always run `state` to see the new elements and their indices. Never guess indices.
+5. **Chain safe commands with `&&`** — `type 3 "a" && type 4 "b" && click 7` is one call instead of three. But always run `state` first to get correct indices before chaining.
+6. **`eval` is read-only** — use `eval` ONLY for data extraction (`JSON.stringify(...)`), never for clicking, typing, or navigating. Always wrap in IIFE to avoid variable conflicts: `eval "(function(){ const x = ...; return JSON.stringify(x); })()"`.
+7. **Prefer `network` to discover APIs** — most sites have JSON APIs. API-based adapters are more reliable than DOM scraping.
 
 ## Command Cost Guide
 
@@ -109,11 +110,16 @@ opencli operate wait text "Success"               # Wait for text
 opencli operate wait time 3                       # Wait N seconds
 ```
 
-### Extract (free & instant)
+### Extract (free & instant, read-only)
+
+Use `eval` ONLY for reading data. Never use it to click, type, or navigate.
 
 ```bash
 opencli operate eval "document.title"
 opencli operate eval "JSON.stringify([...document.querySelectorAll('h2')].map(e => e.textContent))"
+
+# IMPORTANT: wrap complex logic in IIFE to avoid "already declared" errors
+opencli operate eval "(function(){ const items = [...document.querySelectorAll('.item')]; return JSON.stringify(items.map(e => e.textContent)); })()"
 ```
 
 ### Network (API Discovery)
