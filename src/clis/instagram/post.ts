@@ -8,6 +8,14 @@ import type { IPage } from '../../types.js';
 const INSTAGRAM_HOME_URL = 'https://www.instagram.com/';
 const SUPPORTED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
+async function gotoInstagramHome(page: IPage, forceReload = false): Promise<void> {
+  if (forceReload) {
+    await page.goto(`${INSTAGRAM_HOME_URL}?__opencli_reset=${Date.now()}`);
+    await page.wait({ time: 1 });
+  }
+  await page.goto(INSTAGRAM_HOME_URL);
+}
+
 export function buildEnsureComposerOpenJs(): string {
   return `
     (() => {
@@ -40,6 +48,41 @@ export function buildEnsureComposerOpenJs(): string {
       }
 
       return { ok: true };
+    })()
+  `;
+}
+
+export function buildPublishStatusProbeJs(): string {
+  return `
+    (() => {
+      const isVisible = (el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.display !== 'none'
+          && style.visibility !== 'hidden'
+          && rect.width > 0
+          && rect.height > 0;
+      };
+      const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter((el) => isVisible(el));
+      const dialogText = dialogs
+        .map((el) => (el.textContent || '').replace(/\\s+/g, ' ').trim())
+        .join(' ');
+      const url = window.location.href;
+      const visibleText = dialogText.toLowerCase();
+      const sharingVisible = /sharing/.test(visibleText);
+      const shared = /post shared|your post has been shared|已分享|已发布/.test(visibleText)
+        || /\\/p\\//.test(url);
+      const failed = !shared && !sharingVisible && (
+        /couldn['’]t be shared|could not be shared|failed to share|share failed|无法分享|分享失败/.test(visibleText)
+        || (/something went wrong/.test(visibleText) && /try again/.test(visibleText))
+      );
+      const composerOpen = dialogs.some((dialog) =>
+        !!dialog.querySelector('textarea, [contenteditable="true"], input[type="file"]')
+        || /write a caption|add location|advanced settings|select from computer|crop|filters|adjustments|sharing/.test((dialog.textContent || '').toLowerCase())
+      );
+      const settled = !shared && !composerOpen && !/sharing/.test(visibleText);
+      return { ok: shared, failed, settled, url: /\\/p\\//.test(url) ? url : '' };
     })()
   `;
 }
@@ -209,6 +252,20 @@ async function resolveUploadSelectors(page: IPage): Promise<string[]> {
   }
 }
 
+function extractSelectorIndex(selector: string): number | null {
+  const match = selector.match(/data-opencli-ig-upload-index="(\d+)"/);
+  if (!match) return null;
+  const index = Number.parseInt(match[1] || '', 10);
+  return Number.isNaN(index) ? null : index;
+}
+
+async function resolveFreshUploadSelector(page: IPage, previousSelector: string): Promise<string> {
+  const selectors = await resolveUploadSelectors(page);
+  const index = extractSelectorIndex(previousSelector);
+  if (index !== null && selectors[index]) return selectors[index]!;
+  return selectors[0] || previousSelector;
+}
+
 async function injectImageViaBrowser(page: IPage, imagePath: string, selector: string): Promise<void> {
   const ext = path.extname(imagePath).toLowerCase();
   const mimeType = ext === '.png'
@@ -295,7 +352,12 @@ async function dispatchUploadEvents(page: IPage, selector: string): Promise<void
   `);
 }
 
-async function hasPreviewSurface(page: IPage): Promise<boolean> {
+type UploadStageState = {
+  state: 'preview' | 'failed' | 'pending';
+  detail?: string;
+};
+
+async function inspectUploadStage(page: IPage): Promise<UploadStageState> {
   const result = await page.evaluate(`
     (() => {
       const isVisible = (el) => {
@@ -313,14 +375,34 @@ async function hasPreviewSurface(page: IPage): Promise<boolean> {
           return isVisible(el) && labels.includes(text);
         });
       };
+      const dialogText = Array.from(document.querySelectorAll('[role="dialog"]'))
+        .filter((el) => isVisible(el))
+        .map((el) => (el.textContent || '').replace(/\\s+/g, ' ').trim())
+        .join(' ');
+      const combined = dialogText.toLowerCase();
       const hasCaption = !!document.querySelector('textarea, [contenteditable="true"]');
       const hasPicker = hasVisibleButton(['Select from computer', '从电脑中选择']);
       const hasNext = hasVisibleButton(['Next', '下一步']);
-      return { ok: hasCaption || (!hasPicker && hasNext) };
+      const hasPreviewUi = hasCaption
+        || (!hasPicker && hasNext)
+        || /crop|select crop|select zoom|open media gallery|filters|adjustments|裁剪|缩放|滤镜|调整/.test(combined);
+      const failed = /something went wrong|please try again|couldn['’]t upload|could not upload|upload failed|try again|出错|失败/.test(combined);
+      if (hasPreviewUi) return { state: 'preview', detail: dialogText || '' };
+      if (failed) return { state: 'failed', detail: dialogText || 'Something went wrong' };
+      return { state: 'pending', detail: dialogText || '' };
     })()
-  `) as { ok?: boolean };
+  `) as UploadStageState & { ok?: boolean };
 
-  return !!result?.ok;
+  if (result?.state) return result;
+  if (result?.ok === true) return { state: 'preview', detail: result.detail };
+  return { state: 'pending', detail: result?.detail };
+}
+
+function makeUploadFailure(detail?: string): CommandExecutionError {
+  return new CommandExecutionError(
+    'Instagram image upload failed',
+    detail ? `Instagram rejected the upload: ${detail}` : 'Instagram rejected the upload before the preview stage',
+  );
 }
 
 async function uploadImage(page: IPage, imagePath: string, selector: string): Promise<void> {
@@ -331,21 +413,65 @@ async function uploadImage(page: IPage, imagePath: string, selector: string): Pr
     );
   }
 
-  try {
-    await page.setFileInput([imagePath], selector);
-    await dispatchUploadEvents(page, selector);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes('Unknown action') && !message.includes('set-file-input') && !message.includes('not supported')) {
-      throw error;
+  let activeSelector = selector;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await page.setFileInput([imagePath], activeSelector);
+      await dispatchUploadEvents(page, activeSelector);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const staleSelector = message.includes('No element found matching selector');
+      if (staleSelector && attempt === 0) {
+        activeSelector = await resolveFreshUploadSelector(page, activeSelector);
+        continue;
+      }
+      if (!message.includes('Unknown action') && !message.includes('set-file-input') && !message.includes('not supported')) {
+        throw error;
+      }
+      await injectImageViaBrowser(page, imagePath, activeSelector);
+      return;
     }
-    await injectImageViaBrowser(page, imagePath, selector);
   }
+}
+
+async function dismissUploadErrorDialog(page: IPage): Promise<boolean> {
+  const result = await page.evaluate(`
+    (() => {
+      const isVisible = (el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.display !== 'none'
+          && style.visibility !== 'hidden'
+          && rect.width > 0
+          && rect.height > 0;
+      };
+      const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter((el) => isVisible(el));
+      for (const dialog of dialogs) {
+        const text = (dialog.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+        if (!text.includes('something went wrong') && !text.includes('try again') && !text.includes('失败') && !text.includes('出错')) continue;
+        const close = dialog.querySelector('[aria-label="Close"], button[aria-label="Close"], div[role="button"][aria-label="Close"]');
+        if (close instanceof HTMLElement && isVisible(close)) {
+          close.click();
+          return { ok: true };
+        }
+      }
+      return { ok: false };
+    })()
+  `) as { ok?: boolean };
+
+  return !!result?.ok;
 }
 
 async function waitForPreview(page: IPage): Promise<void> {
   for (let attempt = 0; attempt < 12; attempt++) {
-    if (await hasPreviewSurface(page)) return;
+    const state = await inspectUploadStage(page);
+    if (state.state === 'preview') return;
+    if (state.state === 'failed') {
+      await page.screenshot({ path: '/tmp/instagram_post_preview_debug.png' });
+      throw makeUploadFailure('Inspect /tmp/instagram_post_preview_debug.png. ' + (state.detail || ''));
+    }
     if (attempt < 11) await page.wait({ time: 1 });
   }
 
@@ -356,13 +482,14 @@ async function waitForPreview(page: IPage): Promise<void> {
   );
 }
 
-async function waitForPreviewMaybe(page: IPage, maxWaitSeconds = 4): Promise<boolean> {
+async function waitForPreviewMaybe(page: IPage, maxWaitSeconds = 4): Promise<UploadStageState> {
   const attempts = Math.max(1, Math.ceil(maxWaitSeconds * 2));
   for (let attempt = 0; attempt < attempts; attempt++) {
-    if (await hasPreviewSurface(page)) return true;
+    const state = await inspectUploadStage(page);
+    if (state.state !== 'pending') return state;
     if (attempt < attempts - 1) await page.wait({ time: 0.5 });
   }
-  return false;
+  return { state: 'pending' };
 }
 
 async function clickAction(page: IPage, labels: string[], scope: 'any' | 'media' | 'caption' = 'any'): Promise<string> {
@@ -774,21 +901,9 @@ async function ensureCaptionFilled(page: IPage, content: string): Promise<void> 
 }
 
 async function waitForPublishSuccess(page: IPage): Promise<string> {
-  for (let attempt = 0; attempt < 30; attempt++) {
-    const result = await page.evaluate(`
-      (() => {
-        const bodyText = (document.body?.innerText || '').replace(/\\s+/g, ' ').trim();
-        const dialogText = Array.from(document.querySelectorAll('[role="dialog"]'))
-          .map((el) => (el.textContent || '').replace(/\\s+/g, ' ').trim())
-          .join(' ');
-        const url = window.location.href;
-        const combined = (dialogText + ' ' + bodyText).toLowerCase();
-        const failed = /couldn['’]t be shared|could not be shared|failed to share|share failed|something went wrong|try again|无法分享|分享失败/.test(combined);
-        const shared = /post shared|your post has been shared|已分享|已发布/.test(combined)
-          || /\\/p\\//.test(url);
-        return { ok: shared, failed, url: /\\/p\\//.test(url) ? url : '' };
-      })()
-    `) as { ok?: boolean; failed?: boolean; url?: string };
+  let settledStreak = 0;
+  for (let attempt = 0; attempt < 90; attempt++) {
+    const result = await page.evaluate(buildPublishStatusProbeJs()) as { ok?: boolean; failed?: boolean; settled?: boolean; url?: string };
 
     if (result?.failed) {
       await page.screenshot({ path: '/tmp/instagram_post_share_debug.png' });
@@ -801,7 +916,13 @@ async function waitForPublishSuccess(page: IPage): Promise<string> {
     if (result?.ok) {
       return result.url || '';
     }
-    if (attempt < 29) {
+    if (result?.settled) {
+      settledStreak += 1;
+      if (settledStreak >= 3) return '';
+    } else {
+      settledStreak = 0;
+    }
+    if (attempt < 89) {
       await page.wait({ time: 1 });
     }
   }
@@ -950,9 +1071,10 @@ cli({
   domain: 'www.instagram.com',
   strategy: Strategy.UI,
   browser: true,
+  timeoutSeconds: 180,
   args: [
     { name: 'image', required: true, help: 'Path to a single image file' },
-    { name: 'content', positional: true, required: true, help: 'Caption text' },
+    { name: 'content', positional: true, required: false, help: 'Caption text' },
   ],
   columns: ['status', 'detail', 'url'],
   func: async (page: IPage | null, kwargs) => {
@@ -966,26 +1088,55 @@ cli({
     for (let attempt = 0; attempt < 3; attempt++) {
       let shareClicked = false;
       try {
-        await browserPage.goto(INSTAGRAM_HOME_URL);
+        await gotoInstagramHome(browserPage, attempt > 0);
         await browserPage.wait({ time: 2 });
         await dismissResidualDialogs(browserPage);
 
         await ensureComposerOpen(browserPage);
         const uploadSelectors = await resolveUploadSelectors(browserPage);
         let uploaded = false;
+        let uploadFailure: CommandExecutionError | null = null;
         for (const selector of uploadSelectors) {
-          await uploadImage(browserPage, imagePath, selector);
-          if (await waitForPreviewMaybe(browserPage, 4)) {
-            uploaded = true;
+          let activeSelector = selector;
+          for (let uploadAttempt = 0; uploadAttempt < 2; uploadAttempt++) {
+            await uploadImage(browserPage, imagePath, activeSelector);
+            const uploadState = await waitForPreviewMaybe(browserPage, 4);
+            if (uploadState.state === 'preview') {
+              uploaded = true;
+              break;
+            }
+            if (uploadState.state === 'failed') {
+              uploadFailure = makeUploadFailure(uploadState.detail);
+              await dismissUploadErrorDialog(browserPage);
+              await dismissResidualDialogs(browserPage);
+              if (uploadAttempt === 0) {
+                try {
+                  await gotoInstagramHome(browserPage, true);
+                  await browserPage.wait({ time: 2 });
+                  await dismissResidualDialogs(browserPage);
+                  await ensureComposerOpen(browserPage);
+                  activeSelector = await resolveFreshUploadSelector(browserPage, activeSelector);
+                } catch {
+                  throw uploadFailure;
+                }
+                await browserPage.wait({ time: 1.5 });
+                continue;
+              }
+              break;
+            }
             break;
           }
+          if (uploaded) break;
         }
         if (!uploaded) {
+          if (uploadFailure) throw uploadFailure;
           await waitForPreview(browserPage);
         }
         await advanceToCaptionEditor(browserPage);
-        await fillCaption(browserPage, content);
-        await ensureCaptionFilled(browserPage, content);
+        if (content) {
+          await fillCaption(browserPage, content);
+          await ensureCaptionFilled(browserPage, content);
+        }
         await clickAction(browserPage, ['Share', '分享'], 'caption');
         shareClicked = true;
         let url = await waitForPublishSuccess(browserPage);
