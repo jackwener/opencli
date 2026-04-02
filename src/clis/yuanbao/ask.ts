@@ -1,12 +1,11 @@
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
 import TurndownService from 'turndown';
+import { AuthRequiredError, CommandExecutionError, TimeoutError } from '../../errors.js';
 
 export const YUANBAO_DOMAIN = 'yuanbao.tencent.com';
 export const YUANBAO_URL = 'https://yuanbao.tencent.com/';
 
-const BLOCKED_PREFIX = '[BLOCKED]';
-const NO_RESPONSE_PREFIX = '[NO RESPONSE]';
 const SESSION_HINT = 'Likely login/auth/challenge/session issue in the existing yuanbao.tencent.com browser session.';
 const YUANBAO_RESPONSE_POLL_INTERVAL_SECONDS = 2;
 const YUANBAO_MIN_WAIT_MS = 8_000;
@@ -24,8 +23,16 @@ type YuanbaoToggleState = {
   found: boolean;
 };
 
-function blocked(message: string) {
-  return [{ Role: 'System', Text: `${BLOCKED_PREFIX} ${message} ${SESSION_HINT}` }];
+function authRequired(message: string) {
+  return new AuthRequiredError(YUANBAO_DOMAIN, `${message} ${SESSION_HINT}`);
+}
+
+function sendFailure(reason?: string, detail?: string) {
+  const suffix = detail ? ` Detail: ${detail}` : '';
+  return new CommandExecutionError(
+    `${reason || 'Unknown Yuanbao send failure.'}${suffix}`,
+    'Make sure the Yuanbao chat composer is visible and ready before retrying.',
+  );
 }
 
 function normalizeText(value: unknown): string {
@@ -547,6 +554,9 @@ export const askCommand = cli({
     const useThink = normalizeBooleanFlag(kwargs.think, false);
 
     await ensureYuanbaoPage(page);
+    if (await hasLoginGate(page)) {
+      throw authRequired('Yuanbao opened a login gate before sending the prompt.');
+    }
     await setYuanbaoInternetSearch(page, useSearch);
     await setYuanbaoDeepThink(page, useThink);
     const beforeAssistantMessages = await getYuanbaoAssistantMessages(page);
@@ -554,7 +564,10 @@ export const askCommand = cli({
     const sendResult = await sendYuanbaoMessage(page, prompt);
 
     if (!sendResult?.ok) {
-      return [{ Role: 'System', Text: `[SEND FAILED] ${sendResult?.reason || 'Unknown Yuanbao send failure.'}` }];
+      if (await hasLoginGate(page)) {
+        throw authRequired('Yuanbao opened a login gate instead of accepting the prompt.');
+      }
+      throw sendFailure(sendResult?.reason, sendResult?.detail);
     }
 
     const response = await waitForYuanbaoResponse(
@@ -566,14 +579,15 @@ export const askCommand = cli({
     );
 
     if (response === 'blocked') {
-      return blocked('Yuanbao opened a login gate instead of returning a chat response.');
+      throw authRequired('Yuanbao opened a login gate instead of returning a chat response.');
     }
 
     if (!response) {
-      return [
-        { Role: 'User', Text: prompt },
-        { Role: 'System', Text: `${NO_RESPONSE_PREFIX} No Yuanbao response within ${timeout}s.` },
-      ];
+      throw new TimeoutError(
+        'yuanbao ask',
+        timeout,
+        'No Yuanbao response was observed before the timeout. Retry with --timeout, and verify the current browser session is still interactive.',
+      );
     }
 
     return [

@@ -1,5 +1,6 @@
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
+import { AuthRequiredError } from '../../errors.js';
 
 const YUANBAO_DOMAIN = 'yuanbao.tencent.com';
 const YUANBAO_URL = 'https://yuanbao.tencent.com/';
@@ -53,6 +54,8 @@ async function getComposerText(page: IPage): Promise<string> {
 async function startNewYuanbaoChat(page: IPage): Promise<'clicked' | 'navigate' | 'blocked'> {
   await ensureYuanbaoPage(page);
 
+  if (await hasLoginGate(page)) return 'blocked';
+
   const beforeUrl = await getCurrentUrl(page);
   const action = await page.evaluate(`(() => {
     const isVisible = (node) => {
@@ -79,6 +82,7 @@ async function startNewYuanbaoChat(page: IPage): Promise<'clicked' | 'navigate' 
   if (action === 'navigate') {
     await page.goto(YUANBAO_URL, { waitUntil: 'load', settleMs: 2500 });
     await page.wait(1);
+    if (await hasLoginGate(page)) return 'blocked';
     return 'navigate';
   }
 
@@ -109,10 +113,10 @@ export const newCommand = cli({
     const action = await startNewYuanbaoChat(page);
 
     if (action === 'blocked') {
-      return [{
-        Status: 'Blocked',
-        Action: 'Yuanbao opened a login gate instead of starting a new chat',
-      }];
+      throw new AuthRequiredError(
+        YUANBAO_DOMAIN,
+        'Yuanbao opened a login gate instead of starting a new chat. Likely login/auth/challenge/session issue in the existing yuanbao.tencent.com browser session.',
+      );
     }
 
     return [{

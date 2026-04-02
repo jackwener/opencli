@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { IPage } from '../../types.js';
+import { AuthRequiredError, CommandExecutionError, TimeoutError } from '../../errors.js';
 import { __test__ } from './ask.js';
+import { askCommand } from './ask.js';
 
 describe('yuanbao ask helpers', () => {
   describe('isOnYuanbao', () => {
@@ -93,5 +95,62 @@ describe('yuanbao ask helpers', () => {
       previousText: '第二段',
       stableCount: 0,
     });
+  });
+});
+
+function createAskPageMock(overrides: {
+  currentUrl?: string;
+  hasLoginGate?: boolean;
+  sendResult?: { ok?: boolean; reason?: string; detail?: string; action?: string };
+} = {}): IPage {
+  const currentUrl = overrides.currentUrl ?? 'https://yuanbao.tencent.com/';
+  const hasLoginGate = overrides.hasLoginGate ?? false;
+  const sendResult = overrides.sendResult;
+
+  return {
+    goto: vi.fn().mockResolvedValue(undefined),
+    wait: vi.fn().mockResolvedValue(undefined),
+    evaluate: vi.fn().mockImplementation(async (script: string) => {
+      if (script === 'window.location.href') return currentUrl;
+      if (script.includes('微信扫码登录')) return hasLoginGate;
+      if (script.includes('[dt-button-id="internet_search"]')) return { found: false, enabled: false };
+      if (script.includes('[dt-button-id="deep_think"]')) return { found: false, enabled: false };
+      if (script.includes('.agent-chat__list__item--ai')) return [];
+      if (script.includes('const stopLines = new Set([')) return [];
+      if (script.includes('Failed to insert the prompt into the Yuanbao composer.')) {
+        return sendResult ?? { ok: true, action: 'click' };
+      }
+      throw new Error(`Unexpected evaluate script in test: ${script.slice(0, 80)}`);
+    }),
+  } as unknown as IPage;
+}
+
+describe('yuanbao ask command', () => {
+  it('throws AuthRequiredError when Yuanbao shows a login gate before sending', async () => {
+    const page = createAskPageMock({ hasLoginGate: true });
+
+    await expect(askCommand.func!(page, { prompt: '你好', timeout: '60', search: true, think: false }))
+      .rejects.toBeInstanceOf(AuthRequiredError);
+  });
+
+  it('throws CommandExecutionError when the prompt cannot be sent', async () => {
+    const page = createAskPageMock({
+      sendResult: {
+        ok: false,
+        reason: 'Yuanbao composer was not found.',
+      },
+    });
+
+    await expect(askCommand.func!(page, { prompt: '你好', timeout: '60', search: true, think: false }))
+      .rejects.toBeInstanceOf(CommandExecutionError);
+  });
+
+  it('throws TimeoutError when no response arrives before timeout', async () => {
+    const page = createAskPageMock({
+      sendResult: { ok: true, action: 'click' },
+    });
+
+    await expect(askCommand.func!(page, { prompt: '你好', timeout: '-1', search: true, think: false }))
+      .rejects.toBeInstanceOf(TimeoutError);
   });
 });
