@@ -1,7 +1,27 @@
 const DEFAULT_DAEMON_HOST = "localhost";
 const DEFAULT_DAEMON_PORT = 19825;
+function normalizeDaemonHost(host) {
+  let value = (host || "").trim();
+  if (!value) return DEFAULT_DAEMON_HOST;
+  if (value.includes("://")) {
+    try {
+      value = new URL(value).hostname || value;
+    } catch {
+      value = value.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+    }
+  }
+  value = value.replace(/[/?#].*$/, "");
+  const bracketedIpv6Match = value.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketedIpv6Match?.[1]) return bracketedIpv6Match[1];
+  const colonCount = (value.match(/:/g) || []).length;
+  if (colonCount === 1) {
+    const [hostname] = value.split(":");
+    value = hostname || value;
+  }
+  return value.trim() || DEFAULT_DAEMON_HOST;
+}
 function buildDaemonEndpoints(host, port) {
-  const h = (host || DEFAULT_DAEMON_HOST).trim() || DEFAULT_DAEMON_HOST;
+  const h = normalizeDaemonHost(host);
   const p = Number.isFinite(port) && port >= 1 && port <= 65535 ? port : DEFAULT_DAEMON_PORT;
   const hostPart = h.includes(":") && !h.startsWith("[") ? `[${h}]` : h;
   return {
@@ -228,7 +248,7 @@ async function getDaemonSettings() {
     [STORAGE_KEYS.host]: DEFAULT_DAEMON_HOST,
     [STORAGE_KEYS.port]: DEFAULT_DAEMON_PORT
   });
-  let host = result[STORAGE_KEYS.host]?.trim() || DEFAULT_DAEMON_HOST;
+  const host = normalizeDaemonHost(result[STORAGE_KEYS.host]);
   let port = typeof result[STORAGE_KEYS.port] === "number" ? result[STORAGE_KEYS.port] : DEFAULT_DAEMON_PORT;
   if (!Number.isFinite(port) || port < 1 || port > 65535) port = DEFAULT_DAEMON_PORT;
   return { host, port };
@@ -262,13 +282,14 @@ async function connect() {
   if (ws) {
     if (ws.readyState === WebSocket.OPEN && activeWsUrl === wsUrl) return;
     if (ws.readyState === WebSocket.CONNECTING && pendingWsUrl === wsUrl) return;
-    try {
-      ws.close();
-    } catch {
-    }
+    const previousSocket = ws;
     ws = null;
     activeWsUrl = null;
     pendingWsUrl = null;
+    try {
+      previousSocket.close();
+    } catch {
+    }
   }
   try {
     const res = await fetch(pingUrl, { signal: AbortSignal.timeout(1e3) });
@@ -278,42 +299,48 @@ async function connect() {
   }
   try {
     pendingWsUrl = wsUrl;
-    ws = new WebSocket(wsUrl);
+    const socket = new WebSocket(wsUrl);
+    ws = socket;
+    socket.onopen = () => {
+      if (ws !== socket) return;
+      console.log("[opencli] Connected to daemon");
+      pendingWsUrl = null;
+      activeWsUrl = wsUrl;
+      reconnectAttempts = 0;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      socket.send(JSON.stringify({ type: "hello", version: chrome.runtime.getManifest().version }));
+    };
+    socket.onmessage = async (event) => {
+      if (ws !== socket) return;
+      try {
+        const command = JSON.parse(event.data);
+        const result = await handleCommand(command);
+        if (ws !== socket || socket.readyState !== WebSocket.OPEN) return;
+        socket.send(JSON.stringify(result));
+      } catch (err) {
+        console.error("[opencli] Message handling error:", err);
+      }
+    };
+    socket.onclose = () => {
+      if (ws !== socket) return;
+      console.log("[opencli] Disconnected from daemon");
+      ws = null;
+      activeWsUrl = null;
+      pendingWsUrl = null;
+      scheduleReconnect();
+    };
+    socket.onerror = () => {
+      if (ws !== socket) return;
+      socket.close();
+    };
   } catch {
     pendingWsUrl = null;
     scheduleReconnect();
     return;
   }
-  ws.onopen = () => {
-    console.log("[opencli] Connected to daemon");
-    pendingWsUrl = null;
-    activeWsUrl = wsUrl;
-    reconnectAttempts = 0;
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    ws?.send(JSON.stringify({ type: "hello", version: chrome.runtime.getManifest().version }));
-  };
-  ws.onmessage = async (event) => {
-    try {
-      const command = JSON.parse(event.data);
-      const result = await handleCommand(command);
-      ws?.send(JSON.stringify(result));
-    } catch (err) {
-      console.error("[opencli] Message handling error:", err);
-    }
-  };
-  ws.onclose = () => {
-    console.log("[opencli] Disconnected from daemon");
-    ws = null;
-    activeWsUrl = null;
-    pendingWsUrl = null;
-    scheduleReconnect();
-  };
-  ws.onerror = () => {
-    ws?.close();
-  };
 }
 const MAX_EAGER_ATTEMPTS = 6;
 function scheduleReconnect() {
@@ -405,13 +432,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (!changes[STORAGE_KEYS.host] && !changes[STORAGE_KEYS.port]) return;
-  try {
-    ws?.close();
-  } catch {
-  }
+  const previousSocket = ws;
   ws = null;
   activeWsUrl = null;
   pendingWsUrl = null;
+  try {
+    previousSocket?.close();
+  } catch {
+  }
   reconnectAttempts = 0;
   void connect();
 });

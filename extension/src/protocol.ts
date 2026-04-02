@@ -55,9 +55,36 @@ export const DEFAULT_DAEMON_HOST = 'localhost';
 /** Default daemon port */
 export const DEFAULT_DAEMON_PORT = 19825;
 
+/** Normalize legacy host input that may accidentally include a scheme or port. */
+export function normalizeDaemonHost(host: string | null | undefined): string {
+  let value = (host || '').trim();
+  if (!value) return DEFAULT_DAEMON_HOST;
+
+  if (value.includes('://')) {
+    try {
+      value = new URL(value).hostname || value;
+    } catch {
+      value = value.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+    }
+  }
+
+  value = value.replace(/[/?#].*$/, '');
+
+  const bracketedIpv6Match = value.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketedIpv6Match?.[1]) return bracketedIpv6Match[1];
+
+  const colonCount = (value.match(/:/g) || []).length;
+  if (colonCount === 1) {
+    const [hostname] = value.split(':');
+    value = hostname || value;
+  }
+
+  return value.trim() || DEFAULT_DAEMON_HOST;
+}
+
 /** Build ping / WebSocket URLs for a daemon host and port. */
 export function buildDaemonEndpoints(host: string, port: number): { ping: string; ws: string } {
-  const h = (host || DEFAULT_DAEMON_HOST).trim() || DEFAULT_DAEMON_HOST;
+  const h = normalizeDaemonHost(host);
   const p = Number.isFinite(port) && port >= 1 && port <= 65535 ? port : DEFAULT_DAEMON_PORT;
   const hostPart = h.includes(':') && !h.startsWith('[') ? `[${h}]` : h;
   return {

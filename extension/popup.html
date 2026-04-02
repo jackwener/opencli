@@ -87,6 +87,15 @@
       color: #34c759;
       min-height: 16px;
     }
+    .settings .warning {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: #fff4e5;
+      font-size: 11px;
+      color: #7a4b00;
+      line-height: 1.5;
+    }
     .hint {
       margin-top: 10px;
       padding: 8px 10px;
@@ -129,6 +138,9 @@
     <input type="number" id="port" min="1" max="65535" placeholder="19825">
     <button type="button" id="save">Save &amp; reconnect</button>
     <div class="save-hint" id="saveHint"></div>
+    <div class="warning">
+      If you expose the daemon remotely, protect it with a VPN, SSH tunnel, or another authenticated tunnel. The daemon has minimal built-in auth.
+    </div>
   </div>
   <div class="hint" id="hint">
     This is normal. The extension connects automatically when you run any <code>opencli</code> command.
