@@ -1,3 +1,9 @@
+---
+name: opencli-oneshot
+description: Use when quickly generating a single OpenCLI command from a specific URL and goal description. 4-step process — open page, capture API, write YAML adapter, test. For full site exploration, use opencli-explorer instead.
+tags: [opencli, adapter, quick-start, yaml, cli, one-shot, automation]
+---
+
 # CLI-ONESHOT — 单点快速 CLI 生成
 
 > 给一个 URL + 一句话描述，4 步生成一个 CLI 命令。

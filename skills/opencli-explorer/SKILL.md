@@ -1,3 +1,9 @@
+---
+name: opencli-explorer
+description: Use when creating a new OpenCLI adapter from scratch, adding support for a new website or platform, or exploring a site's API endpoints via browser DevTools. Covers API discovery workflow, authentication strategy selection, YAML/TS adapter writing, and testing.
+tags: [opencli, adapter, browser, api-discovery, cli, web-scraping, automation]
+---
+
 # CLI-EXPLORER — 适配器探索式开发完全指南
 
 > 本文档教你（或 AI Agent）如何为 OpenCLI 添加一个新网站的命令。  

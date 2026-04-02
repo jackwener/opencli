@@ -1,9 +1,9 @@
 ---
 name: opencli-usage
-description: "OpenCLI usage guide — installation, prerequisites, and command reference organized by platform"
+description: "Use when running OpenCLI commands to interact with websites (Bilibili, Twitter, Reddit, Xiaohongshu, etc.), desktop apps (Cursor, Notion), or public APIs (HackerNews, arXiv). Covers installation, command reference, and output formats for 60+ adapters."
 version: 1.5.9
 author: jackwener
-tags: [cli, browser, web, chrome-extension, cdp, AI, agent]
+tags: [opencli, cli, browser, web, chrome-extension, cdp, bilibili, twitter, reddit, xiaohongshu, github, youtube, AI, agent, automation]
 ---
 
 # OpenCLI Usage Guide
