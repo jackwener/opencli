@@ -36,36 +36,34 @@ Browser commands require:
 
 Public API commands (`hackernews`, `v2ex`) need no browser.
 
+## Quick Lookup by Capability
+
+| Capability | Platforms (partial list) | File |
+|-----------|--------------------------|------|
+| **search** | Bilibili, Twitter, Reddit, Xiaohongshu, Zhihu, YouTube, Google, arXiv, LinkedIn, Pixiv, etc. | browser.md / public-api.md |
+| **hot/trending** | Bilibili, Twitter, Weibo, HackerNews, Reddit, V2EX, Xueqiu, Lobsters, Douban | browser.md / public-api.md |
+| **feed/timeline** | Twitter, Reddit, Xiaohongshu, Xueqiu, Jike, Facebook, Instagram, Medium | browser.md |
+| **user/profile** | Twitter, Reddit, Instagram, TikTok, Facebook, Bilibili, Pixiv | browser.md |
+| **post/create** | Twitter, Jike | browser.md |
+| **AI chat** | Grok, Doubao, Kimi, DeepSeek, Qwen, ChatGPT, Cursor, Codex | browser.md / desktop.md |
+| **finance/stock** | Xueqiu, Yahoo Finance, Barchart, Sina Finance, Bloomberg | browser.md / public-api.md |
+| **web scraping** | `opencli web read --url <url>` — any URL to Markdown | browser.md |
+
 ## Command Categories
 
-OpenCLI commands are organized by platform type:
-
-### 📱 Browser-based Commands
-Commands that require Chrome browser with login state. See [browser.md](./browser.md) for full reference.
-
-**Supported platforms:**
-- Bilibili (哔哩哔哩), Zhihu (知乎), Xiaohongshu (小红书), Xueqiu (雪球)
-- Twitter/X, Reddit, Facebook, Instagram, TikTok, LinkedIn
-- YouTube, Medium, Substack, Sinablog (新浪博客)
-- V2EX (browser features), Weibo (微博), Jike (即刻), Linux.do (browser features)
-- BOSS直聘, Coupang (쿠팡), JD (京东), SMZDM (什么值得买), Ctrip (携程)
-- Yahoo Finance, Sina Finance, Reuters, Barchart, Bloomberg (full article)
-- Douban (豆瓣), Chaoxing (超星学习通), WeRead (微信读书), Pixiv
-- Yollomi, Jimeng (即梦 AI), Web, Weixin (微信公众号)
-- Grok, Doubao Web (豆包), Kimi, DeepSeek, Qwen (通义千问)
+### 📱 Browser-based Commands (login required)
+See [browser.md](./browser.md) — 40+ platforms including Bilibili, Twitter, Reddit, Xiaohongshu, YouTube, Instagram, TikTok, Facebook, LinkedIn, etc.
 
 ### 🖥️ Desktop Adapter Commands
-Commands that interact with desktop applications via CDP or external CLI tools. See [desktop.md](./desktop.md) for full reference.
+See [desktop.md](./desktop.md) — GitHub (gh CLI), Cursor, Codex, ChatGPT, ChatWise, Notion, Discord App, Doubao App, Antigravity.
 
-**Supported platforms:**
-- GitHub (via gh CLI), Cursor, Codex, ChatGPT, ChatWise
-- Notion, Discord App, Doubao App (豆包桌面版), Antigravity
+### 🌐 Public API Commands (no browser needed)
+See [public-api.md](./public-api.md) — HackerNews, V2EX, Google, arXiv, Bloomberg RSS, StackOverflow, Wikipedia, etc.
 
-### 🌐 Public API Commands
-Commands that work without browser or authentication. See [public-api.md](./public-api.md) for full reference.
+### 🔧 Management & AI Workflow
+See [plugins.md](./plugins.md) — `opencli list`, `opencli validate`, `opencli explore`, `opencli record`, output formats, environment variables.
 
-**Supported platforms:**
-- Hacker News, V2EX (public features), BBC News, Sina Finance
-- Lobsters, Google, DEV.to, Steam, Apple Podcasts
-- arXiv, Bloomberg (RSS), Dictionary, HuggingFace
-- StackOverflow, Xiaoyuzhou (小宇宙), Wikipedia, Product Hunt
+## Related Skills
+
+- **opencli-explorer** — Full guide for creating new adapters (API discovery, auth strategy, YAML/TS writing)
+- **opencli-oneshot** — Quick 4-step template for adding a single command from a URL
