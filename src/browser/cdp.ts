@@ -46,7 +46,7 @@ export class CDPBridge implements IBrowserFactory {
   private _pending = new Map<number, { resolve: (val: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private _eventListeners = new Map<string, Set<(params: unknown) => void>>();
 
-  async connect(opts?: { timeout?: number; workspace?: string; cdpEndpoint?: string; cdpTargetFilter?: string }): Promise<IPage> {
+  async connect(opts?: { timeout?: number; workspace?: string; cdpEndpoint?: string }): Promise<IPage> {
     if (this._ws) throw new Error('CDPBridge is already connected. Call close() before reconnecting.');
 
     const endpoint = opts?.cdpEndpoint ?? process.env.OPENCLI_CDP_ENDPOINT;
@@ -55,7 +55,7 @@ export class CDPBridge implements IBrowserFactory {
     let wsUrl = endpoint;
     if (endpoint.startsWith('http')) {
       const targets = await fetchJsonDirect(`${endpoint.replace(/\/$/, '')}/json`) as CDPTarget[];
-      const target = selectCDPTarget(targets, opts?.cdpTargetFilter);
+      const target = selectCDPTarget(targets);
       if (!target || !target.webSocketDebuggerUrl) {
         throw new Error('No inspectable targets found at CDP endpoint');
       }
@@ -250,8 +250,8 @@ function matchesCookieDomain(cookieDomain: string, targetDomain: string): boolea
     || normalizedTargetDomain.endsWith(`.${normalizedCookieDomain}`);
 }
 
-function selectCDPTarget(targets: CDPTarget[], appTargetFilter?: string): CDPTarget | undefined {
-  const preferredPattern = compilePreferredPattern(process.env.OPENCLI_CDP_TARGET ?? appTargetFilter);
+function selectCDPTarget(targets: CDPTarget[]): CDPTarget | undefined {
+  const preferredPattern = compilePreferredPattern(process.env.OPENCLI_CDP_TARGET);
 
   const ranked = targets
     .map((target, index) => ({ target, index, score: scoreCDPTarget(target, preferredPattern) }))
@@ -274,6 +274,7 @@ function scoreCDPTarget(target: CDPTarget, preferredPattern?: RegExp): number {
 
   if (!haystack.trim() && !type) return Number.NEGATIVE_INFINITY;
   if (haystack.includes('devtools')) return Number.NEGATIVE_INFINITY;
+  if (type === 'background_page' || type === 'service_worker') return Number.NEGATIVE_INFINITY;
 
   let score = 0;
 
