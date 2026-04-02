@@ -22,9 +22,10 @@ Requires: Chrome running + OpenCLI Browser Bridge extension installed.
 2. **ALWAYS use `click`/`type`/`select` for interaction, NEVER use `eval` to click or type** — `eval "el.click()"` bypasses scrollIntoView and CDP click pipeline, causing failures on off-screen elements. Use `state` to find the `[N]` index, then `click <N>`.
 3. **Verify inputs with `get value`, not screenshots** — after `type`, run `get value <index>` to confirm.
 4. **Run `state` after every page change** — after `open`, `click` (on links), `scroll`, always run `state` to see the new elements and their indices. Never guess indices.
-5. **Chain safe commands with `&&`** — `type 3 "a" && type 4 "b" && click 7` is one call instead of three. But always run `state` first to get correct indices before chaining.
+5. **Chain commands aggressively with `&&`** — combine `open + state`, multiple `type` calls, and `type + get value` into single `&&` chains. Each tool call has overhead; chaining cuts it.
 6. **`eval` is read-only** — use `eval` ONLY for data extraction (`JSON.stringify(...)`), never for clicking, typing, or navigating. Always wrap in IIFE to avoid variable conflicts: `eval "(function(){ const x = ...; return JSON.stringify(x); })()"`.
-7. **Prefer `network` to discover APIs** — most sites have JSON APIs. API-based adapters are more reliable than DOM scraping.
+7. **Minimize total tool calls** — plan your sequence before acting. A good task completion uses 3-5 tool calls, not 15-20. Combine `open + state` as one call. Combine `type + type + click` as one call. Only run `state` separately when you need to discover new indices.
+8. **Prefer `network` to discover APIs** — most sites have JSON APIs. API-based adapters are more reliable than DOM scraping.
 
 ## Command Cost Guide
 
@@ -38,13 +39,24 @@ Requires: Chrome running + OpenCLI Browser Bridge extension installed.
 
 Commands can be chained with `&&`. The browser persists via daemon, so chaining is safe.
 
-**Safe to chain** — these don't change the page structure:
+**Always chain when possible** — fewer tool calls = faster completion:
 ```bash
-# Fill multiple fields then submit
+# GOOD: open + inspect in one call (saves 1 round trip)
+opencli operate open https://example.com && opencli operate state
+
+# GOOD: fill form in one call (saves 2 round trips)
 opencli operate type 3 "hello" && opencli operate type 4 "world" && opencli operate click 7
 
-# Open and inspect
-opencli operate open https://example.com && opencli operate state
+# GOOD: type + verify in one call
+opencli operate type 5 "test@example.com" && opencli operate get value 5
+
+# GOOD: click + wait + state in one call (for page-changing clicks)
+opencli operate click 12 && opencli operate wait time 1 && opencli operate state
+
+# BAD: separate calls for each action (wasteful)
+opencli operate type 3 "hello"    # Don't do this
+opencli operate type 4 "world"    # when you can chain
+opencli operate click 7            # all three together
 ```
 
 **Page-changing — always put last** in a chain (subsequent commands see stale indices):
