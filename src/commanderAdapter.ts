@@ -110,7 +110,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       }
 
       const resolved = getRegistry().get(fullName(cmd)) ?? cmd;
-      if (format === 'table' && resolved.defaultFormat) {
+      if (!formatExplicit && format === 'table' && resolved.defaultFormat) {
         format = resolved.defaultFormat;
       }
 
