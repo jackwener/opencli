@@ -5,3 +5,4 @@
 # guard: npm run build
 iteration	commit	metric	delta	guard	status	description
 0	3b4a139	14	+0	pass	baseline	initial state — pass_count 14
+1	bb1e2aa	16	+2	pass	keep	两个新任务都基于已有通过任务使用的同一 API，期望 pass_count 从 14 → 16。
