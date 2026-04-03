@@ -24,6 +24,15 @@ function buildFetchItemEvaluate(itemId: string): string {
         return false;
       };
 
+      const bodyText = document.body?.innerText || '';
+      if (/请先登录|登录后/.test(bodyText)) {
+        return { error: 'auth-required' };
+      }
+
+      if (/验证码|安全验证|异常访问/.test(bodyText)) {
+        return { error: 'blocked' };
+      }
+
       await waitFor(() => window.lib?.mtop?.request);
       if (!window.lib || !window.lib.mtop || typeof window.lib.mtop.request !== 'function') {
         return { error: 'mtop-not-ready' };
@@ -122,6 +131,14 @@ cli({
       title?: string;
       item_id?: string;
     } & Record<string, unknown>;
+
+    if (result?.error === 'auth-required') {
+      throw new AuthRequiredError('www.goofish.com', 'Xianyu item detail requires a logged-in browser session');
+    }
+
+    if (result?.error === 'blocked') {
+      throw new EmptyResultError('xianyu item', 'Xianyu item detail is blocked by verification or risk control');
+    }
 
     if (result?.error === 'mtop-not-ready') {
       throw new SelectorError('window.lib.mtop', '闲鱼页面未完成初始化，无法调用商品详情接口');
