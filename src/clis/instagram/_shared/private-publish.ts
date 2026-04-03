@@ -67,6 +67,18 @@ export type PreparedInstagramMediaAsset =
   | { type: 'image'; asset: PreparedInstagramImageAsset }
   | { type: 'video'; asset: InstagramVideoAsset };
 
+type StoryPayloadInput = {
+  uploadId: string;
+  width: number;
+  height: number;
+  now?: () => number;
+  jazoest: string;
+};
+
+type StoryVideoPayloadInput = StoryPayloadInput & {
+  durationMs: number;
+};
+
 type PrivateApiFetchInit = {
   method?: string;
   headers?: Record<string, string>;
@@ -77,6 +89,8 @@ type PrivateApiFetchLike = (url: string | URL, init?: PrivateApiFetchInit) => Pr
 
 const INSTAGRAM_MIN_FEED_ASPECT_RATIO = 4 / 5;
 const INSTAGRAM_MAX_FEED_ASPECT_RATIO = 1.91;
+const INSTAGRAM_MIN_STORY_ASPECT_RATIO = 9 / 16;
+const INSTAGRAM_MAX_STORY_ASPECT_RATIO = 3 / 4;
 const INSTAGRAM_PRIVATE_PAD_COLOR = 'FFFFFF';
 const INSTAGRAM_HOME_URL = 'https://www.instagram.com/';
 const INSTAGRAM_PRIVATE_CAPTURE_PATTERN = '/api/v1/|/graphql/';
@@ -84,6 +98,15 @@ const INSTAGRAM_PRIVATE_CONFIG_RETRY_BUDGET = 2;
 const INSTAGRAM_PRIVATE_UPLOAD_RETRY_BUDGET = 2;
 const INSTAGRAM_PRIVATE_SIDECAR_TRANSCODE_ATTEMPTS = 20;
 const INSTAGRAM_PRIVATE_SIDECAR_TRANSCODE_WAIT_MS = 2000;
+const INSTAGRAM_MAX_STORY_VIDEO_DURATION_MS = 15_000;
+const INSTAGRAM_STORY_SIG_KEY = '19ce5f445dbfd9d29c59dc2a78c616a7fc090a8e018b9267bc4240a30244c53b';
+const INSTAGRAM_STORY_SIG_KEY_VERSION = '4';
+const INSTAGRAM_STORY_DEVICE = {
+  manufacturer: 'samsung',
+  model: 'SM-G930F',
+  android_version: 24,
+  android_release: '7.0',
+} as const;
 
 export function derivePrivateApiContextFromCapture(
   entries: InstagramProtocolCaptureEntry[],
@@ -392,6 +415,32 @@ export function getInstagramFeedNormalizedDimensions(
   return null;
 }
 
+export function isInstagramStoryAspectRatioAllowed(width: number, height: number): boolean {
+  const ratio = width / Math.max(height, 1);
+  return ratio >= INSTAGRAM_MIN_STORY_ASPECT_RATIO - 0.001
+    && ratio <= INSTAGRAM_MAX_STORY_ASPECT_RATIO + 0.001;
+}
+
+export function getInstagramStoryNormalizedDimensions(
+  width: number,
+  height: number,
+): { width: number; height: number } | null {
+  const ratio = width / Math.max(height, 1);
+  if (ratio < INSTAGRAM_MIN_STORY_ASPECT_RATIO) {
+    return {
+      width: Math.ceil(height * INSTAGRAM_MIN_STORY_ASPECT_RATIO),
+      height,
+    };
+  }
+  if (ratio > INSTAGRAM_MAX_STORY_ASPECT_RATIO) {
+    return {
+      width,
+      height: Math.ceil(width / INSTAGRAM_MAX_STORY_ASPECT_RATIO),
+    };
+  }
+  return null;
+}
+
 function buildPrivateNormalizedImagePath(filePath: string): string {
   const parsed = path.parse(filePath);
   return path.join(
@@ -435,6 +484,51 @@ export function prepareImageAssetForPrivateUpload(filePath: string): PreparedIns
       .join(' ');
     throw new CommandExecutionError(
       `Instagram private publish failed to normalize ${asset.fileName}`,
+      detail || 'sips padToHeightWidth failed',
+    );
+  }
+
+  return {
+    ...readImageAsset(outputPath),
+    cleanupPath: outputPath,
+  };
+}
+
+export function prepareImageAssetForPrivateStoryUpload(filePath: string): PreparedInstagramImageAsset {
+  const asset = readImageAsset(filePath);
+  const normalizedDimensions = getInstagramStoryNormalizedDimensions(asset.width, asset.height);
+  if (!normalizedDimensions) {
+    return asset;
+  }
+
+  if (process.platform !== 'darwin') {
+    throw new CommandExecutionError(
+      `Instagram private story publish does not support auto-normalizing ${asset.fileName} on ${process.platform}`,
+      `Use images within ${INSTAGRAM_MIN_STORY_ASPECT_RATIO.toFixed(2)}-${INSTAGRAM_MAX_STORY_ASPECT_RATIO.toFixed(2)} aspect ratio, or use the UI route`,
+    );
+  }
+
+  const outputPath = buildPrivateNormalizedImagePath(filePath);
+  const result = spawnSync('sips', [
+    '--padToHeightWidth',
+    String(normalizedDimensions.height),
+    String(normalizedDimensions.width),
+    '--padColor',
+    INSTAGRAM_PRIVATE_PAD_COLOR,
+    filePath,
+    '--out',
+    outputPath,
+  ], {
+    encoding: 'utf8',
+  });
+
+  if (result.error || result.status !== 0 || !fs.existsSync(outputPath)) {
+    const detail = [result.error?.message, result.stderr, result.stdout]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+      .join(' ');
+    throw new CommandExecutionError(
+      `Instagram private story publish failed to normalize ${asset.fileName}`,
       detail || 'sips padToHeightWidth failed',
     );
   }
@@ -524,6 +618,14 @@ function buildPrivateVideoCoverPath(filePath: string): string {
   );
 }
 
+function buildPrivateStoryVideoPath(filePath: string): string {
+  const parsed = path.parse(filePath);
+  return path.join(
+    os.tmpdir(),
+    `opencli-instagram-story-video-${parsed.name}-${crypto.randomUUID()}${parsed.ext || '.mp4'}`,
+  );
+}
+
 function generateVideoCoverImage(filePath: string): PreparedInstagramImageAsset {
   if (process.platform !== 'darwin') {
     throw new CommandExecutionError(
@@ -577,6 +679,146 @@ export function readVideoAsset(filePath: string): InstagramVideoAsset {
     coverImage,
     cleanupPaths: coverImage.cleanupPath ? [coverImage.cleanupPath] : [],
   };
+}
+
+function trimVideoForInstagramStory(filePath: string, maxDurationMs: number): string {
+  if (process.platform !== 'darwin') {
+    throw new CommandExecutionError(
+      `Instagram private story publish does not support trimming long videos on ${process.platform}`,
+      'Use macOS for private story video publishing, or trim the video to 15 seconds first',
+    );
+  }
+
+  const outputPath = buildPrivateStoryVideoPath(filePath);
+  runSwiftJsonScript<{ ok?: boolean }>(`
+import AVFoundation
+import Foundation
+
+let inputPath = CommandLine.arguments[1]
+let outputPath = CommandLine.arguments[2]
+let durationMs = Int(CommandLine.arguments[3]) ?? 15000
+let asset = AVURLAsset(url: URL(fileURLWithPath: inputPath))
+guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
+  fputs("{\\"error\\":\\"missing-export-session\\"}", stderr)
+  exit(1)
+}
+exportSession.outputURL = URL(fileURLWithPath: outputPath)
+exportSession.outputFileType = .mp4
+exportSession.shouldOptimizeForNetworkUse = true
+exportSession.timeRange = CMTimeRange(
+  start: .zero,
+  duration: CMTime(seconds: Double(durationMs) / 1000.0, preferredTimescale: 600)
+)
+let semaphore = DispatchSemaphore(value: 0)
+exportSession.exportAsynchronously {
+  semaphore.signal()
+}
+semaphore.wait()
+if exportSession.status != .completed {
+  let message = exportSession.error?.localizedDescription ?? "export-failed"
+  fputs(message, stderr)
+  exit(1)
+}
+let payload = ["ok": true]
+let json = try JSONSerialization.data(withJSONObject: payload, options: [])
+FileHandle.standardOutput.write(json)
+`, [filePath, outputPath, String(maxDurationMs)], 'trim story video');
+
+  return outputPath;
+}
+
+function prepareVideoAssetForPrivateStoryUpload(filePath: string): InstagramVideoAsset {
+  const asset = readVideoAsset(filePath);
+  if (asset.durationMs <= INSTAGRAM_MAX_STORY_VIDEO_DURATION_MS) {
+    return asset;
+  }
+
+  const trimmedPath = trimVideoForInstagramStory(filePath, INSTAGRAM_MAX_STORY_VIDEO_DURATION_MS);
+  const trimmedAsset = readVideoAsset(trimmedPath);
+  return {
+    ...trimmedAsset,
+    cleanupPaths: [
+      ...(trimmedAsset.cleanupPaths || []),
+      trimmedPath,
+    ],
+  };
+}
+
+function toUnixSeconds(now: () => number): number {
+  const value = now();
+  return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+}
+
+export function buildConfigureToStoryPhotoPayload(input: StoryPayloadInput): Record<string, unknown> {
+  const now = input.now ?? (() => Date.now());
+  const timestamp = toUnixSeconds(now);
+  return {
+    source_type: '4',
+    upload_id: input.uploadId,
+    story_media_creation_date: String(timestamp - 17),
+    client_shared_at: String(timestamp - 5),
+    client_timestamp: String(timestamp),
+    configure_mode: 1,
+    edits: {
+      crop_original_size: [input.width, input.height],
+      crop_center: [0, 0],
+      crop_zoom: 1.3333334,
+    },
+    extra: {
+      source_width: input.width,
+      source_height: input.height,
+    },
+    jazoest: input.jazoest,
+  };
+}
+
+export function buildConfigureToStoryVideoPayload(input: StoryVideoPayloadInput): Record<string, unknown> {
+  const now = input.now ?? (() => Date.now());
+  const timestamp = toUnixSeconds(now);
+  const durationSeconds = Number((input.durationMs / 1000).toFixed(3));
+  return {
+    source_type: '4',
+    upload_id: input.uploadId,
+    story_media_creation_date: String(timestamp - 17),
+    client_shared_at: String(timestamp - 5),
+    client_timestamp: String(timestamp),
+    configure_mode: 1,
+    poster_frame_index: 0,
+    length: durationSeconds,
+    audio_muted: false,
+    filter_type: '0',
+    video_result: 'deprecated',
+    extra: {
+      source_width: input.width,
+      source_height: input.height,
+    },
+    jazoest: input.jazoest,
+  };
+}
+
+function buildFormEncodedBodyFromPayload(payload: Record<string, unknown>): string {
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'object') {
+      body.set(key, JSON.stringify(value));
+      continue;
+    }
+    body.set(key, String(value));
+  }
+  return body.toString();
+}
+
+function buildSignedBody(payload: Record<string, unknown>): string {
+  const jsonPayload = JSON.stringify(payload);
+  const signature = crypto
+    .createHmac('sha256', INSTAGRAM_STORY_SIG_KEY)
+    .update(jsonPayload)
+    .digest('hex');
+  const body = new URLSearchParams();
+  body.set('ig_sig_key_version', INSTAGRAM_STORY_SIG_KEY_VERSION);
+  body.set('signed_body', `${signature}.${jsonPayload}`);
+  return body.toString();
 }
 
 function buildPrivateApiHeaders(context: InstagramPrivateApiContext): Record<string, string> {
@@ -644,6 +886,30 @@ function buildVideoRuploadHeaders(
       'media_type': 2,
       'for_album': false,
       'video_format': '',
+      'upload_id': uploadId,
+      'upload_media_duration_ms': asset.durationMs,
+      'upload_media_height': asset.height,
+      'upload_media_width': asset.width,
+      'video_transform': null,
+      'video_edit_params': buildVideoEditParams(asset),
+    }),
+  };
+}
+
+function buildStoryVideoRuploadHeaders(
+  asset: InstagramVideoAsset,
+  uploadId: string,
+  context: InstagramPrivateApiContext,
+): Record<string, string> {
+  return {
+    ...buildPrivateApiHeaders(context),
+    'Accept': '*/*',
+    'Offset': '0',
+    'X-Entity-Length': String(asset.byteLength),
+    'X-Entity-Name': `fb_uploader_${uploadId}`,
+    'X-Instagram-Rupload-Params': JSON.stringify({
+      'client-passthrough': '1',
+      'media_type': 2,
       'upload_id': uploadId,
       'upload_media_duration_ms': asset.durationMs,
       'upload_media_height': asset.height,
@@ -745,6 +1011,7 @@ async function uploadPreparedMediaAsset(
   prepared: PreparedInstagramMediaAsset,
   uploadId: string,
   context: InstagramPrivateApiContext,
+  mode: 'feed' | 'story' = 'feed',
 ): Promise<void> {
   if (prepared.type === 'image') {
     const response = await fetchPrivateUploadWithRetry(fetcher, `https://i.instagram.com/rupload_igphoto/fb_uploader_${uploadId}`, {
@@ -761,7 +1028,9 @@ async function uploadPreparedMediaAsset(
 
   const videoResponse = await fetchPrivateUploadWithRetry(fetcher, `https://i.instagram.com/rupload_igvideo/fb_uploader_${uploadId}`, {
     method: 'POST',
-    headers: buildVideoRuploadHeaders(prepared.asset, uploadId, context),
+    headers: mode === 'story'
+      ? buildStoryVideoRuploadHeaders(prepared.asset, uploadId, context)
+      : buildVideoRuploadHeaders(prepared.asset, uploadId, context),
     body: prepared.asset.bytes,
   });
   const videoJson = await parseJsonResponse(videoResponse, 'video upload');
@@ -863,7 +1132,7 @@ export async function publishMediaViaPrivateApi(input: {
     for (let index = 0; index < assets.length; index += 1) {
       const asset = assets[index]!;
       const uploadId = uploadIds[index]!;
-      await uploadPreparedMediaAsset(fetcher, asset, uploadId, input.apiContext);
+    await uploadPreparedMediaAsset(fetcher, asset, uploadId, input.apiContext);
     }
 
     if (uploadIds.length === 1) {
@@ -930,4 +1199,105 @@ export async function publishImagesViaPrivateApi(input: {
         })
       : undefined,
   });
+}
+
+export async function publishStoryViaPrivateApi(input: {
+  page: unknown;
+  mediaItem: InstagramMediaItem;
+  content: string;
+  apiContext: InstagramPrivateApiContext;
+  jazoest: string;
+  currentUserId?: string;
+  now?: () => number;
+  fetcher?: PrivateApiFetchLike;
+  prepareMediaAsset?: (item: InstagramMediaItem) => PreparedInstagramMediaAsset | Promise<PreparedInstagramMediaAsset>;
+}): Promise<{ mediaPk?: string; uploadId: string }> {
+  const now = input.now ?? (() => Date.now());
+  const uploadId = String(now());
+  const fetcher: PrivateApiFetchLike = input.fetcher ?? ((url, init) => instagramPrivateApiFetch(input.page as any, url, init as any));
+  const prepareMediaAsset = input.prepareMediaAsset ?? (async (item: InstagramMediaItem) => item.type === 'video'
+    ? { type: 'video' as const, asset: prepareVideoAssetForPrivateStoryUpload(item.filePath) }
+    : { type: 'image' as const, asset: prepareImageAssetForPrivateStoryUpload(item.filePath) });
+  const prepared = await prepareMediaAsset(input.mediaItem);
+  const currentUserId = input.currentUserId
+    || ('getCookies' in (input.page as any)
+      ? String((await ((input.page as IPage).getCookies?.({ domain: 'instagram.com' }) ?? Promise.resolve([] as BrowserCookie[])))
+        .find((cookie) => cookie.name === 'ds_user_id')?.value || '')
+      : '');
+  if (!currentUserId) {
+    throw new CommandExecutionError('Instagram story publish could not derive current user id from browser session');
+  }
+
+  const signedPayloadBase = {
+    _csrftoken: input.apiContext.csrfToken,
+    _uid: currentUserId,
+    _uuid: crypto.randomUUID(),
+    device: INSTAGRAM_STORY_DEVICE,
+  };
+  const buildSignedStoryPhotoBody = (width: number, height: number) => buildSignedBody({
+    ...buildConfigureToStoryPhotoPayload({
+      uploadId,
+      width,
+      height,
+      now,
+      jazoest: input.jazoest,
+    }),
+    ...signedPayloadBase,
+  });
+  const buildSignedStoryVideoBody = (width: number, height: number, durationMs: number) => buildSignedBody({
+    ...buildConfigureToStoryVideoPayload({
+      uploadId,
+      width,
+      height,
+      durationMs,
+      now,
+      jazoest: input.jazoest,
+    }),
+    ...signedPayloadBase,
+  });
+
+  try {
+    await uploadPreparedMediaAsset(fetcher, prepared, uploadId, input.apiContext, 'story');
+
+    if (prepared.type === 'image') {
+      const response = await fetcher('https://i.instagram.com/api/v1/media/configure_to_story/', {
+        method: 'POST',
+        headers: {
+          ...buildPrivateApiHeaders(input.apiContext),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: buildSignedStoryPhotoBody(prepared.asset.width, prepared.asset.height),
+      });
+      const json = await parseJsonResponse(response, 'configure_to_story');
+      return {
+        mediaPk: String(json?.media?.pk || json?.media?.id || '').split('_')[0] || undefined,
+        uploadId,
+      };
+    }
+
+    await parseJsonResponse(await fetcher('https://i.instagram.com/api/v1/media/configure_to_story/', {
+      method: 'POST',
+      headers: {
+        ...buildPrivateApiHeaders(input.apiContext),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: buildSignedStoryPhotoBody(prepared.asset.width, prepared.asset.height),
+    }), 'configure_to_story cover');
+
+    const response = await fetcher('https://i.instagram.com/api/v1/media/configure_to_story/?video=1', {
+      method: 'POST',
+      headers: {
+        ...buildPrivateApiHeaders(input.apiContext),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: buildSignedStoryVideoBody(prepared.asset.width, prepared.asset.height, prepared.asset.durationMs),
+    });
+    const json = await parseJsonResponse(response, 'configure_to_story');
+    return {
+      mediaPk: String(json?.media?.pk || json?.media?.id || '').split('_')[0] || undefined,
+      uploadId,
+    };
+  } finally {
+    cleanupPreparedMediaAssets([prepared]);
+  }
 }

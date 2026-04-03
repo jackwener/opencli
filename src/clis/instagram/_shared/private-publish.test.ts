@@ -8,11 +8,16 @@ import type { InstagramProtocolCaptureEntry } from './protocol-capture.js';
 import {
   buildConfigureBody,
   buildConfigureSidecarPayload,
+  buildConfigureToStoryPhotoPayload,
+  buildConfigureToStoryVideoPayload,
   deriveInstagramJazoest,
   derivePrivateApiContextFromCapture,
   extractInstagramRuntimeInfo,
   getInstagramFeedNormalizedDimensions,
+  getInstagramStoryNormalizedDimensions,
   isInstagramFeedAspectRatioAllowed,
+  isInstagramStoryAspectRatioAllowed,
+  publishStoryViaPrivateApi,
   publishMediaViaPrivateApi,
   publishImagesViaPrivateApi,
   readImageAsset,
@@ -246,6 +251,61 @@ describe('instagram private publish helpers', () => {
     expect(getInstagramFeedNormalizedDimensions(2120, 1140)).toBeNull();
   });
 
+  it('computes story-safe aspect-ratio normalization targets', () => {
+    expect(isInstagramStoryAspectRatioAllowed(1080, 1920)).toBe(true);
+    expect(isInstagramStoryAspectRatioAllowed(1080, 1080)).toBe(false);
+    expect(getInstagramStoryNormalizedDimensions(1080, 1080)).toEqual({
+      width: 1080,
+      height: 1440,
+    });
+  });
+
+  it('builds the single-photo configure_to_story payload', () => {
+    expect(buildConfigureToStoryPhotoPayload({
+      uploadId: '1775134280303',
+      width: 1080,
+      height: 1920,
+      now: () => 1_775_134_280_303,
+      jazoest: '22047',
+    })).toMatchObject({
+      source_type: '4',
+      upload_id: '1775134280303',
+      configure_mode: 1,
+      edits: {
+        crop_original_size: [1080, 1920],
+        crop_center: [0, 0],
+        crop_zoom: 1.3333334,
+      },
+      extra: {
+        source_width: 1080,
+        source_height: 1920,
+      },
+      jazoest: '22047',
+    });
+  });
+
+  it('builds the single-video configure_to_story payload', () => {
+    expect(buildConfigureToStoryVideoPayload({
+      uploadId: '1775134280303',
+      width: 1080,
+      height: 1920,
+      durationMs: 12500,
+      now: () => 1_775_134_280_303,
+      jazoest: '22047',
+    })).toMatchObject({
+      source_type: '4',
+      upload_id: '1775134280303',
+      configure_mode: 1,
+      poster_frame_index: 0,
+      length: 12.5,
+      extra: {
+        source_width: 1080,
+        source_height: 1920,
+      },
+      jazoest: '22047',
+    });
+  });
+
   it('publishes a single image through rupload + configure', async () => {
     const jpeg = createTempFile('private-single.jpg', Buffer.from(
       'FFD8FFE000104A46494600010100000100010000FFC00011080004000603012200021101031101FFD9',
@@ -288,6 +348,125 @@ describe('instagram private publish helpers', () => {
     expect(calls[1]?.url).toBe('https://www.instagram.com/api/v1/media/configure/');
     expect(String(calls[1]?.init?.body || '')).toContain('upload_id=111');
     expect(response).toEqual({ code: 'ABC123', uploadIds: ['111'] });
+  });
+
+  it('publishes a single image story through rupload + configure_to_story', async () => {
+    const jpeg = createTempFile('private-story.jpg', Buffer.from(
+      'FFD8FFE000104A46494600010100000100010000FFC00011080010000903012200021101031101FFD9',
+      'hex',
+    ));
+    const calls: Array<{ url: string; init?: { method?: string; headers?: Record<string, string>; body?: unknown } }> = [];
+    const fetcher = async (url: string | URL, init?: { method?: string; headers?: Record<string, string>; body?: unknown }) => {
+      calls.push({ url: String(url), init });
+      if (String(url).includes('/rupload_igphoto/')) {
+        return new Response('{"upload_id":"111","status":"ok"}', { status: 200 });
+      }
+      return new Response('{"media":{"pk":"1234567890"}}', { status: 200 });
+    };
+
+    const response = await publishStoryViaPrivateApi({
+      page: {} as never,
+      mediaItem: { type: 'image', filePath: jpeg },
+      content: '',
+      currentUserId: '61236465677',
+      apiContext: {
+        asbdId: '359341',
+        csrfToken: 'csrf-token',
+        igAppId: '936619743392459',
+        igWwwClaim: 'hmac.claim',
+        instagramAjax: '1036517563',
+        webSessionId: 'abc:def:ghi',
+      },
+      jazoest: '22047',
+      now: () => 111,
+      fetcher,
+      prepareMediaAsset: async () => ({
+        type: 'image',
+        asset: {
+          filePath: jpeg,
+          fileName: path.basename(jpeg),
+          mimeType: 'image/jpeg',
+          width: 1080,
+          height: 1920,
+          byteLength: fs.statSync(jpeg).size,
+          bytes: fs.readFileSync(jpeg),
+        },
+      }),
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.url).toContain('/rupload_igphoto/fb_uploader_111');
+    expect(calls[1]?.url).toBe('https://i.instagram.com/api/v1/media/configure_to_story/');
+    expect(String(calls[1]?.init?.body || '')).toContain('signed_body=');
+    expect(response).toEqual({ mediaPk: '1234567890', uploadId: '111' });
+  });
+
+  it('publishes a single video story through rupload + cover + configure_to_story?video=1', async () => {
+    const video = createTempFile('private-story.mp4', Buffer.from('story-video'));
+    const coverBytes = Buffer.from(
+      'FFD8FFE000104A46494600010100000100010000FFC00011080010000903012200021101031101FFD9',
+      'hex',
+    );
+    const calls: Array<{ url: string; init?: { method?: string; headers?: Record<string, string>; body?: unknown } }> = [];
+    const fetcher = async (url: string | URL, init?: { method?: string; headers?: Record<string, string>; body?: unknown }) => {
+      calls.push({ url: String(url), init });
+      if (String(url).includes('/rupload_igvideo/')) {
+        return new Response('{"upload_id":"222","status":"ok"}', { status: 200 });
+      }
+      if (String(url).includes('/rupload_igphoto/')) {
+        return new Response('{"upload_id":"222","status":"ok"}', { status: 200 });
+      }
+      return new Response('{"media":{"pk":"9988776655"}}', { status: 200 });
+    };
+
+    const response = await publishStoryViaPrivateApi({
+      page: {} as never,
+      mediaItem: { type: 'video', filePath: video },
+      content: '',
+      currentUserId: '61236465677',
+      apiContext: {
+        asbdId: '359341',
+        csrfToken: 'csrf-token',
+        igAppId: '936619743392459',
+        igWwwClaim: 'hmac.claim',
+        instagramAjax: '1036517563',
+        webSessionId: 'abc:def:ghi',
+      },
+      jazoest: '22047',
+      now: () => 222,
+      fetcher,
+      prepareMediaAsset: async () => ({
+        type: 'video',
+        asset: {
+          filePath: video,
+          fileName: path.basename(video),
+          mimeType: 'video/mp4',
+          width: 1080,
+          height: 1920,
+          durationMs: 12500,
+          byteLength: fs.statSync(video).size,
+          bytes: fs.readFileSync(video),
+          coverImage: {
+            filePath: '/tmp/cover.jpg',
+            fileName: 'cover.jpg',
+            mimeType: 'image/jpeg',
+            width: 1080,
+            height: 1920,
+            byteLength: coverBytes.length,
+            bytes: coverBytes,
+          },
+        },
+      }),
+    });
+
+    expect(calls).toHaveLength(4);
+    expect(calls[0]?.url).toContain('/rupload_igvideo/fb_uploader_222');
+    expect(calls[1]?.url).toContain('/rupload_igphoto/fb_uploader_222');
+    expect(calls[2]?.url).toBe('https://i.instagram.com/api/v1/media/configure_to_story/');
+    expect(calls[3]?.url).toBe('https://i.instagram.com/api/v1/media/configure_to_story/?video=1');
+    expect(String(calls[2]?.init?.body || '')).toContain('signed_body=');
+    expect(String(calls[3]?.init?.body || '')).toContain('signed_body=');
+    expect(response).toEqual({ mediaPk: '9988776655', uploadId: '222' });
   });
 
   it('publishes a carousel through rupload + configure_sidecar', async () => {
