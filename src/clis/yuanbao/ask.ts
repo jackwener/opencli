@@ -1,12 +1,9 @@
 import { cli, Strategy } from '../../registry.js';
 import type { IPage } from '../../types.js';
 import TurndownService from 'turndown';
-import { AuthRequiredError, CommandExecutionError, TimeoutError } from '../../errors.js';
+import { CommandExecutionError, TimeoutError } from '../../errors.js';
+import { YUANBAO_DOMAIN, YUANBAO_URL, IS_VISIBLE_JS, authRequired, isOnYuanbao, ensureYuanbaoPage, hasLoginGate } from './shared.js';
 
-export const YUANBAO_DOMAIN = 'yuanbao.tencent.com';
-export const YUANBAO_URL = 'https://yuanbao.tencent.com/';
-
-const SESSION_HINT = 'Likely login/auth/challenge/session issue in the existing yuanbao.tencent.com browser session.';
 const YUANBAO_RESPONSE_POLL_INTERVAL_SECONDS = 2;
 const YUANBAO_MIN_WAIT_MS = 8_000;
 const YUANBAO_STABLE_POLLS_REQUIRED = 3;
@@ -22,10 +19,6 @@ type YuanbaoToggleState = {
   enabled: boolean;
   found: boolean;
 };
-
-function authRequired(message: string) {
-  return new AuthRequiredError(YUANBAO_DOMAIN, `${message} ${SESSION_HINT}`);
-}
 
 function sendFailure(reason?: string, detail?: string) {
   const suffix = detail ? ` Detail: ${detail}` : '';
@@ -171,24 +164,6 @@ export function updateStableState(previousText: string, stableCount: number, nex
   return { previousText: nextText, stableCount: 0 };
 }
 
-async function isOnYuanbao(page: IPage): Promise<boolean> {
-  const url = await page.evaluate('window.location.href').catch(() => '');
-  if (typeof url !== 'string' || !url) return false;
-
-  try {
-    const hostname = new URL(url).hostname;
-    return hostname === YUANBAO_DOMAIN || hostname.endsWith(`.${YUANBAO_DOMAIN}`);
-  } catch {
-    return false;
-  }
-}
-
-async function ensureYuanbaoPage(page: IPage): Promise<void> {
-  if (!(await isOnYuanbao(page))) {
-    await page.goto(YUANBAO_URL, { waitUntil: 'load', settleMs: 2500 });
-    await page.wait(1);
-  }
-}
 
 function getTranscriptLinesScript(): string {
   return `
@@ -272,15 +247,7 @@ async function getYuanbaoTranscriptLines(page: IPage): Promise<string[]> {
 
 async function getYuanbaoAssistantMessages(page: IPage): Promise<string[]> {
   const result = await page.evaluate(`(() => {
-    const isVisible = (node) => {
-      if (!(node instanceof HTMLElement)) return false;
-      const rect = node.getBoundingClientRect();
-      const style = window.getComputedStyle(node);
-      return rect.width > 0
-        && rect.height > 0
-        && style.display !== 'none'
-        && style.visibility !== 'hidden';
-    };
+    ${IS_VISIBLE_JS}
 
     const roots = Array.from(document.querySelectorAll('.agent-chat__list__item--ai'))
       .filter((node) => isVisible(node));
@@ -308,30 +275,9 @@ async function getYuanbaoAssistantMessages(page: IPage): Promise<string[]> {
     : [];
 }
 
-async function hasLoginGate(page: IPage): Promise<boolean> {
-  const result = await page.evaluate(`(() => {
-    const bodyText = document.body.innerText || '';
-    const hasWechatLoginText = bodyText.includes('微信扫码登录');
-    const hasWechatIframe = Array.from(document.querySelectorAll('iframe'))
-      .some((frame) => (frame.getAttribute('src') || '').includes('open.weixin.qq.com/connect/qrconnect'));
-
-    return hasWechatLoginText || hasWechatIframe;
-  })()`);
-
-  return Boolean(result);
-}
-
 async function getYuanbaoInternetSearchState(page: IPage): Promise<YuanbaoToggleState> {
   const result = await page.evaluate(`(() => {
-    const isVisible = (node) => {
-      if (!(node instanceof HTMLElement)) return false;
-      const rect = node.getBoundingClientRect();
-      const style = window.getComputedStyle(node);
-      return rect.width > 0
-        && rect.height > 0
-        && style.display !== 'none'
-        && style.visibility !== 'hidden';
-    };
+    ${IS_VISIBLE_JS}
 
     const button = Array.from(document.querySelectorAll('[dt-button-id="internet_search"]'))
       .find((node) => isVisible(node));
@@ -354,15 +300,7 @@ async function setYuanbaoInternetSearch(page: IPage, enabled: boolean): Promise<
   if (!current.found || current.enabled === enabled) return;
 
   await page.evaluate(`(() => {
-    const isVisible = (node) => {
-      if (!(node instanceof HTMLElement)) return false;
-      const rect = node.getBoundingClientRect();
-      const style = window.getComputedStyle(node);
-      return rect.width > 0
-        && rect.height > 0
-        && style.display !== 'none'
-        && style.visibility !== 'hidden';
-    };
+    ${IS_VISIBLE_JS}
 
     const button = Array.from(document.querySelectorAll('[dt-button-id="internet_search"]'))
       .find((node) => isVisible(node));
@@ -375,15 +313,7 @@ async function setYuanbaoInternetSearch(page: IPage, enabled: boolean): Promise<
 
 async function getYuanbaoDeepThinkState(page: IPage): Promise<YuanbaoToggleState> {
   const result = await page.evaluate(`(() => {
-    const isVisible = (node) => {
-      if (!(node instanceof HTMLElement)) return false;
-      const rect = node.getBoundingClientRect();
-      const style = window.getComputedStyle(node);
-      return rect.width > 0
-        && rect.height > 0
-        && style.display !== 'none'
-        && style.visibility !== 'hidden';
-    };
+    ${IS_VISIBLE_JS}
 
     const button = Array.from(document.querySelectorAll('[dt-button-id="deep_think"]'))
       .find((node) => isVisible(node));
@@ -405,15 +335,7 @@ async function setYuanbaoDeepThink(page: IPage, enabled: boolean): Promise<void>
   if (!current.found || current.enabled === enabled) return;
 
   await page.evaluate(`(() => {
-    const isVisible = (node) => {
-      if (!(node instanceof HTMLElement)) return false;
-      const rect = node.getBoundingClientRect();
-      const style = window.getComputedStyle(node);
-      return rect.width > 0
-        && rect.height > 0
-        && style.display !== 'none'
-        && style.visibility !== 'hidden';
-    };
+    ${IS_VISIBLE_JS}
 
     const button = Array.from(document.querySelectorAll('[dt-button-id="deep_think"]'))
       .find((node) => isVisible(node));
@@ -427,15 +349,7 @@ async function setYuanbaoDeepThink(page: IPage, enabled: boolean): Promise<void>
 async function sendYuanbaoMessage(page: IPage, prompt: string): Promise<YuanbaoSendResult> {
   return await page.evaluate(`(async () => {
     const waitFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const isVisible = (node) => {
-      if (!(node instanceof HTMLElement)) return false;
-      const rect = node.getBoundingClientRect();
-      const style = window.getComputedStyle(node);
-      return rect.width > 0
-        && rect.height > 0
-        && style.display !== 'none'
-        && style.visibility !== 'hidden';
-    };
+    ${IS_VISIBLE_JS}
 
     const composer = Array.from(document.querySelectorAll('.ql-editor[contenteditable="true"], .ql-editor, [contenteditable="true"]'))
       .find(isVisible);
