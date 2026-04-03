@@ -25,7 +25,22 @@ async function getOperatePage(): Promise<import('./types.js').IPage> {
   return bridge.connect({ timeout: 30, workspace: 'operate:default' });
 }
 
-export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
+type VerboseOpts = { verbose?: boolean };
+
+export function registerVerboseAction<TArgs extends unknown[]>(
+  cmd: Command,
+  action: (...args: TArgs) => Promise<void> | void,
+): Command {
+  return cmd
+    .option('-v, --verbose', 'Debug output')
+    .action(async (...args: unknown[]) => {
+      const opts = cmd.opts() as VerboseOpts;
+      if (opts.verbose) process.env.OPENCLI_VERBOSE = '1';
+      await action(...args as TArgs);
+    });
+}
+
+export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command {
   const program = new Command();
   // enablePositionalOptions: prevents parent from consuming flags meant for subcommands;
   // prerequisite for passThroughOptions to forward --help/--version to external binaries
@@ -135,8 +150,9 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
 
   // ── Built-in: explore / synthesize / generate / cascade ───────────────────
 
-  program
-    .command('explore')
+  registerVerboseAction(
+    program
+      .command('explore')
     .alias('probe')
     .description('Explore a website: discover APIs, stores, and recommend strategies')
     .argument('<url>')
@@ -144,10 +160,15 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
     .option('--goal <text>')
     .option('--wait <s>', '', '3')
     .option('--auto', 'Enable interactive fuzzing')
-    .option('--click <labels>', 'Comma-separated labels to click before fuzzing')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (url, opts) => {
-      if (opts.verbose) process.env.OPENCLI_VERBOSE = '1';
+    .option('--click <labels>', 'Comma-separated labels to click before fuzzing'),
+    async (url: string, opts: {
+      site?: string;
+      goal?: string;
+      wait: string;
+      auto?: boolean;
+      click?: string;
+      verbose?: boolean;
+    }) => {
       const { exploreUrl, renderExploreSummary } = await import('./explore.js');
       const clickLabels = opts.click
         ? opts.click.split(',').map((s: string) => s.trim())
@@ -163,7 +184,8 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         workspace,
       });
       console.log(renderExploreSummary(result));
-    });
+    },
+  );
 
   program
     .command('synthesize')
@@ -175,15 +197,18 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       console.log(renderSynthesizeSummary(synthesizeFromExplore(target, { top: parseInt(opts.top) })));
     });
 
-  program
-    .command('generate')
+  registerVerboseAction(
+    program
+      .command('generate')
     .description('One-shot: explore → synthesize → register')
     .argument('<url>')
     .option('--goal <text>')
-    .option('--site <name>')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (url, opts) => {
-      if (opts.verbose) process.env.OPENCLI_VERBOSE = '1';
+    .option('--site <name>'),
+    async (url: string, opts: {
+      goal?: string;
+      site?: string;
+      verbose?: boolean;
+    }) => {
       const { generateCliFromUrl, renderGenerateSummary } = await import('./generate.js');
       const workspace = `generate:${inferHost(url, opts.site)}`;
       const r = await generateCliFromUrl({
@@ -195,21 +220,27 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       });
       console.log(renderGenerateSummary(r));
       process.exitCode = r.ok ? EXIT_CODES.SUCCESS : EXIT_CODES.GENERIC_ERROR;
-    });
+    },
+  );
 
   // ── Built-in: record ─────────────────────────────────────────────────────
 
-  program
-    .command('record')
+  registerVerboseAction(
+    program
+      .command('record')
     .description('Record API calls from a live browser session → generate YAML candidates')
     .argument('<url>', 'URL to open and record')
     .option('--site <name>', 'Site name (inferred from URL if omitted)')
     .option('--out <dir>', 'Output directory for candidates')
     .option('--poll <ms>', 'Poll interval in milliseconds', '2000')
-    .option('--timeout <ms>', 'Auto-stop after N milliseconds (default: 60000)', '60000')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (url, opts) => {
-      if (opts.verbose) process.env.OPENCLI_VERBOSE = '1';
+    .option('--timeout <ms>', 'Auto-stop after N milliseconds (default: 60000)', '60000'),
+    async (url: string, opts: {
+      site?: string;
+      out?: string;
+      poll: string;
+      timeout: string;
+      verbose?: boolean;
+    }) => {
       const { recordSession, renderRecordSummary } = await import('./record.js');
       const result = await recordSession({
         BrowserFactory: getBrowserFactory(),
@@ -221,16 +252,19 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
       });
       console.log(renderRecordSummary(result));
       process.exitCode = result.candidateCount > 0 ? EXIT_CODES.SUCCESS : EXIT_CODES.EMPTY_RESULT;
-    });
+    },
+  );
 
-  program
-    .command('cascade')
+  registerVerboseAction(
+    program
+      .command('cascade')
     .description('Strategy cascade: find simplest working strategy')
     .argument('<url>')
-    .option('--site <name>')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (url, opts) => {
-      if (opts.verbose) process.env.OPENCLI_VERBOSE = '1';
+    .option('--site <name>'),
+    async (url: string, opts: {
+      site?: string;
+      verbose?: boolean;
+    }) => {
       const { cascadeProbe, renderCascadeResult } = await import('./cascade.js');
       const workspace = `cascade:${inferHost(url, opts.site)}`;
       const result = await browserSession(getBrowserFactory(), async (page) => {
@@ -242,7 +276,8 @@ export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
         return cascadeProbe(page, url);
       }, { workspace });
       console.log(renderCascadeResult(result));
-    });
+    },
+  );
 
   // ── Built-in: operate (browser control for Claude Code skill) ───────────────
   //
@@ -962,7 +997,11 @@ cli({
     process.exitCode = EXIT_CODES.USAGE_ERROR;
   });
 
-  program.parse();
+  return program;
+}
+
+export function runCli(BUILTIN_CLIS: string, USER_CLIS: string): void {
+  createProgram(BUILTIN_CLIS, USER_CLIS).parse();
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
