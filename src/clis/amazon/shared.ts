@@ -5,6 +5,8 @@ export const SITE = 'amazon';
 export const DOMAIN = 'amazon.com';
 export const HOME_URL = 'https://www.amazon.com/';
 export const BESTSELLERS_URL = 'https://www.amazon.com/Best-Sellers/zgbs';
+export const NEW_RELEASES_URL = 'https://www.amazon.com/gp/new-releases';
+export const MOVERS_SHAKERS_URL = 'https://www.amazon.com/gp/movers-and-shakers';
 export const SEARCH_URL_PREFIX = 'https://www.amazon.com/s?k=';
 export const PRODUCT_URL_PREFIX = 'https://www.amazon.com/dp/';
 export const DISCUSSION_URL_PREFIX = 'https://www.amazon.com/product-reviews/';
@@ -27,6 +29,40 @@ const ROBOT_TEXT_PATTERNS = [
   'Type the characters you see in this image',
   'To discuss automated access to Amazon data please contact',
 ];
+
+export type AmazonRankingListType = 'bestsellers' | 'new_releases' | 'movers_shakers';
+
+interface AmazonRankingSpec {
+  commandName: string;
+  rootUrl: string;
+  pathPattern: RegExp;
+  invalidInputMessage: string;
+  invalidInputHint: string;
+}
+
+const AMAZON_RANKING_SPECS: Record<AmazonRankingListType, AmazonRankingSpec> = {
+  bestsellers: {
+    commandName: 'bestsellers',
+    rootUrl: BESTSELLERS_URL,
+    pathPattern: /(?:^|\/)zgbs(?:\/|$)/i,
+    invalidInputMessage: 'amazon bestsellers expects a best sellers URL or /zgbs path',
+    invalidInputHint: 'Example: opencli amazon bestsellers https://www.amazon.com/Best-Sellers/zgbs',
+  },
+  new_releases: {
+    commandName: 'new-releases',
+    rootUrl: NEW_RELEASES_URL,
+    pathPattern: /\/gp\/new-releases(?:\/|$)/i,
+    invalidInputMessage: 'amazon new-releases expects a new releases URL or /gp/new-releases path',
+    invalidInputHint: 'Example: opencli amazon new-releases https://www.amazon.com/gp/new-releases',
+  },
+  movers_shakers: {
+    commandName: 'movers-shakers',
+    rootUrl: MOVERS_SHAKERS_URL,
+    pathPattern: /\/gp\/movers-and-shakers(?:\/|$)/i,
+    invalidInputMessage: 'amazon movers-shakers expects a movers-and-shakers URL or /gp/movers-and-shakers path',
+    invalidInputHint: 'Example: opencli amazon movers-shakers https://www.amazon.com/gp/movers-and-shakers',
+  },
+};
 
 export interface ProvenanceFields {
   source_url: string;
@@ -115,23 +151,104 @@ export function buildDiscussionUrl(input: string): string {
   return `${DISCUSSION_URL_PREFIX}${asin}`;
 }
 
-export function resolveBestsellersUrl(input?: string): string {
+function getRankingSpec(listType: AmazonRankingListType): AmazonRankingSpec {
+  return AMAZON_RANKING_SPECS[listType];
+}
+
+export function isSupportedRankingPath(listType: AmazonRankingListType, inputUrl: string): boolean {
+  try {
+    const url = new URL(inputUrl);
+    return getRankingSpec(listType).pathPattern.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function resolveRankingUrl(listType: AmazonRankingListType, input?: string): string {
+  const spec = getRankingSpec(listType);
   const normalized = cleanText(input);
-  if (!normalized) return BESTSELLERS_URL;
-  if (normalized === 'root') return BESTSELLERS_URL;
+  if (!normalized || normalized === 'root') return spec.rootUrl;
+
+  let candidateUrl: string;
   if (normalized.startsWith('/')) {
-    return new URL(normalized, HOME_URL).toString();
+    candidateUrl = new URL(normalized, HOME_URL).toString();
+  } else if (/^https?:\/\//i.test(normalized)) {
+    candidateUrl = canonicalizeAmazonUrl(normalized);
+  } else if (normalized.includes('amazon.') && normalized.includes('/')) {
+    candidateUrl = canonicalizeAmazonUrl(`https://${normalized.replace(/^\/+/, '')}`);
+  } else {
+    throw new ArgumentError(spec.invalidInputMessage, spec.invalidInputHint);
   }
-  if (/^https?:\/\//i.test(normalized)) {
-    return canonicalizeAmazonUrl(normalized);
+
+  if (!isSupportedRankingPath(listType, candidateUrl)) {
+    throw new ArgumentError(spec.invalidInputMessage, spec.invalidInputHint);
   }
-  if (normalized.includes('/zgbs/')) {
-    return canonicalizeAmazonUrl(`https://${normalized.replace(/^\/+/, '')}`);
+  return normalizeRankingInputUrl(candidateUrl);
+}
+
+function normalizeRankingInputUrl(inputUrl: string): string {
+  try {
+    const url = new URL(inputUrl);
+    const normalizedPathSegments = url.pathname
+      .split('/')
+      .filter(Boolean)
+      .filter((segment) => !/^ref=/i.test(segment));
+    url.pathname = `/${normalizedPathSegments.join('/')}`;
+    url.hash = '';
+    // Ranking pages are frequently shared with tracking refs that can land on unstable variants.
+    // Dropping ref keeps the canonical ranking path while preserving useful params (for example pg=2).
+    url.searchParams.delete('ref');
+    return url.toString();
+  } catch {
+    return inputUrl;
   }
-  throw new ArgumentError(
-    'amazon bestsellers expects a best sellers URL or /zgbs path',
-    'Example: opencli amazon bestsellers https://www.amazon.com/Best-Sellers/zgbs',
-  );
+}
+
+export function isRankingPaginationUrl(listType: AmazonRankingListType, inputUrl: string): boolean {
+  const absolute = toAbsoluteAmazonUrl(inputUrl);
+  if (!absolute || !isSupportedRankingPath(listType, absolute)) return false;
+
+  try {
+    const url = new URL(absolute);
+    const ref = cleanText(url.searchParams.get('ref')).toLowerCase();
+    return url.searchParams.has('pg')
+      || absolute.includes('ref=zg_bs_pg_')
+      || /(?:^|_)pg(?:_|$)/.test(ref)
+      || ref.includes('zg_bs_pg_');
+  } catch {
+    return false;
+  }
+}
+
+export function extractCategoryNodeId(inputUrl: string | null | undefined): string | null {
+  const absolute = toAbsoluteAmazonUrl(inputUrl);
+  if (!absolute) return null;
+
+  try {
+    const url = new URL(absolute);
+
+    for (const key of ['node', 'nodeid', 'nodeId', 'browseNode']) {
+      const value = cleanText(url.searchParams.get(key));
+      if (/^\d{4,}$/.test(value)) return value;
+    }
+
+    const rhValue = cleanText(url.searchParams.get('rh'));
+    const rhMatch = decodeURIComponent(rhValue).match(/(?:^|,)\s*n:(\d{4,})(?:,|$)/i);
+    if (rhMatch) return rhMatch[1];
+
+    const pathMatches = [...url.pathname.matchAll(/\/(\d{4,})(?=\/|$)/g)];
+    if (pathMatches.length > 0) {
+      return pathMatches[pathMatches.length - 1][1];
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function resolveBestsellersUrl(input?: string): string {
+  return resolveRankingUrl('bestsellers', input);
 }
 
 export function canonicalizeAmazonUrl(input: string): string {
@@ -305,6 +422,10 @@ export const __test__ = {
   buildProductUrl,
   buildDiscussionUrl,
   resolveBestsellersUrl,
+  resolveRankingUrl,
+  isSupportedRankingPath,
+  isRankingPaginationUrl,
+  extractCategoryNodeId,
   parsePriceText,
   parseRatingValue,
   parseReviewCount,

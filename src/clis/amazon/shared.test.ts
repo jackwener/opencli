@@ -34,4 +34,20 @@ describe('amazon shared helpers', () => {
     expect(__test__.resolveBestsellersUrl('/Best-Sellers/zgbs')).toBe('https://www.amazon.com/Best-Sellers/zgbs');
     expect(() => __test__.resolveBestsellersUrl('desk shelf organizer')).toThrow('amazon bestsellers expects a best sellers URL or /zgbs path');
   });
+
+  it('resolves and validates all ranking list URLs', () => {
+    expect(__test__.resolveRankingUrl('new_releases')).toBe('https://www.amazon.com/gp/new-releases');
+    expect(__test__.resolveRankingUrl('movers_shakers')).toBe('https://www.amazon.com/gp/movers-and-shakers');
+    expect(__test__.resolveRankingUrl('new_releases', '/gp/new-releases/kitchen')).toBe('https://www.amazon.com/gp/new-releases/kitchen');
+    expect(__test__.resolveRankingUrl(
+      'bestsellers',
+      'https://www.amazon.com/Best-Sellers/zgbs/ref=zg_bsnr_tab_bs',
+    )).toBe('https://www.amazon.com/Best-Sellers/zgbs');
+    expect(() => __test__.resolveRankingUrl('movers_shakers', 'https://example.com/gp/movers-and-shakers')).toThrow('Invalid Amazon URL');
+  });
+
+  it('extracts category node id from URL best effort', () => {
+    expect(__test__.extractCategoryNodeId('https://www.amazon.com/Best-Sellers-Home-Kitchen/zgbs/home-garden/3744371')).toBe('3744371');
+    expect(__test__.extractCategoryNodeId('https://www.amazon.com/s?k=desk+organizer&rh=n%3A1064954')).toBe('1064954');
+  });
 });
