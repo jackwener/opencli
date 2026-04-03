@@ -6,7 +6,8 @@ const { mockApiGet } = vi.hoisted(() => ({
   mockApiGet: vi.fn(),
 }));
 
-vi.mock('./utils.js', () => ({
+vi.mock('./utils.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./utils.js')>()),
   apiGet: mockApiGet,
 }));
 

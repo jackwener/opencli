@@ -34,7 +34,7 @@ describe('detectProcess', () => {
     expect(result).toBe(false);
   });
 
-  it('returns true when pgrep finds a process', () => {
+  it.skipIf(process.platform === 'win32')('returns true when pgrep finds a process', () => {
     cp.execFileSync.mockReturnValue('12345\n');
     const result = detectProcess('Cursor');
     expect(result).toBe(true);

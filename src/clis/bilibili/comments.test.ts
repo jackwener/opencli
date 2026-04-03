@@ -4,7 +4,8 @@ const { mockApiGet } = vi.hoisted(() => ({
   mockApiGet: vi.fn(),
 }));
 
-vi.mock('./utils.js', () => ({
+vi.mock('./utils.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./utils.js')>()),
   apiGet: mockApiGet,
 }));
 
@@ -58,8 +59,8 @@ describe('bilibili comments', () => {
   it('throws when aid cannot be resolved', async () => {
     mockApiGet.mockResolvedValueOnce({ data: {} }); // no aid
 
-    await expect(command!.func!({} as any, { bvid: 'BV_invalid', limit: 5 })).rejects.toThrow(
-      'Cannot resolve aid for bvid: BV_invalid',
+    await expect(command!.func!({} as any, { bvid: 'BVinvalid123', limit: 5 })).rejects.toThrow(
+      'Cannot resolve aid for bvid: BVinvalid123',
     );
   });
 
