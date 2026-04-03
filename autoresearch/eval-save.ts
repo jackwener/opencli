@@ -25,7 +25,10 @@ interface SaveTask {
   name: string;
   site: string;
   command: string;
-  adapter: string;
+  /** Inline adapter code (simple tasks) */
+  adapter?: string;
+  /** Path to adapter file relative to autoresearch/ dir (complex tasks — avoids JSON escape issues) */
+  adapterFile?: string;
   judge: JudgeCriteria;
   set?: 'test';
   note?: string;
@@ -129,7 +132,14 @@ function runTask(task: SaveTask): TaskResult {
     }
 
     // Phase 2: write — overwrite scaffold with real adapter code
-    writeFileSync(adapterPath, task.adapter, 'utf-8');
+    if (task.adapterFile) {
+      // Read from file (complex adapters — avoids JSON string escape issues)
+      const srcPath = join(__dirname, task.adapterFile);
+      const code = readFileSync(srcPath, 'utf-8');
+      writeFileSync(adapterPath, code, 'utf-8');
+    } else if (task.adapter) {
+      writeFileSync(adapterPath, task.adapter, 'utf-8');
+    }
 
     // Phase 3: verify — run the adapter via operate verify
     const verifyOutput = runCommand(
