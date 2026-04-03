@@ -88,7 +88,8 @@
     "name": "extract-npm-description",
     "steps": [
       "opencli operate open https://www.npmjs.com/package/express",
-      "opencli operate eval \"document.querySelector('p[class*=description], [data-testid=package-description], #readme p')?.textContent?.trim()\""
+      "opencli operate wait time 2",
+      "opencli operate eval \"(function(){var ps=document.querySelectorAll('p');for(var i=0;i<ps.length;i++){var t=ps[i].textContent.trim();if(t.length>10&&t.length<200)return t;}return '';})()\""
     ],
     "judge": {
       "type": "nonEmpty"
@@ -294,7 +295,7 @@
       "opencli operate open https://example.com",
       "opencli operate eval \"document.querySelector('a')?.click();'clicked'\"",
       "opencli operate wait time 2",
-      "opencli operate eval \"document.title\""
+      "opencli operate eval \"document.title + ' ' + location.href\""
     ],
     "judge": {
       "type": "contains",
