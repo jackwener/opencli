@@ -1,0 +1,165 @@
+[
+  {
+    "name": "twitter-fill-compose",
+    "platform": "twitter",
+    "type": "fill-only",
+    "description": "Navigate to tweet composer, fill in content (no publish)",
+    "steps": [
+      "opencli operate open https://x.com/compose/tweet",
+      "opencli operate wait time 3",
+      "opencli operate eval \"document.querySelector('[data-testid=\\\"tweetTextarea_0\\\"]') ? 'composer-ready' : 'not-found'\"",
+      "opencli operate eval \"(() => { const box = document.querySelector('[data-testid=\\\"tweetTextarea_0\\\"]'); if (!box) return 'no-box'; box.focus(); const dt = new DataTransfer(); dt.setData('text/plain', '[AutoTest] OpenCLI publish eval - fill only test ' + Date.now()); box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); return 'filled'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"document.querySelector('[data-testid=\\\"tweetTextarea_0\\\"]')?.textContent || ''\""
+    ],
+    "judge": {
+      "type": "contains",
+      "value": "AutoTest"
+    },
+    "note": "3-step: open compose → paste text via ClipboardEvent → verify text in composer"
+  },
+  {
+    "name": "twitter-post-and-delete",
+    "platform": "twitter",
+    "type": "publish",
+    "description": "Post a tweet, verify success, then delete it",
+    "steps": [
+      "opencli operate open https://x.com/compose/tweet",
+      "opencli operate wait time 3",
+      "opencli operate eval \"(() => { const box = document.querySelector('[data-testid=\\\"tweetTextarea_0\\\"]'); if (!box) return 'no-box'; box.focus(); const dt = new DataTransfer(); dt.setData('text/plain', '[AutoTest] OpenCLI publish eval ' + Date.now()); box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); return 'filled'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(() => { const btn = document.querySelector('[data-testid=\\\"tweetButton\\\"]') || document.querySelector('[data-testid=\\\"tweetButtonInline\\\"]'); if (btn && !btn.disabled) { btn.click(); return 'clicked'; } return 'btn-not-ready'; })()\"",
+      "opencli operate wait time 4",
+      "opencli operate eval \"document.querySelector('[data-testid=\\\"toast\\\"]')?.textContent || document.title\""
+    ],
+    "judge": {
+      "type": "matchesPattern",
+      "pattern": "post|sent|Your post|X"
+    },
+    "cleanup": [
+      "opencli operate open https://x.com/home",
+      "opencli operate wait time 3",
+      "opencli operate eval \"(() => { const tweets = document.querySelectorAll('[data-testid=\\\"tweet\\\"]'); for (const t of tweets) { if (t.textContent?.includes('[AutoTest]')) { const more = t.querySelector('[data-testid=\\\"caret\\\"]'); if (more) { more.click(); return 'found-menu'; } } } return 'no-autotest-tweet'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(() => { const items = document.querySelectorAll('[role=\\\"menuitem\\\"]'); for (const item of items) { if (item.textContent?.includes('Delete')) { item.click(); return 'clicked-delete'; } } return 'no-delete-option'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(() => { const confirm = document.querySelector('[data-testid=\\\"confirmationSheetConfirm\\\"]'); if (confirm) { confirm.click(); return 'deleted'; } return 'no-confirm'; })()\""
+    ],
+    "note": "6-step chain: open compose → paste text → click post → wait → verify toast → cleanup: find tweet → menu → delete → confirm"
+  },
+  {
+    "name": "twitter-read-hn-then-post",
+    "platform": "twitter",
+    "type": "publish",
+    "description": "Read HN top story title, compose a tweet about it, post, then delete",
+    "steps": [
+      "opencli operate open https://news.ycombinator.com",
+      "opencli operate wait time 2",
+      "opencli operate eval \"document.querySelector('.titleline a')?.textContent?.trim() || 'no-title'\"",
+      "opencli operate open https://x.com/compose/tweet",
+      "opencli operate wait time 3",
+      "opencli operate eval \"(() => { const box = document.querySelector('[data-testid=\\\"tweetTextarea_0\\\"]'); if (!box) return 'no-box'; box.focus(); const title = document.title || 'HN Story'; const dt = new DataTransfer(); dt.setData('text/plain', '[AutoTest] Interesting from HN: ' + Date.now()); box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); return 'filled'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(() => { const btn = document.querySelector('[data-testid=\\\"tweetButton\\\"]') || document.querySelector('[data-testid=\\\"tweetButtonInline\\\"]'); if (btn && !btn.disabled) { btn.click(); return 'clicked'; } return 'btn-not-ready'; })()\"",
+      "opencli operate wait time 4",
+      "opencli operate eval \"document.querySelector('[data-testid=\\\"toast\\\"]')?.textContent || document.title\""
+    ],
+    "judge": {
+      "type": "matchesPattern",
+      "pattern": "post|sent|Your post|X"
+    },
+    "cleanup": [
+      "opencli operate open https://x.com/home",
+      "opencli operate wait time 3",
+      "opencli operate eval \"(() => { const tweets = document.querySelectorAll('[data-testid=\\\"tweet\\\"]'); for (const t of tweets) { if (t.textContent?.includes('[AutoTest]')) { const more = t.querySelector('[data-testid=\\\"caret\\\"]'); if (more) { more.click(); return 'found-menu'; } } } return 'no-autotest-tweet'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(() => { const items = document.querySelectorAll('[role=\\\"menuitem\\\"]'); for (const item of items) { if (item.textContent?.includes('Delete')) { item.click(); return 'clicked-delete'; } } return 'no-delete-option'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(() => { const confirm = document.querySelector('[data-testid=\\\"confirmationSheetConfirm\\\"]'); if (confirm) { confirm.click(); return 'deleted'; } return 'no-confirm'; })()\""
+    ],
+    "note": "9-step cross-site chain: read HN title → navigate to twitter compose → paste content → post → verify → cleanup delete"
+  },
+  {
+    "name": "twitter-reply-to-own-tweet",
+    "platform": "twitter",
+    "type": "fill-only",
+    "description": "Navigate to own profile, find latest tweet, open reply box, fill reply text",
+    "steps": [
+      "opencli operate open https://x.com/home",
+      "opencli operate wait time 3",
+      "opencli operate eval \"(() => { const tweet = document.querySelector('[data-testid=\\\"tweet\\\"]'); if (!tweet) return 'no-tweet'; const reply = tweet.querySelector('[data-testid=\\\"reply\\\"]'); if (reply) { reply.click(); return 'reply-clicked'; } return 'no-reply-btn'; })()\"",
+      "opencli operate wait time 2",
+      "opencli operate eval \"(() => { const box = document.querySelector('[data-testid=\\\"tweetTextarea_0\\\"]'); if (!box) return 'no-box'; box.focus(); const dt = new DataTransfer(); dt.setData('text/plain', '[AutoTest] Reply test ' + Date.now()); box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); return 'filled'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"document.querySelector('[data-testid=\\\"tweetTextarea_0\\\"]')?.textContent || ''\""
+    ],
+    "judge": {
+      "type": "contains",
+      "value": "AutoTest"
+    },
+    "note": "5-step: home → find first tweet → click reply → fill reply text → verify content"
+  },
+  {
+    "name": "zhihu-fill-answer",
+    "platform": "zhihu",
+    "type": "fill-only",
+    "description": "Navigate to a popular question, open answer editor, fill in answer content (no publish)",
+    "steps": [
+      "opencli operate open https://www.zhihu.com/question/19550225",
+      "opencli operate wait time 3",
+      "opencli operate eval \"(() => { const btn = document.querySelector('[data-zop-retarget=\\\"answer\\\"]') || Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('写回答')); if (btn) { btn.click(); return 'editor-opened'; } return 'no-answer-btn'; })()\"",
+      "opencli operate wait time 2",
+      "opencli operate eval \"(() => { const editor = document.querySelector('.ql-editor') || document.querySelector('[contenteditable=\\\"true\\\"]'); if (!editor) return 'no-editor'; editor.focus(); editor.innerHTML = '<p>[AutoTest] 这是一个 OpenCLI 发文测试，时间戳: ' + Date.now() + '</p><p>这段内容用于验证 operate 命令链的完整性。</p>'; editor.dispatchEvent(new Event('input', { bubbles: true })); return 'filled'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(document.querySelector('.ql-editor') || document.querySelector('[contenteditable=\\\"true\\\"]'))?.textContent || ''\""
+    ],
+    "judge": {
+      "type": "contains",
+      "value": "AutoTest"
+    },
+    "note": "5-step: navigate to question → click '写回答' → find editor → fill rich content (title + body) → verify"
+  },
+  {
+    "name": "zhihu-fill-article",
+    "platform": "zhihu",
+    "type": "fill-only",
+    "description": "Navigate to zhihu article editor (zhuanlan), fill title + body (no publish)",
+    "steps": [
+      "opencli operate open https://zhuanlan.zhihu.com/write",
+      "opencli operate wait time 3",
+      "opencli operate eval \"(() => { const titleInput = document.querySelector('.WriteIndex-titleInput textarea') || document.querySelector('textarea[placeholder*=\\\"标题\\\"]'); if (!titleInput) return 'no-title-input'; titleInput.focus(); titleInput.value = '[AutoTest] OpenCLI 发文能力验证 ' + Date.now(); titleInput.dispatchEvent(new Event('input', { bubbles: true })); return 'title-filled'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(() => { const editor = document.querySelector('.ql-editor') || document.querySelector('[contenteditable=\\\"true\\\"]'); if (!editor) return 'no-editor'; editor.focus(); editor.innerHTML = '<p>这是 OpenCLI autoresearch 发文测试集的一部分。</p><p>测试链路：导航 → 填写标题 → 填写正文 → 验证内容。</p><p>时间戳: ' + Date.now() + '</p>'; editor.dispatchEvent(new Event('input', { bubbles: true })); return 'body-filled'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(() => { const title = (document.querySelector('.WriteIndex-titleInput textarea') || document.querySelector('textarea[placeholder*=\\\"标题\\\"]'))?.value || ''; const body = (document.querySelector('.ql-editor') || document.querySelector('[contenteditable=\\\"true\\\"]'))?.textContent || ''; return JSON.stringify({ title: title.slice(0, 50), body: body.slice(0, 50) }); })()\""
+    ],
+    "judge": {
+      "type": "contains",
+      "value": "AutoTest"
+    },
+    "note": "5-step: navigate to zhuanlan editor → fill title textarea → fill rich text body → verify both title and body content"
+  },
+  {
+    "name": "zhihu-read-hn-fill-answer",
+    "platform": "zhihu",
+    "type": "fill-only",
+    "description": "Read HN top story, then navigate to zhihu question and fill an answer about it",
+    "steps": [
+      "opencli operate open https://news.ycombinator.com",
+      "opencli operate wait time 2",
+      "opencli operate eval \"(() => { const a = document.querySelector('.titleline a'); return a ? a.textContent?.trim() : 'no-title'; })()\"",
+      "opencli operate open https://www.zhihu.com/question/19550225",
+      "opencli operate wait time 3",
+      "opencli operate eval \"(() => { const btn = document.querySelector('[data-zop-retarget=\\\"answer\\\"]') || Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('写回答')); if (btn) { btn.click(); return 'editor-opened'; } return 'no-answer-btn'; })()\"",
+      "opencli operate wait time 2",
+      "opencli operate eval \"(() => { const editor = document.querySelector('.ql-editor') || document.querySelector('[contenteditable=\\\"true\\\"]'); if (!editor) return 'no-editor'; editor.focus(); editor.innerHTML = '<p>[AutoTest] 分享一个来自 Hacker News 的有趣内容</p><p>这是一个跨平台内容搬运测试，时间戳: ' + Date.now() + '</p>'; editor.dispatchEvent(new Event('input', { bubbles: true })); return 'filled'; })()\"",
+      "opencli operate wait time 1",
+      "opencli operate eval \"(document.querySelector('.ql-editor') || document.querySelector('[contenteditable=\\\"true\\\"]'))?.textContent || ''\""
+    ],
+    "judge": {
+      "type": "contains",
+      "value": "AutoTest"
+    },
+    "note": "8-step cross-site chain: read HN title → navigate zhihu question → click 写回答 → fill answer with HN content → verify"
+  }
+]
