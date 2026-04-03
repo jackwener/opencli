@@ -23,6 +23,7 @@ export type ConnectivityResult = {
   ok: boolean;
   error?: string;
   durationMs: number;
+  browserName?: string;
 };
 
 
@@ -47,7 +48,7 @@ export async function checkConnectivity(opts?: { timeout?: number }): Promise<Co
     // Try a simple eval to verify end-to-end connectivity
     await page.evaluate('1 + 1');
     await bridge.close();
-    return { ok: true, durationMs: Date.now() - start };
+    return { ok: true, durationMs: Date.now() - start, browserName: bridge.inferredBrowserName ?? undefined };
   } catch (err) {
     return { ok: false, error: getErrorMessage(err), durationMs: Date.now() - start };
   }
@@ -137,6 +138,9 @@ export function renderBrowserDoctorReport(report: DoctorReport): string {
       ? `connected in ${(report.connectivity.durationMs / 1000).toFixed(1)}s`
       : `failed (${report.connectivity.error ?? 'unknown'})`;
     lines.push(`${connIcon} Connectivity: ${detail}`);
+    if (report.connectivity.ok && report.connectivity.browserName) {
+      lines.push(`${chalk.green('[OK]')} Browser: ${report.connectivity.browserName} (inferred from this run)`);
+    }
   } else {
     lines.push(`${chalk.dim('[SKIP]')} Connectivity: skipped (--no-live)`);
   }

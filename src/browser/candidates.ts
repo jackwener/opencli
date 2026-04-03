@@ -5,6 +5,7 @@ import * as path from 'node:path';
 export interface BrowserCandidate {
   id: 'chrome' | 'edge' | 'chromium';
   name: string;
+  running: boolean;
   /**
    * macOS: app bundle path (e.g. /Applications/Google Chrome.app)
    * Linux/Windows: executable path
@@ -70,8 +71,42 @@ function firstExisting(paths: string[]): string | null {
   return null;
 }
 
+function isRunningUnix(processNames: string[]): boolean {
+  for (const processName of processNames) {
+    try {
+      execFileSync('pgrep', ['-x', processName], { encoding: 'utf-8', stdio: 'pipe' });
+      return true;
+    } catch {
+      // try next process name
+    }
+  }
+  return false;
+}
+
+function isRunningWindows(imageNames: string[]): boolean {
+  for (const imageName of imageNames) {
+    try {
+      const out = execFileSync('tasklist', ['/FI', `IMAGENAME eq ${imageName}`], { encoding: 'utf-8', stdio: 'pipe' });
+      if (String(out).includes(imageName)) return true;
+    } catch {
+      // try next image name
+    }
+  }
+  return false;
+}
+
+function isBrowserRunning(processNames: string[]): boolean {
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    return isRunningUnix(processNames);
+  }
+  if (process.platform === 'win32') {
+    return isRunningWindows(processNames);
+  }
+  return false;
+}
+
 export function getBrowserCandidates(): BrowserCandidate[] {
-  const out: BrowserCandidate[] = [];
+  const installed: BrowserCandidate[] = [];
 
   const defs: Array<{
     id: BrowserCandidate['id'];
@@ -79,6 +114,7 @@ export function getBrowserCandidates(): BrowserCandidate[] {
     macAppName: string;
     linuxBins: string[];
     winExeParts: string[][];
+    processNames: string[];
   }> = [
     {
       id: 'chrome',
@@ -88,6 +124,7 @@ export function getBrowserCandidates(): BrowserCandidate[] {
       winExeParts: [
         ['Google', 'Chrome', 'Application', 'chrome.exe'],
       ],
+      processNames: ['Google Chrome', 'google-chrome-stable', 'google-chrome', 'chrome', 'chrome.exe'],
     },
     {
       id: 'edge',
@@ -97,6 +134,7 @@ export function getBrowserCandidates(): BrowserCandidate[] {
       winExeParts: [
         ['Microsoft', 'Edge', 'Application', 'msedge.exe'],
       ],
+      processNames: ['Microsoft Edge', 'microsoft-edge-stable', 'microsoft-edge', 'msedge', 'msedge.exe'],
     },
     {
       id: 'chromium',
@@ -106,6 +144,7 @@ export function getBrowserCandidates(): BrowserCandidate[] {
       winExeParts: [
         ['Chromium', 'Application', 'chrome.exe'],
       ],
+      processNames: ['Chromium', 'chromium', 'chromium-browser', 'chrome.exe'],
     },
   ];
 
@@ -127,10 +166,20 @@ export function getBrowserCandidates(): BrowserCandidate[] {
       executable = firstExisting(candidates);
     }
 
-    if (executable) out.push({ id: def.id, name: def.name, executable: trimPath(executable) });
+    if (executable) {
+      installed.push({
+        id: def.id,
+        name: def.name,
+        executable: trimPath(executable),
+        running: isBrowserRunning(def.processNames),
+      });
+    }
   }
 
-  return out;
+  return [
+    ...installed.filter(candidate => candidate.running),
+    ...installed.filter(candidate => !candidate.running),
+  ];
 }
 
 export async function launchBrowserCandidate(candidate: BrowserCandidate): Promise<void> {

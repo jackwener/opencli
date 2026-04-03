@@ -50,12 +50,15 @@ describe('browser candidates', () => {
     restorePlatform = setPlatform('linux');
 
     mockExecFileSync.mockImplementation((cmd: string, args: string[]) => {
-      if (cmd !== 'which') throw new Error(`unexpected cmd: ${cmd}`);
-      const bin = args[0];
-      if (bin === 'google-chrome-stable') return '/usr/bin/google-chrome-stable\n';
-      if (bin === 'microsoft-edge-stable') return '/usr/bin/microsoft-edge-stable\n';
-      if (bin === 'chromium') return '/usr/bin/chromium\n';
-      throw new Error('not found');
+      const bin = cmd === 'pgrep' ? args[1] : args[0];
+      if (cmd === 'which') {
+        if (bin === 'google-chrome-stable') return '/usr/bin/google-chrome-stable\n';
+        if (bin === 'microsoft-edge-stable') return '/usr/bin/microsoft-edge-stable\n';
+        if (bin === 'chromium') return '/usr/bin/chromium\n';
+        throw new Error('not found');
+      }
+      if (cmd === 'pgrep') throw new Error('not running');
+      throw new Error(`unexpected cmd: ${cmd}`);
     });
 
     const { getBrowserCandidates } = await import('./candidates.js');
@@ -67,6 +70,31 @@ describe('browser candidates', () => {
       '/usr/bin/microsoft-edge-stable',
       '/usr/bin/chromium',
     ]);
+  });
+
+  it('prioritizes running browsers while preserving brand order', async () => {
+    restorePlatform = setPlatform('linux');
+
+    mockExecFileSync.mockImplementation((cmd: string, args: string[]) => {
+      const bin = cmd === 'pgrep' ? args[1] : args[0];
+      if (cmd === 'which') {
+        if (bin === 'google-chrome-stable') return '/usr/bin/google-chrome-stable\n';
+        if (bin === 'microsoft-edge-stable') return '/usr/bin/microsoft-edge-stable\n';
+        if (bin === 'chromium') return '/usr/bin/chromium\n';
+        throw new Error('not found');
+      }
+      if (cmd === 'pgrep') {
+        if (bin === 'microsoft-edge-stable') return '123\n';
+        throw new Error('not running');
+      }
+      throw new Error('not found');
+    });
+
+    const { getBrowserCandidates } = await import('./candidates.js');
+    const candidates = getBrowserCandidates();
+
+    expect(candidates.map((c) => c.id)).toEqual(['edge', 'chrome', 'chromium']);
+    expect(candidates.map((c) => c.running)).toEqual([true, false, false]);
   });
 
   it('skips browsers that are not installed (windows path probe)', async () => {
@@ -109,7 +137,7 @@ describe('browser candidates', () => {
     mockSpawn.mockReturnValue({ unref: vi.fn() });
 
     const { launchBrowserCandidate } = await import('./candidates.js');
-    await launchBrowserCandidate({ id: 'edge', name: 'Edge', executable: '/usr/bin/microsoft-edge-stable' });
+    await launchBrowserCandidate({ id: 'edge', name: 'Edge', executable: '/usr/bin/microsoft-edge-stable', running: false });
 
     expect(mockSpawn).toHaveBeenCalledWith(
       '/usr/bin/microsoft-edge-stable',
@@ -123,7 +151,7 @@ describe('browser candidates', () => {
     mockSpawn.mockReturnValue({ unref: vi.fn() });
 
     const { launchBrowserCandidate } = await import('./candidates.js');
-    await launchBrowserCandidate({ id: 'edge', name: 'Edge', executable: '/Applications/Microsoft Edge.app' });
+    await launchBrowserCandidate({ id: 'edge', name: 'Edge', executable: '/Applications/Microsoft Edge.app', running: false });
 
     expect(mockSpawn).toHaveBeenCalledWith(
       'open',

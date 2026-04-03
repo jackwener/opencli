@@ -28,9 +28,14 @@ export class BrowserBridge implements IBrowserFactory {
   private _daemonProc: ChildProcess | null = null;
   private _lastDetectedBrowsers: string[] = [];
   private _lastTriedBrowsers: string[] = [];
+  private _inferredBrowserName: string | null = null;
 
   get state(): BrowserBridgeState {
     return this._state;
+  }
+
+  get inferredBrowserName(): string | null {
+    return this._inferredBrowserName;
   }
 
   async connect(opts: { timeout?: number; workspace?: string } = {}): Promise<IPage> {
@@ -40,6 +45,7 @@ export class BrowserBridge implements IBrowserFactory {
     if (this._state === 'closed') throw new Error('Session is closed');
 
     this._state = 'connecting';
+    this._inferredBrowserName = null;
 
     try {
       await this._ensureDaemon(opts.timeout);
@@ -135,10 +141,16 @@ export class BrowserBridge implements IBrowserFactory {
         process.stderr.write(`   Trying browser: ${candidate.name}\n`);
       }
       await launchBrowserCandidate(candidate);
-      if (await isExtensionConnected()) return true;
+      if (await isExtensionConnected()) {
+        this._inferredBrowserName = candidate.name;
+        return true;
+      }
       const remainingMs = Math.max(0, timeoutMs - (Date.now() - startedAt));
       if (remainingMs <= 0) break;
-      if (await this._waitForExtensionConnection(Math.min(perBrowserWaitMs, remainingMs))) return true;
+      if (await this._waitForExtensionConnection(Math.min(perBrowserWaitMs, remainingMs))) {
+        this._inferredBrowserName = candidate.name;
+        return true;
+      }
     }
 
     const remainingMs = Math.max(0, timeoutMs - (Date.now() - startedAt));

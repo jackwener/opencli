@@ -192,6 +192,7 @@ describe('BrowserBridge state', () => {
 
     expect(mockLaunchBrowserCandidate).toHaveBeenNthCalledWith(1, expect.objectContaining({ id: 'chrome' }));
     expect(mockLaunchBrowserCandidate).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 'edge' }));
+    expect(bridge.inferredBrowserName).toBe('Edge');
   });
 
   it('includes detected and tried browsers in the final error', async () => {

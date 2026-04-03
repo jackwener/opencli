@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockCheckDaemonStatus, mockListSessions, mockConnect, mockClose } = vi.hoisted(() => ({
+const { mockCheckDaemonStatus, mockListSessions, mockConnect, mockClose, mockInferredBrowserName } = vi.hoisted(() => ({
   mockCheckDaemonStatus: vi.fn(),
   mockListSessions: vi.fn(),
   mockConnect: vi.fn(),
   mockClose: vi.fn(),
+  mockInferredBrowserName: { value: null as string | null },
 }));
 
 vi.mock('./browser/discover.js', () => ({
@@ -19,6 +20,9 @@ vi.mock('./browser/index.js', () => ({
   BrowserBridge: class {
     connect = mockConnect;
     close = mockClose;
+    get inferredBrowserName() {
+      return mockInferredBrowserName.value;
+    }
   },
 }));
 
@@ -29,6 +33,7 @@ describe('doctor report rendering', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInferredBrowserName.value = null;
   });
 
   it('renders OK-style report when daemon and extension connected', () => {
@@ -77,6 +82,17 @@ describe('doctor report rendering', () => {
     expect(text).toContain('[OK] Connectivity: connected in 1.2s');
   });
 
+  it('renders inferred browser only when this run inferred it', () => {
+    const text = strip(renderBrowserDoctorReport({
+      daemonRunning: true,
+      extensionConnected: true,
+      connectivity: { ok: true, durationMs: 1234, browserName: 'Edge' },
+      issues: [],
+    }));
+
+    expect(text).toContain('[OK] Browser: Edge (inferred from this run)');
+  });
+
   it('renders connectivity SKIP when not tested', () => {
     const text = strip(renderBrowserDoctorReport({
       daemonRunning: true,
@@ -118,5 +134,18 @@ describe('doctor report rendering', () => {
     expect(text).toContain('Chromium-based');
     expect(text).toContain('chrome://extensions');
     expect(text).toContain('edge://extensions');
+  });
+
+  it('includes inferred browser name when connectivity established during this run', async () => {
+    mockCheckDaemonStatus
+      .mockResolvedValueOnce({ running: false, extensionConnected: false })
+      .mockResolvedValueOnce({ running: true, extensionConnected: true });
+    mockConnect.mockResolvedValue({ evaluate: vi.fn().mockResolvedValue(2) });
+    mockClose.mockResolvedValue(undefined);
+    mockInferredBrowserName.value = 'Edge';
+
+    const report = await runBrowserDoctor({ live: true });
+
+    expect(report.connectivity).toEqual(expect.objectContaining({ ok: true, browserName: 'Edge' }));
   });
 });
