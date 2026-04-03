@@ -26,10 +26,14 @@ function resolveColumns(rows: Record<string, unknown>[], opts: RenderOptions): s
 }
 
 export function render(data: unknown, opts: RenderOptions = {}): void {
-  const envFmt = process.env.OUTPUT?.trim().toLowerCase();
-  // Non-TTY stdout (pipes, AI agents): auto-downgrade table → yaml for parseable output.
-  // Override with OUTPUT=table env var if you explicitly want table in pipes.
-  const fmt = envFmt || opts.fmt || (!process.stdout.isTTY ? 'yaml' : 'table');
+  let fmt = opts.fmt ?? 'table';
+  // When format is 'table' (the default), check for non-TTY auto-downgrade.
+  // Priority: explicit -f flag (non-table) > OUTPUT env var > TTY auto-detect > table
+  if (fmt === 'table') {
+    const envFmt = process.env.OUTPUT?.trim().toLowerCase();
+    if (envFmt) fmt = envFmt;
+    else if (!process.stdout.isTTY) fmt = 'yaml';
+  }
   if (data === null || data === undefined) {
     console.log(data);
     return;

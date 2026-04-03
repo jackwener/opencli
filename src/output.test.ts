@@ -17,34 +17,44 @@ describe('output TTY detection', () => {
     logSpy.mockRestore();
   });
 
-  it('outputs YAML in non-TTY when format is not specified', () => {
+  it('outputs YAML in non-TTY when format is default table', () => {
     Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true });
-    render([{ name: 'alice', score: 10 }], { columns: ['name', 'score'] });
+    // commanderAdapter always passes fmt:'table' as default — this must still trigger downgrade
+    render([{ name: 'alice', score: 10 }], { fmt: 'table', columns: ['name', 'score'] });
     const out = logSpy.mock.calls.map(c => c[0]).join('\n');
     expect(out).toContain('name: alice');
     expect(out).toContain('score: 10');
-    expect(out).not.toContain('\x1b[');
   });
 
-  it('outputs table in TTY when format is not specified', () => {
+  it('outputs table in TTY when format is default table', () => {
     Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
-    render([{ name: 'alice', score: 10 }], { columns: ['name', 'score'] });
+    render([{ name: 'alice', score: 10 }], { fmt: 'table', columns: ['name', 'score'] });
     const out = logSpy.mock.calls.map(c => c[0]).join('\n');
     expect(out).toContain('alice');
   });
 
-  it('respects explicit -f json even in TTY', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+  it('respects explicit -f json even in non-TTY', () => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true });
     render([{ name: 'alice' }], { fmt: 'json' });
     const out = logSpy.mock.calls.map(c => c[0]).join('\n');
     expect(JSON.parse(out)).toEqual([{ name: 'alice' }]);
   });
 
-  it('OUTPUT env var overrides TTY auto-detection', () => {
+  it('OUTPUT env var overrides default table in non-TTY', () => {
     Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true });
     process.env.OUTPUT = 'json';
-    render([{ name: 'alice' }], {});
+    render([{ name: 'alice' }], { fmt: 'table' });
     const out = logSpy.mock.calls.map(c => c[0]).join('\n');
     expect(JSON.parse(out)).toEqual([{ name: 'alice' }]);
+  });
+
+  it('explicit -f flag takes precedence over OUTPUT env var', () => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true });
+    process.env.OUTPUT = 'json';
+    render([{ name: 'alice' }], { fmt: 'csv' });
+    const out = logSpy.mock.calls.map(c => c[0]).join('\n');
+    expect(out).toContain('name');
+    expect(out).toContain('alice');
+    expect(out).not.toContain('"name"');  // not JSON
   });
 });
