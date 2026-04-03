@@ -96,6 +96,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
 
       const verbose = optionsRecord.verbose === true;
       let format = typeof optionsRecord.format === 'string' ? optionsRecord.format : 'table';
+      const formatExplicit = subCmd.getOptionValueSource('format') === 'cli';
       if (verbose) process.env.OPENCLI_VERBOSE = '1';
       if (cmd.deprecated) {
         const message = typeof cmd.deprecated === 'string' ? cmd.deprecated : `${fullName(cmd)} is deprecated.`;
@@ -118,6 +119,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       }
       renderOutput(result, {
         fmt: format,
+        fmtExplicit: formatExplicit,
         columns: resolved.columns,
         title: `${resolved.site}/${resolved.name}`,
         elapsed: (Date.now() - startTime) / 1000,
