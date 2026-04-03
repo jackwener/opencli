@@ -4,6 +4,7 @@
  */
 
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import yaml from 'js-yaml';
 import { VOLATILE_PARAMS, SEARCH_PARAMS, LIMIT_PARAMS, PAGINATION_PARAMS } from './constants.js';
@@ -125,8 +126,12 @@ export function renderSynthesizeSummary(result: SynthesizeResult): string {
 
 export function resolveExploreDir(target: string): string {
   if (fs.existsSync(target)) return target;
-  const candidate = path.join('.opencli', 'explore', target);
-  if (fs.existsSync(candidate)) return candidate;
+  // Check ~/.opencli/explore/<target> (new default location, #711)
+  const homeCandidate = path.join(os.homedir(), '.opencli', 'explore', target);
+  if (fs.existsSync(homeCandidate)) return homeCandidate;
+  // Fallback: check cwd/.opencli/explore/<target> (legacy location)
+  const cwdCandidate = path.join('.opencli', 'explore', target);
+  if (fs.existsSync(cwdCandidate)) return cwdCandidate;
   throw new Error(`Explore directory not found: ${target}`);
 }
 

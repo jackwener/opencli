@@ -13,6 +13,7 @@
  */
 
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
 import chalk from 'chalk';
@@ -734,7 +735,8 @@ function analyzeAndWrite(
   requests: RecordedRequest[],
   outDir?: string,
 ): RecordResult {
-  const targetDir = outDir ?? path.join('.opencli', 'record', site);
+  // Default to ~/.opencli/record/<site>/ so we never pollute cwd (#711)
+  const targetDir = outDir ?? path.join(os.homedir(), '.opencli', 'record', site);
   fs.mkdirSync(targetDir, { recursive: true });
 
   if (requests.length === 0) {

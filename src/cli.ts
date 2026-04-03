@@ -154,6 +154,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .option('--wait <s>', '', '3')
     .option('--auto', 'Enable interactive fuzzing')
     .option('--click <labels>', 'Comma-separated labels to click before fuzzing')
+    .option('--out <dir>', 'Output directory for artifacts')
     .option('-v, --verbose', 'Debug output')
     .action(async (url: string, opts: {
       site?: string;
@@ -161,6 +162,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       wait: string;
       auto?: boolean;
       click?: string;
+      out?: string;
       verbose?: boolean;
     }) => {
       applyVerbose(opts);
@@ -177,6 +179,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         auto: opts.auto,
         clickLabels,
         workspace,
+        outDir: opts.out,
       });
       console.log(renderExploreSummary(result));
     });

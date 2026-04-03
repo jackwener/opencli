@@ -7,6 +7,7 @@
  */
 
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { DEFAULT_BROWSER_EXPLORE_TIMEOUT, browserSession, runWithTimeout } from './runtime.js';
 import type { IBrowserFactory } from './runtime.js';
@@ -447,7 +448,8 @@ export async function exploreUrl(
 
       // Step 9: Assemble result and write artifacts
       const siteName = opts.site ?? detectSiteName(metadata.url || url);
-      const targetDir = opts.outDir ?? path.join('.opencli', 'explore', siteName);
+      // Default to ~/.opencli/explore/<site>/ so we never pollute cwd (#711)
+      const targetDir = opts.outDir ?? path.join(os.homedir(), '.opencli', 'explore', siteName);
 
       const result = {
         site: siteName, target_url: url, final_url: metadata.url, title: metadata.title,
