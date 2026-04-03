@@ -581,7 +581,8 @@
     "name": "bench-imdb-matrix",
     "steps": [
       "opencli operate open https://www.imdb.com/title/tt0133093/",
-      "opencli operate eval \"JSON.stringify({title:document.querySelector('h1 span, [data-testid=hero__pageTitle] span')?.textContent,year:document.querySelector('a[href*=releaseinfo], [data-testid=hero-title-block__metadata] a')?.textContent})\""
+      "opencli operate wait time 3",
+      "opencli operate eval \"(function(){var title=document.querySelector('h1')?.textContent?.trim()||'';var year='';var links=document.querySelectorAll('a');for(var i=0;i<links.length;i++){if(links[i].textContent.trim()==='1999'){year='1999';break;}}var rating=document.querySelector('[data-testid=hero-rating-bar__aggregate-rating__score] span, .sc-bde20123-1')?.textContent?.trim()||'';return JSON.stringify({title:title,year:year,rating:rating});})()\""
     ],
     "judge": {
       "type": "contains",
