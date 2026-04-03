@@ -136,5 +136,21 @@
     "adapter": "import { cli, Strategy } from '@jackwener/opencli/registry';\n\ncli({\n  site: 'test-jsonplaceholder',\n  name: 'comments',\n  description: 'JSONPlaceholder comments',\n  domain: 'jsonplaceholder.typicode.com',\n  strategy: Strategy.PUBLIC,\n  browser: false,\n  args: [\n    { name: 'limit', type: 'int', default: 5, help: 'Number of comments' },\n  ],\n  columns: ['id', 'name', 'email'],\n  func: async (_page, kwargs) => {\n    const limit = kwargs.limit ?? 5;\n    const res = await fetch('https://jsonplaceholder.typicode.com/comments');\n    const comments = await res.json();\n    return comments.slice(0, limit).map((c: any) => ({ id: c.id, name: c.name, email: c.email }));\n  },\n});\n",
     "judge": { "type": "arrayMinLength", "minLength": 3 },
     "note": "PUBLIC strategy: JSONPlaceholder comments — same base domain as posts/users/todos, different endpoint"
+  },
+  {
+    "name": "jsonplaceholder-albums",
+    "site": "test-jsonplaceholder",
+    "command": "albums",
+    "adapter": "import { cli, Strategy } from '@jackwener/opencli/registry';\n\ncli({\n  site: 'test-jsonplaceholder',\n  name: 'albums',\n  description: 'JSONPlaceholder albums',\n  domain: 'jsonplaceholder.typicode.com',\n  strategy: Strategy.PUBLIC,\n  browser: false,\n  args: [\n    { name: 'limit', type: 'int', default: 5, help: 'Number of albums' },\n  ],\n  columns: ['id', 'userId', 'title'],\n  func: async (_page, kwargs) => {\n    const limit = kwargs.limit ?? 5;\n    const res = await fetch('https://jsonplaceholder.typicode.com/albums');\n    const albums = await res.json();\n    return albums.slice(0, limit).map((a: any) => ({ id: a.id, userId: a.userId, title: a.title }));\n  },\n});\n",
+    "judge": { "type": "arrayMinLength", "minLength": 3 },
+    "note": "PUBLIC strategy: JSONPlaceholder albums — same base domain as posts/users/todos/comments, different endpoint"
+  },
+  {
+    "name": "jsonplaceholder-photos",
+    "site": "test-jsonplaceholder",
+    "command": "photos",
+    "adapter": "import { cli, Strategy } from '@jackwener/opencli/registry';\n\ncli({\n  site: 'test-jsonplaceholder',\n  name: 'photos',\n  description: 'JSONPlaceholder photos',\n  domain: 'jsonplaceholder.typicode.com',\n  strategy: Strategy.PUBLIC,\n  browser: false,\n  args: [\n    { name: 'limit', type: 'int', default: 5, help: 'Number of photos' },\n  ],\n  columns: ['id', 'albumId', 'title'],\n  func: async (_page, kwargs) => {\n    const limit = kwargs.limit ?? 5;\n    const res = await fetch('https://jsonplaceholder.typicode.com/photos');\n    const photos = await res.json();\n    return photos.slice(0, limit).map((p: any) => ({ id: p.id, albumId: p.albumId, title: p.title }));\n  },\n});\n",
+    "judge": { "type": "arrayMinLength", "minLength": 3 },
+    "note": "PUBLIC strategy: JSONPlaceholder photos — same base domain as posts/users/todos/comments/albums, different endpoint"
   }
 ]
