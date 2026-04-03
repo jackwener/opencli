@@ -18,7 +18,7 @@ cli({
   ],
   columns: ['rank', 'author', 'text', 'likes', 'replies', 'time'],
   func: async (page, kwargs) => {
-    const bvid = await resolveBvid(String(kwargs.bvid).trim());
+    const bvid = await resolveBvid(kwargs.bvid);
     const limit = Math.min(Number(kwargs.limit) || 20, 50);
 
     // Resolve bvid → aid (required by reply API)

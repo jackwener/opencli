@@ -10,8 +10,8 @@ import { AuthRequiredError, EmptyResultError } from '../../errors.js';
  * Resolve Bilibili short URL / short code to BV ID.
  * Supports: BV1MV9NBtENN, XYzsqGa, b23.tv/XYzsqGa, https://b23.tv/XYzsqGa
  */
-export function resolveBvid(input: string): Promise<string> {
-  const trimmed = input.trim();
+export function resolveBvid(input: unknown): Promise<string> {
+  const trimmed = String(input).trim();
   if (/^BV[A-Za-z0-9]+$/i.test(trimmed)) {
     return Promise.resolve(trimmed);
   }
@@ -25,9 +25,10 @@ export function resolveBvid(input: string): Promise<string> {
         if (match) { res.resume(); resolve(match[1]); return; }
       }
       res.resume();
-      reject(new Error(`Cannot resolve BV ID from short URL: ${input}`));
+      reject(new Error(`Cannot resolve BV ID from short URL: ${trimmed}`));
     });
     req.on('error', reject);
+    req.setTimeout(5000, () => { req.destroy(); reject(new Error(`Timeout resolving short URL: ${trimmed}`)); });
   });
 }
 
