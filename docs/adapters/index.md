@@ -79,6 +79,7 @@ Run `opencli list` for the live registry.
 | **[spotify](./browser/spotify)** | `auth` `status` `play` `pause` `next` `prev` `volume` `search` `queue` `shuffle` `repeat` | 🔑 OAuth API |
 | **[stackoverflow](./browser/stackoverflow)** | `hot` `search` `bounties` `unanswered` | 🌐 Public |
 | **[wikipedia](./browser/wikipedia)** | `search` `summary` `random` `trending` | 🌐 Public |
+| **[lesswrong](./browser/lesswrong)** | `curated` `frontpage` `new` `top` `top-week` `top-month` `top-year` `read` `comments` `user` `user-posts` `tag` `tags` `sequences` `shortform` | 🌐 Public |
 | **[lobsters](./browser/lobsters)** | `hot` `newest` `active` `tag` | 🌐 Public |
 | **[steam](./browser/steam)** | `top-sellers` | 🌐 Public |
 
