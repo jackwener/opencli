@@ -15,11 +15,22 @@ cli({
     const { question } = kwargs;
     await page.goto('https://leai.lenovo.com.cn', { waitUntil: 'networkidle' });
 
-    // 点击开启新对话
+    // 点击"开启新对话"
     await page.evaluate(`(function(){ document.querySelector(".top-box")?.click(); })()`);
-    await new Promise(r => setTimeout(r, 2000));
 
-    // 输入问题（用 nativeInputValueSetter 触发 Vue 响应）
+    // 等待输入框出现（最多10秒）
+    for (let w = 0; w < 10; w++) {
+      await new Promise(r => setTimeout(r, 1000));
+      const hasInput = await page.evaluate(`(function(){ return !!document.querySelector(".van-field__control"); })()`);
+      if (hasInput) break;
+    }
+
+    // 记录当前已有回复数量
+    const baseCount = await page.evaluate(`(function(){
+      return document.querySelectorAll(".response-text").length;
+    })()`);
+
+    // 输入问题
     await page.evaluate(`(function(){
       var input = document.querySelector(".van-field__control");
       if (!input) return;
@@ -30,11 +41,6 @@ cli({
 
     await new Promise(r => setTimeout(r, 500));
 
-    // 记录当前已有回复数量
-    const baseCount = await page.evaluate(`(function(){
-      return document.querySelectorAll(".response-text").length;
-    })()`);
-
     // 回车发送
     await page.evaluate(`(function(){
       var input = document.querySelector(".van-field__control");
@@ -44,11 +50,11 @@ cli({
       input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
     })()`);
 
-    // 等待新回复出现（最多60秒）
+    // 等待新回复（最多50秒）
     let answer = '';
     let prevLen = 0;
     let stableCount = 0;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 25; i++) {
       await new Promise(r => setTimeout(r, 2000));
       const result = await page.evaluate(`(function(){
         var responses = document.querySelectorAll(".response-text");
