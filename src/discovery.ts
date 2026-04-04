@@ -168,7 +168,7 @@ export async function ensureUserAdapters(): Promise<void> {
     const scriptPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'scripts', 'fetch-adapters.js');
     execFileSync(process.execPath, [scriptPath], {
       stdio: 'inherit',
-      env: { ...process.env, OPENCLI_FETCH: '1' },
+      env: { ...process.env, _OPENCLI_FIRST_RUN: '1' },
       timeout: 120_000,
     });
   } catch (err) {
