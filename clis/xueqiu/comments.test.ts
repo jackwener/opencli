@@ -4,7 +4,7 @@ const { mockWarn } = vi.hoisted(() => ({
   mockWarn: vi.fn(),
 }));
 
-vi.mock('../../logger.js', () => ({
+vi.mock('../../src/logger.js', () => ({
   log: {
     info: vi.fn(),
     warn: mockWarn,
