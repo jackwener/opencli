@@ -19,6 +19,8 @@
   },
   "files": [
     "dist/src/",
+    "dist/clis/",
+    "dist/cli-manifest.json",
     "dist/registry.*",
     "dist/errors.*",
     "dist/types.*",

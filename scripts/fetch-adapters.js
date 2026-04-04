@@ -4,17 +4,18 @@
  * Fetch official CLI adapters into ~/.opencli/clis/ on postinstall.
  *
  * Strategy:
- * - git clone --depth 1 (fast, minimal bandwidth)
+ * - git sparse-checkout clone (fast, minimal bandwidth)
  * - Fallback: GitHub tarball download if git is unavailable
  * - Official files (listed in manifest) are unconditionally overwritten on update
  * - User-created files (not in manifest) are preserved
+ * - Skips fetch if already installed at the same version
  *
- * This script is plain Node.js — no TypeScript, no imports from src/.
+ * This is an ESM script (package.json type: module). No TypeScript, no src/ imports.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 
@@ -30,48 +31,67 @@ function log(msg) {
 
 function hasGit() {
   try {
-    execSync('git --version', { stdio: 'ignore' });
+    execFileSync('git', ['--version'], { stdio: 'ignore' });
     return true;
   } catch {
     return false;
   }
 }
 
+function getPackageVersion() {
+  try {
+    const pkgPath = resolve(import.meta.dirname, '..', 'package.json');
+    return JSON.parse(readFileSync(pkgPath, 'utf-8')).version;
+  } catch {
+    return 'unknown';
+  }
+}
+
+function getInstalledVersion() {
+  try {
+    const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
+    return manifest.version;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Clone repo shallowly, return path to temp dir.
+ * Clone repo shallowly, return { repoDir, tmpRoot }.
  */
 function cloneRepo() {
-  const tmp = join(tmpdir(), `opencli-fetch-${randomBytes(4).toString('hex')}`);
-  mkdirSync(tmp, { recursive: true });
+  const tmpRoot = join(tmpdir(), `opencli-fetch-${randomBytes(4).toString('hex')}`);
+  mkdirSync(tmpRoot, { recursive: true });
 
   if (hasGit()) {
     log('Fetching adapters via git clone...');
-    execSync(`git clone --depth 1 --filter=blob:none --sparse "${REPO_URL}" "${tmp}/repo"`, {
+    const repoDir = join(tmpRoot, 'repo');
+    execFileSync('git', [
+      'clone', '--depth', '1', '--filter=blob:none', '--sparse',
+      REPO_URL, repoDir,
+    ], { stdio: 'pipe', timeout: 60_000 });
+    execFileSync('git', ['sparse-checkout', 'set', 'clis'], {
+      cwd: repoDir,
       stdio: 'pipe',
-      timeout: 60_000,
     });
-    execSync('git sparse-checkout set clis', {
-      cwd: join(tmp, 'repo'),
-      stdio: 'pipe',
-    });
-    return join(tmp, 'repo');
+    return { repoDir, tmpRoot };
   }
 
   // Fallback: tarball download
   log('git not found, fetching adapters via tarball...');
-  const tarball = join(tmp, 'opencli.tar.gz');
-  execSync(`curl -sL "${TARBALL_URL}" -o "${tarball}"`, {
+  const tarball = join(tmpRoot, 'opencli.tar.gz');
+  execFileSync('curl', ['-sL', TARBALL_URL, '-o', tarball], {
     stdio: 'pipe',
     timeout: 120_000,
   });
-  execSync(`tar xzf "${tarball}" -C "${tmp}"`, { stdio: 'pipe' });
+  execFileSync('tar', ['xzf', tarball, '-C', tmpRoot], { stdio: 'pipe' });
 
   // Find extracted directory (opencli-main/)
-  const extracted = readdirSync(tmp).find(f =>
-    f.startsWith('opencli-') && statSync(join(tmp, f)).isDirectory()
+  const extracted = readdirSync(tmpRoot).find(f =>
+    f.startsWith('opencli-') && statSync(join(tmpRoot, f)).isDirectory()
   );
   if (!extracted) throw new Error('Failed to extract tarball');
-  return join(tmp, extracted);
+  return { repoDir: join(tmpRoot, extracted), tmpRoot };
 }
 
 /**
@@ -92,15 +112,31 @@ function walkFiles(dir, prefix = '') {
   return results;
 }
 
+function cleanup(tmpRoot) {
+  try {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  } catch {
+    // Best-effort cleanup
+  }
+}
+
 function main() {
   // Skip in CI
   if (process.env.CI || process.env.CONTINUOUS_INTEGRATION) return;
   // Allow opt-out
   if (process.env.OPENCLI_SKIP_FETCH === '1') return;
 
-  let repoDir;
+  // Skip if already installed at the same version
+  const currentVersion = getPackageVersion();
+  const installedVersion = getInstalledVersion();
+  if (currentVersion !== 'unknown' && installedVersion === currentVersion) {
+    log(`Adapters already up to date (v${currentVersion})`);
+    return;
+  }
+
+  let repoDir, tmpRoot;
   try {
-    repoDir = cloneRepo();
+    ({ repoDir, tmpRoot } = cloneRepo());
   } catch (err) {
     log(`Warning: could not fetch adapters: ${err.message}`);
     log('Adapters will be fetched on first run.');
@@ -110,7 +146,7 @@ function main() {
   const srcClis = join(repoDir, 'clis');
   if (!existsSync(srcClis)) {
     log('Warning: no clis/ directory found in repo');
-    cleanup(repoDir);
+    cleanup(tmpRoot);
     return;
   }
 
@@ -123,37 +159,20 @@ function main() {
   for (const relPath of officialFiles) {
     const src = join(srcClis, relPath);
     const dst = join(USER_CLIS_DIR, relPath);
-    mkdirSync(join(dst, '..'), { recursive: true });
+    mkdirSync(dirname(dst), { recursive: true });
     cpSync(src, dst, { force: true });
     copied++;
   }
 
   // Write manifest so we know which files are official
   writeFileSync(MANIFEST_PATH, JSON.stringify({
-    version: getPackageVersion(),
+    version: currentVersion,
     files: officialFiles,
     updatedAt: new Date().toISOString(),
   }, null, 2));
 
   log(`Installed ${copied} adapter files to ${USER_CLIS_DIR}`);
-  cleanup(repoDir);
-}
-
-function getPackageVersion() {
-  try {
-    const pkgPath = resolve(import.meta.dirname, '..', 'package.json');
-    return JSON.parse(readFileSync(pkgPath, 'utf-8')).version;
-  } catch {
-    return 'unknown';
-  }
-}
-
-function cleanup(dir) {
-  try {
-    rmSync(dir.replace(/\/repo$/, ''), { recursive: true, force: true });
-  } catch {
-    // Best-effort cleanup
-  }
+  cleanup(tmpRoot);
 }
 
 main();
