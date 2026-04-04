@@ -34,6 +34,13 @@ function resolveImagePath(imagePath: string): string {
     throw new Error(`Unsupported image format "${ext}". Supported: jpg, jpeg, png, gif, webp`);
   }
 
+  const stat = fs.statSync(absPath);
+  if (stat.size > MAX_IMAGE_SIZE_BYTES) {
+    throw new Error(
+      `Image too large: ${(stat.size / 1024 / 1024).toFixed(1)} MB (max ${MAX_IMAGE_SIZE_BYTES / 1024 / 1024} MB)`
+    );
+  }
+
   return absPath;
 }
 
@@ -136,6 +143,13 @@ async function attachReplyImage(page: IPage, absImagePath: string): Promise<void
           ? 'image/webp'
           : 'image/jpeg';
     const base64 = fs.readFileSync(absImagePath).toString('base64');
+    if (base64.length > 500_000) {
+      console.warn(
+        `[warn] Image base64 payload is ${(base64.length / 1024 / 1024).toFixed(1)}MB. ` +
+        'This may fail with the browser bridge. Update the extension to v1.6+ for CDP-based upload, ' +
+        'or compress the image before attaching.'
+      );
+    }
     const upload = await page.evaluate(`
       (() => {
         const input = document.querySelector(${JSON.stringify(REPLY_FILE_INPUT_SELECTOR)});
