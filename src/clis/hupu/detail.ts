@@ -1,17 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
-import { getHupuThreadUrl, readHupuNextData } from './utils.js';
-
-// 清理HTML标签
-function stripHtml(html: string): string {
-  if (!html) return '';
-  const re = /<[^>]+>/g;
-  const decoded = html
-    .replace(/\\u003c/g, '<')
-    .replace(/\\u003e/g, '>')
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '');
-  return decoded.replace(re, '').trim();
-}
+import { getHupuThreadUrl, readHupuNextData, stripHtml } from './utils.js';
 
 // JSON数据结构（对应Next.js的__NEXT_DATA__）
 interface NextData {

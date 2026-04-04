@@ -20,6 +20,26 @@ interface BrowserDataResult<T> {
   error?: string;
 }
 
+export function stripHtml(html: string): string {
+  if (!html) return '';
+  const decoded = html
+    .replace(/\\u003c/g, '<')
+    .replace(/\\u003e/g, '>')
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '');
+  return decoded.replace(/<[^>]+>/g, '').trim();
+}
+
+export function decodeHtmlEntities(html: string): string {
+  if (!html) return '';
+  return html.replace(/&nbsp;/g, ' ')
+             .replace(/&lt;/g, '<')
+             .replace(/&gt;/g, '>')
+             .replace(/&amp;/g, '&')
+             .replace(/&quot;/g, '"')
+             .replace(/&#x27;/g, "'");
+}
+
 export function getHupuThreadUrl(tid: unknown): string {
   return `https://bbs.hupu.com/${encodeURIComponent(String(tid))}-1.html`;
 }
@@ -331,46 +351,13 @@ export async function postHupuJson(
   apiUrl: string,
   body: Record<string, unknown>,
   actionLabel: string,
+  mode: 'default' | 'reply' = 'default',
 ): Promise<HupuApiResponse> {
   const referer = getHupuThreadUrl(tid);
   await page.goto(referer);
 
   const result = await page.evaluate(
-    buildBrowserJsonPostScript(apiUrl, body, 'default'),
-  ) as BrowserFetchResult;
-
-  if (!result || typeof result !== 'object') {
-    throw new CommandExecutionError(`${actionLabel} failed: invalid browser response`);
-  }
-
-  if (result.status === 401 || result.status === 403) {
-    throw new AuthRequiredError('bbs.hupu.com', `${actionLabel} failed: please log in to Hupu first`);
-  }
-
-  if (result.error) {
-    throw new CommandExecutionError(`${actionLabel} failed: ${result.error}`);
-  }
-
-  if (!result.ok) {
-    const detail = result.data?.msg || result.data?.message || `HTTP ${result.status ?? 'unknown'}`;
-    throw new CommandExecutionError(`${actionLabel} failed: ${detail}`);
-  }
-
-  return result.data ?? {};
-}
-
-export async function postHupuReplyJson(
-  page: IPage,
-  tid: unknown,
-  apiUrl: string,
-  body: Record<string, unknown>,
-  actionLabel: string,
-): Promise<HupuApiResponse> {
-  const referer = getHupuThreadUrl(tid);
-  await page.goto(referer);
-
-  const result = await page.evaluate(
-    buildBrowserJsonPostScript(apiUrl, body, 'reply'),
+    buildBrowserJsonPostScript(apiUrl, body, mode),
   ) as BrowserFetchResult;
 
   if (!result || typeof result !== 'object') {

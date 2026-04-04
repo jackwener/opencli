@@ -1,22 +1,5 @@
 import { cli, Strategy } from '../../registry.js';
-import { getHupuSearchUrl, readHupuSearchData } from './utils.js';
-
-// 清理HTML标签的函数
-function stripHtml(html: string): string {
-  if (!html) return '';
-  return html.replace(/<[^>]+>/g, '').trim();
-}
-
-// 解码HTML实体的函数
-function decodeHtml(html: string): string {
-  if (!html) return '';
-  return html.replace(/&nbsp;/g, ' ')
-             .replace(/&lt;/g, '<')
-             .replace(/&gt;/g, '>')
-             .replace(/&amp;/g, '&')
-             .replace(/&quot;/g, '"')
-             .replace(/&#x27;/g, "'");
-}
+import { decodeHtmlEntities, getHupuSearchUrl, readHupuSearchData, stripHtml } from './utils.js';
 
 // 搜索结果数据结构
 interface SearchResult {
@@ -99,7 +82,7 @@ cli({
     // 处理结果：清理HTML标签，解码HTML实体
     const processedResults = results.slice(0, Number(limit)).map((item, index) => ({
       rank: index + 1,
-      title: decodeHtml(stripHtml(item.title)),
+      title: decodeHtmlEntities(stripHtml(item.title)),
       author: item.username || '未知用户',
       replies: item.replies || '0',
       lights: item.lights || '0',

@@ -1,6 +1,6 @@
 import { CliError } from '../../errors.js';
 import { cli, Strategy } from '../../registry.js';
-import { postHupuReplyJson } from './utils.js';
+import { postHupuJson } from './utils.js';
 
 cli({
   site: 'hupu',
@@ -56,7 +56,7 @@ cli({
     }
 
     try {
-      const result = await postHupuReplyJson(page, tid, url, body, 'Reply to Hupu thread');
+      const result = await postHupuJson(page, tid, url, body, 'Reply to Hupu thread', 'reply');
 
       if (result.code === 1) {
         return [{
