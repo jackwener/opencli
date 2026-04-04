@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { cli, Strategy } from '../../registry.js';
 import { CommandExecutionError } from '../../errors.js';
 import type { IPage } from '../../types.js';
@@ -46,8 +48,6 @@ cli({
 
     // 3. Attach images if provided
     if (kwargs.images) {
-      const nodePath = await import('node:path');
-      const nodeFs = await import('node:fs');
       const imagePaths = String(kwargs.images).split(',').map((s: string) => s.trim()).filter(Boolean);
 
       if (imagePaths.length > 4) {
@@ -55,8 +55,8 @@ cli({
       }
 
       const absPaths = imagePaths.map((p: string) => {
-        const absPath = nodePath.resolve(p);
-        const stat = nodeFs.statSync(absPath, { throwIfNoEntry: false });
+        const absPath = path.resolve(p);
+        const stat = fs.statSync(absPath, { throwIfNoEntry: false } as any);
         if (!stat || !stat.isFile()) {
           throw new CommandExecutionError(`Not a valid file: ${absPath}`);
         }
@@ -75,12 +75,12 @@ cli({
       // Poll until image upload completes (attachments rendered & tweet button enabled) or timeout
       const imageCount = absPaths.length;
       const uploaded = await page.evaluate(`(async () => {
-          for (let i = 0; i < 30; i++) {
-              await new Promise(r => setTimeout(r, 1000));
+          for (let i = 0; i < 60; i++) {
+              await new Promise(r => setTimeout(r, 500));
               const container = document.querySelector('[data-testid="attachments"]');
               if (!container) continue;
               const groups = container.querySelectorAll('[role="group"]');
-              if (groups.length !== ${imageCount}) continue;
+              if (groups.length !== ${JSON.stringify(imageCount)}) continue;
               const btn = document.querySelector('[data-testid="tweetButton"]');
               if (btn && !btn.disabled) return true;
               const inlineBtn = document.querySelector('[data-testid="tweetButtonInline"]');

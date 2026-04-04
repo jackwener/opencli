@@ -2,16 +2,24 @@ import { describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '../../registry.js';
 import './post.js';
 
-vi.mock('node:fs', () => ({
-  statSync: vi.fn((p: string, _opts?: any) => {
-    if (p.includes('missing')) return null;
-    return { isFile: () => true };
-  }),
-}));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    statSync: vi.fn((p: string, _opts?: any) => {
+      if (String(p).includes('missing')) return undefined;
+      return { isFile: () => true };
+    }),
+  };
+});
 
-vi.mock('node:path', () => ({
-  resolve: vi.fn((p: string) => `/abs/${p}`),
-}));
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:path')>();
+  return {
+    ...actual,
+    resolve: vi.fn((p: string) => `/abs/${p}`),
+  };
+});
 
 function makePage(overrides: Record<string, any> = {}) {
   return {
@@ -124,7 +132,7 @@ describe('twitter post command', () => {
     const command = getCommand();
 
     await expect(
-      command!.func!(null, { text: 'hi' }),
+      command!.func!(null as any, { text: 'hi' }),
     ).rejects.toThrow('Browser session required for twitter post');
   });
 });
