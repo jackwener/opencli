@@ -3,6 +3,10 @@
  *
  * Extracts title, author, description text, and engagement metrics
  * (likes, collects, comment count) via DOM extraction.
+ *
+ * Supports both bare note IDs and full URLs (with xsec_token).
+ * Bare IDs now use /search_result/<id> which works without xsec_token
+ * when the user is logged in via cookies.
  */
 
 import { cli, Strategy } from '../../registry.js';
@@ -21,7 +25,6 @@ cli({
   columns: ['field', 'value'],
   func: async (page, kwargs) => {
     const raw = String(kwargs['note-id']);
-    const isBareNoteId = !/^https?:\/\//.test(raw.trim());
     const noteId = parseNoteId(raw);
     const url = buildNoteUrl(raw);
 
@@ -70,22 +73,15 @@ cli({
     // normalize to '0' unless the value looks numeric.
     const numOrZero = (v: string) => /^\d+/.test(v) ? v : '0';
 
-    // XHS sometimes renders an empty shell page for bare /explore/<id> visits
-    // when the request lacks a valid xsec_token.  Title + author are always
-    // present on a real note, so their absence is the simplest reliable signal.
-    const emptyShell = !d.title && !d.author;
-    if (emptyShell) {
-      if (isBareNoteId) {
-        throw new EmptyResultError(
-          'xiaohongshu/note',
-          'Pass the full search_result URL with xsec_token, for example from `opencli xiaohongshu search`, instead of a bare note ID.',
-        );
-      }
+    // Title + author are always present on a real note page.
+    // If both are missing, the page likely failed to load properly.
+    if (!d.title && !d.author) {
       throw new EmptyResultError(
         'xiaohongshu/note',
-        'The note page loaded without visible content. Retry with a fresh URL or run with --verbose; if it persists, the page structure may have changed.',
+        'The note page loaded without visible content. The note may be deleted or restricted.',
       );
     }
+
     const rows = [
       { field: 'title', value: d.title || '' },
       { field: 'author', value: d.author || '' },

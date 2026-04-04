@@ -12,8 +12,8 @@ export function parseNoteId(input: string): string {
  *
  * XHS blocks direct `/explore/<id>` access without a valid `xsec_token`.
  * When the user passes a full URL (from search results), we preserve it
- * so the browser navigates with the token intact. For bare IDs we fall
- * back to the `/explore/<id>` path (works when cookies carry enough context).
+ * so the browser navigates with the token intact. For bare IDs we now use
+ * `/search_result/<id>` which works without xsec_token when cookies are present.
  */
 export function buildNoteUrl(input: string): string {
   const trimmed = input.trim();
@@ -21,5 +21,7 @@ export function buildNoteUrl(input: string): string {
     // Full URL — navigate as-is; the browser will follow any redirects
     return trimmed;
   }
-  return `https://www.xiaohongshu.com/explore/${trimmed}`;
+  // Use /search_result/<id> instead of /explore/<id> — works without xsec_token
+  // when the user is logged in via cookies (which is always the case with opencli).
+  return `https://www.xiaohongshu.com/search_result/${trimmed}`;
 }
