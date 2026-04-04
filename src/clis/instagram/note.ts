@@ -174,20 +174,20 @@ function buildPublishInstagramNoteJs(content: string): string {
       body.set('__spin_b', spinB);
       body.set('__spin_t', spinT);
       body.set('fb_api_caller_class', 'RelayModern');
-      body.set('fb_api_req_friendly_name', '${INSTAGRAM_NOTE_MUTATION_NAME}');
+      body.set('fb_api_req_friendly_name', ${JSON.stringify(INSTAGRAM_NOTE_MUTATION_NAME)});
       body.set('variables', JSON.stringify(variables));
       body.set('server_timestamps', 'true');
-      body.set('doc_id', '${INSTAGRAM_NOTE_DOC_ID}');
+      body.set('doc_id', ${JSON.stringify(INSTAGRAM_NOTE_DOC_ID)});
 
       const headers = {
         Accept: '*/*',
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-ASBD-ID': asbdId || undefined,
         'X-CSRFToken': csrfToken,
-        'X-FB-Friendly-Name': '${INSTAGRAM_NOTE_MUTATION_NAME}',
+        'X-FB-Friendly-Name': ${JSON.stringify(INSTAGRAM_NOTE_MUTATION_NAME)},
         'X-FB-LSD': lsd,
         'X-IG-App-ID': appId,
-        'X-Root-Field-Name': '${INSTAGRAM_NOTE_ROOT_FIELD}',
+        'X-Root-Field-Name': ${JSON.stringify(INSTAGRAM_NOTE_ROOT_FIELD)},
       };
 
       const response = await fetch('/graphql/query', {
@@ -203,7 +203,8 @@ function buildPublishInstagramNoteJs(content: string): string {
         data = JSON.parse(normalizedText);
       } catch {}
 
-      const note = data?.data?.${INSTAGRAM_NOTE_ROOT_FIELD}?.inbox_tray_item;
+      const rootField = ${JSON.stringify(INSTAGRAM_NOTE_ROOT_FIELD)};
+      const note = data?.data?.[rootField]?.inbox_tray_item;
       const noteId = String(note?.inbox_tray_item_id || note?.id || '');
       if (response.ok && noteId) {
         return {
