@@ -322,6 +322,40 @@ describe('Gemini submission state', () => {
     expect(result).toBeNull();
   });
 
+  it('does not confirm transcript-only submission while url remains /app root', async () => {
+    const page = createPageMock();
+    const evaluate = vi.mocked(page.evaluate);
+
+    evaluate
+      .mockResolvedValueOnce('https://gemini.google.com/app')
+      .mockResolvedValueOnce({
+        url: 'https://gemini.google.com/app',
+        turns: [],
+        transcriptLines: ['baseline', 'prompt'],
+        composerHasText: false,
+        isGenerating: false,
+        structuredTurnsTrusted: false,
+      })
+      .mockResolvedValueOnce('https://gemini.google.com/app')
+      .mockResolvedValueOnce({
+        url: 'https://gemini.google.com/app',
+        turns: [],
+        transcriptLines: ['baseline', 'prompt'],
+        composerHasText: false,
+        isGenerating: false,
+        structuredTurnsTrusted: false,
+      });
+
+    const result = await waitForGeminiSubmission(page, snapshot({
+      url: 'https://gemini.google.com/app',
+      transcriptLines: ['baseline'],
+      composerHasText: true,
+      structuredTurnsTrusted: false,
+    }), 2);
+
+    expect(result).toBeNull();
+  });
+
   it('keeps polling past ten seconds when the overall timeout budget still allows submission confirmation', async () => {
     const page = createPageMock();
     const evaluate = vi.mocked(page.evaluate);

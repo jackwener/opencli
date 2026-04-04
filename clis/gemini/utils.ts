@@ -41,6 +41,7 @@ export interface GeminiConversation {
 export type GeminiTitleMatchMode = 'contains' | 'exact';
 
 export interface GeminiSnapshot {
+  url?: string;
   turns: GeminiTurn[];
   transcriptLines: string[];
   composerHasText: boolean;
@@ -369,6 +370,7 @@ function readGeminiSnapshotScript(): string {
       const transcriptLines = ${getTranscriptLinesScript().trim()};
 
       return {
+        url: window.location.href,
         turns,
         transcriptLines,
         composerHasText: composerText.length > 0,
@@ -377,6 +379,17 @@ function readGeminiSnapshotScript(): string {
       };
     })()
   `;
+}
+
+function isGeminiConversationUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== GEMINI_DOMAIN && !parsed.hostname.endsWith(`.${GEMINI_DOMAIN}`)) return false;
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    return pathname.startsWith('/app/') && pathname !== '/app';
+  } catch {
+    return false;
+  }
 }
 
 function getTranscriptLinesScript(): string {
@@ -1252,7 +1265,12 @@ export async function waitForGeminiSubmission(
       };
     }
 
-    if (!current.composerHasText && transcriptDelta.length > 0) {
+    // Transcript-only growth is noisy on /app root. When URL is available,
+    // trust this signal only after Gemini has navigated into a concrete
+    // conversation URL. (Keep backwards compatibility for mocked snapshots
+    // that don't carry url.)
+    const transcriptSubmissionAllowed = !current.url || isGeminiConversationUrl(String(current.url));
+    if (!current.composerHasText && transcriptDelta.length > 0 && transcriptSubmissionAllowed) {
       return {
         snapshot: current,
         preSendAssistantCount,
