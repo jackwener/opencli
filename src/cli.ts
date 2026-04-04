@@ -181,7 +181,9 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .description('Synthesize CLIs from explore')
     .argument('<target>')
     .option('--top <n>', '', '3')
+    .option('-v, --verbose', 'Debug output')
     .action(async (target, opts) => {
+      applyVerbose(opts);
       const { synthesizeFromExplore, renderSynthesizeSummary } = await import('./synthesize.js');
       console.log(renderSynthesizeSummary(synthesizeFromExplore(target, { top: parseInt(opts.top) })));
     });
@@ -676,7 +678,9 @@ cli({
     .description('Diagnose opencli browser bridge connectivity')
     .option('--no-live', 'Skip live browser connectivity test')
     .option('--sessions', 'Show active automation sessions', false)
+    .option('-v, --verbose', 'Debug output')
     .action(async (opts) => {
+      applyVerbose(opts);
       const { runBrowserDoctor, renderBrowserDoctorReport } = await import('./doctor.js');
       const report = await runBrowserDoctor({ live: opts.live, sessions: opts.sessions, cliVersion: PKG_VERSION });
       console.log(renderBrowserDoctorReport(report));
