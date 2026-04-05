@@ -114,7 +114,7 @@ describe('resolveAdapterSourcePath', () => {
     expect(result).not.toContain('manifest:');
   });
 
-  it('returns undefined when no paths available', () => {
+  it('returns undefined when only manifest: pseudo-path and no _modulePath', () => {
     const cmd = makeCmd({ source: 'manifest:test/cmd' });
     expect(resolveAdapterSourcePath(cmd as InternalCliCommand)).toBeUndefined();
   });
