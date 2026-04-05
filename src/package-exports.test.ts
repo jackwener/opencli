@@ -28,13 +28,13 @@ function collectTsFiles(dir: string): string[] {
   return results;
 }
 
-/** Forbidden relative import patterns that should have been replaced. */
+/** Forbidden relative import patterns that should have been replaced.
+ * Uses (?:\.\./)+ to catch any depth of ../ traversal. */
 const FORBIDDEN_PATTERNS = [
-  /from\s+['"]\.\.\/\.\.\/src\//,       // ../../src/registry.js etc.
-  /from\s+['"]\.\.\/\.\.\/\.\.\/src\//,  // ../../../src/errors.js (from _shared/)
-  /from\s+['"]\.\.\/\.\.\/browser\//,    // ../../browser/cdp.js
-  /from\s+['"]\.\.\/\.\.\/download\//,   // ../../download/index.js
-  /from\s+['"]\.\.\/\.\.\/pipeline\//,   // ../../pipeline/index.js
+  /from\s+['"](?:\.\.\/)+src\//,       // any ../src/ traversal
+  /from\s+['"](?:\.\.\/)+browser\//,   // any ../browser/ traversal
+  /from\s+['"](?:\.\.\/)+download\//,  // any ../download/ traversal
+  /from\s+['"](?:\.\.\/)+pipeline\//,  // any ../pipeline/ traversal
 ];
 
 describe('adapter imports use package exports', () => {

@@ -84,7 +84,9 @@ export async function ensureUserCliCompatShims(baseDir: string = USER_OPENCLI_DI
     if (needsUpdate) {
       await fs.promises.mkdir(symlinkDir, { recursive: true });
       try { await fs.promises.unlink(symlinkPath); } catch { /* doesn't exist */ }
-      await fs.promises.symlink(opencliRoot, symlinkPath, 'dir');
+      // Use 'junction' on Windows — doesn't require admin/Developer Mode privileges
+      const symlinkType = process.platform === 'win32' ? 'junction' : 'dir';
+      await fs.promises.symlink(opencliRoot, symlinkPath, symlinkType);
     }
   } catch {
     // Non-fatal: npm-linked installs or permission issues may prevent this
