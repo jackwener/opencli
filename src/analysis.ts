@@ -150,30 +150,13 @@ export function detectAuthFromContent(url: string, body: unknown): string[] {
   return indicators;
 }
 
-// ── Shared scoring helpers ───────────────────────────────────────────────────
+// ── Noise filtering ─────────────────────────────────────────────────────────
 
-/** URL-based score adjustments shared by explore and record scoring. */
-export function applyUrlScoreAdjustments(url: string, score: number): number {
-  let s = score;
-  if (url.includes('/api/') || url.includes('/x/')) s += 3;
-  if (url.match(/\/(track|log|analytics|beacon|pixel|stats|metric)/i)) s -= 10;
-  if (url.match(/\/(ping|heartbeat|keep.?alive)/i)) s -= 10;
-  return s;
-}
+const NOISE_URL_PATTERN = /\/(track|log|analytics|beacon|pixel|stats|metric|ping|heartbeat|keep.?alive)\b/i;
 
-/** Score an array response based on item count and detected field roles. */
-export function scoreArrayResponse(arrayResult: ArrayDiscovery | null): number {
-  if (!arrayResult) return 0;
-  let s = 10;
-  s += Math.min(arrayResult.items.length, 10);
-  const sample = arrayResult.items[0];
-  if (sample && typeof sample === 'object') {
-    const keys = Object.keys(sample as object).map(k => k.toLowerCase());
-    for (const aliases of Object.values(FIELD_ROLES)) {
-      if (aliases.some(a => keys.includes(a))) s += 2;
-    }
-  }
-  return s;
+/** Check whether a URL looks like tracking/telemetry noise rather than a business API. */
+export function isNoiseUrl(url: string): boolean {
+  return NOISE_URL_PATTERN.test(url);
 }
 
 // ── Query param classification ──────────────────────────────────────────────

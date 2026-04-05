@@ -25,6 +25,7 @@ import {
   inferStrategy,
   detectAuthFromHeaders,
   classifyQueryParams,
+  isNoiseUrl,
 } from './analysis.js';
 
 // ── Site name detection ────────────────────────────────────────────────────
@@ -67,14 +68,14 @@ interface NetworkEntry {
 
 interface AnalyzedEndpoint {
   pattern: string; method: string; url: string; status: number | null;
-  contentType: string; queryParams: string[]; score: number;
+  contentType: string; queryParams: string[];
   hasSearchParam: boolean; hasPaginationParam: boolean; hasLimitParam: boolean;
   authIndicators: string[];
   responseAnalysis: { itemPath: string | null; itemCount: number; detectedFields: Record<string, string>; sampleFields: string[] } | null;
 }
 
 interface InferredCapability {
-  name: string; description: string; strategy: string; confidence: number;
+  name: string; description: string; strategy: string;
   endpoint: string; itemPath: string | null;
   recommendedColumns: string[];
   recommendedArgs: Array<{ name: string; type: string; required: boolean; default?: unknown }>;
@@ -104,7 +105,6 @@ export interface ExploreEndpointArtifact {
   url: string;
   status: number | null;
   contentType: string;
-  score: number;
   queryParams: string[];
   itemPath: string | null;
   itemCount: number;
@@ -194,17 +194,13 @@ function isBooleanRecord(value: unknown): value is Record<string, boolean> {
     && Object.values(value as Record<string, unknown>).every(v => typeof v === 'boolean');
 }
 
-function scoreEndpoint(ep: { contentType: string; responseAnalysis: AnalyzedEndpoint['responseAnalysis']; pattern: string; status: number | null; hasSearchParam: boolean; hasPaginationParam: boolean; hasLimitParam: boolean }): number {
-  let s = 0;
-  if (ep.contentType.includes('json')) s += 10;
-  if (ep.responseAnalysis) { s += 5; s += Math.min(ep.responseAnalysis.itemCount, 10); s += Object.keys(ep.responseAnalysis.detectedFields).length * 2; }
-  if (ep.pattern.includes('/api/') || ep.pattern.includes('/x/')) s += 3;
-  if (ep.hasSearchParam) s += 3;
-  if (ep.hasPaginationParam) s += 2;
-  if (ep.hasLimitParam) s += 2;
-  if (ep.status === 200) s += 2;
-  if (ep.responseAnalysis && ep.responseAnalysis.itemCount === 0 && ep.contentType.includes('json')) s -= 3;
-  return s;
+/** Check whether an endpoint carries useful structured data (JSON with array items or query params). */
+function isUsefulEndpoint(ep: AnalyzedEndpoint): boolean {
+  if (isNoiseUrl(ep.url)) return false;
+  if (!ep.contentType.includes('json')) return false;
+  if (ep.responseAnalysis && ep.responseAnalysis.itemCount > 0) return true;
+  if (ep.hasSearchParam || ep.hasPaginationParam || ep.hasLimitParam) return true;
+  return false;
 }
 
 
@@ -229,7 +225,7 @@ const INTERACT_FUZZ_JS = interactFuzz.toString();
 
 // ── Analysis helpers (extracted from exploreUrl) ───────────────────────────
 
-/** Filter, deduplicate, and score network endpoints. */
+/** Filter and deduplicate network endpoints, keeping only useful structured-data APIs. */
 function analyzeEndpoints(networkEntries: NetworkEntry[]): { analyzed: AnalyzedEndpoint[]; totalCount: number } {
   const seen = new Map<string, AnalyzedEndpoint>();
   for (const entry of networkEntries) {
@@ -251,13 +247,14 @@ function analyzeEndpoints(networkEntries: NetworkEntry[]): { analyzed: AnalyzedE
       hasLimitParam: hasLimit || qp.some(p => LIMIT_PARAMS.has(p)),
       authIndicators: detectAuthFromHeaders(entry.requestHeaders),
       responseAnalysis: entry.responseBody ? analyzeResponseBody(entry.responseBody) : null,
-      score: 0,
     };
-    ep.score = scoreEndpoint(ep);
     seen.set(key, ep);
   }
 
-  const analyzed = [...seen.values()].filter(ep => ep.score >= 5).sort((a, b) => b.score - a.score);
+  // Filter to useful endpoints; sort by item count (richer data first) for deterministic ordering
+  const analyzed = [...seen.values()]
+    .filter(isUsefulEndpoint)
+    .sort((a, b) => (b.responseAnalysis?.itemCount ?? 0) - (a.responseAnalysis?.itemCount ?? 0));
   return { analyzed, totalCount: seen.size };
 }
 
@@ -305,7 +302,7 @@ function inferCapabilitiesFromEndpoints(
     capabilities.push({
       name: capName, description: `${opts.site ?? detectSiteName(opts.url)} ${capName}`,
       strategy: storeHint ? 'store-action' : epStrategy,
-      confidence: Math.min(ep.score / 20, 1.0), endpoint: ep.pattern,
+      endpoint: ep.pattern,
       itemPath: ep.responseAnalysis?.itemPath ?? null,
       recommendedColumns: cols.length ? cols : ['title', 'url'],
       recommendedArgs: args,
@@ -337,7 +334,7 @@ async function writeExploreArtifacts(
     }, null, 2)),
     fs.promises.writeFile(path.join(targetDir, 'endpoints.json'), JSON.stringify(analyzedEndpoints.map(ep => ({
       pattern: ep.pattern, method: ep.method, url: ep.url, status: ep.status,
-      contentType: ep.contentType, score: ep.score, queryParams: ep.queryParams,
+      contentType: ep.contentType, queryParams: ep.queryParams,
       itemPath: ep.responseAnalysis?.itemPath ?? null, itemCount: ep.responseAnalysis?.itemCount ?? 0,
       detectedFields: ep.responseAnalysis?.detectedFields ?? {}, authIndicators: ep.authIndicators,
     })), null, 2)),
@@ -485,7 +482,7 @@ export function renderExploreSummary(result: ExploreResult): string {
   ];
   for (const cap of (result.capabilities ?? []).slice(0, 5)) {
     const storeInfo = cap.storeHint ? ` → ${cap.storeHint.store}.${cap.storeHint.action}()` : '';
-    lines.push(`  • ${cap.name} (${cap.strategy}, ${(cap.confidence * 100).toFixed(0)}%)${storeInfo}`);
+    lines.push(`  • ${cap.name} (${cap.strategy})${storeInfo}`);
   }
   const fw = result.framework ?? {};
   const fwNames = Object.entries(fw).filter(([, v]) => v).map(([k]) => k);
