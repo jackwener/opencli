@@ -184,7 +184,7 @@ class CDPPage extends BasePage {
     }
   }
 
-  async evaluate(js: string): Promise<unknown> {
+  async evaluate(js: string): Promise<any> {
     const expression = wrapForEval(js);
     const result = await this.bridge.send('Runtime.evaluate', {
       expression,
