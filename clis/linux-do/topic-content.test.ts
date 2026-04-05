@@ -50,10 +50,10 @@ describe('linux-do topic-content', () => {
     expect(result.content).toContain('> quoted');
   });
 
-  it('registers topic-content with markdown default output for markdown body rendering', () => {
+  it('registers topic-content with plain default output for markdown body rendering', () => {
     const command = getRegistry().get('linux-do/topic-content');
 
-    expect(command?.defaultFormat).toBe('markdown');
+    expect(command?.defaultFormat).toBe('plain');
     expect(command?.columns).toEqual(['content']);
   });
 
