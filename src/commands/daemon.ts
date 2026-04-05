@@ -26,7 +26,7 @@ export async function daemonStatus(): Promise<void> {
   }
 
   console.log(`Daemon: ${chalk.green('running')} (PID ${status.pid})`);
-  console.log(`Uptime: ${formatDuration(status.uptime * 1000)}`);
+  console.log(`Uptime: ${formatDuration(Math.round(status.uptime * 1000))}`);
   console.log(`Extension: ${status.extensionConnected ? chalk.green('connected') : chalk.yellow('disconnected')}`);
   console.log(`Last CLI request: ${formatTimeSince(status.lastCliRequestTime)}`);
   console.log(`Memory: ${status.memoryMB} MB`);
