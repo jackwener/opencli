@@ -28,7 +28,7 @@ Run `opencli list` for the live registry.
 | **[jike](./browser/jike)** | `feed` `search` `post` `topic` `user` `create` `comment` `like` `repost` `notifications` | 🔐 Browser |
 | **[jimeng](./browser/jimeng)** | `generate` `history` | 🔐 Browser |
 | **[yollomi](./browser/yollomi)** | `generate` `video` `edit` `upload` `models` `remove-bg` `upscale` `face-swap` `restore` `try-on` `background` `object-remover` | 🔐 Browser |
-| **[linux-do](./browser/linux-do)** | `hot` `latest` `feed` `search` `categories` `category` `tags` `topic` `user-posts` `user-topics` | 🔐 Browser |
+| **[linux-do](./browser/linux-do)** | `hot` `latest` `feed` `search` `categories` `category` `tags` `topic` `topic-content` `user-posts` `user-topics` | 🔐 Browser |
 | **[chaoxing](./browser/chaoxing)** | `assignments` `exams` | 🔐 Browser |
 | **[grok](./browser/grok)** | `ask` | 🔐 Browser |
 | **[gemini](./browser/gemini)** | `new` `ask` `image` `deep-research` `deep-research-result` | 🔐 Browser |
