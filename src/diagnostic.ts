@@ -4,6 +4,12 @@
  * When OPENCLI_DIAGNOSTIC=1, failed commands emit a JSON RepairContext to stderr
  * containing the error, adapter source, and browser state (DOM snapshot, network
  * requests, console errors). AI Agents consume this to diagnose and fix adapters.
+ *
+ * Safety boundaries:
+ * - Sensitive headers/cookies are redacted before emission
+ * - Individual fields are capped to prevent unbounded output
+ * - Network response bodies from authenticated requests are stripped
+ * - Total output is capped to MAX_DIAGNOSTIC_BYTES
  */
 
 import * as fs from 'node:fs';
@@ -11,6 +17,36 @@ import type { IPage } from './types.js';
 import { CliError, getErrorMessage } from './errors.js';
 import type { InternalCliCommand } from './registry.js';
 import { fullName } from './registry.js';
+
+// ── Size budgets ─────────────────────────────────────────────────────────────
+
+/** Maximum bytes for the entire diagnostic JSON output. */
+export const MAX_DIAGNOSTIC_BYTES = 256 * 1024; // 256 KB
+/** Maximum characters for DOM snapshot. */
+const MAX_SNAPSHOT_CHARS = 100_000;
+/** Maximum characters for adapter source. */
+const MAX_SOURCE_CHARS = 50_000;
+/** Maximum number of network requests to include. */
+const MAX_NETWORK_REQUESTS = 50;
+/** Maximum characters for a single network request body. */
+const MAX_REQUEST_BODY_CHARS = 4_000;
+/** Maximum characters for error stack trace. */
+const MAX_STACK_CHARS = 5_000;
+
+// ── Sensitive data patterns ──────────────────────────────────────────────────
+
+const SENSITIVE_HEADERS = new Set([
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'x-csrf-token',
+  'x-xsrf-token',
+  'proxy-authorization',
+  'x-api-key',
+  'x-auth-token',
+]);
+
+const SENSITIVE_URL_PARAMS = /([?&])(token|key|secret|password|auth|access_token|api_key|session_id|csrf)=[^&]*/gi;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +72,59 @@ export interface RepairContext {
   timestamp: string;
 }
 
+// ── Redaction helpers ────────────────────────────────────────────────────────
+
+/** Truncate a string to maxLen, appending a truncation marker. */
+export function truncate(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen) + `\n...[truncated, ${str.length - maxLen} chars omitted]`;
+}
+
+/** Redact sensitive query parameters from a URL. */
+export function redactUrl(url: string): string {
+  return url.replace(SENSITIVE_URL_PARAMS, '$1$2=[REDACTED]');
+}
+
+/** Redact sensitive headers from a headers object. */
+function redactHeaders(headers: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!headers || typeof headers !== 'object') return headers;
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    result[key] = SENSITIVE_HEADERS.has(key.toLowerCase()) ? '[REDACTED]' : value;
+  }
+  return result;
+}
+
+/** Redact sensitive data from a single network request entry. */
+function redactNetworkRequest(req: unknown): unknown {
+  if (!req || typeof req !== 'object') return req;
+  const r = req as Record<string, unknown>;
+  const redacted: Record<string, unknown> = { ...r };
+
+  // Redact URL
+  if (typeof redacted.url === 'string') {
+    redacted.url = redactUrl(redacted.url);
+  }
+
+  // Redact headers
+  if (redacted.headers && typeof redacted.headers === 'object') {
+    redacted.headers = redactHeaders(redacted.headers as Record<string, string>);
+  }
+  if (redacted.requestHeaders && typeof redacted.requestHeaders === 'object') {
+    redacted.requestHeaders = redactHeaders(redacted.requestHeaders as Record<string, string>);
+  }
+  if (redacted.responseHeaders && typeof redacted.responseHeaders === 'object') {
+    redacted.responseHeaders = redactHeaders(redacted.responseHeaders as Record<string, string>);
+  }
+
+  // Truncate response body
+  if (typeof redacted.body === 'string') {
+    redacted.body = truncate(redacted.body, MAX_REQUEST_BODY_CHARS);
+  }
+
+  return redacted;
+}
+
 // ── Diagnostic collection ────────────────────────────────────────────────────
 
 /** Whether diagnostic mode is enabled. */
@@ -43,7 +132,7 @@ export function isDiagnosticEnabled(): boolean {
   return process.env.OPENCLI_DIAGNOSTIC === '1';
 }
 
-/** Safely collect page diagnostic state. Individual failures are swallowed. */
+/** Safely collect page diagnostic state with redaction and size caps. */
 async function collectPageState(page: IPage): Promise<RepairContext['page'] | undefined> {
   try {
     const [url, snapshot, networkRequests, consoleErrors] = await Promise.all([
@@ -52,17 +141,27 @@ async function collectPageState(page: IPage): Promise<RepairContext['page'] | un
       page.networkRequests().catch(() => []),
       page.consoleMessages('error').catch(() => []),
     ]);
-    return { url: url ?? 'unknown', snapshot, networkRequests, consoleErrors };
+
+    const rawUrl = url ?? 'unknown';
+    return {
+      url: redactUrl(rawUrl),
+      snapshot: truncate(snapshot, MAX_SNAPSHOT_CHARS),
+      networkRequests: (networkRequests as unknown[])
+        .slice(0, MAX_NETWORK_REQUESTS)
+        .map(redactNetworkRequest),
+      consoleErrors: (consoleErrors as unknown[]).slice(0, 50),
+    };
   } catch {
     return undefined;
   }
 }
 
-/** Read adapter source file content. */
+/** Read adapter source file content with size cap. */
 function readAdapterSource(modulePath: string | undefined): string | undefined {
   if (!modulePath) return undefined;
   try {
-    return fs.readFileSync(modulePath, 'utf-8');
+    const content = fs.readFileSync(modulePath, 'utf-8');
+    return truncate(content, MAX_SOURCE_CHARS);
   } catch {
     return undefined;
   }
@@ -80,7 +179,7 @@ export function buildRepairContext(
       code: isCliError ? err.code : 'UNKNOWN',
       message: getErrorMessage(err),
       hint: isCliError ? err.hint : undefined,
-      stack: err instanceof Error ? err.stack : undefined,
+      stack: err instanceof Error ? truncate(err.stack ?? '', MAX_STACK_CHARS) : undefined,
     },
     adapter: {
       site: cmd.site,
@@ -103,8 +202,21 @@ export async function collectDiagnostic(
   return buildRepairContext(err, cmd, pageState);
 }
 
-/** Emit diagnostic JSON to stderr. */
+/** Emit diagnostic JSON to stderr, enforcing total size cap. */
 export function emitDiagnostic(ctx: RepairContext): void {
   const marker = '___OPENCLI_DIAGNOSTIC___';
-  process.stderr.write(`\n${marker}\n${JSON.stringify(ctx)}\n${marker}\n`);
+  let json = JSON.stringify(ctx);
+
+  // Enforce total output budget — drop page state (largest section) first if over budget
+  if (json.length > MAX_DIAGNOSTIC_BYTES && ctx.page) {
+    const trimmed = { ...ctx, page: { ...ctx.page, snapshot: '[omitted: over size budget]', networkRequests: [] } };
+    json = JSON.stringify(trimmed);
+  }
+  // If still over budget, drop page entirely
+  if (json.length > MAX_DIAGNOSTIC_BYTES) {
+    const minimal = { ...ctx, page: undefined };
+    json = JSON.stringify(minimal);
+  }
+
+  process.stderr.write(`\n${marker}\n${json}\n${marker}\n`);
 }
