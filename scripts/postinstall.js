@@ -107,7 +107,12 @@ function ensureZshFpath(completionsDir, zshrcPath) {
   }
 
   if (insertIdx !== -1) {
-    // Insert fpath BEFORE the compinit / oh-my-zsh source line
+    // Walk back past any backslash-continued lines so we don't split
+    // a multi-line command (e.g. zinit blocks that mention compinit).
+    while (insertIdx > 0 && lines[insertIdx - 1].trimEnd().endsWith('\\')) {
+      insertIdx--;
+    }
+    // Insert fpath BEFORE the (logical) compinit / oh-my-zsh source line
     lines.splice(insertIdx, 0, marker, fpathLine);
     writeFileSync(zshrcPath, lines.join('\n'), 'utf8');
   } else {
