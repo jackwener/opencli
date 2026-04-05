@@ -174,6 +174,7 @@ class CDPPage extends BasePage {
     responseContentType?: string; responsePreview?: string; timestamp: number;
   }> = [];
   private _pendingRequests = new Map<string, number>(); // requestId → index in _networkEntries
+  private _pendingBodyFetches: Set<Promise<void>> = new Set(); // track in-flight getResponseBody calls
 
   constructor(private bridge: CDPBridge) {
     super();
@@ -265,7 +266,7 @@ class CDPPage extends BasePage {
         const p = params as { requestId: string };
         const idx = this._pendingRequests.get(p.requestId);
         if (idx !== undefined) {
-          this.bridge.send('Network.getResponseBody', { requestId: p.requestId }).then((result: unknown) => {
+          const bodyFetch = this.bridge.send('Network.getResponseBody', { requestId: p.requestId }).then((result: unknown) => {
             const r = result as { body?: string; base64Encoded?: boolean } | undefined;
             if (typeof r?.body === 'string') {
               this._networkEntries[idx].responsePreview = r.base64Encoded
@@ -274,7 +275,10 @@ class CDPPage extends BasePage {
             }
           }).catch(() => {
             // Body unavailable for some requests (e.g. uploads) — non-fatal
+          }).finally(() => {
+            this._pendingBodyFetches.delete(bodyFetch);
           });
+          this._pendingBodyFetches.add(bodyFetch);
           this._pendingRequests.delete(p.requestId);
         }
       });
@@ -284,6 +288,10 @@ class CDPPage extends BasePage {
   }
 
   async readNetworkCapture(): Promise<unknown[]> {
+    // Await all in-flight body fetches so entries have responsePreview populated
+    if (this._pendingBodyFetches.size > 0) {
+      await Promise.all([...this._pendingBodyFetches]);
+    }
     const entries = [...this._networkEntries];
     this._networkEntries = [];
     return entries;
