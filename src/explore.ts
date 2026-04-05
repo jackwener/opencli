@@ -194,6 +194,25 @@ function isBooleanRecord(value: unknown): value is Record<string, boolean> {
     && Object.values(value as Record<string, unknown>).every(v => typeof v === 'boolean');
 }
 
+/**
+ * Deterministic sort key for endpoint ordering — transparent, observable signals only.
+ * Used by generate/synthesize to pick a stable default candidate.
+ * Not exposed externally; AI agents see the raw metadata and decide for themselves.
+ */
+function endpointSortKey(ep: AnalyzedEndpoint): number {
+  let k = 0;
+  // Prefer endpoints with array data (list APIs are more useful for automation)
+  const items = ep.responseAnalysis?.itemCount ?? 0;
+  if (items > 0) k += 100 + Math.min(items, 50);
+  // Prefer endpoints with detected semantic fields
+  k += Object.keys(ep.responseAnalysis?.detectedFields ?? {}).length * 10;
+  // Prefer API-style paths
+  if (ep.pattern.includes('/api/') || ep.pattern.includes('/x/')) k += 5;
+  // Prefer endpoints with query params (more likely to be parameterized APIs)
+  if (ep.hasSearchParam || ep.hasPaginationParam || ep.hasLimitParam) k += 5;
+  return k;
+}
+
 /** Check whether an endpoint carries useful structured data (any JSON response, not noise). */
 function isUsefulEndpoint(ep: AnalyzedEndpoint): boolean {
   if (isNoiseUrl(ep.url)) return false;
@@ -248,10 +267,10 @@ function analyzeEndpoints(networkEntries: NetworkEntry[]): { analyzed: AnalyzedE
     seen.set(key, ep);
   }
 
-  // Filter to useful endpoints; sort by item count (richer data first) for deterministic ordering
+  // Filter to useful endpoints; deterministic ordering by observable metadata signals
   const analyzed = [...seen.values()]
     .filter(isUsefulEndpoint)
-    .sort((a, b) => (b.responseAnalysis?.itemCount ?? 0) - (a.responseAnalysis?.itemCount ?? 0));
+    .sort((a, b) => endpointSortKey(b) - endpointSortKey(a));
   return { analyzed, totalCount: seen.size };
 }
 

@@ -144,7 +144,12 @@ function chooseEndpoint(cap: SynthesizeCapability, endpoints: ExploreEndpointArt
     const match = endpoints.find((endpoint) => endpoint.pattern === endpointPattern || endpoint.url?.includes(endpointPattern));
     if (match) return match;
   }
-  return [...endpoints].sort((a, b) => (b.itemCount ?? 0) - (a.itemCount ?? 0))[0];
+  // Fallback: prefer endpoint with most data (item count + detected fields)
+  return [...endpoints].sort((a, b) => {
+    const aKey = (a.itemCount ?? 0) * 10 + Object.keys(a.detectedFields ?? {}).length;
+    const bKey = (b.itemCount ?? 0) * 10 + Object.keys(b.detectedFields ?? {}).length;
+    return bKey - aKey;
+  })[0];
 }
 
 // ── URL templating ─────────────────────────────────────────────────────────
