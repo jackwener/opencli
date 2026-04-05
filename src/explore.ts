@@ -155,13 +155,24 @@ function parseNetworkRequests(raw: unknown): NetworkEntry[] {
     return entries;
   }
   if (Array.isArray(raw)) {
-    return raw.filter(e => e && typeof e === 'object').map(e => ({
-      method: (e.method ?? 'GET').toUpperCase(),
-      url: String(e.url ?? e.request?.url ?? e.requestUrl ?? ''),
-      status: e.status ?? e.statusCode ?? null,
-      contentType: e.contentType ?? e.response?.contentType ?? '',
-      responseBody: e.responseBody, requestHeaders: e.requestHeaders,
-    }));
+    return raw.filter(e => e && typeof e === 'object').map(e => {
+      // Handle both legacy shape (status/contentType/responseBody) and
+      // extension/CDP capture shape (responseStatus/responseContentType/responsePreview)
+      let body = e.responseBody;
+      if (body === undefined && e.responsePreview !== undefined) {
+        const preview = e.responsePreview;
+        if (typeof preview === 'string') {
+          try { body = JSON.parse(preview); } catch { body = preview; }
+        }
+      }
+      return {
+        method: (e.method ?? 'GET').toUpperCase(),
+        url: String(e.url ?? e.request?.url ?? e.requestUrl ?? ''),
+        status: e.status ?? e.responseStatus ?? e.statusCode ?? null,
+        contentType: e.contentType ?? e.responseContentType ?? e.response?.contentType ?? '',
+        responseBody: body, requestHeaders: e.requestHeaders,
+      };
+    });
   }
   return [];
 }

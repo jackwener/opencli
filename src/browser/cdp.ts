@@ -234,6 +234,7 @@ class CDPPage extends BasePage {
     this._networkCapturePattern = pattern;
     this._networkEntries = [];
     this._pendingRequests.clear();
+    this._pendingBodyFetches.clear();
 
     if (!this._networkCapturing) {
       await this.bridge.send('Network.enable');
