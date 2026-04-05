@@ -194,13 +194,10 @@ function isBooleanRecord(value: unknown): value is Record<string, boolean> {
     && Object.values(value as Record<string, unknown>).every(v => typeof v === 'boolean');
 }
 
-/** Check whether an endpoint carries useful structured data (JSON with array items or query params). */
+/** Check whether an endpoint carries useful structured data (any JSON response, not noise). */
 function isUsefulEndpoint(ep: AnalyzedEndpoint): boolean {
   if (isNoiseUrl(ep.url)) return false;
-  if (!ep.contentType.includes('json')) return false;
-  if (ep.responseAnalysis && ep.responseAnalysis.itemCount > 0) return true;
-  if (ep.hasSearchParam || ep.hasPaginationParam || ep.hasLimitParam) return true;
-  return false;
+  return ep.contentType.includes('json');
 }
 
 

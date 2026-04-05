@@ -152,7 +152,7 @@ export function detectAuthFromContent(url: string, body: unknown): string[] {
 
 // ── Noise filtering ─────────────────────────────────────────────────────────
 
-const NOISE_URL_PATTERN = /\/(track|log|analytics|beacon|pixel|stats|metric|ping|heartbeat|keep.?alive)\b/i;
+const NOISE_URL_PATTERN = /\/(track|log|analytics|beacon|pixel|ping|heartbeat|keep.?alive)\b/i;
 
 /** Check whether a URL looks like tracking/telemetry noise rather than a business API. */
 export function isNoiseUrl(url: string): boolean {
