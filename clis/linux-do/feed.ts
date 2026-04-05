@@ -12,9 +12,9 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@jackwener/opencli/errors';
-import { cli, Strategy, type Arg, type CommandArgs } from '@jackwener/opencli/registry';
-import type { IPage } from '@jackwener/opencli/types';
+import { ArgumentError, AuthRequiredError, CommandExecutionError } from '../../src/errors.js';
+import { cli, Strategy, type Arg, type CommandArgs } from '../../src/registry.js';
+import type { IPage } from '../../src/types.js';
 import { getUserOpenCliPath } from '../../src/user-opencli-paths.js';
 
 const LINUX_DO_HOME = 'https://linux.do';
