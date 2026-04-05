@@ -24,7 +24,7 @@ Discover APIs, infer capabilities, and detect framework:
 opencli explore https://example.com --site mysite
 ```
 
-Outputs to `.opencli/explore/<site>/`:
+Outputs to `~/.opencli/explore/<site>/`:
 - `manifest.json` — Site metadata
 - `endpoints.json` — Discovered API endpoints
 - `capabilities.json` — Inferred capabilities

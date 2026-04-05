@@ -16,6 +16,7 @@ import { discoverStores } from './scripts/store.js';
 import { interactFuzz } from './scripts/interact.js';
 import type { IPage } from './types.js';
 import { log } from './logger.js';
+import { getUserExploreDir } from './user-opencli-paths.js';
 import {
   urlToPattern,
   findArrayPath,
@@ -447,7 +448,8 @@ export async function exploreUrl(
 
       // Step 9: Assemble result and write artifacts
       const siteName = opts.site ?? detectSiteName(metadata.url || url);
-      const targetDir = opts.outDir ?? path.join('.opencli', 'explore', siteName);
+      // Default to ~/.opencli/explore/<site>/ so we never pollute cwd (#711)
+      const targetDir = opts.outDir ?? getUserExploreDir(siteName);
 
       const result = {
         site: siteName, target_url: url, final_url: metadata.url, title: metadata.title,

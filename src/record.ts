@@ -19,6 +19,7 @@ import chalk from 'chalk';
 import yaml from 'js-yaml';
 import { sendCommand } from './browser/daemon-client.js';
 import type { IPage } from './types.js';
+import { getUserRecordDir } from './user-opencli-paths.js';
 import { SEARCH_PARAMS, PAGINATION_PARAMS, FIELD_ROLES } from './constants.js';
 import {
   urlToPattern,
@@ -734,7 +735,8 @@ function analyzeAndWrite(
   requests: RecordedRequest[],
   outDir?: string,
 ): RecordResult {
-  const targetDir = outDir ?? path.join('.opencli', 'record', site);
+  // Default to ~/.opencli/record/<site>/ so we never pollute cwd (#711)
+  const targetDir = outDir ?? getUserRecordDir(site);
   fs.mkdirSync(targetDir, { recursive: true });
 
   if (requests.length === 0) {

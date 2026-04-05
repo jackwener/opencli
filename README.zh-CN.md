@@ -388,7 +388,7 @@ opencli generate https://example.com --goal "hot"
 opencli cascade https://api.example.com/data
 ```
 
-探索结果输出到 `.opencli/explore/<site>/`。
+探索结果输出到 `~/.opencli/explore/<site>/`。
 
 ## 常见问题排查
 

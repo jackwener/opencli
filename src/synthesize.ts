@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import yaml from 'js-yaml';
 import { VOLATILE_PARAMS, SEARCH_PARAMS, LIMIT_PARAMS, PAGINATION_PARAMS } from './constants.js';
 import type { ExploreAuthSummary, ExploreEndpointArtifact, ExploreManifest } from './explore.js';
+import { getUserExploreDir } from './user-opencli-paths.js';
 
 
 interface RecommendedArg {
@@ -125,9 +126,16 @@ export function renderSynthesizeSummary(result: SynthesizeResult): string {
 
 export function resolveExploreDir(target: string): string {
   if (fs.existsSync(target)) return target;
-  const candidate = path.join('.opencli', 'explore', target);
-  if (fs.existsSync(candidate)) return candidate;
-  throw new Error(`Explore directory not found: ${target}`);
+  // Check ~/.opencli/explore/<target> (new default location, #711)
+  const homeCandidate = getUserExploreDir(target);
+  if (fs.existsSync(homeCandidate)) return homeCandidate;
+  // Fallback: check cwd/.opencli/explore/<target> (legacy location)
+  const cwdCandidate = path.join('.opencli', 'explore', target);
+  if (fs.existsSync(cwdCandidate)) return cwdCandidate;
+  throw new Error(
+    `Explore directory not found: ${target}. `
+    + 'If artifacts were created elsewhere, pass the full path.',
+  );
 }
 
 export function loadExploreBundle(exploreDir: string): LoadedExploreBundle {

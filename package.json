@@ -18,6 +18,7 @@
     "./registry": "./dist/src/registry-api.js",
     "./errors": "./dist/src/errors.js",
     "./types": "./dist/src/types.js",
+    "./user-opencli-paths": "./dist/src/user-opencli-paths.js",
     "./utils": "./dist/src/utils.js",
     "./logger": "./dist/src/logger.js",
     "./launcher": "./dist/src/launcher.js",

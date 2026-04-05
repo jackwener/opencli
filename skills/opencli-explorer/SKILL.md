@@ -92,7 +92,7 @@ OpenCLI 内置 Deep Explore，自动分析网站网络请求：
 opencli explore https://www.example.com --site mysite
 ```
 
-输出到 `.opencli/explore/mysite/`：
+输出到 `~/.opencli/explore/mysite/`：
 
 | 文件 | 内容 |
 |------|------|
@@ -727,7 +727,7 @@ opencli synthesize mysite                                        # 生成候选 
 opencli verify mysite/hot --smoke                                # 冒烟测试
 ```
 
-生成的候选 YAML 保存在 `.opencli/explore/mysite/candidates/`，可直接复制到 `clis/mysite/` 并微调。
+生成的候选 YAML 保存在 `~/.opencli/explore/mysite/candidates/`，可直接复制到 `clis/mysite/` 并微调。
 
 ## Record Workflow
 
@@ -764,8 +764,8 @@ opencli record "https://example.com/page" --timeout 120000
 # 3. 完成操作后按 Enter 停止（或等超时自动停止）
 
 # 4. 查看结果
-cat .opencli/record/<site>/captured.json        # 原始捕获
-ls  .opencli/record/<site>/candidates/          # 候选 YAML
+cat ~/.opencli/record/<site>/captured.json        # 原始捕获
+ls  ~/.opencli/record/<site>/candidates/          # 候选 YAML
 ```
 
 ### 页面类型与捕获预期
