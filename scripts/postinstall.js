@@ -72,9 +72,10 @@ function ensureDir(dir) {
 /**
  * Ensure fpath contains the custom completions directory in .zshrc.
  *
- * Key detail: the fpath line MUST appear BEFORE the first `compinit` call,
- * otherwise compinit won't scan our completions directory.  This is critical
- * for oh-my-zsh users (source $ZSH/oh-my-zsh.sh calls compinit internally).
+ * Appends to the end of .zshrc (like bash/bun) instead of trying to find an
+ * insertion point.  The previous approach searched for `compinit` and spliced
+ * before it, but that broke multi-line commands (e.g. zinit blocks containing
+ * `zicompinit`).  Appending is safe regardless of .zshrc structure.
  */
 function ensureZshFpath(completionsDir, zshrcPath) {
   const fpathLine = `fpath=(${completionsDir} $fpath)`;
@@ -93,33 +94,17 @@ function ensureZshFpath(completionsDir, zshrcPath) {
     return;
   }
 
-  // Find the first line that triggers compinit (direct call or oh-my-zsh source)
-  const lines = content.split('\n');
-  let insertIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
-    // Skip comment-only lines
-    if (trimmed.startsWith('#')) continue;
-    if (/compinit/.test(trimmed) || /source\s+.*oh-my-zsh\.sh/.test(trimmed)) {
-      insertIdx = i;
-      break;
-    }
-  }
+  // Check whether the file already has a compinit call (oh-my-zsh, zinit, etc.)
+  const hasCompinit = content.split('\n').some(line => {
+    const t = line.trim();
+    return !t.startsWith('#') && (/compinit/.test(t) || /source\s+.*oh-my-zsh\.sh/.test(t));
+  });
 
-  if (insertIdx !== -1) {
-    // Walk back past any backslash-continued lines so we don't split
-    // a multi-line command (e.g. zinit blocks that mention compinit).
-    while (insertIdx > 0 && lines[insertIdx - 1].trimEnd().endsWith('\\')) {
-      insertIdx--;
-    }
-    // Insert fpath BEFORE the (logical) compinit / oh-my-zsh source line
-    lines.splice(insertIdx, 0, marker, fpathLine);
-    writeFileSync(zshrcPath, lines.join('\n'), 'utf8');
-  } else {
-    // No compinit found — append fpath + compinit at the end
-    let addition = `\n${marker}\n${fpathLine}\n${autoloadLine}\n`;
-    appendFileSync(zshrcPath, addition, 'utf8');
-  }
+  // Only add compinit if the user doesn't already have one
+  const addition = hasCompinit
+    ? `\n${marker}\n${fpathLine}\n`
+    : `\n${marker}\n${fpathLine}\n${autoloadLine}\n`;
+  appendFileSync(zshrcPath, addition, 'utf8');
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
