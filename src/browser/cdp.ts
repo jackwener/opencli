@@ -163,10 +163,138 @@ export class CDPBridge implements IBrowserFactory {
   }
 }
 
+/** Entry captured by session-level passive network capture. */
+export interface NetworkCaptureEntry {
+  url: string;
+  method: string;
+  status?: number;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+  responseContentType?: string;
+  responseBody?: string;
+  /** Size in bytes (encoded). */
+  size?: number;
+  timestamp: number;
+}
+
+/** Maximum entries to keep in a single capture session. */
+const MAX_CAPTURE_ENTRIES = 200;
+/** Maximum response body preview size. */
+const MAX_RESPONSE_PREVIEW = 10_000;
+
 class CDPPage extends BasePage {
   private _pageEnabled = false;
+  private _captureEntries: NetworkCaptureEntry[] = [];
+  private _captureActive = false;
+  private _captureRequestMap = new Map<string, { index: number; method: string; url: string; headers: Record<string, string>; timestamp: number }>();
+  private _captureHandlers: Array<{ event: string; handler: (params: unknown) => void }> = [];
+
   constructor(private bridge: CDPBridge) {
     super();
+  }
+
+  // ── Session-level passive network capture ──────────────────────────────
+
+  async startNetworkCapture(_pattern?: string): Promise<void> {
+    if (this._captureActive) return;
+    this._captureActive = true;
+    this._captureEntries = [];
+    this._captureRequestMap.clear();
+
+    await this.bridge.send('Network.enable', { maxPostDataLength: 0 });
+
+    const onRequestWillBeSent = (params: unknown) => {
+      const p = params as Record<string, unknown>;
+      const requestId = String(p.requestId ?? '');
+      const request = p.request as Record<string, unknown> | undefined;
+      if (!requestId || !request) return;
+
+      const url = String(request.url ?? '');
+      const method = String(request.method ?? 'GET');
+      const headers = (request.headers ?? {}) as Record<string, string>;
+      const timestamp = typeof p.wallTime === 'number' ? p.wallTime * 1000 : Date.now();
+
+      this._captureRequestMap.set(requestId, {
+        index: -1, method, url, headers, timestamp,
+      });
+    };
+
+    const onResponseReceived = (params: unknown) => {
+      const p = params as Record<string, unknown>;
+      const requestId = String(p.requestId ?? '');
+      const response = p.response as Record<string, unknown> | undefined;
+      const pending = this._captureRequestMap.get(requestId);
+      if (!pending || !response) return;
+
+      if (this._captureEntries.length >= MAX_CAPTURE_ENTRIES) {
+        this._captureRequestMap.delete(requestId);
+        return;
+      }
+
+      const responseHeaders = (response.headers ?? {}) as Record<string, string>;
+      const contentType = String(response.mimeType ?? responseHeaders['content-type'] ?? '');
+
+      const entry: NetworkCaptureEntry = {
+        url: pending.url,
+        method: pending.method,
+        status: typeof response.status === 'number' ? response.status : undefined,
+        requestHeaders: pending.headers,
+        responseHeaders,
+        responseContentType: contentType,
+        size: typeof response.encodedDataLength === 'number' ? response.encodedDataLength : undefined,
+        timestamp: pending.timestamp,
+      };
+
+      const idx = this._captureEntries.length;
+      this._captureEntries.push(entry);
+      pending.index = idx;
+    };
+
+    const onLoadingFinished = (params: unknown) => {
+      const p = params as Record<string, unknown>;
+      const requestId = String(p.requestId ?? '');
+      const pending = this._captureRequestMap.get(requestId);
+      if (!pending || pending.index < 0) {
+        this._captureRequestMap.delete(requestId);
+        return;
+      }
+
+      const entry = this._captureEntries[pending.index];
+      if (!entry) { this._captureRequestMap.delete(requestId); return; }
+
+      // Only fetch response body for JSON/text content types (skip images, fonts, etc.)
+      const ct = (entry.responseContentType ?? '').toLowerCase();
+      const isTextual = ct.includes('json') || ct.includes('text') || ct.includes('xml') || ct.includes('javascript');
+      if (isTextual) {
+        this.bridge.send('Network.getResponseBody', { requestId }).then((result) => {
+          const r = result as Record<string, unknown> | undefined;
+          if (r && typeof r.body === 'string') {
+            entry.responseBody = r.body.length > MAX_RESPONSE_PREVIEW
+              ? r.body.slice(0, MAX_RESPONSE_PREVIEW) + `...[truncated, ${r.body.length - MAX_RESPONSE_PREVIEW} chars omitted]`
+              : r.body;
+          }
+        }).catch(() => { /* response body unavailable */ });
+      }
+
+      this._captureRequestMap.delete(requestId);
+    };
+
+    // Register handlers
+    this._captureHandlers = [
+      { event: 'Network.requestWillBeSent', handler: onRequestWillBeSent },
+      { event: 'Network.responseReceived', handler: onResponseReceived },
+      { event: 'Network.loadingFinished', handler: onLoadingFinished },
+    ];
+    for (const { event, handler } of this._captureHandlers) {
+      this.bridge.on(event, handler);
+    }
+  }
+
+  async readNetworkCapture(): Promise<unknown[]> {
+    // Give a brief moment for pending response bodies to resolve
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const entries = [...this._captureEntries];
+    return entries;
   }
 
   async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {

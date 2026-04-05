@@ -134,6 +134,10 @@ export interface ExploreBundle {
   auth: ExploreAuthSummary;
 }
 
+function tryParseJson(str: string): unknown {
+  try { return JSON.parse(str); } catch { return str; }
+}
+
 /**
  * Parse raw network output from browser page.
  * Handles text format: [GET] url => [200]
@@ -159,8 +163,9 @@ function parseNetworkRequests(raw: unknown): NetworkEntry[] {
       method: (e.method ?? 'GET').toUpperCase(),
       url: String(e.url ?? e.request?.url ?? e.requestUrl ?? ''),
       status: e.status ?? e.statusCode ?? null,
-      contentType: e.contentType ?? e.response?.contentType ?? '',
-      responseBody: e.responseBody, requestHeaders: e.requestHeaders,
+      contentType: e.contentType ?? e.responseContentType ?? e.response?.contentType ?? '',
+      responseBody: e.responseBody ? (typeof e.responseBody === 'string' ? tryParseJson(e.responseBody) : e.responseBody) : undefined,
+      requestHeaders: e.requestHeaders,
     }));
   }
   return [];
@@ -358,6 +363,12 @@ export async function exploreUrl(
 
   return browserSession(opts.BrowserFactory, async (page) => {
     return runWithTimeout((async () => {
+      // Step 0: Start session-level network capture before navigation (if available)
+      const hasCapture = typeof page.startNetworkCapture === 'function';
+      if (hasCapture) {
+        await page.startNetworkCapture!().catch(() => {});
+      }
+
       // Step 1: Navigate
       await page.goto(url);
       await page.wait(waitSeconds);
@@ -394,7 +405,14 @@ export async function exploreUrl(
       const metadata = await readPageMetadata(page);
 
       // Step 4: Capture network traffic
-      const rawNetwork = await page.networkRequests(false);
+      // Prefer session-level capture (has method/status/headers/body); fallback to performance API
+      let rawNetwork: unknown;
+      if (hasCapture) {
+        rawNetwork = await page.readNetworkCapture!().catch(() => null);
+      }
+      if (!rawNetwork || (Array.isArray(rawNetwork) && rawNetwork.length === 0)) {
+        rawNetwork = await page.networkRequests(false);
+      }
       const networkEntries = parseNetworkRequests(rawNetwork);
 
       // Step 5: For JSON endpoints missing a body, carefully re-fetch in-browser via a pristine iframe
