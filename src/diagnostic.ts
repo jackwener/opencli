@@ -48,6 +48,18 @@ const SENSITIVE_HEADERS = new Set([
 
 const SENSITIVE_URL_PARAMS = /([?&])(token|key|secret|password|auth|access_token|api_key|session_id|csrf)=[^&]*/gi;
 
+/** Patterns that match inline secrets in free-text strings (error messages, stack traces, console output, DOM). */
+const SENSITIVE_TEXT_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
+  // Bearer tokens
+  { pattern: /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, replacement: 'Bearer [REDACTED]' },
+  // Generic "token=...", "key=...", etc. in non-URL text
+  { pattern: /(token|secret|password|api_key|apikey|access_token|session_id)[=:]\s*['"]?[A-Za-z0-9\-._~+/]{8,}['"]?/gi, replacement: '$1=[REDACTED]' },
+  // Cookie header values (key=value pairs)
+  { pattern: /(cookie[=:]\s*)[^\n;]{10,}/gi, replacement: '$1[REDACTED]' },
+  // JWT-like tokens (three base64 segments separated by dots)
+  { pattern: /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, replacement: '[REDACTED_JWT]' },
+];
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface RepairContext {
@@ -83,6 +95,17 @@ export function truncate(str: string, maxLen: number): string {
 /** Redact sensitive query parameters from a URL. */
 export function redactUrl(url: string): string {
   return url.replace(SENSITIVE_URL_PARAMS, '$1$2=[REDACTED]');
+}
+
+/** Redact inline secrets from free-text strings (error messages, stack traces, console output, DOM). */
+export function redactText(text: string): string {
+  let result = text;
+  for (const { pattern, replacement } of SENSITIVE_TEXT_PATTERNS) {
+    // Reset lastIndex for global regexps
+    pattern.lastIndex = 0;
+    result = result.replace(pattern, replacement);
+  }
+  return result;
 }
 
 /** Redact sensitive headers from a headers object. */
@@ -145,11 +168,13 @@ async function collectPageState(page: IPage): Promise<RepairContext['page'] | un
     const rawUrl = url ?? 'unknown';
     return {
       url: redactUrl(rawUrl),
-      snapshot: truncate(snapshot, MAX_SNAPSHOT_CHARS),
+      snapshot: redactText(truncate(snapshot, MAX_SNAPSHOT_CHARS)),
       networkRequests: (networkRequests as unknown[])
         .slice(0, MAX_NETWORK_REQUESTS)
         .map(redactNetworkRequest),
-      consoleErrors: (consoleErrors as unknown[]).slice(0, 50),
+      consoleErrors: (consoleErrors as unknown[])
+        .slice(0, 50)
+        .map(e => typeof e === 'string' ? redactText(e) : e),
     };
   } catch {
     return undefined;
@@ -177,9 +202,9 @@ export function buildRepairContext(
   return {
     error: {
       code: isCliError ? err.code : 'UNKNOWN',
-      message: getErrorMessage(err),
-      hint: isCliError ? err.hint : undefined,
-      stack: err instanceof Error ? truncate(err.stack ?? '', MAX_STACK_CHARS) : undefined,
+      message: redactText(getErrorMessage(err)),
+      hint: isCliError && err.hint ? redactText(err.hint) : undefined,
+      stack: err instanceof Error ? redactText(truncate(err.stack ?? '', MAX_STACK_CHARS)) : undefined,
     },
     adapter: {
       site: cmd.site,

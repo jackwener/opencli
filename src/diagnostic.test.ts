@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildRepairContext, isDiagnosticEnabled, emitDiagnostic,
-  truncate, redactUrl, MAX_DIAGNOSTIC_BYTES,
+  truncate, redactUrl, redactText, MAX_DIAGNOSTIC_BYTES,
   type RepairContext,
 } from './diagnostic.js';
 import { SelectorError, CommandExecutionError } from './errors.js';
@@ -73,6 +73,33 @@ describe('redactUrl', () => {
   });
 });
 
+describe('redactText', () => {
+  it('redacts Bearer tokens', () => {
+    expect(redactText('Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.test'))
+      .toContain('Bearer [REDACTED]');
+  });
+
+  it('redacts JWT tokens', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    expect(redactText(`token is ${jwt}`)).toContain('[REDACTED_JWT]');
+    expect(redactText(`token is ${jwt}`)).not.toContain('eyJhbGci');
+  });
+
+  it('redacts inline token=value patterns', () => {
+    expect(redactText('failed with token=abc123def456')).toContain('token=[REDACTED]');
+  });
+
+  it('redacts cookie values', () => {
+    const result = redactText('cookie: session=abc123; user=xyz789; path=/');
+    expect(result).toContain('[REDACTED]');
+    expect(result).not.toContain('session=abc123');
+  });
+
+  it('leaves normal text unchanged', () => {
+    expect(redactText('Error: element not found')).toBe('Error: element not found');
+  });
+});
+
 describe('buildRepairContext', () => {
   it('captures CliError fields', () => {
     const err = new SelectorError('.missing-element', 'Element removed');
@@ -119,6 +146,15 @@ describe('buildRepairContext', () => {
     const ctx = buildRepairContext(err, makeCmd());
     expect(ctx.error.stack!.length).toBeLessThan(10_000);
     expect(ctx.error.stack).toContain('truncated');
+  });
+
+  it('redacts sensitive data in error message and stack', () => {
+    const err = new Error('Request failed with Bearer eyJhbGciOiJIUzI1NiJ9.test.sig');
+    const ctx = buildRepairContext(err, makeCmd());
+    expect(ctx.error.message).toContain('Bearer [REDACTED]');
+    expect(ctx.error.message).not.toContain('eyJhbGci');
+    // Stack also gets redacted
+    expect(ctx.error.stack).toContain('Bearer [REDACTED]');
   });
 });
 
