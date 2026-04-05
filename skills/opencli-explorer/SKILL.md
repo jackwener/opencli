@@ -455,7 +455,7 @@ pipeline:
 
 ```typescript
 // clis/twitter/search.ts
-import { cli, Strategy } from '../../src/registry.js';
+import { cli, Strategy } from '@jackwener/opencli/registry';
 
 cli({
   site: 'twitter',
@@ -496,7 +496,7 @@ cli({
 
 ```typescript
 // clis/xiaohongshu/user.ts
-import { cli, Strategy } from '../../src/registry.js';
+import { cli, Strategy } from '@jackwener/opencli/registry';
 
 cli({
   site: 'xiaohongshu',
@@ -636,8 +636,8 @@ git add clis/mysite/ && git commit -m "feat(mysite): add hot" && git push
 ### 模板代码
 
 ```typescript
-import { cli, Strategy } from '../../src/registry.js';
-import type { IPage } from '../../src/types.js';
+import { cli, Strategy } from '@jackwener/opencli/registry';
+import type { IPage } from '@jackwener/opencli/types';
 import { apiGet } from './utils.js'; // 复用平台 SDK
 
 cli({
@@ -802,7 +802,7 @@ pipeline:
 
 **转换为 TS CLI**（参考 `clis/tae/add-expense.ts` 风格）：
 ```typescript
-import { cli, Strategy } from '../../src/registry.js';
+import { cli, Strategy } from '@jackwener/opencli/registry';
 
 cli({
   site: 'tae',

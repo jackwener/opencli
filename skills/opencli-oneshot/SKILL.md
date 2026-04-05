@@ -124,7 +124,7 @@ columns: [rank, title, value]
 
 ```typescript
 // clis/<site>/<name>.ts
-import { cli, Strategy } from '../../src/registry.js';
+import { cli, Strategy } from '@jackwener/opencli/registry';
 
 cli({
   site: 'mysite',
@@ -170,7 +170,7 @@ cli({
 ### TS — Header（如 Twitter GraphQL）
 
 ```typescript
-import { cli, Strategy } from '../../src/registry.js';
+import { cli, Strategy } from '@jackwener/opencli/registry';
 
 cli({
   site: 'twitter',
