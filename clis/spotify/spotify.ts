@@ -11,7 +11,7 @@ import {
   parseDotEnv,
   resolveSpotifyCredentials,
 } from './utils.js';
-import { USER_OPENCLI_DIR, getUserOpenCliPath } from '../../src/user-opencli-paths.js';
+import { USER_OPENCLI_DIR, getUserOpenCliPath } from '@jackwener/opencli/user-opencli-paths';
 
 // ── Credentials ───────────────────────────────────────────────────────────────
 // Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET as environment variables,
