@@ -312,10 +312,14 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   operate.command('open').argument('<url>').description('Open URL in automation window')
     .action(operateAction(async (page, url) => {
+      // Start session-level capture before navigation (catches initial requests)
+      await page.startNetworkCapture?.();
       await page.goto(url);
       await page.wait(2);
-      // Auto-inject network interceptor for API discovery
-      try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
+      // Fallback: also inject JS interceptor for pages without session capture
+      if (!page.startNetworkCapture) {
+        try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
+      }
       console.log(`Navigated to: ${await page.getCurrentUrl?.() ?? url}`);
     }));
 
@@ -505,13 +509,26 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .option('--all', 'Show all requests including static resources')
     .description('Show captured network requests (auto-captured since last open)')
     .action(operateAction(async (page, opts) => {
-      const requests = await page.evaluate(`(function(){
-        var reqs = window.__opencli_net || [];
-        return JSON.stringify(reqs);
-      })()`) as string;
-
       let items: Array<{ url: string; method: string; status: number; size: number; ct: string; body: unknown }> = [];
-      try { items = JSON.parse(requests); } catch { console.log('No network data captured. Run "operate open <url>" first.'); return; }
+      if (page.readNetworkCapture) {
+        const raw = await page.readNetworkCapture();
+        // Normalize to the same shape as __opencli_net entries
+        items = (raw as Array<Record<string, unknown>>).map(e => ({
+          url: (e.url as string) || '',
+          method: (e.method as string) || 'GET',
+          status: (e.status as number) || 0,
+          size: e.responseBody ? JSON.stringify(e.responseBody).length : 0,
+          ct: (e.contentType as string) || '',
+          body: e.responseBody ?? null,
+        }));
+      } else {
+        // Fallback to JS interceptor data
+        const requests = await page.evaluate(`(function(){
+          var reqs = window.__opencli_net || [];
+          return JSON.stringify(reqs);
+        })()`) as string;
+        try { items = JSON.parse(requests); } catch { console.log('No network data captured. Run "operate open <url>" first.'); return; }
+      }
 
       if (items.length === 0) { console.log('No requests captured.'); return; }
 
