@@ -78,7 +78,7 @@ function judge(criteria: JudgeCriteria, output: string): boolean {
 }
 
 function runCommand(cmd: string, timeout = 30000): string {
-  const localCmd = cmd.replace(/^opencli /, `node dist/main.js `);
+  const localCmd = cmd.replace(/^opencli /, `node dist/src/main.js `);
   try {
     return execSync(localCmd, {
       cwd: PROJECT_ROOT,

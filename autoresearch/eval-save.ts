@@ -83,7 +83,7 @@ const PROJECT_ROOT = join(__dirname, '..');
 /** Run a command, using local dist/main.js instead of global opencli for consistency */
 function runCommand(cmd: string, timeout = 30000): string {
   // Use local build so tests always run against the current source
-  const localCmd = cmd.replace(/^opencli /, `node dist/main.js `);
+  const localCmd = cmd.replace(/^opencli /, `node dist/src/main.js `);
   try {
     return execSync(localCmd, {
       cwd: PROJECT_ROOT,
