@@ -15,6 +15,7 @@ import {
   eutilsFetchText,
   buildPubMedUrl,
   truncateText,
+  prioritizeArticleType,
 } from './utils.js';
 
 /**
@@ -87,9 +88,9 @@ function parseEFetchXml(xml: string, pmid: string) {
   // Keywords
   const keywords = getAllTags(xml, 'Keyword').filter(Boolean).slice(0, 10);
 
-  // Article type
+  // Article type - PubMed returns multiple types, prioritize more specific ones
   const pubTypes = getAllTags(xml, 'PublicationType').filter(Boolean);
-  const articleType = pubTypes[0] || 'Journal Article';
+  const articleType = prioritizeArticleType(pubTypes);
 
   // Language
   const language = getTag(xml, 'Language');

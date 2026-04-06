@@ -339,12 +339,80 @@ export function formatArticleType(pubTypeList: any[] | undefined): string {
 
   // ESummary format: pubtype is a string array e.g. ["Journal Article"]
   if (typeof pubTypeList[0] === 'string') {
-    return pubTypeList[0];
+    return prioritizeArticleType(pubTypeList as string[]);
   }
 
   // EFetch format: pubtype is an object array e.g. [{ ui: "D016428", value: "Journal Article" }]
-  const mainType = pubTypeList.find((pt: any) => pt.ui);
-  return mainType?.value || pubTypeList[0]?.value || 'Journal Article';
+  const values = pubTypeList.map((pt: any) => pt.value).filter(Boolean);
+  return prioritizeArticleType(values);
+}
+
+/**
+ * Prioritize article types - return the most specific/meaningful type
+ * "Journal Article" is generic, prefer more specific types like "Review", "Meta-Analysis", etc.
+ */
+export function prioritizeArticleType(pubTypes: string[]): string {
+  if (!pubTypes || pubTypes.length === 0) {
+    return 'Journal Article';
+  }
+
+  // Define priority: more specific types are preferred over generic "Journal Article"
+  const priorityOrder = [
+    'Systematic Review',
+    'Meta-Analysis',
+    'Review',
+    'Randomized Controlled Trial',
+    'Clinical Trial',
+    'Case Reports',
+    'Comparative Study',
+    'Multicenter Study',
+    'Observational Study',
+    'Editorial',
+    'Comment',
+    'Letter',
+    'News',
+    'Published Erratum',
+    'Guideline',
+    'Practice Guideline',
+    'Consensus Development Conference',
+    'Congress',
+    'Lecture',
+    'Interview',
+    'Biography',
+    'Portrait',
+    'Historical Article',
+    'Classical Article',
+    'Legal Case',
+    'Legislation',
+    'Government Publication',
+    'Technical Report',
+    'Dataset',
+    'Evaluation Study',
+    'Validation Study',
+    'Research Support, Non-U.S. Gov\'t',
+    'Research Support, U.S. Gov\'t, Non-P.H.S.',
+    'Research Support, U.S. Gov\'t, P.H.S.',
+    'Research Support, N.I.H., Extramural',
+    'Research Support, N.I.H., Intramural',
+    'Research Support, American Recovery and Reinvestment Act',
+    'Journal Article',  // Generic, low priority
+  ];
+
+  // Find the highest priority type present in the list
+  for (const priorityType of priorityOrder) {
+    const match = pubTypes.find(pt => 
+      pt.toLowerCase() === priorityType.toLowerCase()
+    );
+    if (match) {
+      return match;
+    }
+  }
+
+  // If no priority match, return the first non-generic type or the first one
+  const nonGeneric = pubTypes.find(pt => 
+    pt.toLowerCase() !== 'journal article'
+  );
+  return nonGeneric || pubTypes[0];
 }
 
 /**
