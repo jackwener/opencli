@@ -706,6 +706,11 @@ function setWorkspaceSession(workspace, session) {
 		idleDeadlineAt: Date.now() + WINDOW_IDLE_TIMEOUT
 	});
 }
+function rememberWorkspaceTab(workspace, tabId) {
+	const session = automationSessions.get(workspace);
+	if (!session) return;
+	session.preferredTabId = tabId;
+}
 /**
 * Resolve target tab in the automation window, returning both the tabId and
 * the Tab object (when available) so callers can skip a redundant chrome.tabs.get().
@@ -714,7 +719,7 @@ async function resolveTab(tabId, workspace, initialUrl) {
 	if (tabId !== void 0) try {
 		const tab = await chrome.tabs.get(tabId);
 		const session = automationSessions.get(workspace);
-		const matchesSession = session ? session.preferredTabId !== null ? session.preferredTabId === tabId : tab.windowId === session.windowId : false;
+		const matchesSession = session ? session.owned ? tab.windowId === session.windowId : session.preferredTabId !== null ? session.preferredTabId === tabId : tab.windowId === session.windowId : false;
 		if (isDebuggableUrl(tab.url) && matchesSession) return {
 			tabId,
 			tab
@@ -786,7 +791,7 @@ async function resolveTabId(tabId, workspace, initialUrl) {
 async function listAutomationTabs(workspace) {
 	const session = automationSessions.get(workspace);
 	if (!session) return [];
-	if (session.preferredTabId !== null) try {
+	if (session.preferredTabId !== null && !session.owned) try {
 		return [await chrome.tabs.get(session.preferredTabId)];
 	} catch {
 		automationSessions.delete(workspace);
@@ -838,6 +843,7 @@ async function handleNavigate(cmd, workspace) {
 	};
 	const resolved = await resolveTab(cmd.tabId, workspace, cmd.url);
 	const tabId = resolved.tabId;
+	rememberWorkspaceTab(workspace, tabId);
 	const beforeTab = resolved.tab ?? await chrome.tabs.get(tabId);
 	const beforeNormalized = normalizeUrlForComparison(beforeTab.url);
 	const targetUrl = cmd.url;
@@ -944,6 +950,7 @@ async function handleTabs(cmd, workspace) {
 				url: cmd.url ?? BLANK_PAGE,
 				active: true
 			});
+			if (tab.id) rememberWorkspaceTab(workspace, tab.id);
 			return {
 				id: cmd.id,
 				ok: true,
@@ -1002,6 +1009,7 @@ async function handleTabs(cmd, workspace) {
 					error: `Tab ${cmd.tabId} is not in the automation window`
 				};
 				await chrome.tabs.update(cmd.tabId, { active: true });
+				rememberWorkspaceTab(workspace, cmd.tabId);
 				return {
 					id: cmd.id,
 					ok: true,
@@ -1015,6 +1023,7 @@ async function handleTabs(cmd, workspace) {
 				error: `Tab index ${cmd.index} not found`
 			};
 			await chrome.tabs.update(target.id, { active: true });
+			rememberWorkspaceTab(workspace, target.id);
 			return {
 				id: cmd.id,
 				ok: true,
@@ -1180,6 +1189,7 @@ async function handleInsertText(cmd, workspace) {
 }
 async function handleNetworkCaptureStart(cmd, workspace) {
 	const tabId = await resolveTabId(cmd.tabId, workspace);
+	rememberWorkspaceTab(workspace, tabId);
 	try {
 		await startNetworkCapture(tabId, cmd.pattern);
 		return {

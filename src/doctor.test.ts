@@ -108,4 +108,20 @@ describe('doctor report rendering', () => {
       expect.stringContaining('Daemon is not running'),
     ]));
   });
+
+  it('reports extension version mismatch even when the major version matches', async () => {
+    const status = {
+      running: true,
+      extensionConnected: true,
+      extensionVersion: '1.5.5',
+    };
+    mockCheckDaemonStatus.mockResolvedValueOnce(status);
+    mockCheckDaemonStatus.mockResolvedValueOnce(status);
+
+    const report = await runBrowserDoctor({ live: false, cliVersion: '1.6.8' });
+
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.stringContaining('Extension version mismatch: extension v1.5.5 ≠ CLI v1.6.8'),
+    ]));
+  });
 });

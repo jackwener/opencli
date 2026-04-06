@@ -17,6 +17,7 @@ import { saveBase64ToFile } from '../utils.js';
 import { generateStealthJs } from './stealth.js';
 import { waitForDomStableJs } from './dom-helpers.js';
 import { BasePage } from './base-page.js';
+import { clearWorkspaceTabId, loadWorkspaceTabId, saveWorkspaceTabId } from './workspace-tab-cache.js';
 
 export function isRetryableSettleError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
@@ -40,6 +41,7 @@ export class Page extends BasePage {
 
   constructor(private readonly workspace: string = 'default') {
     super();
+    this._tabId = loadWorkspaceTabId(workspace);
   }
 
   /** Active tab ID, set after navigate and used in all subsequent commands */
@@ -66,6 +68,7 @@ export class Page extends BasePage {
     // Remember the tabId and URL for subsequent calls
     if (result?.tabId) {
       this._tabId = result.tabId;
+      saveWorkspaceTabId(this.workspace, result.tabId);
     }
     this._lastUrl = url;
     // Inject stealth + settle in a single round-trip instead of two sequential exec calls.
@@ -133,6 +136,7 @@ export class Page extends BasePage {
     } finally {
       this._tabId = undefined;
       this._lastUrl = null;
+      clearWorkspaceTabId(this.workspace);
     }
   }
 
@@ -143,7 +147,10 @@ export class Page extends BasePage {
 
   async selectTab(index: number): Promise<void> {
     const result = await sendCommand('tabs', { op: 'select', index, ...this._wsOpt() }) as { selected?: number };
-    if (result?.selected) this._tabId = result.selected;
+    if (result?.selected) {
+      this._tabId = result.selected;
+      saveWorkspaceTabId(this.workspace, result.selected);
+    }
   }
 
   /**

@@ -29,7 +29,15 @@ pipeline:
       rank: ${{ index + 1 }}
       title: ${{ item.title }}
       author: ${{ item.by }}
-      url: ${{ item.url }}
+      url: >-
+        ${{
+          item.url
+          || item.text?.match(/href="([^"]+)"/)?.[1]
+            ?.replace(/&#x2F;/g, '/')
+            ?.replace(/&amp;/g, '&')
+            ?.replace(/&#x27;/g, "'")
+          || ('https://news.ycombinator.com/item?id=' + item.id)
+        }}
 
   - limit: ${{ args.limit }}
 

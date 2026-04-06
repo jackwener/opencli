@@ -381,6 +381,12 @@ function setWorkspaceSession(workspace: string, session: Omit<AutomationSession,
   });
 }
 
+function rememberWorkspaceTab(workspace: string, tabId: number): void {
+  const session = automationSessions.get(workspace);
+  if (!session) return;
+  session.preferredTabId = tabId;
+}
+
 type ResolvedTab = { tabId: number; tab: chrome.tabs.Tab | null };
 
 /**
@@ -394,7 +400,7 @@ async function resolveTab(tabId: number | undefined, workspace: string, initialU
       const tab = await chrome.tabs.get(tabId);
       const session = automationSessions.get(workspace);
       const matchesSession = session
-        ? (session.preferredTabId !== null ? session.preferredTabId === tabId : tab.windowId === session.windowId)
+        ? (session.owned ? tab.windowId === session.windowId : (session.preferredTabId !== null ? session.preferredTabId === tabId : tab.windowId === session.windowId))
         : false;
       if (isDebuggableUrl(tab.url) && matchesSession) return { tabId, tab };
       if (session && !matchesSession && session.preferredTabId === null && isDebuggableUrl(tab.url)) {
@@ -465,7 +471,7 @@ async function resolveTabId(tabId: number | undefined, workspace: string, initia
 async function listAutomationTabs(workspace: string): Promise<chrome.tabs.Tab[]> {
   const session = automationSessions.get(workspace);
   if (!session) return [];
-  if (session.preferredTabId !== null) {
+  if (session.preferredTabId !== null && !session.owned) {
     try {
       return [await chrome.tabs.get(session.preferredTabId)];
     } catch {
@@ -506,6 +512,7 @@ async function handleNavigate(cmd: Command, workspace: string): Promise<Result> 
   // Pass target URL so that first-time window creation can start on the right domain
   const resolved = await resolveTab(cmd.tabId, workspace, cmd.url);
   const tabId = resolved.tabId;
+  rememberWorkspaceTab(workspace, tabId);
 
   const beforeTab = resolved.tab ?? await chrome.tabs.get(tabId);
   const beforeNormalized = normalizeUrlForComparison(beforeTab.url);
@@ -629,6 +636,7 @@ async function handleTabs(cmd: Command, workspace: string): Promise<Result> {
       }
       const windowId = await getAutomationWindow(workspace);
       const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: true });
+      if (tab.id) rememberWorkspaceTab(workspace, tab.id);
       return { id: cmd.id, ok: true, data: { tabId: tab.id, url: tab.url } };
     }
     case 'close': {
@@ -660,12 +668,14 @@ async function handleTabs(cmd: Command, workspace: string): Promise<Result> {
           return { id: cmd.id, ok: false, error: `Tab ${cmd.tabId} is not in the automation window` };
         }
         await chrome.tabs.update(cmd.tabId, { active: true });
+        rememberWorkspaceTab(workspace, cmd.tabId);
         return { id: cmd.id, ok: true, data: { selected: cmd.tabId } };
       }
       const tabs = await listAutomationWebTabs(workspace);
       const target = tabs[cmd.index!];
       if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
       await chrome.tabs.update(target.id, { active: true });
+      rememberWorkspaceTab(workspace, target.id);
       return { id: cmd.id, ok: true, data: { selected: target.id } };
     }
     default:
@@ -795,6 +805,7 @@ async function handleInsertText(cmd: Command, workspace: string): Promise<Result
 
 async function handleNetworkCaptureStart(cmd: Command, workspace: string): Promise<Result> {
   const tabId = await resolveTabId(cmd.tabId, workspace);
+  rememberWorkspaceTab(workspace, tabId);
   try {
     await executor.startNetworkCapture(tabId, cmd.pattern);
     return { id: cmd.id, ok: true, data: { started: true } };

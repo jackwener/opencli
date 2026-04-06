@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { autoScrollJs, waitForCaptureJs, waitForSelectorJs } from './dom-helpers.js';
+import { autoScrollJs, networkRequestsJs, waitForCaptureJs, waitForSelectorJs } from './dom-helpers.js';
 
 describe('autoScrollJs', () => {
   it('returns early without error when document.body is null', async () => {
@@ -110,5 +110,49 @@ describe('waitForSelectorJs', () => {
     await expect(eval(code) as Promise<string>).rejects.toThrow('Selector not found: #missing');
     delete g.document;
     delete g.MutationObserver;
+  });
+});
+
+describe('networkRequestsJs', () => {
+  it('includes the main document navigation in the fallback request list', () => {
+    const g = globalThis as any;
+    const origPerformance = g.performance;
+    const origDocument = g.document;
+
+    g.performance = {
+      getEntriesByType: (type: string) => {
+        if (type === 'navigation') {
+          return [{
+            name: 'https://example.com/',
+            duration: 123.4,
+            transferSize: 321,
+            encodedBodySize: 300,
+            responseStatus: 200,
+          }];
+        }
+        if (type === 'resource') return [];
+        return [];
+      },
+    };
+    g.document = { contentType: 'text/html' };
+
+    const requests = eval(networkRequestsJs(false)) as Array<Record<string, unknown>>;
+
+    expect(requests).toEqual([
+      {
+        url: 'https://example.com/',
+        method: 'GET',
+        type: 'navigation',
+        duration: 123,
+        size: 321,
+        status: 200,
+        responseStatus: 200,
+        ct: 'text/html',
+        responseContentType: 'text/html',
+      },
+    ]);
+
+    g.performance = origPerformance;
+    g.document = origDocument;
   });
 });

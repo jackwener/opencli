@@ -4,8 +4,24 @@ const { sendCommandMock } = vi.hoisted(() => ({
   sendCommandMock: vi.fn(),
 }));
 
+const {
+  loadWorkspaceTabIdMock,
+  saveWorkspaceTabIdMock,
+  clearWorkspaceTabIdMock,
+} = vi.hoisted(() => ({
+  loadWorkspaceTabIdMock: vi.fn(),
+  saveWorkspaceTabIdMock: vi.fn(),
+  clearWorkspaceTabIdMock: vi.fn(),
+}));
+
 vi.mock('./daemon-client.js', () => ({
   sendCommand: sendCommandMock,
+}));
+
+vi.mock('./workspace-tab-cache.js', () => ({
+  loadWorkspaceTabId: loadWorkspaceTabIdMock,
+  saveWorkspaceTabId: saveWorkspaceTabIdMock,
+  clearWorkspaceTabId: clearWorkspaceTabIdMock,
 }));
 
 import { Page } from './page.js';
@@ -13,6 +29,9 @@ import { Page } from './page.js';
 describe('Page.getCurrentUrl', () => {
   beforeEach(() => {
     sendCommandMock.mockReset();
+    loadWorkspaceTabIdMock.mockReset().mockReturnValue(undefined);
+    saveWorkspaceTabIdMock.mockReset();
+    clearWorkspaceTabIdMock.mockReset();
   });
 
   it('reads the real browser URL when no local navigation cache exists', async () => {
@@ -37,11 +56,28 @@ describe('Page.getCurrentUrl', () => {
 
     expect(sendCommandMock).toHaveBeenCalledTimes(1);
   });
+
+  it('reuses the cached workspace tab id for later commands', async () => {
+    loadWorkspaceTabIdMock.mockReturnValueOnce(42);
+    sendCommandMock.mockResolvedValueOnce('https://example.com/');
+
+    const page = new Page('operate:default');
+    const url = await page.getCurrentUrl();
+
+    expect(url).toBe('https://example.com/');
+    expect(sendCommandMock).toHaveBeenCalledWith('exec', expect.objectContaining({
+      workspace: 'operate:default',
+      tabId: 42,
+    }));
+  });
 });
 
 describe('Page.evaluate', () => {
   beforeEach(() => {
     sendCommandMock.mockReset();
+    loadWorkspaceTabIdMock.mockReset().mockReturnValue(undefined);
+    saveWorkspaceTabIdMock.mockReset();
+    clearWorkspaceTabIdMock.mockReset();
   });
 
   it('retries once when the inspected target navigated during exec', async () => {
@@ -60,6 +96,9 @@ describe('Page.evaluate', () => {
 describe('Page.consoleMessages', () => {
   beforeEach(() => {
     sendCommandMock.mockReset();
+    loadWorkspaceTabIdMock.mockReset().mockReturnValue(undefined);
+    saveWorkspaceTabIdMock.mockReset();
+    clearWorkspaceTabIdMock.mockReset();
   });
 
   it('filters daemon console messages locally and keeps warn in error mode', async () => {
@@ -106,5 +145,18 @@ describe('Page.consoleMessages', () => {
     await expect(page.consoleMessages('error')).resolves.toEqual([]);
     await expect(page.stopCapture()).resolves.toBeUndefined();
     expect(page.hasNativeCaptureSupport()).toBe(false);
+  });
+
+  it('persists the resolved tab after navigation and clears it when the window closes', async () => {
+    sendCommandMock
+      .mockResolvedValueOnce({ tabId: 99 })
+      .mockResolvedValueOnce(null);
+
+    const page = new Page('operate:default');
+    await page.goto('https://example.com', { waitUntil: 'none' });
+    await page.closeWindow();
+
+    expect(saveWorkspaceTabIdMock).toHaveBeenCalledWith('operate:default', 99);
+    expect(clearWorkspaceTabIdMock).toHaveBeenCalledWith('operate:default');
   });
 });

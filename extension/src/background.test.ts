@@ -162,6 +162,35 @@ describe('background tab isolation', () => {
     expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'https://new.example', active: true });
   });
 
+  it('lists all owned automation-window web tabs even when a preferred tab is remembered', async () => {
+    const { chrome, tabs } = createChromeMock();
+    tabs.push({ id: 4, windowId: 1, url: 'https://second.example', title: 'second', active: false, status: 'complete' });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession('site:twitter', { windowId: 1, owned: true, preferredTabId: 4 });
+
+    const result = await mod.__test__.handleTabs({ id: 'owned-list', action: 'tabs', op: 'list', workspace: 'site:twitter' }, 'site:twitter');
+
+    expect(result.ok).toBe(true);
+    expect(result.data).toEqual([
+      {
+        index: 0,
+        tabId: 1,
+        url: 'https://automation.example',
+        title: 'automation',
+        active: true,
+      },
+      {
+        index: 1,
+        tabId: 4,
+        url: 'https://second.example',
+        title: 'second',
+        active: false,
+      },
+    ]);
+  });
+
   it('treats normalized same-url navigate as already complete', async () => {
     const { chrome, tabs, update } = createChromeMock();
     tabs[0].url = 'https://www.bilibili.com/';
@@ -306,6 +335,25 @@ describe('background tab isolation', () => {
 
     expect(chrome.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 1 }, 'Network.enable');
     expect(chrome.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 1 }, 'Runtime.enable');
+  });
+
+  it('remembers the navigated tab for owned workspaces', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('operate:default', 1);
+
+    await mod.__test__.handleNavigate(
+      { id: 'remember-tab', action: 'navigate', url: 'https://example.com', workspace: 'operate:default' },
+      'operate:default',
+    );
+
+    expect(mod.__test__.getSession('operate:default')).toEqual(expect.objectContaining({
+      windowId: 1,
+      owned: true,
+      preferredTabId: 1,
+    }));
   });
 
   it('routes console-read and capture-stop through the executor', async () => {
