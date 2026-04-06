@@ -64,22 +64,30 @@ function parseEFetchXml(xml: string, pmid: string) {
   const fullDate = [year, month, day].filter(Boolean).join(' ');
 
   // Authors and affiliations - collect all affiliations for each author
+  // Also track EqualContrib for co-first authors
   const authorBlocks = xml.match(/<Author[^>]*>([\s\S]*?)<\/Author>/gi) || [];
-  const authors: Array<{ name: string; affiliations: string[] }> = authorBlocks.map(block => {
+  const authors: Array<{ name: string; affiliations: string[]; equalContrib: boolean }> = authorBlocks.map(block => {
     const lastName = getTag(block, 'LastName');
     const foreName = getTag(block, 'ForeName') || getTag(block, 'Initials');
     const collectiveName = getTag(block, 'CollectiveName');
     const name = collectiveName || `${lastName} ${foreName}`.trim();
+    // Check for EqualContrib attribute
+    const equalContrib = /EqualContrib="Y"/i.test(block);
     // Get all affiliations for this author (an author can have multiple AffiliationInfo blocks)
     const affiliationBlocks = block.match(/<AffiliationInfo>([\s\S]*?)<\/AffiliationInfo>/gi) || [];
     const affiliations = affiliationBlocks
       .map(info => getTag(info, 'Affiliation'))
       .filter(Boolean);
-    return { name, affiliations };
+    return { name, affiliations, equalContrib };
   });
 
-  const firstAuthor = authors[0] || { name: '', affiliations: [] };
-  const correspondingAuthor = authors[authors.length - 1] || { name: '', affiliations: [] };
+  // Identify co-first authors (authors with EqualContrib="Y")
+  const coFirstAuthors = authors.filter(a => a.equalContrib);
+  const firstAuthors = coFirstAuthors.length > 0 ? coFirstAuthors : [authors[0]].filter(Boolean);
+  
+  // For corresponding authors, use the last author (common convention)
+  // In the future, could also check for specific corresponding author indicators
+  const correspondingAuthor = authors[authors.length - 1] || { name: '', affiliations: [], equalContrib: false };
 
   // Unique affiliations - flatten all author affiliations and deduplicate
   const allAffiliations = authors.flatMap(a => a.affiliations);
@@ -113,6 +121,7 @@ function parseEFetchXml(xml: string, pmid: string) {
   const authorListWithAffiliations = authors.map(a => ({
     name: a.name,
     affiliations: a.affiliations,
+    equalContrib: a.equalContrib,
   }));
 
   // Simple author name list for compact display
@@ -126,11 +135,15 @@ function parseEFetchXml(xml: string, pmid: string) {
       list: authorListWithAffiliations,
       names: authorNameList,
       all: authorNameList.slice(0, 10).join(', ') + (authorNameList.length > 10 ? ', et al.' : ''),
-      first: firstAuthor.name,
+      first: firstAuthors[0]?.name || '',
       firstWithAffiliations: {
-        name: firstAuthor.name,
-        affiliations: firstAuthor.affiliations,
+        name: firstAuthors[0]?.name || '',
+        affiliations: firstAuthors[0]?.affiliations || [],
       },
+      firstAuthors: firstAuthors.map(a => ({
+        name: a.name,
+        affiliations: a.affiliations,
+      })),
       corresponding: correspondingAuthor.name,
       correspondingWithAffiliations: {
         name: correspondingAuthor.name,
@@ -236,7 +249,7 @@ cli({
       return emailMatch ? emailMatch[0] : '';
     };
 
-    const firstAuthor = article.authors.firstWithAffiliations;
+    const firstAuthors = article.authors.firstAuthors || [article.authors.firstWithAffiliations];
     const corrAuthor = article.authors.correspondingWithAffiliations;
     const corrEmail = corrAuthor.affiliations.map(extractEmail).filter(Boolean)[0] || 'N/A';
 
@@ -245,19 +258,42 @@ cli({
       { field: 'Title', value: article.title },
       { field: '---', value: '---' },
       { field: 'Section', value: '第一作者及通讯作者信息' },
-      { field: 'First Author', value: firstAuthor.name },
-      { field: 'First Author Affiliations', value: firstAuthor.affiliations.join('; ') || 'N/A' },
+    ];
+
+    // Add first author(s) - support co-first authors
+    if (firstAuthors.length > 1) {
+      rows.push({ field: 'Co-first Authors', value: `${firstAuthors.length} authors` });
+      firstAuthors.forEach((author, index) => {
+        rows.push({
+          field: `  ${index + 1}. First Author`,
+          value: author.name,
+        });
+        rows.push({
+          field: `     Affiliations`,
+          value: author.affiliations.join('; ') || 'N/A',
+        });
+      });
+    } else {
+      rows.push({ field: 'First Author', value: firstAuthors[0]?.name || 'N/A' });
+      rows.push({
+        field: 'First Author Affiliations',
+        value: firstAuthors[0]?.affiliations.join('; ') || 'N/A',
+      });
+    }
+
+    rows.push(
       { field: 'Corresponding Author', value: corrAuthor.name },
       { field: 'Corresponding Author Affiliations', value: corrAuthor.affiliations.join('; ') || 'N/A' },
       { field: 'Corresponding Author Email', value: corrEmail },
       { field: '---', value: '---' },
       { field: 'Section', value: '所有作者信息' },
-    ];
+    );
 
-    // Add each author with their affiliations
+    // Add each author with their affiliations, mark co-first authors
     article.authors.list.forEach((author, index) => {
+      const isCoFirst = (author as any).equalContrib ? ' ★' : '';
       rows.push({
-        field: `${index + 1}. ${author.name}`,
+        field: `${index + 1}. ${author.name}${isCoFirst}`,
         value: author.affiliations.join('; ') || 'N/A',
       });
     });
