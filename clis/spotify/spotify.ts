@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { createServer } from 'http';
 import { homedir } from 'os';
 import { join } from 'path';
-import { exec } from 'child_process';
+import { execFileSync } from 'child_process';
 import {
   assertSpotifyCredentialsConfigured,
   getFirstSpotifyTrack,
@@ -115,8 +115,9 @@ async function findTrackUri(query: string): Promise<{ uri: string; name: string;
 }
 
 function openBrowser(url: string): void {
-  const cmd = process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}"`;
-  exec(cmd);
+  const opener = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['', url] : [url];
+  execFileSync(opener, args, { stdio: 'ignore' });
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────

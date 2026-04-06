@@ -151,7 +151,7 @@ export function createRecordedEntry(input: {
 export function generateFullCaptureInterceptorJs(): string {
   return `
     (() => {
-      // Restore original fetch/XHR if previously patched, then re-patch (idempotent injection)
+      // Restore original fetch/XHR if previously patched, then re-patch (safe to call multiple times)
       if (window.__opencli_record_patched) {
         if (window.__opencli_orig_fetch) window.fetch = window.__opencli_orig_fetch;
         if (window.__opencli_orig_xhr_open) XMLHttpRequest.prototype.open = window.__opencli_orig_xhr_open;
