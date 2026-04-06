@@ -134,7 +134,9 @@ export class Engine {
     if (diff === '0') return null; // no changes
 
     try {
-      execStrict(`git commit -m "experiment(operate): ${description.replace(/"/g, '\\"')}"`);
+      execFileSync('git', ['commit', '-m', `experiment(operate): ${description}`], {
+        cwd: ROOT, timeout: 30_000, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
+      });
       return exec('git rev-parse --short HEAD');
     } catch {
       // Hook failure
