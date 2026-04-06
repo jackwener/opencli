@@ -109,7 +109,23 @@ describe('doctor report rendering', () => {
     ]));
   });
 
-  it('reports extension version mismatch even when the major version matches', async () => {
+  it('does not report extension patch-version mismatch within the same minor version', async () => {
+    const status = {
+      running: true,
+      extensionConnected: true,
+      extensionVersion: '1.6.5',
+    };
+    mockCheckDaemonStatus.mockResolvedValueOnce(status);
+    mockCheckDaemonStatus.mockResolvedValueOnce(status);
+
+    const report = await runBrowserDoctor({ live: false, cliVersion: '1.6.8' });
+
+    expect(report.issues).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('Extension version mismatch'),
+    ]));
+  });
+
+  it('reports extension version mismatch when the minor version differs', async () => {
     const status = {
       running: true,
       extensionConnected: true,

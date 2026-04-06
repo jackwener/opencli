@@ -15,8 +15,11 @@ function readCache(): WorkspaceTabState {
 }
 
 function writeCache(cache: WorkspaceTabState): void {
-  fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
-  fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2) + '\n', 'utf-8');
+  const cacheDir = path.dirname(CACHE_FILE);
+  const tempFile = path.join(cacheDir, `workspace-tabs.${process.pid}.${Date.now()}.tmp`);
+  fs.mkdirSync(cacheDir, { recursive: true });
+  fs.writeFileSync(tempFile, JSON.stringify(cache, null, 2) + '\n', 'utf-8');
+  fs.renameSync(tempFile, CACHE_FILE);
 }
 
 export function loadWorkspaceTabId(workspace: string): number | undefined {

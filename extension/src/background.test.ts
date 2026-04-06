@@ -191,6 +191,20 @@ describe('background tab isolation', () => {
     ]);
   });
 
+  it('does not reuse a preferred tab from another window for owned sessions', async () => {
+    const { chrome, tabs, create } = createChromeMock();
+    tabs.push({ id: 4, windowId: 2, url: 'https://drifted.example', title: 'drifted', active: false, status: 'complete' });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession('site:twitter', { windowId: 1, owned: true, preferredTabId: 4 });
+
+    const result = await mod.__test__.handleTabs({ id: 'owned-new', action: 'tabs', op: 'new', url: 'https://new.example', workspace: 'site:twitter' }, 'site:twitter');
+
+    expect(result.ok).toBe(true);
+    expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'https://new.example', active: true });
+  });
+
   it('treats normalized same-url navigate as already complete', async () => {
     const { chrome, tabs, update } = createChromeMock();
     tabs[0].url = 'https://www.bilibili.com/';

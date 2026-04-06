@@ -746,7 +746,8 @@ async function resolveTab(tabId, workspace, initialUrl) {
 	const existingSession = automationSessions.get(workspace);
 	if (existingSession?.preferredTabId !== null) try {
 		const preferredTab = await chrome.tabs.get(existingSession.preferredTabId);
-		if (isDebuggableUrl(preferredTab.url)) return {
+		const ownedWindowMatches = !existingSession.owned || preferredTab.windowId === existingSession.windowId;
+		if (isDebuggableUrl(preferredTab.url) && ownedWindowMatches) return {
 			tabId: preferredTab.id,
 			tab: preferredTab
 		};

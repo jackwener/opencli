@@ -428,7 +428,10 @@ async function resolveTab(tabId: number | undefined, workspace: string, initialU
   if (existingSession?.preferredTabId !== null) {
     try {
       const preferredTab = await chrome.tabs.get(existingSession.preferredTabId);
-      if (isDebuggableUrl(preferredTab.url)) return { tabId: preferredTab.id!, tab: preferredTab };
+      const ownedWindowMatches = !existingSession.owned || preferredTab.windowId === existingSession.windowId;
+      if (isDebuggableUrl(preferredTab.url) && ownedWindowMatches) {
+        return { tabId: preferredTab.id!, tab: preferredTab };
+      }
     } catch {
       automationSessions.delete(workspace);
     }

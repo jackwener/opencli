@@ -149,6 +149,8 @@ export async function ensureAttached(tabId: number, aggressiveRetry: boolean = f
   const state = networkCaptures.get(tabId);
   if (captureIntents.has(tabId) && !state?.armed) {
     try {
+      // armCapture() re-enables Runtime/Network and reinstalls listeners, so
+      // the generic Runtime.enable call below is intentionally skipped here.
       await armCapture(tabId);
     } catch (error) {
       console.warn(`[opencli] failed to rearm capture for tab ${tabId}: ${error}`);
@@ -451,6 +453,9 @@ export async function readNetworkCapture(tabId: number): Promise<NetworkCaptureE
 export async function readConsoleCapture(tabId: number): Promise<ConsoleMessage[]> {
   const state = await ensureCaptureReadable(tabId);
   if (!state) return [];
+  // Console capture is intentionally non-draining so callers can inspect the
+  // full rolling session log, unlike readNetworkCapture(), which drains new
+  // network entries after each read.
   return [...state.consoleErrors, ...state.consoleOther]
     .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
 }

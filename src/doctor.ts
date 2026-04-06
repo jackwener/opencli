@@ -95,7 +95,9 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
     issues.push(`Browser connectivity test failed: ${connectivity.error ?? 'unknown'}`);
   }
   if (status.extensionVersion && opts.cliVersion) {
-    if (status.extensionVersion !== opts.cliVersion) {
+    const [extMajor, extMinor] = status.extensionVersion.split('.');
+    const [cliMajor, cliMinor] = opts.cliVersion.split('.');
+    if (extMajor !== cliMajor || extMinor !== cliMinor) {
       issues.push(
         `Extension version mismatch: extension v${status.extensionVersion} ≠ CLI v${opts.cliVersion}\n` +
         '  Download the latest extension from: https://github.com/jackwener/opencli/releases',
