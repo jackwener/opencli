@@ -2,30 +2,148 @@
  * PubMed Article Details Adapter
  *
  * Get detailed information about a specific PubMed article by PMID.
- * Uses ESummary API to retrieve metadata (ESummary returns JSON, EFetch returns XML).
+ * Uses EFetch API (XML) for full article details including abstract,
+ * MeSH terms, keywords, and author affiliations.
  *
  * API Documentation:
- * - ESummary: https://www.ncbi.nlm.nih.gov/books/NBK25499/#chapter4.ESummary
+ * - EFetch: https://www.ncbi.nlm.nih.gov/books/NBK25499/#chapter4.EFetch
  */
 
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { CliError } from '@jackwener/opencli/errors';
 import {
-  eutilsFetch,
-  extractAuthors,
-  extractFirstAuthor,
-  extractCorrespondingAuthor,
-  extractDoi,
-  extractPmcId,
+  eutilsFetchText,
   buildPubMedUrl,
   truncateText,
-  formatArticleType,
 } from './utils.js';
+
+/**
+ * Parse EFetch XML response to extract full article details
+ */
+function parseEFetchXml(xml: string, pmid: string) {
+  // Helper: extract text content between tags
+  const getTag = (src: string, tag: string): string => {
+    const m = src.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\/${tag}>`, 'i'));
+    return m ? m[1].replace(/<[^>]+>/g, '').trim() : '';
+  };
+
+  const getAllTags = (src: string, tag: string): string[] => {
+    const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\/${tag}>`, 'gi');
+    const results: string[] = [];
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      results.push(m[1].replace(/<[^>]+>/g, '').trim());
+    }
+    return results;
+  };
+
+  // Abstract - may have multiple AbstractText sections (structured abstract)
+  const abstractParts = getAllTags(xml, 'AbstractText');
+  const abstract = abstractParts.join(' ').replace(/\s+/g, ' ').trim();
+
+  // Title
+  const title = getTag(xml, 'ArticleTitle');
+
+  // Journal
+  const journalTitle = getTag(xml, 'Title');
+  const isoAbbreviation = getTag(xml, 'ISOAbbreviation');
+  const volume = getTag(xml, 'Volume');
+  const issue = getTag(xml, 'Issue');
+  const pagination = getTag(xml, 'MedlinePgn');
+
+  // Publication date
+  const year = getTag(xml, 'Year') || getTag(xml, 'MedlineDate').slice(0, 4);
+  const month = getTag(xml, 'Month');
+  const day = getTag(xml, 'Day');
+  const fullDate = [year, month, day].filter(Boolean).join(' ');
+
+  // Authors and affiliations
+  const authorBlocks = xml.match(/<Author[^>]*>([\s\S]*?)<\/Author>/gi) || [];
+  const authors: Array<{ name: string; affiliation: string }> = authorBlocks.map(block => {
+    const lastName = getTag(block, 'LastName');
+    const foreName = getTag(block, 'ForeName') || getTag(block, 'Initials');
+    const collectiveName = getTag(block, 'CollectiveName');
+    const name = collectiveName || `${lastName} ${foreName}`.trim();
+    const affiliation = getTag(block, 'Affiliation');
+    return { name, affiliation };
+  });
+
+  const allAuthors = authors.map(a => a.name);
+  const firstAuthor = allAuthors[0] || '';
+  const correspondingAuthor = allAuthors[allAuthors.length - 1] || '';
+
+  // Unique affiliations
+  const affiliations = [...new Set(
+    authors.map(a => a.affiliation).filter(Boolean)
+  )];
+
+  // MeSH terms
+  const meshBlocks = xml.match(/<MeshHeading>([\s\S]*?)<\/MeshHeading>/gi) || [];
+  const meshTerms = meshBlocks
+    .map(block => getTag(block, 'DescriptorName'))
+    .filter(Boolean)
+    .slice(0, 10);
+
+  // Keywords
+  const keywords = getAllTags(xml, 'Keyword').filter(Boolean).slice(0, 10);
+
+  // Article type
+  const pubTypes = getAllTags(xml, 'PublicationType').filter(Boolean);
+  const articleType = pubTypes[0] || 'Journal Article';
+
+  // Language
+  const language = getTag(xml, 'Language');
+
+  // IDs: DOI
+  const doiMatch = xml.match(/<ArticleId IdType="doi">([^<]+)<\/ArticleId>/i);
+  const doi = doiMatch ? doiMatch[1].trim() : '';
+
+  const pmcMatch = xml.match(/<ArticleId IdType="pmc">([^<]+)<\/ArticleId>/i);
+  const pmcId = pmcMatch ? pmcMatch[1].trim() : '';
+
+  return {
+    pmid,
+    title,
+    abstract,
+    authors: {
+      list: allAuthors,
+      all: allAuthors.slice(0, 10).join(', ') + (allAuthors.length > 10 ? ', et al.' : ''),
+      first: firstAuthor,
+      corresponding: correspondingAuthor,
+      count: allAuthors.length,
+      affiliations,
+    },
+    journal: {
+      title: journalTitle,
+      isoAbbreviation,
+      volume,
+      issue,
+      pagination,
+    },
+    publication: {
+      year,
+      fullDate,
+    },
+    ids: {
+      pmid,
+      doi,
+      pmc: pmcId,
+    },
+    classification: {
+      articleType,
+      pubTypes,
+      language,
+      meshTerms,
+      keywords,
+    },
+    url: buildPubMedUrl(pmid),
+  };
+}
 
 cli({
   site: 'pubmed',
   name: 'article',
-  description: 'Get detailed information about a PubMed article by PMID',
+  description: 'Get detailed information about a PubMed article by PMID (full abstract, MeSH terms, affiliations)',
   strategy: Strategy.PUBLIC,
   browser: false,
   args: [
@@ -34,7 +152,7 @@ cli({
       type: 'string',
       required: true,
       positional: true,
-      help: 'PubMed ID (e.g., "37780221", "37158692")',
+      help: 'PubMed ID (e.g., "37780221")',
     },
     {
       name: 'output',
@@ -43,14 +161,10 @@ cli({
       help: 'Output format: table (summary) or json (full details)',
     },
   ],
-  columns: [
-    'field',
-    'value',
-  ],
+  columns: ['field', 'value'],
   func: async (_page, args) => {
     const pmid = args.pmid.trim();
 
-    // Validate PMID format
     if (!/^\d+$/.test(pmid)) {
       throw new CliError(
         'INVALID_ARGUMENT',
@@ -59,13 +173,14 @@ cli({
       );
     }
 
-    // Use ESummary to get article details (returns JSON, unlike EFetch which returns XML)
-    const esummaryResult = await eutilsFetch('esummary', {
+    // Use EFetch to get full article details (XML includes abstract, MeSH, affiliations)
+    const xml = await eutilsFetchText('efetch', {
       id: pmid,
+      rettype: 'abstract',
+      retmode: 'xml',
     });
 
-    const article = esummaryResult.result?.[pmid];
-    if (!article) {
+    if (!xml || xml.includes('<ERROR>') || !xml.includes('<PubmedArticle>')) {
       throw new CliError(
         'NOT_FOUND',
         `Article with PMID ${pmid} not found`,
@@ -73,110 +188,36 @@ cli({
       );
     }
 
-    // Extract basic info
-    const title = article.title || '';
-    const abstract = article.abstract || '';
-    const abstractText = typeof abstract === 'string' ? abstract : '';
+    const article = parseEFetchXml(xml, pmid);
 
-    // Extract authors
-    const authorList = article.authors || [];
-    const allAuthors = extractAuthors(authorList, 10);
-    const firstAuthor = extractFirstAuthor(authorList);
-    const correspondingAuthor = extractCorrespondingAuthor(authorList);
-
-    // Extract journal info
-    const journalTitle = article.fulljournalname || article.source || '';
-    const isoAbbreviation = article.source || '';
-
-    // Extract publication date
-    const pubDate = article.pubdate || '';
-    const year = pubDate.split(' ')[0] || '';
-    const fullDate = pubDate;
-
-    // Extract volume, issue, pages
-    const volume = article.volume || '';
-    const issue = article.issue || '';
-    const pagination = article.pages || '';
-
-    // Extract article IDs
-    const articleIds = article.articleids || [];
-    const doi = extractDoi(articleIds);
-    const pmcId = extractPmcId(articleIds);
-
-    // Extract MeSH terms and keywords (from ESummary these may not be available)
-    const meshTerms: string[] = [];
-    const keywords: string[] = [];
-
-    // Extract article type
-    const pubTypeList = article.pubtype || [];
-    const articleType = formatArticleType(pubTypeList);
-
-    // Extract language
-    const language = article.lang?.[0] || '';
-
-    // If JSON format requested, return full structured data
     if (args.output === 'json') {
       return [{
         field: 'data',
-        value: JSON.stringify({
-          pmid,
-          title,
-          abstract: abstractText,
-          authors: {
-            all: allAuthors,
-            first: firstAuthor,
-            corresponding: correspondingAuthor,
-            count: authorList?.length || 0,
-          },
-          journal: {
-            title: journalTitle,
-            isoAbbreviation,
-            volume,
-            issue,
-            pagination,
-          },
-          publication: {
-            year,
-            fullDate,
-          },
-          ids: {
-            pmid,
-            doi,
-            pmc: pmcId,
-          },
-          classification: {
-            articleType,
-            language,
-            meshTerms,
-            keywords,
-          },
-          url: buildPubMedUrl(pmid),
-        }, null, 2),
+        value: JSON.stringify(article, null, 2),
       }];
     }
 
-    // Table format - return key-value pairs
+    // Table format
     const rows: Array<{ field: string; value: string }> = [
-      { field: 'PMID', value: pmid },
-      { field: 'Title', value: title },
-      { field: 'First Author', value: firstAuthor },
-      { field: 'Corresponding Author', value: correspondingAuthor },
-      { field: 'All Authors', value: truncateText(allAuthors, 100) },
-      { field: 'Journal', value: journalTitle },
-      { field: 'Year', value: year },
-      { field: 'Volume/Issue', value: `${volume}${issue ? `(${issue})` : ''}` },
-      { field: 'Pages', value: pagination },
-      { field: 'DOI', value: doi || 'N/A' },
-      { field: 'PMC ID', value: pmcId || 'N/A' },
-      { field: 'Article Type', value: articleType },
-      { field: 'Language', value: language },
-      { field: 'MeSH Terms', value: meshTerms.join(', ') || 'N/A' },
-      { field: 'Keywords', value: keywords.join(', ') || 'N/A' },
-      { field: 'Abstract', value: truncateText(abstractText, 300) || 'N/A' },
-      { field: 'URL', value: buildPubMedUrl(pmid) },
+      { field: 'PMID', value: article.pmid },
+      { field: 'Title', value: article.title },
+      { field: 'First Author', value: article.authors.first },
+      { field: 'Corresponding Author', value: article.authors.corresponding },
+      { field: 'All Authors', value: truncateText(article.authors.all, 120) },
+      { field: 'Affiliations', value: truncateText(article.authors.affiliations[0] || 'N/A', 120) },
+      { field: 'Journal', value: article.journal.title || article.journal.isoAbbreviation },
+      { field: 'Year', value: article.publication.year },
+      { field: 'Volume/Issue', value: `${article.journal.volume}${article.journal.issue ? `(${article.journal.issue})` : ''}` },
+      { field: 'Pages', value: article.journal.pagination },
+      { field: 'DOI', value: article.ids.doi || 'N/A' },
+      { field: 'PMC ID', value: article.ids.pmc || 'N/A' },
+      { field: 'Article Type', value: article.classification.articleType },
+      { field: 'Language', value: article.classification.language },
+      { field: 'MeSH Terms', value: article.classification.meshTerms.join(', ') || 'N/A' },
+      { field: 'Keywords', value: article.classification.keywords.join(', ') || 'N/A' },
+      { field: 'Abstract', value: truncateText(article.abstract, 400) || 'N/A' },
+      { field: 'URL', value: article.url },
     ];
-
-
 
     return rows;
   },

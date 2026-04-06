@@ -22,7 +22,11 @@ export function buildEutilsUrl(
 ): string {
   const searchParams = new URLSearchParams();
   searchParams.append('db', 'pubmed');
-  searchParams.append('retmode', 'json');
+
+  // Allow callers to override retmode (e.g., EFetch needs retmode=xml)
+  if (!params.retmode) {
+    searchParams.append('retmode', 'json');
+  }
 
   // Add API key if available
   const apiKey = getApiKey();
@@ -178,6 +182,11 @@ export function extractAuthors(authorList: any[] | undefined, maxAuthors: number
   }
 
   const authors = authorList.slice(0, maxAuthors).map(author => {
+    // ESummary format: { name, authtype, clusterid }
+    if (author.name) {
+      return author.name;
+    }
+    // EFetch format: { lastname, forename, initials, collectivename }
     if (author.collectivename) {
       return author.collectivename;
     }
@@ -202,10 +211,10 @@ export function extractFirstAuthor(authorList: any[] | undefined): string {
   }
 
   const firstAuthor = authorList[0];
-  if (firstAuthor.collectivename) {
-    return firstAuthor.collectivename;
-  }
-
+  // ESummary format: { name, authtype }
+  if (firstAuthor.name) return firstAuthor.name;
+  // EFetch format
+  if (firstAuthor.collectivename) return firstAuthor.collectivename;
   const lastName = firstAuthor.lastname || '';
   const foreName = firstAuthor.forename || firstAuthor.initials || '';
   return `${lastName} ${foreName}`.trim();
@@ -220,10 +229,10 @@ export function extractCorrespondingAuthor(authorList: any[] | undefined): strin
   }
 
   const lastAuthor = authorList[authorList.length - 1];
-  if (lastAuthor.collectivename) {
-    return lastAuthor.collectivename;
-  }
-
+  // ESummary format: { name, authtype }
+  if (lastAuthor.name) return lastAuthor.name;
+  // EFetch format
+  if (lastAuthor.collectivename) return lastAuthor.collectivename;
   const lastName = lastAuthor.lastname || '';
   const foreName = lastAuthor.forename || lastAuthor.initials || '';
   return `${lastName} ${foreName}`.trim();
@@ -328,6 +337,12 @@ export function formatArticleType(pubTypeList: any[] | undefined): string {
     return 'Journal Article';
   }
 
+  // ESummary format: pubtype is a string array e.g. ["Journal Article"]
+  if (typeof pubTypeList[0] === 'string') {
+    return pubTypeList[0];
+  }
+
+  // EFetch format: pubtype is an object array e.g. [{ ui: "D016428", value: "Journal Article" }]
   const mainType = pubTypeList.find((pt: any) => pt.ui);
   return mainType?.value || pubTypeList[0]?.value || 'Journal Article';
 }

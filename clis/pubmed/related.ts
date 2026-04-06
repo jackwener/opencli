@@ -69,11 +69,11 @@ cli({
       );
     }
 
-    // Use ELink to get related articles
+    // Use ELink neighbor_score to get related articles with similarity scores
     const elinkResult = await eutilsFetch('elink', {
       id: pmid,
       dbfrom: 'pubmed',
-      cmd: 'neighbor',
+      cmd: 'neighbor_score',
       linkname: 'pubmed_pubmed',
     });
 
@@ -97,8 +97,9 @@ cli({
     }
 
     // Get the links from the linksetdb
-    const links = linkSetDbs[0].links;
-    if (!links || !Array.isArray(links) || links.length === 0) {
+    // ELink neighbor_score returns: links = [{ id: "12345", score: 41208390 }, ...]
+    const rawLinks: Array<{ id: string; score?: number } | string> = linkSetDbs[0].links;
+    if (!rawLinks || !Array.isArray(rawLinks) || rawLinks.length === 0) {
       throw new CliError(
         'NOT_FOUND',
         `No related articles found for PMID ${pmid}`,
@@ -106,14 +107,20 @@ cli({
       );
     }
 
-    // Get scores if available
-    const scores = linkSetDbs[0].scores || [];
+    // Normalize to { id, score } objects (ELink may return strings or objects)
+    const normalizedLinks: Array<{ id: string; score: number }> = rawLinks.map(link => {
+      if (typeof link === 'string') return { id: link, score: 0 };
+      return { id: String(link.id), score: Number(link.score) || 0 };
+    });
 
-    // Limit results
-    const pmidList = links.slice(0, limit);
+    // Filter out the original PMID (ELink sometimes includes it as rank 1)
+    const filteredLinks = normalizedLinks.filter(link => link.id !== pmid);
+
+    // Apply limit after filtering
+    const limitedLinks = filteredLinks.slice(0, limit);
 
     // Get article details using ESummary
-    const pmids = pmidList.join(',');
+    const pmids = limitedLinks.map(l => l.id).join(',');
     const esummaryResult = await eutilsFetch('esummary', {
       id: pmids,
     });
@@ -128,7 +135,7 @@ cli({
     }
 
     // Process results
-    const results = pmidList.map((linkedPmid: string, index: number) => {
+    const results = limitedLinks.map(({ id: linkedPmid, score }, index: number) => {
       const article = articles[linkedPmid];
       if (!article) {
         return null;
@@ -139,7 +146,6 @@ cli({
       const journal = article.fulljournalname || article.source || '';
       const year = article.pubdate?.split(' ')?.[0] || '';
       const doi = extractDoi(article.articleids);
-      const score = args.score && scores[index] ? scores[index] : '';
 
       return {
         rank: index + 1,
@@ -148,7 +154,7 @@ cli({
         authors,
         journal: truncateText(journal, 50),
         year,
-        score: score ? String(score) : '',
+        score: args.score ? String(score) : '',
         doi,
         url: buildPubMedUrl(linkedPmid),
       };
