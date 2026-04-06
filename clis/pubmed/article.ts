@@ -78,13 +78,12 @@ function parseEFetchXml(xml: string, pmid: string) {
     return { name, affiliations };
   });
 
-  const allAuthors = authors.map(a => a.name);
-  const firstAuthor = allAuthors[0] || '';
-  const correspondingAuthor = allAuthors[allAuthors.length - 1] || '';
+  const firstAuthor = authors[0] || { name: '', affiliations: [] };
+  const correspondingAuthor = authors[authors.length - 1] || { name: '', affiliations: [] };
 
   // Unique affiliations - flatten all author affiliations and deduplicate
   const allAffiliations = authors.flatMap(a => a.affiliations);
-  const affiliations = [...new Set(allAffiliations)];
+  const uniqueAffiliations = [...new Set(allAffiliations)];
 
   // MeSH terms
   const meshBlocks = xml.match(/<MeshHeading>([\s\S]*?)<\/MeshHeading>/gi) || [];
@@ -110,17 +109,35 @@ function parseEFetchXml(xml: string, pmid: string) {
   const pmcMatch = xml.match(/<ArticleId IdType="pmc">([^<]+)<\/ArticleId>/i);
   const pmcId = pmcMatch ? pmcMatch[1].trim() : '';
 
+  // Build author list with their affiliations for detailed view
+  const authorListWithAffiliations = authors.map(a => ({
+    name: a.name,
+    affiliations: a.affiliations,
+  }));
+
+  // Simple author name list for compact display
+  const authorNameList = authors.map(a => a.name);
+
   return {
     pmid,
     title,
     abstract,
     authors: {
-      list: allAuthors,
-      all: allAuthors.slice(0, 10).join(', ') + (allAuthors.length > 10 ? ', et al.' : ''),
-      first: firstAuthor,
-      corresponding: correspondingAuthor,
-      count: allAuthors.length,
-      affiliations,
+      list: authorListWithAffiliations,
+      names: authorNameList,
+      all: authorNameList.slice(0, 10).join(', ') + (authorNameList.length > 10 ? ', et al.' : ''),
+      first: firstAuthor.name,
+      firstWithAffiliations: {
+        name: firstAuthor.name,
+        affiliations: firstAuthor.affiliations,
+      },
+      corresponding: correspondingAuthor.name,
+      correspondingWithAffiliations: {
+        name: correspondingAuthor.name,
+        affiliations: correspondingAuthor.affiliations,
+      },
+      count: authors.length,
+      affiliations: uniqueAffiliations,
     },
     journal: {
       title: journalTitle,
@@ -169,6 +186,12 @@ cli({
       default: 'table',
       help: 'Output format: table (summary) or json (full details)',
     },
+    {
+      name: 'full-abstract',
+      type: 'boolean',
+      default: false,
+      help: 'Show full abstract without truncation (table output only)',
+    },
   ],
   columns: ['field', 'value'],
   func: async (_page, args) => {
@@ -206,27 +229,60 @@ cli({
       }];
     }
 
-    // Table format
+    // Table format - reorganized sections
+    // Helper: extract email from affiliation text
+    const extractEmail = (affil: string): string => {
+      const emailMatch = affil.match(/[\w.-]+@[\w.-]+\.\w+/);
+      return emailMatch ? emailMatch[0] : '';
+    };
+
+    const firstAuthor = article.authors.firstWithAffiliations;
+    const corrAuthor = article.authors.correspondingWithAffiliations;
+    const corrEmail = corrAuthor.affiliations.map(extractEmail).filter(Boolean)[0] || 'N/A';
+
     const rows: Array<{ field: string; value: string }> = [
       { field: 'PMID', value: article.pmid },
       { field: 'Title', value: article.title },
-      { field: 'First Author', value: article.authors.first },
-      { field: 'Corresponding Author', value: article.authors.corresponding },
-      { field: 'All Authors', value: truncateText(article.authors.all, 120) },
-      { field: 'Affiliations', value: truncateText(article.authors.affiliations[0] || 'N/A', 120) },
+      { field: '---', value: '---' },
+      { field: 'Section', value: '第一作者及通讯作者信息' },
+      { field: 'First Author', value: firstAuthor.name },
+      { field: 'First Author Affiliations', value: firstAuthor.affiliations.join('; ') || 'N/A' },
+      { field: 'Corresponding Author', value: corrAuthor.name },
+      { field: 'Corresponding Author Affiliations', value: corrAuthor.affiliations.join('; ') || 'N/A' },
+      { field: 'Corresponding Author Email', value: corrEmail },
+      { field: '---', value: '---' },
+      { field: 'Section', value: '所有作者信息' },
+    ];
+
+    // Add each author with their affiliations
+    article.authors.list.forEach((author, index) => {
+      rows.push({
+        field: `${index + 1}. ${author.name}`,
+        value: author.affiliations.join('; ') || 'N/A',
+      });
+    });
+
+    rows.push(
+      { field: '---', value: '---' },
+      { field: 'Section', value: '期刊信息' },
       { field: 'Journal', value: article.journal.title || article.journal.isoAbbreviation },
       { field: 'Year', value: article.publication.year },
       { field: 'Volume/Issue', value: `${article.journal.volume}${article.journal.issue ? `(${article.journal.issue})` : ''}` },
       { field: 'Pages', value: article.journal.pagination },
       { field: 'DOI', value: article.ids.doi || 'N/A' },
       { field: 'PMC ID', value: article.ids.pmc || 'N/A' },
+      { field: '---', value: '---' },
+      { field: 'Section', value: '文章分类' },
       { field: 'Article Type', value: article.classification.articleType },
       { field: 'Language', value: article.classification.language },
       { field: 'MeSH Terms', value: article.classification.meshTerms.join(', ') || 'N/A' },
       { field: 'Keywords', value: article.classification.keywords.join(', ') || 'N/A' },
-      { field: 'Abstract', value: truncateText(article.abstract, 400) || 'N/A' },
-      { field: 'URL', value: article.url },
-    ];
+      { field: '---', value: '---' },
+      { field: 'Section', value: '摘要' },
+      { field: 'Abstract', value: args['full-abstract'] ? article.abstract || 'N/A' : truncateText(article.abstract, 400) || 'N/A' },
+      { field: '---', value: '---' },
+      { field: 'URL', value: article.url }
+    );
 
     return rows;
   },
