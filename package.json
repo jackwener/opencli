@@ -85,7 +85,7 @@
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.13.10",
+    "@types/node": "^25.5.2",
     "@types/turndown": "^5.0.6",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.3",
