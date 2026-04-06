@@ -81,8 +81,17 @@ function parseEFetchXml(xml: string, pmid: string) {
     return { name, affiliations, equalContrib };
   });
 
-  // Identify co-first authors (authors with EqualContrib="Y")
-  const coFirstAuthors = authors.filter(a => a.equalContrib);
+  // Identify co-first authors: only consecutive authors at the BEGINNING with EqualContrib="Y"
+  // Co-first authors must be first authors, not authors in the middle or end
+  const coFirstAuthors: typeof authors = [];
+  for (const author of authors) {
+    if (author.equalContrib) {
+      coFirstAuthors.push(author);
+    } else {
+      // Stop at first author without EqualContrib - co-first authors must be consecutive from start
+      break;
+    }
+  }
   const firstAuthors = coFirstAuthors.length > 0 ? coFirstAuthors : [authors[0]].filter(Boolean);
   
   // For corresponding authors, use the last author (common convention)
