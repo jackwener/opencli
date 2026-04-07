@@ -268,7 +268,6 @@ async function renderError(err: unknown, cmdName: string, verbose: boolean): Pro
     } else {
       console.error(chalk.dim(`  Add --verbose for details, or report: ${ISSUES_URL}`));
     }
-    emitAutoFixHint(cmdName);
     return;
   }
 
@@ -288,7 +287,7 @@ async function renderError(err: unknown, cmdName: string, verbose: boolean): Pro
     console.error(chalk.red(`${classified.icon} ${msg}`));
     console.error(chalk.yellow(`→ ${classified.hint}`));
     if (classified.kind === 'not-found') console.error(chalk.dim(`  Report: ${ISSUES_URL}`));
-    if (classified.kind !== 'auth') emitAutoFixHint(cmdName);
+    if (classified.kind === 'not-found') emitAutoFixHint(cmdName);
     return;
   }
 
