@@ -318,6 +318,7 @@ async function waitForReply(
   let stableCount = 0;
   const stableThreshold = 4; // 4 * 500ms = 2s of stability fallback
 
+  let reconnectCount = 0;
   while (Date.now() < deadline) {
     try {
       const generating = await isGenerating(page);
@@ -348,12 +349,23 @@ async function waitForReply(
           }
         }
       }
-    } catch (err) {
-      if (opts.reconnect) {
-        console.error('[serve] Error during waitForReply, attempting to reconnect:', (err as Error).message);
-        page = await opts.reconnect();
-        // Continue monitoring with new page instance
-        continue;
+    } catch (err: any) {
+      const msg = err.message || String(err);
+      const isSessionLoss = /closed|lost|not open|websocket/i.test(msg);
+
+      if (opts.reconnect && isSessionLoss && reconnectCount < 2) {
+        reconnectCount++;
+        console.error(`[serve] CDP session loss detected (${msg}), attempting to reconnect (${reconnectCount}/2)...`);
+        try {
+          page = await opts.reconnect();
+          // Reset stability tracking after reconnect
+          stableCount = 0;
+          lastText = beforeText;
+          continue;
+        } catch (reconnectErr: any) {
+          console.error(`[serve] Reconnection failed: ${reconnectErr.message}`);
+          throw err; // Throw original error if reconnection itself fails
+        }
       }
       throw err;
     }
