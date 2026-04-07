@@ -1,39 +1,11 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import type { IPage } from '@jackwener/opencli/types';
-import { CommandExecutionError } from '@jackwener/opencli/errors';
 import {
-  SHARE_API,
   extractPwdId,
-  getToken,
   formatDate,
-  fetchJson,
+  getShareList,
+  getToken,
 } from './utils.js';
-import type { ShareFile } from './utils.js';
-
-async function getShareList(
-  page: IPage,
-  pwdId: string,
-  stoken: string,
-  pdirFid = '0',
-  options?: { sort?: string },
-): Promise<ShareFile[]> {
-  const allFiles: ShareFile[] = [];
-  let pageNum = 1;
-  let total = 0;
-
-  do {
-    const sortParam = options?.sort ? `&_sort=${options.sort}` : '';
-    const url = `${SHARE_API}/detail?pr=ucpro&fr=pc&ver=2&pwd_id=${pwdId}&stoken=${encodeURIComponent(stoken)}&pdir_fid=${pdirFid}&force=0&_page=${pageNum}&_size=200&_fetch_total=1${sortParam}`;
-    const data = await fetchJson<{ list: ShareFile[] }>(page, url);
-    if (data.status !== 200) throw new CommandExecutionError(`quark: Failed to get share list: ${data.message}`);
-    const files = data.data?.list || [];
-    allFiles.push(...files);
-    total = data.metadata?._total || 0;
-    pageNum++;
-  } while (allFiles.length < total);
-
-  return allFiles;
-}
 
 interface QuarkTreeNode {
   fid: string;

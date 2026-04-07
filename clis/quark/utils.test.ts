@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AuthRequiredError, CommandExecutionError } from '@jackwener/opencli/errors';
 import type { IPage } from '@jackwener/opencli/types';
-import { apiGet, apiPost, extractPwdId, getToken } from './utils.js';
+import { apiGet, apiPost, extractPwdId, getShareList, getToken } from './utils.js';
 
 function makePage(evaluateImpl: (js: string) => unknown | Promise<unknown>): IPage {
   return {
@@ -55,5 +55,17 @@ describe('quark utils', () => {
     }));
 
     await expect(getToken(page, 'abc123')).resolves.toBe('token123');
+  });
+
+  it('maps share-tree detail auth failures to AuthRequiredError', async () => {
+    const page = makePage(async () => ({
+      status: 401,
+      code: 401,
+      message: '请先登录',
+      data: null,
+      metadata: { _total: 0 },
+    }));
+
+    await expect(getShareList(page, 'abc123', 'token123')).rejects.toBeInstanceOf(AuthRequiredError);
   });
 });

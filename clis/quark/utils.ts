@@ -107,6 +107,30 @@ export async function getToken(page: IPage, pwdId: string, passcode = ''): Promi
   return unwrapApiData(data, 'Failed to get token').stoken;
 }
 
+export async function getShareList(
+  page: IPage,
+  pwdId: string,
+  stoken: string,
+  pdirFid = '0',
+  options?: { sort?: string },
+): Promise<ShareFile[]> {
+  const allFiles: ShareFile[] = [];
+  let pageNum = 1;
+  let total = 0;
+
+  do {
+    const sortParam = options?.sort ? `&_sort=${options.sort}` : '';
+    const url = `${SHARE_API}/detail?pr=ucpro&fr=pc&ver=2&pwd_id=${pwdId}&stoken=${encodeURIComponent(stoken)}&pdir_fid=${pdirFid}&force=0&_page=${pageNum}&_size=200&_fetch_total=1${sortParam}`;
+    const data = await fetchJson<{ list: ShareFile[] }>(page, url);
+    const files = unwrapApiData(data, 'Failed to get share list')?.list || [];
+    allFiles.push(...files);
+    total = data.metadata?._total || 0;
+    pageNum++;
+  } while (allFiles.length < total);
+
+  return allFiles;
+}
+
 export async function listMyDrive(page: IPage, pdirFid: string): Promise<DriveFile[]> {
   const allFiles: DriveFile[] = [];
   let pageNum = 1;
