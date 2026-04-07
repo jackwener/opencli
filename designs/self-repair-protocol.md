@@ -18,7 +18,7 @@ The previous design (PR #863) required pre-authoring `command-specs.json` with v
 From first principles, the agent already has everything it needs:
 1. **The failing command** — it just ran it
 2. **The error output** — stdout/stderr
-3. **The adapter source** — `clis/<site>/xxx.ts`
+3. **The adapter source** — resolved via `RepairContext.adapter.sourcePath`
 4. **Diagnostic context** — DOM snapshot, network requests (via `OPENCLI_DIAGNOSTIC=1`)
 5. **A verify oracle** — re-run the same command
 
@@ -37,7 +37,7 @@ Agent runs: opencli <site> <command> [args...]
       1. Re-run with OPENCLI_DIAGNOSTIC=1 to collect RepairContext
       2. Read adapter source from RepairContext.adapter.sourcePath
       3. Analyze: error code + DOM snapshot + network requests → root cause
-      4. Edit the adapter file (clis/<site>/ only)
+      4. Edit the adapter file at RepairContext.adapter.sourcePath
       5. Retry the original command
       6. If still failing → repeat (max 3 rounds)
       7. If 3 rounds exhausted → report failure, do not loop further
@@ -150,7 +150,7 @@ opencli weibo hot --limit 5 -f json
 # If it fails, the agent automatically:
 # 1. Runs OPENCLI_DIAGNOSTIC=1 opencli weibo hot --limit 5 -f json 2>diag.json
 # 2. Reads the diagnostic context
-# 3. Fixes clis/weibo/hot.ts
+# 3. Fixes the adapter at RepairContext.adapter.sourcePath
 # 4. Retries: opencli weibo hot --limit 5 -f json
 # 5. Continues with the task
 ```
