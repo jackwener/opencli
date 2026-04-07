@@ -1128,10 +1128,15 @@ cli({
     .command('serve')
     .description('Start Anthropic-compatible API proxy for Antigravity')
     .option('--port <port>', 'Server port (default: 8082)', '8082')
+    .option('--timeout <seconds>', 'Maximum time to wait for a reply (default: 120s)')
     .action(async (opts) => {
       // @ts-expect-error JS adapter — no type declarations
       const { startServe } = await import('../clis/antigravity/serve.js');
-      await startServe({ port: parseInt(opts.port) });
+      const { parseTimeoutValue } = await import('./runtime.js');
+      await startServe({
+        port: parseInt(opts.port, 10),
+        timeout: opts.timeout ? parseTimeoutValue(opts.timeout, '--timeout', 120) : undefined,
+      });
     });
 
   // ── Dynamic adapter commands ──────────────────────────────────────────────

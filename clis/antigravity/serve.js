@@ -13,6 +13,7 @@ import { createServer } from 'node:http';
 import { CDPBridge } from '@jackwener/opencli/browser/cdp';
 import { resolveElectronEndpoint } from '@jackwener/opencli/launcher';
 import { EXIT_CODES, getErrorMessage } from '@jackwener/opencli/errors';
+import { parseEnvTimeout, parseTimeoutValue } from '../../src/runtime.js';
 // ─── Helpers ─────────────────────────────────────────────────────────
 function generateMsgId() {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -267,41 +268,65 @@ async function waitForReply(page, beforeText, opts = {}) {
     let lastText = beforeText;
     let stableCount = 0;
     const stableThreshold = 4; // 4 * 500ms = 2s of stability fallback
+    let reconnectCount = 0;
     while (Date.now() < deadline) {
-        const generating = await isGenerating(page);
-        const currentText = await getConversationText(page);
-        const textChanged = currentText !== beforeText && currentText.length > 0;
-        if (generating) {
-            hasStartedGenerating = true;
-            stableCount = 0; // Reset stability while generating
-        }
-        else {
-            if (hasStartedGenerating) {
-                // It actively generated and now it stopped -> DONE
-                // Provide a small buffer to let React render the final message fully
-                await sleep(500);
-                return;
+        try {
+            const generating = await isGenerating(page);
+            const currentText = await getConversationText(page);
+            const textChanged = currentText !== beforeText && currentText.length > 0;
+            if (generating) {
+                hasStartedGenerating = true;
+                stableCount = 0; // Reset stability while generating
             }
-            // Fallback: If it never showed "Generating/Cancel", but text changed and is stable
-            if (textChanged) {
-                if (currentText === lastText) {
-                    stableCount++;
-                    if (stableCount >= stableThreshold) {
-                        return; // Text has been stable for 2 seconds -> DONE
+            else {
+                if (hasStartedGenerating) {
+                    // It actively generated and now it stopped -> DONE
+                    // Provide a small buffer to let React render the final message fully
+                    await sleep(500);
+                    return page;
+                }
+                // Fallback: If it never showed "Generating/Cancel", but text changed and is stable
+                if (textChanged) {
+                    if (currentText === lastText) {
+                        stableCount++;
+                        if (stableCount >= stableThreshold) {
+                            return page; // Text has been stable for 2 seconds -> DONE
+                        }
+                    }
+                    else {
+                        stableCount = 0;
+                        lastText = currentText;
                     }
                 }
-                else {
+            }
+        }
+        catch (err) {
+            const msg = err.message || String(err);
+            const isSessionLoss = /closed|lost|not open|websocket/i.test(msg);
+            if (opts.reconnect && isSessionLoss && reconnectCount < 2) {
+                reconnectCount++;
+                console.error(`[serve] CDP session loss detected (${msg}), attempting to reconnect (${reconnectCount}/2)...`);
+                try {
+                    page = await opts.reconnect();
+                    // Reset stability tracking after reconnect
                     stableCount = 0;
-                    lastText = currentText;
+                    lastText = beforeText;
+                    continue;
+                }
+                catch (reconnectErr) {
+                    console.error(`[serve] Reconnection failed: ${reconnectErr.message}`);
+                    throw err; // Throw original error if reconnection itself fails
                 }
             }
+            throw err;
         }
         await sleep(pollInterval);
     }
-    throw new Error('Timeout waiting for Antigravity reply');
+    throw new Error(`Timeout waiting for Antigravity reply after ${timeout / 1000}s`);
 }
 // ─── Request Handlers ────────────────────────────────────────────────
-async function handleMessages(body, page, bridge) {
+async function handleMessages(body, page, opts = {}) {
+    const { bridge, timeout, reconnect } = opts;
     // Extract the last user message
     const userMessages = body.messages.filter(m => m.role === 'user');
     if (userMessages.length === 0) {
@@ -328,7 +353,7 @@ async function handleMessages(body, page, bridge) {
     await sendMessage(page, userText, bridge);
     // Poll for reply (change detection)
     console.error('[serve] Waiting for reply...');
-    await waitForReply(page, beforeText);
+    page = await waitForReply(page, beforeText, { timeout, reconnect });
     // Extract the actual reply text precisely from the DOM
     const replyText = await getLastAssistantReply(page, userText);
     console.error(`[serve] Got reply: "${replyText.slice(0, 80)}${replyText.length > 80 ? '...' : ''}"`);
@@ -349,6 +374,10 @@ async function handleMessages(body, page, bridge) {
 // ─── Server ──────────────────────────────────────────────────────────
 export async function startServe(opts = {}) {
     const port = opts.port ?? 8082;
+    const envTimeoutSeconds = parseEnvTimeout('OPENCLI_ANTIGRAVITY_TIMEOUT', 120);
+    const effectiveTimeoutSeconds = parseTimeoutValue(opts.timeout, '--timeout', envTimeoutSeconds);
+    const effectiveTimeout = effectiveTimeoutSeconds * 1000;
+    console.error(`[serve] Starting Antigravity API proxy on port ${port} (timeout: ${effectiveTimeout / 1000}s)`);
     // Lazy CDP connection — connect when first request comes in
     let cdp = null;
     let page = null;
@@ -462,7 +491,11 @@ export async function startServe(opts = {}) {
                     }
                     // Lazy connect on first request
                     const activePage = await ensureConnected();
-                    const response = await handleMessages(body, activePage, cdp ?? undefined);
+                    const response = await handleMessages(body, activePage, {
+                        bridge: cdp,
+                        timeout: effectiveTimeout,
+                        reconnect: ensureConnected,
+                    });
                     jsonResponse(res, 200, response);
                 }
                 finally {
