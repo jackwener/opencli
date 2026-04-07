@@ -1,0 +1,43 @@
+site: 1point3acres
+name: search
+description: 1Point3Acres search (login required)
+domain: api.1point3acres.com
+strategy: cookie
+browser: true
+
+args:
+  query:
+    type: str
+    required: true
+    positional: true
+    description: Search keyword
+  limit:
+    type: int
+    default: 20
+    description: Number of results
+  page:
+    type: int
+    default: 1
+    description: Page number
+
+pipeline:
+  - fetch:
+      url: https://api.1point3acres.com/api/search
+      params:
+        keyword: ${{ args.query }}
+        page: ${{ args.page }}
+        ps: ${{ args.limit }}
+
+  - select: threads
+
+  - map:
+      rank: ${{ index + 1 }}
+      tid: ${{ item.tid }}
+      title: ${{ item.subject || item.title }}
+      forum: ${{ item.forum_name || item.forum }}
+      author: ${{ item.author || item.username || '' }}
+      replies: ${{ item.replies }}
+      views: ${{ item.views }}
+      url: https://www.1point3acres.com/bbs/thread-${{ item.tid }}-1-1.html
+
+columns: [rank, title, forum, author, replies, views, url]

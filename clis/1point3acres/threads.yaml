@@ -1,6 +1,6 @@
 site: 1point3acres
-name: hot
-description: 1Point3Acres hot topics
+name: threads
+description: 1Point3Acres hot thread list
 domain: api.1point3acres.com
 strategy: public
 browser: false
@@ -9,7 +9,7 @@ args:
   limit:
     type: int
     default: 20
-    description: Number of topics
+    description: Number of threads
   page:
     type: int
     default: 1
