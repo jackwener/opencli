@@ -1,0 +1,39 @@
+site: 1point3acres
+name: threads
+description: 1Point3Acres hot thread list
+domain: api.1point3acres.com
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 20
+    description: Number of threads
+  page:
+    type: int
+    default: 1
+    description: Page number
+
+pipeline:
+  - fetch:
+      url: https://api.1point3acres.com/api/threads
+      params:
+        ps: ${{ args.limit }}
+        page: ${{ args.page }}
+
+  - select: threads
+
+  - map:
+      rank: ${{ index + 1 }}
+      tid: ${{ item.tid }}
+      title: ${{ item.subject }}
+      forum: ${{ item.forum_name }}
+      fid: ${{ item.fid }}
+      author: ${{ item.author }}
+      replies: ${{ item.replies }}
+      views: ${{ item.views }}
+      heats: ${{ item.heats }}
+      url: https://www.1point3acres.com/bbs/thread-${{ item.tid }}-1-1.html
+
+columns: [rank, title, forum, author, replies, views, heats, url]

@@ -1,0 +1,30 @@
+site: 1point3acres
+name: forums
+description: 1Point3Acres forum list
+domain: api.1point3acres.com
+strategy: public
+browser: false
+
+args:
+  limit:
+    type: int
+    default: 200
+    description: Number of forums
+
+pipeline:
+  - fetch:
+      url: https://api.1point3acres.com/api/forums
+
+  - select: forums
+
+  - map:
+      fid: ${{ item.fid }}
+      name: ${{ item.name }}
+      type: ${{ item.type }}
+      parent_fid: ${{ item.fup }}
+      display_order: ${{ item.displayorder }}
+      today_posts: ${{ item.todayposts }}
+
+  - limit: ${{ args.limit }}
+
+columns: [fid, name, type, parent_fid, display_order, today_posts]
