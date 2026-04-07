@@ -11,10 +11,10 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { CDPBridge } from '@jackwener/opencli/browser/cdp';
-import type { IPage } from '@jackwener/opencli/types';
-import { resolveElectronEndpoint } from '@jackwener/opencli/launcher';
-import { EXIT_CODES, getErrorMessage } from '@jackwener/opencli/errors';
+import { CDPBridge } from '../../src/browser/cdp.js';
+import type { IPage } from '../../src/types.js';
+import { resolveElectronEndpoint } from '../../src/launcher.js';
+import { EXIT_CODES, getErrorMessage } from '../../src/errors.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -303,8 +303,8 @@ async function sendMessage(page: IPage, message: string, bridge?: CDPBridge): Pr
 async function waitForReply(
   page: IPage,
   beforeText: string,
-  opts: { timeout?: number; pollInterval?: number } = {},
-): Promise<void> {
+  opts: { timeout?: number; pollInterval?: number; reconnect?: () => Promise<IPage> } = {},
+): Promise<IPage> {
   const timeout = opts.timeout ?? 120_000;     // 2 minutes max
   const pollInterval = opts.pollInterval ?? 500; // 500ms polling
 
@@ -319,39 +319,49 @@ async function waitForReply(
   const stableThreshold = 4; // 4 * 500ms = 2s of stability fallback
 
   while (Date.now() < deadline) {
-    const generating = await isGenerating(page);
-    const currentText = await getConversationText(page);
-    const textChanged = currentText !== beforeText && currentText.length > 0;
+    try {
+      const generating = await isGenerating(page);
+      const currentText = await getConversationText(page);
+      const textChanged = currentText !== beforeText && currentText.length > 0;
 
-    if (generating) {
-      hasStartedGenerating = true;
-      stableCount = 0; // Reset stability while generating
-    } else {
-      if (hasStartedGenerating) {
-        // It actively generated and now it stopped -> DONE
-        // Provide a small buffer to let React render the final message fully
-        await sleep(500);
-        return;
-      }
-      
-      // Fallback: If it never showed "Generating/Cancel", but text changed and is stable
-      if (textChanged) {
-        if (currentText === lastText) {
-          stableCount++;
-          if (stableCount >= stableThreshold) {
-            return; // Text has been stable for 2 seconds -> DONE
+      if (generating) {
+        hasStartedGenerating = true;
+        stableCount = 0; // Reset stability while generating
+      } else {
+        if (hasStartedGenerating) {
+          // It actively generated and now it stopped -> DONE
+          // Provide a small buffer to let React render the final message fully
+          await sleep(500);
+          return page;
+        }
+
+        // Fallback: If it never showed "Generating/Cancel", but text changed and is stable
+        if (textChanged) {
+          if (currentText === lastText) {
+            stableCount++;
+            if (stableCount >= stableThreshold) {
+              return page; // Text has been stable for 2 seconds -> DONE
+            }
+          } else {
+            stableCount = 0;
+            lastText = currentText;
           }
-        } else {
-          stableCount = 0;
-          lastText = currentText;
         }
       }
+    } catch (err) {
+      if (opts.reconnect) {
+        console.error('[serve] Error during waitForReply, attempting to reconnect:', (err as Error).message);
+        page = await opts.reconnect();
+        // Continue monitoring with new page instance
+        continue;
+      }
+      throw err;
     }
 
     await sleep(pollInterval);
   }
 
-  throw new Error('Timeout waiting for Antigravity reply');
+  throw new Error(`Timeout waiting for Antigravity reply after ${timeout / 1000}s`);
 }
 
 // ─── Request Handlers ────────────────────────────────────────────────
@@ -359,8 +369,9 @@ async function waitForReply(
 async function handleMessages(
   body: AnthropicRequest,
   page: IPage,
-  bridge?: CDPBridge,
+  opts: { bridge?: CDPBridge; timeout?: number; reconnect?: () => Promise<IPage> } = {},
 ): Promise<AnthropicResponse> {
+  const { bridge, timeout, reconnect } = opts;
   // Extract the last user message
   const userMessages = body.messages.filter(m => m.role === 'user');
   if (userMessages.length === 0) {
@@ -393,7 +404,7 @@ async function handleMessages(
 
   // Poll for reply (change detection)
   console.error('[serve] Waiting for reply...');
-  await waitForReply(page, beforeText);
+  page = await waitForReply(page, beforeText, { timeout, reconnect });
 
   // Extract the actual reply text precisely from the DOM
   const replyText = await getLastAssistantReply(page, userText);
@@ -416,8 +427,12 @@ async function handleMessages(
 
 // ─── Server ──────────────────────────────────────────────────────────
 
-export async function startServe(opts: { port?: number } = {}): Promise<void> {
+export async function startServe(opts: { port?: number; timeout?: number } = {}): Promise<void> {
   const port = opts.port ?? 8082;
+  const envTimeout = process.env.OPENCLI_ANTIGRAVITY_TIMEOUT ? parseInt(process.env.OPENCLI_ANTIGRAVITY_TIMEOUT) * 1000 : undefined;
+  const effectiveTimeout = opts.timeout ? opts.timeout * 1000 : envTimeout ?? 120_000;
+
+  console.error(`[serve] Starting Antigravity API proxy on port ${port} (timeout: ${effectiveTimeout / 1000}s)`);
 
   // Lazy CDP connection — connect when first request comes in
   let cdp: CDPBridge | null = null;
@@ -546,7 +561,11 @@ export async function startServe(opts: { port?: number } = {}): Promise<void> {
 
           // Lazy connect on first request
           const activePage = await ensureConnected();
-          const response = await handleMessages(body, activePage, cdp ?? undefined);
+          const response = await handleMessages(body, activePage, {
+            bridge: cdp!,
+            timeout: effectiveTimeout,
+            reconnect: ensureConnected,
+          });
           jsonResponse(res, 200, response);
         } finally {
           requestInFlight = false;
