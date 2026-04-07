@@ -18,6 +18,7 @@ interface CaptureProject {
 
 const GITEE_EXPLORE_URL = 'https://gitee.com/explore';
 const MAX_LIMIT = 50;
+const MAX_DESCRIPTION_LENGTH = 48;
 const GITEE_HOSTS = new Set(['gitee.com', 'www.gitee.com']);
 const RESERVED_SEGMENTS = new Set([
   'about',
@@ -31,6 +32,7 @@ const RESERVED_SEGMENTS = new Set([
   'dashboard',
   'docs',
   'enterprise',
+  'enterprises',
   'explore',
   'features',
   'help',
@@ -70,6 +72,13 @@ function normalizeStars(value: string): string {
   if (!compact) return '-';
   const match = compact.match(/\d+(?:[.,]\d+)?(?:[kKmMwW]|\u4E07)?/);
   return match ? match[0] : compact;
+}
+
+function compactDescription(value: string): string {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized || normalized === '-') return '-';
+  if (normalized.length <= MAX_DESCRIPTION_LENGTH) return normalized;
+  return `${normalized.slice(0, MAX_DESCRIPTION_LENGTH - 3)}...`;
 }
 
 function clampLimit(value: unknown): number {
@@ -344,6 +353,7 @@ cli({
           'dashboard',
           'docs',
           'enterprise',
+          'enterprises',
           'explore',
           'features',
           'help',
@@ -582,6 +592,10 @@ cli({
       .map(toProject)
       .filter((project): project is GiteeProject => project !== null)
       .map((project) => mergeCapturedProject(project, projectsFromCapture.get(project.url)))
+      .map((project) => ({
+        ...project,
+        description: compactDescription(project.description),
+      }))
       .slice(0, limit);
 
     if (projects.length === 0) {
