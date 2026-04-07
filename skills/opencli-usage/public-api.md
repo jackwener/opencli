@@ -109,6 +109,8 @@ opencli xiaoyuzhou episode 12345          # 单集详情 (id positional)
 ```bash
 opencli wikipedia search "AI"             # 搜索 (query positional)
 opencli wikipedia summary "Python"        # 摘要 (title positional)
+opencli wikipedia random                  # 随机条目
+opencli wikipedia trending               # 热门条目
 ```
 
 ## Bloomberg (RSS)
@@ -143,7 +145,34 @@ opencli hf top --limit 10                # 热门模型
 
 ```bash
 opencli producthunt today --limit 10      # 今日产品
-opencli producthunt week --limit 10       # 本周产品
-opencli producthunt month --limit 10      # 本月产品
-opencli producthunt search "AI"           # 搜索产品 (query positional)
+opencli producthunt hot --limit 10        # 热门产品
+opencli producthunt browse --limit 10     # 浏览产品
+opencli producthunt posts --limit 10      # 最新产品
+```
+
+## IMDB
+
+```bash
+opencli imdb top --limit 10              # Top 250
+opencli imdb trending --limit 10         # 热门影视
+opencli imdb search "关键词"             # 搜索 (query positional)
+opencli imdb title <id>                  # 影视详情
+opencli imdb person <id>                 # 演员详情
+opencli imdb reviews <id>               # 评论
+```
+
+## Spotify
+
+```bash
+opencli spotify auth                     # OAuth 授权
+opencli spotify status                   # 播放状态
+opencli spotify play "歌曲"              # 播放 (query positional)
+```
+
+## Paper Review
+
+```bash
+opencli paperreview submit               # 提交论文
+opencli paperreview review               # 审阅
+opencli paperreview feedback             # 反馈
 ```

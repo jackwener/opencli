@@ -128,34 +128,34 @@ while (Date.now() < deadline) {
 - `src/pipeline/steps/intercept.ts` — use `waitForCapture()`
 
 ### Modified (adapters — Layer 1, INTERCEPT)
-- `src/clis/36kr/hot.ts`
-- `src/clis/36kr/search.ts`
-- `src/clis/twitter/search.ts`
-- `src/clis/twitter/followers.ts`
-- `src/clis/twitter/following.ts`
-- `src/clis/producthunt/hot.ts`
-- `src/clis/producthunt/browse.ts`
+- `clis/36kr/hot.ts`
+- `clis/36kr/search.ts`
+- `clis/twitter/search.ts`
+- `clis/twitter/followers.ts`
+- `clis/twitter/following.ts`
+- `clis/producthunt/hot.ts`
+- `clis/producthunt/browse.ts`
 
 ### Modified (adapters — Layer 2, selector)
-- `src/clis/twitter/reply.ts`
-- `src/clis/twitter/follow.ts`
-- `src/clis/twitter/unfollow.ts`
-- `src/clis/twitter/like.ts`
-- `src/clis/twitter/bookmark.ts`
-- `src/clis/twitter/unbookmark.ts`
-- `src/clis/twitter/block.ts`
-- `src/clis/twitter/unblock.ts`
-- `src/clis/twitter/hide-reply.ts`
-- `src/clis/twitter/notifications.ts`
-- `src/clis/twitter/profile.ts`
-- `src/clis/twitter/thread.ts`
-- `src/clis/twitter/timeline.ts`
-- `src/clis/twitter/delete.ts`
-- `src/clis/twitter/reply-dm.ts`
-- `src/clis/medium/utils.ts`
-- `src/clis/substack/utils.ts`
-- `src/clis/bloomberg/news.ts`
-- `src/clis/sinablog/utils.ts`
+- `clis/twitter/reply.ts`
+- `clis/twitter/follow.ts`
+- `clis/twitter/unfollow.ts`
+- `clis/twitter/like.ts`
+- `clis/twitter/bookmark.ts`
+- `clis/twitter/unbookmark.ts`
+- `clis/twitter/block.ts`
+- `clis/twitter/unblock.ts`
+- `clis/twitter/hide-reply.ts`
+- `clis/twitter/notifications.ts`
+- `clis/twitter/profile.ts`
+- `clis/twitter/thread.ts`
+- `clis/twitter/timeline.ts`
+- `clis/twitter/delete.ts`
+- `clis/twitter/reply-dm.ts`
+- `clis/medium/utils.ts`
+- `clis/substack/utils.ts`
+- `clis/bloomberg/news.ts`
+- `clis/sinablog/utils.ts`
 
 ## Delivery Order
 

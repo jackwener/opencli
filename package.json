@@ -1,35 +1,57 @@
 {
   "name": "@jackwener/opencli",
-  "version": "1.5.9",
+  "version": "1.6.8",
   "publishConfig": {
     "access": "public"
   },
-  "description": "Make any website your CLI. AI-powered.",
+  "description": "Make any website or Electron App your CLI. AI-powered.",
   "engines": {
     "node": ">=20.0.0"
   },
   "type": "module",
-  "main": "dist/main.js",
+  "main": "dist/src/main.js",
   "bin": {
-    "opencli": "dist/main.js"
+    "opencli": "dist/src/main.js"
   },
   "exports": {
-    ".": "./dist/main.js",
-    "./registry": "./dist/registry-api.js"
+    ".": "./dist/src/main.js",
+    "./registry": "./dist/src/registry-api.js",
+    "./errors": "./dist/src/errors.js",
+    "./types": "./dist/src/types.js",
+    "./utils": "./dist/src/utils.js",
+    "./logger": "./dist/src/logger.js",
+    "./launcher": "./dist/src/launcher.js",
+    "./browser/cdp": "./dist/src/browser/cdp.js",
+    "./browser/page": "./dist/src/browser/page.js",
+    "./browser/utils": "./dist/src/browser/utils.js",
+    "./download": "./dist/src/download/index.js",
+    "./download/article-download": "./dist/src/download/article-download.js",
+    "./download/media-download": "./dist/src/download/media-download.js",
+    "./download/progress": "./dist/src/download/progress.js",
+    "./pipeline": "./dist/src/pipeline/index.js"
   },
+  "files": [
+    "dist/src/",
+    "dist/clis/",
+    "dist/cli-manifest.json",
+    "scripts/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx src/main.ts",
     "dev:bun": "bun src/main.ts",
     "build": "npm run clean-dist && tsc && npm run clean-yaml && npm run copy-yaml && npm run build-manifest",
-    "build-manifest": "node dist/build-manifest.js",
+    "build-manifest": "node dist/src/build-manifest.js",
     "clean-dist": "node scripts/clean-dist.cjs",
     "clean-yaml": "node scripts/clean-yaml.cjs",
     "copy-yaml": "node scripts/copy-yaml.cjs",
-    "start": "node dist/main.js",
-    "start:bun": "bun dist/main.js",
-    "postinstall": "node scripts/postinstall.js || true",
+    "start": "node dist/src/main.js",
+    "start:bun": "bun dist/src/main.js",
+    "postinstall": "node scripts/postinstall.js || true; node scripts/fetch-adapters.js || true",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
+    "prepare": "[ -d src ] && npm run build || true",
     "prepublishOnly": "npm run build",
     "test": "vitest run --project unit",
     "test:bun": "bun vitest run --project unit",
@@ -64,12 +86,12 @@
     "commander": "^14.0.3",
     "js-yaml": "^4.1.0",
     "turndown": "^7.2.2",
-    "undici": "^7.24.6",
+    "undici": "^8.0.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.13.10",
+    "@types/node": "^25.5.2",
     "@types/turndown": "^5.0.6",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.3",

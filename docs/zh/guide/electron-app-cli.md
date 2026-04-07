@@ -114,12 +114,12 @@ await page.wait(1);
 一个 TypeScript 桌面适配器，通常结构是：
 
 ```text
-src/clis/<app>/status.ts
-src/clis/<app>/dump.ts
-src/clis/<app>/read.ts
-src/clis/<app>/send.ts
-src/clis/<app>/new.ts
-src/clis/<app>/utils.ts
+clis/<app>/status.ts
+clis/<app>/dump.ts
+clis/<app>/read.ts
+clis/<app>/send.ts
+clis/<app>/new.ts
+clis/<app>/utils.ts
 ```
 
 当基础能力稳定后，再继续加：

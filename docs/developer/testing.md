@@ -36,8 +36,8 @@ src/
 
 | 层 | 位置 | 当前文件数 | 运行方式 | 用途 |
 |---|---|---:|---|---|
-| 单元测试 | `src/**/*.test.ts`（排除 `src/clis/**`） | - | `npm test` | 内部模块、pipeline、runtime |
-| Adapter 测试 | `src/clis/{zhihu,twitter,reddit,bilibili}/**/*.test.ts` | - | `npm run test:adapter` | 保留 4 个重点站点的 adapter 覆盖 |
+| 单元测试 | `src/**/*.test.ts`（排除 `clis/**`） | - | `npm test` | 内部模块、pipeline、runtime |
+| Adapter 测试 | `clis/{zhihu,twitter,reddit,bilibili}/**/*.test.ts` | - | `npm run test:adapter` | 保留 4 个重点站点的 adapter 覆盖 |
 | E2E 测试 | `tests/e2e/*.test.ts` | 5 | `npx vitest run tests/e2e/` | 真实 CLI 命令执行 |
 | 烟雾测试 | `tests/smoke/*.test.ts` | 1 | `npx vitest run tests/smoke/` | 外部 API 与注册完整性 |
 
@@ -51,7 +51,7 @@ src/
 |---|---|
 | 核心运行时与输出 | `src/browser.test.ts`, `src/browser/dom-snapshot.test.ts`, `src/build-manifest.test.ts`, `src/capabilityRouting.test.ts`, `src/doctor.test.ts`, `src/engine.test.ts`, `src/interceptor.test.ts`, `src/output.test.ts`, `src/plugin.test.ts`, `src/registry.test.ts`, `src/snapshotFormatter.test.ts` |
 | pipeline 与下载 | `src/download/index.test.ts`, `src/pipeline/executor.test.ts`, `src/pipeline/template.test.ts`, `src/pipeline/transform.test.ts` |
-| 聚焦 adapter 逻辑 | `src/clis/zhihu/download.test.ts`, `src/clis/twitter/timeline.test.ts`, `src/clis/reddit/read.test.ts`, `src/clis/bilibili/dynamic.test.ts` |
+| 聚焦 adapter 逻辑 | `clis/zhihu/download.test.ts`, `clis/twitter/timeline.test.ts`, `clis/reddit/read.test.ts`, `clis/bilibili/dynamic.test.ts` |
 
 这些测试覆盖的重点包括：
 
@@ -95,7 +95,7 @@ find tests/smoke -name '*.test.ts' | sort
 
 ```bash
 npm ci                # 安装依赖
-npm run build         # 编译（E2E / smoke 测试需要 dist/main.js）
+npm run build         # 编译（E2E / smoke 测试需要 dist/src/main.js）
 ```
 
 ### 运行命令
@@ -114,7 +114,7 @@ npx vitest run tests/e2e/
 npx vitest run tests/smoke/
 
 # 单个测试文件
-npx vitest run src/clis/apple-podcasts/commands.test.ts
+npx vitest run clis/apple-podcasts/commands.test.ts
 npx vitest run tests/e2e/management.test.ts
 
 # 全部测试
@@ -127,16 +127,18 @@ npx vitest src/
 ### 浏览器命令本地测试须知
 
 - opencli 通过 Browser Bridge 扩展连接已运行的 Chrome 浏览器
-- E2E 测试通过 `tests/e2e/helpers.ts` 里的 `runCli()` 调用已构建的 `dist/main.js`
+- E2E 测试通过 `tests/e2e/helpers.ts` 里的 `runCli()` 调用已构建的 `dist/src/main.js`
 - `browser-public.test.ts` 使用 `tryBrowserCommand()`，站点反爬或地域限制导致空数据时会 warn + pass
 - `browser-auth.test.ts` 验证 **graceful failure**，重点是不 crash、不 hang、错误信息可控
 - 如需测试完整登录态，保持 Chrome 登录态并安装 Browser Bridge 扩展，再手动运行对应测试
+- 对依赖具体 host 页面上下文的 browser adapter，除了单测外，还应手动验证真实命令，并把必要的 target host 约束写进 adapter docs / troubleshooting
+- 对会主动导航页面的 browser commands，手动验证时优先串行执行；多个 CLI 进程同时连到同一个 CDP target 可能互相覆盖导航，制造假的 adapter 故障
 
 ---
 
 ## 如何添加新测试
 
-### 新增 YAML Adapter（如 `src/clis/producthunt/trending.yaml`）
+### 新增 YAML Adapter（如 `clis/producthunt/trending.yaml`）
 
 1. `opencli validate` 的 E2E / smoke 测试会覆盖 adapter 结构校验
 2. 根据 adapter 类型，在对应测试文件补一个 `it()` block

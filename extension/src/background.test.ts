@@ -73,6 +73,12 @@ function createChromeMock() {
         if (!tab) throw new Error(`Unknown tab ${tabId}`);
         return tab;
       }),
+      move: vi.fn(async (tabId: number, moveProps: { windowId: number; index: number }) => {
+        const tab = tabs.find((entry) => entry.id === tabId);
+        if (!tab) throw new Error(`Unknown tab ${tabId}`);
+        tab.windowId = moveProps.windowId;
+        return tab;
+      }),
       onUpdated: { addListener: vi.fn(), removeListener: vi.fn() } as Listener<(id: number, info: chrome.tabs.TabChangeInfo) => void>,
     },
     windows: {
@@ -217,6 +223,39 @@ describe('background tab isolation', () => {
     expect(mod.__test__.getSession('site:notebooklm')).toEqual(expect.objectContaining({
       windowId: 1,
     }));
+  });
+
+  it('moves drifted tab back to automation window instead of creating a new one', async () => {
+    const { chrome, tabs } = createChromeMock();
+    // Tab 1 belongs to automation window 1 but drifted to window 2
+    tabs[0].windowId = 2;
+    tabs[0].url = 'https://twitter.com/home';
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+
+    const tabId = await mod.__test__.resolveTabId(1, 'site:twitter');
+
+    // Should have moved tab 1 back to window 1 and reused it
+    expect(chrome.tabs.move).toHaveBeenCalledWith(1, { windowId: 1, index: -1 });
+    expect(tabId).toBe(1);
+  });
+
+  it('falls through to re-resolve when drifted tab move fails', async () => {
+    const { chrome, tabs } = createChromeMock();
+    tabs[0].windowId = 2;
+    tabs[0].url = 'https://twitter.com/home';
+    // Make move fail
+    chrome.tabs.move = vi.fn(async () => { throw new Error('Cannot move tab'); });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+
+    // Should still resolve (by finding/creating a tab in the correct window)
+    const tabId = await mod.__test__.resolveTabId(1, 'site:twitter');
+    expect(typeof tabId).toBe('number');
   });
 
   it('idle timeout closes the automation window for site:notebooklm', async () => {

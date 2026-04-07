@@ -31,6 +31,7 @@ import {
   CommandExecutionError,
 } from './errors.js';
 import { checkDaemonStatus } from './browser/discover.js';
+import { isDiagnosticEnabled } from './diagnostic.js';
 
 export function normalizeArgValue(argType: string | undefined, value: unknown, name: string): unknown {
   if (argType !== 'bool' && argType !== 'boolean') return value;
@@ -62,7 +63,8 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       subCmd.argument(bracket, arg.help ?? '');
       positionalArgs.push(arg);
     } else {
-      const flag = arg.required ? `--${arg.name} <value>` : `--${arg.name} [value]`;
+      const expectsValue = arg.required || arg.valueRequired;
+      const flag = expectsValue ? `--${arg.name} <value>` : `--${arg.name} [value]`;
       if (arg.required) subCmd.requiredOption(flag, arg.help ?? '');
       else if (arg.default != null) subCmd.option(flag, arg.help ?? '', String(arg.default));
       else subCmd.option(flag, arg.help ?? '');
@@ -93,9 +95,11 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
         const v = optionsRecord[arg.name] ?? optionsRecord[camelName];
         if (v !== undefined) kwargs[arg.name] = normalizeArgValue(arg.type, v, arg.name);
       }
+      cmd.validateArgs?.(kwargs);
 
       const verbose = optionsRecord.verbose === true;
       let format = typeof optionsRecord.format === 'string' ? optionsRecord.format : 'table';
+      const formatExplicit = subCmd.getOptionValueSource('format') === 'cli';
       if (verbose) process.env.OPENCLI_VERBOSE = '1';
       if (cmd.deprecated) {
         const message = typeof cmd.deprecated === 'string' ? cmd.deprecated : `${fullName(cmd)} is deprecated.`;
@@ -109,7 +113,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       }
 
       const resolved = getRegistry().get(fullName(cmd)) ?? cmd;
-      if (format === 'table' && resolved.defaultFormat) {
+      if (!formatExplicit && format === 'table' && resolved.defaultFormat) {
         format = resolved.defaultFormat;
       }
 
@@ -118,6 +122,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       }
       renderOutput(result, {
         fmt: format,
+        fmtExplicit: formatExplicit,
         columns: resolved.columns,
         title: `${resolved.site}/${resolved.name}`,
         elapsed: (Date.now() - startTime) / 1000,
@@ -131,40 +136,41 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
   });
 }
 
-// ── Exit code resolution ─────────────────────────────────────────────────────
-
-/**
- * Map any thrown value to a Unix process exit code.
- *
- * - CliError subclasses carry their own exitCode (set in errors.ts).
- * - Generic Error objects are classified by message pattern so that
- *   un-typed auth / not-found errors from adapters still produce
- *   meaningful exit codes for shell scripts.
- */
-function resolveExitCode(err: unknown): number {
-  if (err instanceof CliError) return err.exitCode;
-
-  // Pattern-based fallback for untyped errors thrown by third-party adapters.
-  const msg = getErrorMessage(err);
-  const kind = classifyGenericError(msg);
-  if (kind === 'auth')      return EXIT_CODES.NOPERM;
-  if (kind === 'not-found') return EXIT_CODES.EMPTY_RESULT;
-  if (kind === 'http')      return EXIT_CODES.GENERIC_ERROR;  // HTTP 4xx/5xx → generic; renderer shows details
-  return EXIT_CODES.GENERIC_ERROR;
-}
-
-// ── Error rendering ──────────────────────────────────────────────────────────
+// ── Error classification ─────────────────────────────────────────────────────
 
 const ISSUES_URL = 'https://github.com/jackwener/opencli/issues';
 
+export type GenericErrorKind = 'auth' | 'http' | 'not-found' | 'other';
+
+interface ClassifiedError {
+  kind: GenericErrorKind;
+  icon: string;
+  exitCode: number;
+  hint: string;
+}
+
+const GENERIC_ERROR_MAP: Record<GenericErrorKind, Omit<ClassifiedError, 'kind'>> = {
+  auth:        { icon: '🔒', exitCode: EXIT_CODES.NOPERM,        hint: 'Open Chrome or Chromium, log in to the target site, then retry.' },
+  http:        { icon: '🌐', exitCode: EXIT_CODES.GENERIC_ERROR, hint: 'Check your login status, or the site may be temporarily unavailable.' },
+  'not-found': { icon: '📭', exitCode: EXIT_CODES.EMPTY_RESULT,  hint: 'The resource was not found. The adapter or page structure may have changed.' },
+  other:       { icon: '💥', exitCode: EXIT_CODES.GENERIC_ERROR, hint: '' },
+};
+
 /** Pattern-based classifier for untyped errors thrown by adapters. */
-function classifyGenericError(msg: string): 'auth' | 'http' | 'not-found' | 'other' {
+function classifyGenericError(msg: string): ClassifiedError {
   const m = msg.toLowerCase();
-  if (/not logged in|login required|please log in|未登录|请先登录|authentication required|cookie expired/.test(m)) return 'auth';
-  // Match "HTTP 404", "status: 500", "status 403", bare "404 Not Found", etc.
-  if (/\b(status[: ]+)?[45]\d{2}\b|http[/ ][45]\d{2}/.test(m)) return 'http';
-  if (/not found|未找到|could not find|no .+ found/.test(m)) return 'not-found';
-  return 'other';
+  let kind: GenericErrorKind = 'other';
+  if (/not logged in|login required|please log in|未登录|请先登录|authentication required|cookie expired/.test(m)) kind = 'auth';
+  else if (/\b(status[: ]+)?[45]\d{2}\b|http[/ ][45]\d{2}/.test(m)) kind = 'http';
+  else if (/not found|未找到|could not find|no .+ found/.test(m)) kind = 'not-found';
+  return { kind, ...GENERIC_ERROR_MAP[kind] };
+}
+
+// ── Exit code resolution ─────────────────────────────────────────────────────
+
+function resolveExitCode(err: unknown): number {
+  if (err instanceof CliError) return err.exitCode;
+  return classifyGenericError(getErrorMessage(err)).exitCode;
 }
 
 /** Render a status line for BrowserConnectError based on real-time or kind-derived state. */
@@ -185,6 +191,14 @@ function renderBridgeStatus(running: boolean, extensionConnected: boolean): void
     console.error(chalk.yellow('  Connection failed despite extension being active.'));
     console.error(chalk.dim('  Try reloading the extension, or run: opencli doctor'));
   }
+}
+
+/** Emit AutoFix hint for repairable adapter errors (skipped if already in diagnostic mode). */
+function emitAutoFixHint(cmdName: string): void {
+  if (isDiagnosticEnabled()) return; // Already collecting diagnostics, don't repeat
+  console.error();
+  console.error(chalk.cyan('💡 AutoFix: re-run with OPENCLI_DIAGNOSTIC=1 for repair context.'));
+  console.error(chalk.dim(`    OPENCLI_DIAGNOSTIC=1 ${cmdName}`));
 }
 
 async function renderError(err: unknown, cmdName: string, verbose: boolean): Promise<void> {
@@ -209,7 +223,7 @@ async function renderError(err: unknown, cmdName: string, verbose: boolean): Pro
   if (err instanceof AuthRequiredError) {
     console.error(chalk.red(`🔒 Not logged in to ${err.domain}`));
     // Respect custom hints set by the adapter; fall back to generic guidance.
-    console.error(chalk.yellow(`→ ${err.hint ?? `Open Chrome and log in to https://${err.domain}, then retry.`}`));
+    console.error(chalk.yellow(`→ ${err.hint ?? `Open Chrome or Chromium and log in to https://${err.domain}, then retry.`}`));
     return;
   }
 
@@ -228,6 +242,7 @@ async function renderError(err: unknown, cmdName: string, verbose: boolean): Pro
     console.error(chalk.yellow(`→ ${err.hint ?? 'The page structure may have changed — this adapter may be outdated.'}`));
     console.error(chalk.dim(`  Debug:  ${cmdName} --verbose`));
     console.error(chalk.dim(`  Report: ${ISSUES_URL}`));
+    emitAutoFixHint(cmdName);
     return;
   }
 
@@ -266,22 +281,13 @@ async function renderError(err: unknown, cmdName: string, verbose: boolean): Pro
 
   // ── Generic Error from adapters: classify by message pattern ──────────
   const msg = getErrorMessage(err);
-  const kind = classifyGenericError(msg);
+  const classified = classifyGenericError(msg);
 
-  if (kind === 'auth') {
-    console.error(chalk.red(`🔒 ${msg}`));
-    console.error(chalk.yellow('→ Open Chrome, log in to the target site, then retry.'));
-    return;
-  }
-  if (kind === 'http') {
-    console.error(chalk.red(`🌐 ${msg}`));
-    console.error(chalk.yellow('→ Check your login status, or the site may be temporarily unavailable.'));
-    return;
-  }
-  if (kind === 'not-found') {
-    console.error(chalk.red(`📭 ${msg}`));
-    console.error(chalk.yellow('→ The resource was not found. The adapter or page structure may have changed.'));
-    console.error(chalk.dim(`  Report: ${ISSUES_URL}`));
+  if (classified.kind !== 'other') {
+    console.error(chalk.red(`${classified.icon} ${msg}`));
+    console.error(chalk.yellow(`→ ${classified.hint}`));
+    if (classified.kind === 'not-found') console.error(chalk.dim(`  Report: ${ISSUES_URL}`));
+    if (classified.kind === 'not-found') emitAutoFixHint(cmdName);
     return;
   }
 

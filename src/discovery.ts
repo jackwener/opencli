@@ -17,6 +17,7 @@ import { type CliCommand, type InternalCliCommand, type Arg, Strategy, registerC
 import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
 import type { ManifestEntry } from './build-manifest.js';
+import { findPackageRoot, getCliManifestPath, getFetchAdaptersScriptPath } from './package-paths.js';
 
 /** User runtime directory: ~/.opencli */
 export const USER_OPENCLI_DIR = path.join(os.homedir(), '.opencli');
@@ -37,45 +38,86 @@ function parseStrategy(rawStrategy: string | undefined, fallback: Strategy = Str
 
 import { isRecord } from './utils.js';
 
-function resolveHostRuntimeModulePath(moduleName: string): string {
-  const runtimeDir = path.dirname(fileURLToPath(import.meta.url));
-  for (const ext of ['.js', '.ts']) {
-    const candidate = path.join(runtimeDir, `${moduleName}${ext}`);
-    if (fs.existsSync(candidate)) return candidate;
-  }
-  return path.join(runtimeDir, `${moduleName}.js`);
-}
-
-async function writeCompatShimIfNeeded(filePath: string, content: string): Promise<void> {
-  try {
-    const existing = await fs.promises.readFile(filePath, 'utf-8');
-    if (existing === content) return;
-  } catch {
-    // Fall through to write missing shim
-  }
-  await fs.promises.writeFile(filePath, content, 'utf-8');
-}
+const PACKAGE_ROOT = findPackageRoot(fileURLToPath(import.meta.url));
 
 /**
- * Create runtime shim files under ~/.opencli so legacy user TS CLIs can keep
- * importing ../../registry(.js) and ../../errors(.js).
+ * Ensure ~/.opencli/node_modules/@jackwener/opencli symlink exists so that
+ * user CLIs in ~/.opencli/clis/ can `import { cli } from '@jackwener/opencli/registry'`.
+ *
+ * This is the sole resolution mechanism — adapters use package exports
+ * (e.g. `@jackwener/opencli/registry`, `@jackwener/opencli/errors`) and
+ * Node.js resolves them through this symlink.
  */
 export async function ensureUserCliCompatShims(baseDir: string = USER_OPENCLI_DIR): Promise<void> {
   await fs.promises.mkdir(baseDir, { recursive: true });
 
-  const registryUrl = pathToFileURL(resolveHostRuntimeModulePath('registry-api')).href;
-  const errorsUrl = pathToFileURL(resolveHostRuntimeModulePath('errors')).href;
+  // package.json for ESM resolution in ~/.opencli/
+  const pkgJsonPath = path.join(baseDir, 'package.json');
+  const pkgJsonContent = `${JSON.stringify({ name: 'opencli-user-runtime', private: true, type: 'module' }, null, 2)}\n`;
+  try {
+    const existing = await fs.promises.readFile(pkgJsonPath, 'utf-8');
+    if (existing !== pkgJsonContent) await fs.promises.writeFile(pkgJsonPath, pkgJsonContent, 'utf-8');
+  } catch {
+    await fs.promises.writeFile(pkgJsonPath, pkgJsonContent, 'utf-8');
+  }
 
-  await Promise.all([
-    writeCompatShimIfNeeded(path.join(baseDir, 'registry'), `export * from '${registryUrl}';\n`),
-    writeCompatShimIfNeeded(path.join(baseDir, 'registry.js'), `export * from '${registryUrl}';\n`),
-    writeCompatShimIfNeeded(path.join(baseDir, 'errors'), `export * from '${errorsUrl}';\n`),
-    writeCompatShimIfNeeded(path.join(baseDir, 'errors.js'), `export * from '${errorsUrl}';\n`),
-    writeCompatShimIfNeeded(
-      path.join(baseDir, 'package.json'),
-      `${JSON.stringify({ name: 'opencli-user-runtime', private: true, type: 'module' }, null, 2)}\n`,
-    ),
-  ]);
+  // Create node_modules/@jackwener/opencli symlink pointing to the installed package root.
+  const opencliRoot = PACKAGE_ROOT;
+  const symlinkDir = path.join(baseDir, 'node_modules', '@jackwener');
+  const symlinkPath = path.join(symlinkDir, 'opencli');
+  try {
+    let needsUpdate = true;
+    try {
+      const existing = await fs.promises.readlink(symlinkPath);
+      if (existing === opencliRoot) needsUpdate = false;
+    } catch { /* doesn't exist */ }
+    if (needsUpdate) {
+      await fs.promises.mkdir(symlinkDir, { recursive: true });
+      try { await fs.promises.rm(symlinkPath, { recursive: true, force: true }); } catch { /* doesn't exist */ }
+      const symlinkType = process.platform === 'win32' ? 'junction' : 'dir';
+      await fs.promises.symlink(opencliRoot, symlinkPath, symlinkType);
+    }
+  } catch (err) {
+    log.warn(`Could not create symlink at ${symlinkPath}: ${getErrorMessage(err)}`);
+  }
+}
+
+const ADAPTER_MANIFEST_PATH = path.join(USER_OPENCLI_DIR, 'adapter-manifest.json');
+
+/**
+ * First-run fallback: if postinstall was skipped (--ignore-scripts) or failed,
+ * trigger adapter fetch on first CLI invocation when ~/.opencli/clis/ is empty.
+ */
+export async function ensureUserAdapters(): Promise<void> {
+  // If adapter manifest already exists, adapters were fetched — nothing to do
+  try {
+    await fs.promises.access(ADAPTER_MANIFEST_PATH);
+    return;
+  } catch {
+    // No manifest — first run or postinstall was skipped
+  }
+
+  // Check if clis dir has any content (could be manually populated)
+  try {
+    const entries = await fs.promises.readdir(USER_CLIS_DIR);
+    if (entries.length > 0) return;
+  } catch {
+    // Dir doesn't exist — needs fetch
+  }
+
+  log.info('First run detected — copying adapters (one-time setup)...');
+  try {
+    const { execFileSync } = await import('node:child_process');
+    const scriptPath = getFetchAdaptersScriptPath(PACKAGE_ROOT);
+    execFileSync(process.execPath, [scriptPath], {
+      stdio: 'inherit',
+      env: { ...process.env, _OPENCLI_FIRST_RUN: '1' },
+      timeout: 120_000,
+    });
+  } catch (err) {
+    log.warn(`Could not fetch adapters on first run: ${getErrorMessage(err)}`);
+    log.warn('Built-in adapters from the package will be used.');
+  }
 }
 
 /**
@@ -85,7 +127,7 @@ export async function ensureUserCliCompatShims(baseDir: string = USER_OPENCLI_DI
 export async function discoverClis(...dirs: string[]): Promise<void> {
   // Fast path: try manifest first (production / post-build)
   for (const dir of dirs) {
-    const manifestPath = path.resolve(dir, '..', 'cli-manifest.json');
+    const manifestPath = getCliManifestPath(dir);
     try {
       await fs.promises.access(manifestPath);
       const loaded = await loadFromManifest(manifestPath, dir);
@@ -122,7 +164,7 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
           columns: entry.columns,
           pipeline: entry.pipeline,
           timeoutSeconds: entry.timeout,
-          source: `manifest:${entry.site}/${entry.name}`,
+          source: entry.sourceFile ? path.resolve(clisDir, entry.sourceFile) : `manifest:${entry.site}/${entry.name}`,
           deprecated: entry.deprecated,
           replacedBy: entry.replacedBy,
           navigateBefore: entry.navigateBefore,
@@ -144,7 +186,7 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
           args: entry.args ?? [],
           columns: entry.columns,
           timeoutSeconds: entry.timeout,
-          source: modulePath,
+          source: entry.sourceFile ? path.resolve(clisDir, entry.sourceFile) : modulePath,
           deprecated: entry.deprecated,
           replacedBy: entry.replacedBy,
           navigateBefore: entry.navigateBefore,

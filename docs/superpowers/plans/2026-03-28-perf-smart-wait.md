@@ -21,32 +21,32 @@
 | `src/browser/cdp.ts` | Implement `waitForCapture()`, add `selector` branch to `wait()` |
 | `src/pipeline/steps/intercept.ts` | Use `page.installInterceptor()` + `page.waitForCapture()` + `page.getInterceptedRequests()` |
 | `src/browser/mcp.ts` | Exponential backoff in `_ensureDaemon()` |
-| `src/clis/36kr/hot.ts` | `wait(6)` → `waitForCapture(10)` |
-| `src/clis/36kr/search.ts` | `wait(6)` → `waitForCapture(10)` |
-| `src/clis/twitter/search.ts` | `wait(5)` → `waitForCapture(8)` (already INTERCEPT) |
-| `src/clis/twitter/followers.ts` | `wait(5)` → `waitForCapture(8)` (already INTERCEPT) |
-| `src/clis/twitter/following.ts` | `wait(5)` → `waitForCapture(8)` (already INTERCEPT) |
-| `src/clis/twitter/notifications.ts` | `wait(3)` → selector + `wait(5)` → `waitForCapture(8)` |
-| `src/clis/producthunt/hot.ts` | `wait(5)` → `waitForCapture(8)` |
-| `src/clis/producthunt/browse.ts` | `wait(5)` → `waitForCapture(8)` |
-| `src/clis/twitter/reply.ts` | `wait(5)` → `wait({ selector: '[data-testid="tweetTextarea_0"]', timeout: 8 })` |
-| `src/clis/twitter/follow.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/unfollow.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/like.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/bookmark.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/unbookmark.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/block.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/unblock.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/hide-reply.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/profile.ts` | `wait(5)` + `wait(3)` → selector variants |
-| `src/clis/twitter/thread.ts` | `wait(3)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 })` |
-| `src/clis/twitter/timeline.ts` | `wait(3)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 })` |
-| `src/clis/twitter/delete.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
-| `src/clis/twitter/reply-dm.ts` | `wait(5)` + `wait(3)` → selector variants |
-| `src/clis/medium/utils.ts` | `wait(5)` → selector; remove inline `setTimeout(3000)` |
-| `src/clis/substack/utils.ts` | `wait(5)` × 2 → selector; remove inline `setTimeout(3000)` × 2 |
-| `src/clis/bloomberg/news.ts` | `wait(5)` → `wait({ selector: '#__NEXT_DATA__', timeout: 8 })`; `wait(4)` → `wait({ selector: '#__NEXT_DATA__', timeout: 5 })` |
-| `src/clis/sinablog/utils.ts` | `wait(3/5)` → selector; remove inline polling loop |
+| `clis/36kr/hot.ts` | `wait(6)` → `waitForCapture(10)` |
+| `clis/36kr/search.ts` | `wait(6)` → `waitForCapture(10)` |
+| `clis/twitter/search.ts` | `wait(5)` → `waitForCapture(8)` (already INTERCEPT) |
+| `clis/twitter/followers.ts` | `wait(5)` → `waitForCapture(8)` (already INTERCEPT) |
+| `clis/twitter/following.ts` | `wait(5)` → `waitForCapture(8)` (already INTERCEPT) |
+| `clis/twitter/notifications.ts` | `wait(3)` → selector + `wait(5)` → `waitForCapture(8)` |
+| `clis/producthunt/hot.ts` | `wait(5)` → `waitForCapture(8)` |
+| `clis/producthunt/browse.ts` | `wait(5)` → `waitForCapture(8)` |
+| `clis/twitter/reply.ts` | `wait(5)` → `wait({ selector: '[data-testid="tweetTextarea_0"]', timeout: 8 })` |
+| `clis/twitter/follow.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/unfollow.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/like.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/bookmark.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/unbookmark.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/block.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/unblock.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/hide-reply.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/profile.ts` | `wait(5)` + `wait(3)` → selector variants |
+| `clis/twitter/thread.ts` | `wait(3)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 })` |
+| `clis/twitter/timeline.ts` | `wait(3)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 })` |
+| `clis/twitter/delete.ts` | `wait(5)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })` |
+| `clis/twitter/reply-dm.ts` | `wait(5)` + `wait(3)` → selector variants |
+| `clis/medium/utils.ts` | `wait(5)` → selector; remove inline `setTimeout(3000)` |
+| `clis/substack/utils.ts` | `wait(5)` × 2 → selector; remove inline `setTimeout(3000)` × 2 |
+| `clis/bloomberg/news.ts` | `wait(5)` → `wait({ selector: '#__NEXT_DATA__', timeout: 8 })`; `wait(4)` → `wait({ selector: '#__NEXT_DATA__', timeout: 5 })` |
+| `clis/sinablog/utils.ts` | `wait(3/5)` → selector; remove inline polling loop |
 
 ---
 
@@ -448,7 +448,7 @@ The current `stepIntercept` uses `generateInterceptorJs`/`generateReadIntercepte
  * Pipeline step: intercept — declarative XHR interception.
  */
 
-import type { IPage } from '../../types.js';
+import type { IPage } from '@jackwener/opencli/types';
 import { render, normalizeEvaluateSource } from '../template.js';
 
 export async function stepIntercept(page: IPage | null, params: any, data: any, args: Record<string, any>): Promise<any> {
@@ -521,7 +521,7 @@ git commit -m "perf(intercept): use installInterceptor+waitForCapture in stepInt
 
 **Files:** `36kr/hot.ts`, `36kr/search.ts`, `twitter/search.ts`, `twitter/followers.ts`, `twitter/following.ts`, `twitter/notifications.ts`, `producthunt/hot.ts`, `producthunt/browse.ts`
 
-- [ ] **Step 1: Fix `src/clis/36kr/hot.ts`**
+- [ ] **Step 1: Fix `clis/36kr/hot.ts`**
 
 Find:
 ```typescript
@@ -536,7 +536,7 @@ Replace with:
     await page.waitForCapture(10);
 ```
 
-- [ ] **Step 2: Fix `src/clis/36kr/search.ts`**
+- [ ] **Step 2: Fix `clis/36kr/search.ts`**
 
 Find:
 ```typescript
@@ -551,7 +551,7 @@ Replace with:
     await page.waitForCapture(10);
 ```
 
-- [ ] **Step 3: Fix `src/clis/twitter/search.ts`**
+- [ ] **Step 3: Fix `clis/twitter/search.ts`**
 
 Find the two lines that contain `await page.wait(5)` in the `navigateToSearch` helper:
 ```typescript
@@ -562,7 +562,7 @@ Find the two lines that contain `await page.wait(5)` in the `navigateToSearch` h
     await page.waitForCapture(8);
 ```
 
-- [ ] **Step 4: Fix `src/clis/twitter/followers.ts`**
+- [ ] **Step 4: Fix `clis/twitter/followers.ts`**
 
 Find:
 ```typescript
@@ -585,14 +585,14 @@ Also find the earlier `wait(5)` after going to profile and `wait(3)` after going
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 });
 ```
 
-- [ ] **Step 5: Fix `src/clis/twitter/following.ts`**
+- [ ] **Step 5: Fix `clis/twitter/following.ts`**
 
 Same pattern as `followers.ts`. Find and apply identically:
 - `wait(5)` after `goto('https://x.com/home')` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 5 })`
 - `wait(3)` after `goto(\`https://x.com/${targetUser}\`)` → `wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 })`
 - `wait(5)` after SPA click that triggers INTERCEPT → `waitForCapture(8)`
 
-- [ ] **Step 6: Fix `src/clis/twitter/notifications.ts`**
+- [ ] **Step 6: Fix `clis/twitter/notifications.ts`**
 
 Find:
 ```typescript
@@ -618,7 +618,7 @@ Replace with:
     // Verify SPA navigation succeeded
 ```
 
-- [ ] **Step 7: Fix `src/clis/producthunt/hot.ts`**
+- [ ] **Step 7: Fix `clis/producthunt/hot.ts`**
 
 Find:
 ```typescript
@@ -626,7 +626,7 @@ Find:
 ```
 Look at the full pattern and replace the subsequent `wait(5)` with `waitForCapture(8)`.
 
-- [ ] **Step 8: Fix `src/clis/producthunt/browse.ts`**
+- [ ] **Step 8: Fix `clis/producthunt/browse.ts`**
 
 Same as `hot.ts` — replace `wait(5)` after `installInterceptor` + `goto` with `waitForCapture(8)`.
 
@@ -642,10 +642,10 @@ If any adapter test file lacks `waitForCapture` mock, add `waitForCapture: vi.fn
 - [ ] **Step 10: Commit**
 
 ```bash
-git add src/clis/36kr/hot.ts src/clis/36kr/search.ts \
-        src/clis/twitter/search.ts src/clis/twitter/followers.ts \
-        src/clis/twitter/following.ts src/clis/twitter/notifications.ts \
-        src/clis/producthunt/hot.ts src/clis/producthunt/browse.ts
+git add clis/36kr/hot.ts clis/36kr/search.ts \
+        clis/twitter/search.ts clis/twitter/followers.ts \
+        clis/twitter/following.ts clis/twitter/notifications.ts \
+        clis/producthunt/hot.ts clis/producthunt/browse.ts
 git commit -m "perf(intercept): replace wait(N) with waitForCapture() in all INTERCEPT adapters"
 ```
 
@@ -703,11 +703,11 @@ git commit -m "perf(daemon): exponential backoff for cold-start extension pollin
 
 ## Task 8: Fix Twitter UI adapters with `wait({ selector })` (Layer 2, part 1)
 
-**Files:** 13 adapters in `src/clis/twitter/`
+**Files:** 13 adapters in `clis/twitter/`
 
 For all adapters below, the pattern is identical: `await page.goto(url)` followed by `await page.wait(5)` waiting for React to hydrate. Replace `wait(5)` with `wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 })`.
 
-- [ ] **Step 1: Fix `src/clis/twitter/reply.ts`**
+- [ ] **Step 1: Fix `clis/twitter/reply.ts`**
 
 Find:
 ```typescript
@@ -721,7 +721,7 @@ Replace with:
 ```
 (reply.ts uses the reply textarea directly — more precise than primaryColumn)
 
-- [ ] **Step 2: Fix `src/clis/twitter/follow.ts`**
+- [ ] **Step 2: Fix `clis/twitter/follow.ts`**
 
 Find:
 ```typescript
@@ -734,7 +734,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
 ```
 
-- [ ] **Step 3: Fix `src/clis/twitter/unfollow.ts`**
+- [ ] **Step 3: Fix `clis/twitter/unfollow.ts`**
 
 Find:
 ```typescript
@@ -747,7 +747,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
 ```
 
-- [ ] **Step 4: Fix `src/clis/twitter/like.ts`**
+- [ ] **Step 4: Fix `clis/twitter/like.ts`**
 
 Find:
 ```typescript
@@ -760,7 +760,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
 ```
 
-- [ ] **Step 5: Fix `src/clis/twitter/bookmark.ts`**
+- [ ] **Step 5: Fix `clis/twitter/bookmark.ts`**
 
 Find:
 ```typescript
@@ -773,7 +773,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
 ```
 
-- [ ] **Step 6: Fix `src/clis/twitter/unbookmark.ts`**
+- [ ] **Step 6: Fix `clis/twitter/unbookmark.ts`**
 
 Find:
 ```typescript
@@ -786,20 +786,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
 ```
 
-- [ ] **Step 7: Fix `src/clis/twitter/block.ts`**
-
-Find:
-```typescript
-    await page.goto(`https://x.com/${username}`);
-    await page.wait(5);
-```
-Replace with:
-```typescript
-    await page.goto(`https://x.com/${username}`);
-    await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
-```
-
-- [ ] **Step 8: Fix `src/clis/twitter/unblock.ts`**
+- [ ] **Step 7: Fix `clis/twitter/block.ts`**
 
 Find:
 ```typescript
@@ -812,7 +799,20 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
 ```
 
-- [ ] **Step 9: Fix `src/clis/twitter/hide-reply.ts`**
+- [ ] **Step 8: Fix `clis/twitter/unblock.ts`**
+
+Find:
+```typescript
+    await page.goto(`https://x.com/${username}`);
+    await page.wait(5);
+```
+Replace with:
+```typescript
+    await page.goto(`https://x.com/${username}`);
+    await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
+```
+
+- [ ] **Step 9: Fix `clis/twitter/hide-reply.ts`**
 
 Find:
 ```typescript
@@ -825,7 +825,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
 ```
 
-- [ ] **Step 10: Fix `src/clis/twitter/delete.ts`**
+- [ ] **Step 10: Fix `clis/twitter/delete.ts`**
 
 Find:
 ```typescript
@@ -838,7 +838,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 6 });
 ```
 
-- [ ] **Step 11: Fix `src/clis/twitter/profile.ts`**
+- [ ] **Step 11: Fix `clis/twitter/profile.ts`**
 
 There are two wait calls:
 
@@ -864,7 +864,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 });
 ```
 
-- [ ] **Step 12: Fix `src/clis/twitter/thread.ts`**
+- [ ] **Step 12: Fix `clis/twitter/thread.ts`**
 
 Find:
 ```typescript
@@ -877,7 +877,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 });
 ```
 
-- [ ] **Step 13: Fix `src/clis/twitter/timeline.ts`**
+- [ ] **Step 13: Fix `clis/twitter/timeline.ts`**
 
 Find:
 ```typescript
@@ -890,7 +890,7 @@ Replace with:
     await page.wait({ selector: '[data-testid="primaryColumn"]', timeout: 4 });
 ```
 
-- [ ] **Step 14: Fix `src/clis/twitter/reply-dm.ts`**
+- [ ] **Step 14: Fix `clis/twitter/reply-dm.ts`**
 
 Find:
 ```typescript
@@ -924,11 +924,11 @@ Expected: All PASS.
 - [ ] **Step 16: Commit**
 
 ```bash
-git add src/clis/twitter/reply.ts src/clis/twitter/follow.ts src/clis/twitter/unfollow.ts \
-        src/clis/twitter/like.ts src/clis/twitter/bookmark.ts src/clis/twitter/unbookmark.ts \
-        src/clis/twitter/block.ts src/clis/twitter/unblock.ts src/clis/twitter/hide-reply.ts \
-        src/clis/twitter/delete.ts src/clis/twitter/profile.ts src/clis/twitter/thread.ts \
-        src/clis/twitter/timeline.ts src/clis/twitter/reply-dm.ts
+git add clis/twitter/reply.ts clis/twitter/follow.ts clis/twitter/unfollow.ts \
+        clis/twitter/like.ts clis/twitter/bookmark.ts clis/twitter/unbookmark.ts \
+        clis/twitter/block.ts clis/twitter/unblock.ts clis/twitter/hide-reply.ts \
+        clis/twitter/delete.ts clis/twitter/profile.ts clis/twitter/thread.ts \
+        clis/twitter/timeline.ts clis/twitter/reply-dm.ts
 git commit -m "perf(twitter): replace wait(N) with wait({ selector }) for React hydration waits"
 ```
 
@@ -940,7 +940,7 @@ git commit -m "perf(twitter): replace wait(N) with wait({ selector }) for React 
 
 The pattern for medium/substack: outer `wait(5)` + inner `setTimeout(3000)` in `evaluate()`. Fix: replace outer with `wait({ selector: 'article', timeout: 8 })`, remove inner setTimeout, and let the evaluate run synchronously.
 
-- [ ] **Step 1: Fix `src/clis/medium/utils.ts`**
+- [ ] **Step 1: Fix `clis/medium/utils.ts`**
 
 Find the `loadMediumPosts` function. Replace:
 ```typescript
@@ -971,7 +971,7 @@ The evaluate body starting line is:
 ```
 Replace `(async () => {` with `(() => {` and remove the `await new Promise((resolve) => setTimeout(resolve, 3000));` line (and the blank line after it). Change `})()` closing to `})()`. Remove `async` from the arrow function signature.
 
-- [ ] **Step 2: Fix `src/clis/substack/utils.ts` — `loadSubstackFeed`**
+- [ ] **Step 2: Fix `clis/substack/utils.ts` — `loadSubstackFeed`**
 
 Find:
 ```typescript
@@ -990,7 +990,7 @@ Replace with:
 ```
 And remove the `await new Promise((resolve) => setTimeout(resolve, 3000));` line. Change `(async () => {` to `(() => {`.
 
-- [ ] **Step 3: Fix `src/clis/substack/utils.ts` — `loadSubstackArchive`**
+- [ ] **Step 3: Fix `clis/substack/utils.ts` — `loadSubstackArchive`**
 
 Same fix as Step 2 but for `loadSubstackArchive`:
 ```typescript
@@ -1009,7 +1009,7 @@ Replace with:
 ```
 Remove inner setTimeout line. Change async to sync.
 
-- [ ] **Step 4: Fix `src/clis/bloomberg/news.ts`**
+- [ ] **Step 4: Fix `clis/bloomberg/news.ts`**
 
 Find:
 ```typescript
@@ -1037,7 +1037,7 @@ Replace with:
     }
 ```
 
-- [ ] **Step 5: Fix `src/clis/sinablog/utils.ts`**
+- [ ] **Step 5: Fix `clis/sinablog/utils.ts`**
 
 `sinablog` has three functions to fix.
 
@@ -1090,8 +1090,8 @@ Expected: All PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/clis/medium/utils.ts src/clis/substack/utils.ts \
-        src/clis/bloomberg/news.ts src/clis/sinablog/utils.ts
+git add clis/medium/utils.ts clis/substack/utils.ts \
+        clis/bloomberg/news.ts clis/sinablog/utils.ts
 git commit -m "perf(adapters): replace wait(N)+inline-sleep with wait({ selector }) in medium/substack/bloomberg/sinablog"
 ```
 

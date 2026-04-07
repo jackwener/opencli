@@ -27,6 +27,8 @@ import { formatSnapshot } from '../snapshotFormatter.js';
 
 export abstract class BasePage implements IPage {
   protected _lastUrl: string | null = null;
+  /** Cached previous snapshot hashes for incremental diff marking */
+  private _prevSnapshotHashes: string | null = null;
 
   // ── Transport-specific methods (must be implemented by subclasses) ──
 
@@ -35,14 +37,34 @@ export abstract class BasePage implements IPage {
   abstract getCookies(opts?: { domain?: string; url?: string }): Promise<BrowserCookie[]>;
   abstract screenshot(options?: ScreenshotOptions): Promise<string>;
   abstract tabs(): Promise<unknown[]>;
-  abstract closeTab(index?: number): Promise<void>;
-  abstract newTab(): Promise<void>;
   abstract selectTab(index: number): Promise<void>;
 
   // ── Shared DOM helper implementations ──
 
   async click(ref: string): Promise<void> {
-    await this.evaluate(clickJs(ref));
+    const result = await this.evaluate(clickJs(ref)) as
+      | string
+      | { status: string; x?: number; y?: number; w?: number; h?: number; error?: string }
+      | null;
+
+    // Backwards compat: old format returned 'clicked' string
+    if (typeof result === 'string' || result == null) return;
+
+    // JS click succeeded
+    if (result.status === 'clicked') return;
+
+    // JS click failed — try CDP native click if coordinates available
+    if (result.x != null && result.y != null) {
+      const success = await this.tryNativeClick(result.x, result.y);
+      if (success) return;
+    }
+
+    throw new Error(`Click failed: ${result.error ?? 'JS click and CDP fallback both failed'}`);
+  }
+
+  /** Override in subclasses with CDP native click support */
+  protected async tryNativeClick(_x: number, _y: number): Promise<boolean> {
+    return false;
   }
 
   async typeText(ref: string, text: string): Promise<void> {
@@ -111,17 +133,30 @@ export abstract class BasePage implements IPage {
 
   async snapshot(opts: SnapshotOptions = {}): Promise<unknown> {
     const snapshotJs = generateSnapshotJs({
-      viewportExpand: opts.viewportExpand ?? 800,
+      viewportExpand: opts.viewportExpand ?? 2000,
       maxDepth: Math.max(1, Math.min(Number(opts.maxDepth) || 50, 200)),
       interactiveOnly: opts.interactive ?? false,
       maxTextLength: opts.maxTextLength ?? 120,
       includeScrollInfo: true,
       bboxDedup: true,
+      previousHashes: this._prevSnapshotHashes,
     });
 
     try {
-      return await this.evaluate(snapshotJs);
-    } catch {
+      const result = await this.evaluate(snapshotJs);
+      // Read back the hashes stored by the snapshot for next diff
+      try {
+        const hashes = await this.evaluate('window.__opencli_prev_hashes') as string | null;
+        this._prevSnapshotHashes = typeof hashes === 'string' ? hashes : null;
+      } catch {
+        // Non-fatal: diff is best-effort
+      }
+      return result;
+    } catch (err) {
+      // Log snapshot failure for debugging, then fallback to basic accessibility tree
+      if (process.env.DEBUG_SNAPSHOT) {
+        console.error('[snapshot] DOM snapshot failed, falling back to accessibility tree:', (err as Error)?.message?.slice(0, 200));
+      }
       return this._basicSnapshot(opts);
     }
   }

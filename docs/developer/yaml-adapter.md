@@ -115,7 +115,7 @@ Use `${{ ... }}` for dynamic values:
 
 ## Real Example
 
-See [`src/clis/hackernews/top.yaml`](https://github.com/jackwener/opencli/blob/main/src/clis/hackernews/top.yaml).
+See [`clis/hackernews/top.yaml`](https://github.com/jackwener/opencli/blob/main/clis/hackernews/top.yaml).
 
 ## Guardrails
 

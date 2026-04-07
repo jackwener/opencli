@@ -1,7 +1,13 @@
+---
+name: opencli-oneshot
+description: Use when quickly generating a single OpenCLI command from a specific URL and goal description. 4-step process — open page, capture API, write YAML adapter, test. For full site exploration, use opencli-explorer instead.
+tags: [opencli, adapter, quick-start, yaml, cli, one-shot, automation]
+---
+
 # CLI-ONESHOT — 单点快速 CLI 生成
 
 > 给一个 URL + 一句话描述，4 步生成一个 CLI 命令。
-> 完整探索式开发请看 [CLI-EXPLORER.md](./CLI-EXPLORER.md)。
+> 完整探索式开发请看 [opencli-explorer skill](../opencli-explorer/SKILL.md)。
 
 ---
 
@@ -79,7 +85,7 @@ fetch(url, {credentials:'include'})？ → Tier 2: cookie   (YAML)
 ### YAML — Cookie/Public（最简）
 
 ```yaml
-# src/clis/<site>/<name>.yaml
+# clis/<site>/<name>.yaml
 site: mysite
 name: mycommand
 description: "一句话描述"
@@ -117,8 +123,8 @@ columns: [rank, title, value]
 ### TS — Intercept（抓包模式）
 
 ```typescript
-// src/clis/<site>/<name>.ts
-import { cli, Strategy } from '../../registry.js';
+// clis/<site>/<name>.ts
+import { cli, Strategy } from '@jackwener/opencli/registry';
 
 cli({
   site: 'mysite',
@@ -164,7 +170,7 @@ cli({
 ### TS — Header（如 Twitter GraphQL）
 
 ```typescript
-import { cli, Strategy } from '../../registry.js';
+import { cli, Strategy } from '@jackwener/opencli/registry';
 
 cli({
   site: 'twitter',
@@ -213,4 +219,4 @@ opencli mysite mycommand --limit 3 -v      # 实际运行
 
 ## 就这样，没了
 
-写完文件 → build → run → 提交。有问题再看 [CLI-EXPLORER.md](./CLI-EXPLORER.md)。
+写完文件 → build → run → 提交。有问题再看 [opencli-explorer skill](../opencli-explorer/SKILL.md)。

@@ -29,10 +29,14 @@ opencli zhihu question 34816524            # 问题详情和回答 (id positiona
 ## Xiaohongshu (小红书)
 
 ```bash
-opencli xiaohongshu search "美食"           # 搜索笔记 (query positional)
-opencli xiaohongshu notifications             # 通知（mentions/likes/connections）
-opencli xiaohongshu feed --limit 10           # 推荐 Feed
-opencli xiaohongshu user xxx               # 用户主页 (id positional)
+opencli xiaohongshu search "美食"              # 搜索笔记 (query positional)
+opencli xiaohongshu note <note-id-or-url>      # 读取笔记正文和互动数据
+opencli xiaohongshu comments <note-id>         # 笔记评论
+opencli xiaohongshu notifications              # 通知（mentions/likes/connections）
+opencli xiaohongshu feed --limit 10            # 推荐 Feed
+opencli xiaohongshu user xxx                   # 用户主页 (id positional)
+opencli xiaohongshu download <note-id>         # 下载笔记图片/视频
+opencli xiaohongshu publish                    # 发布笔记
 opencli xiaohongshu creator-notes --limit 10   # 创作者笔记列表
 opencli xiaohongshu creator-note-detail --note-id xxx  # 笔记详情
 opencli xiaohongshu creator-notes-summary      # 笔记数据概览
@@ -116,6 +120,12 @@ opencli v2ex notifications --limit 10    # 通知
 
 ```bash
 opencli weibo hot --limit 10            # 微博热搜
+opencli weibo search "关键词"            # 搜索微博
+opencli weibo feed --limit 20           # 首页时间线
+opencli weibo user <uid>                # 用户信息
+opencli weibo me                        # 我的信息
+opencli weibo post "内容"               # 发微博
+opencli weibo comments <mid>            # 微博评论
 ```
 
 ## BOSS直聘
@@ -203,6 +213,8 @@ opencli jike notifications               # 通知
 ```bash
 opencli linux-do categories --limit 20   # 分类列表
 opencli linux-do category dev 7          # 分类内话题 (slug + id positional)
+opencli linux-do topic 1234              # 帖子首页回复列表
+opencli linux-do topic-content 1234      # 主贴 Markdown 正文
 ```
 
 ## WeRead (微信读书)
@@ -353,6 +365,10 @@ opencli doubao new                        # 新建对话
 opencli doubao send "你好"                # 发送消息 (text positional)
 opencli doubao read                       # 读取对话记录
 opencli doubao ask "问题"                 # 一键提问并等回复 (text positional)
+opencli doubao detail <id>                # 对话详情
+opencli doubao history                    # 历史对话列表
+opencli doubao meeting-summary <id>       # 会议总结
+opencli doubao meeting-transcript <id>    # 会议记录
 ```
 
 ## Grok
@@ -404,26 +420,110 @@ opencli linkedin timeline --limit 20     # 首页动态流
 opencli bloomberg news "https://..."      # 阅读 Bloomberg 文章全文 (link positional, browser)
 ```
 
-## Kimi
+## Gemini
 
 ```bash
-opencli kimi status                       # 检查 Kimi 页面状态
-opencli kimi new                          # 新建对话
-opencli kimi ask "问题"                   # 提问 (prompt positional)
+opencli gemini ask "问题"                 # 提问 (prompt positional)
+opencli gemini new                        # 新建对话
+opencli gemini image "描述"               # 生成图片
 ```
 
-## DeepSeek
+## NotebookLM
 
 ```bash
-opencli deepseek status                   # 检查 DeepSeek 页面状态
-opencli deepseek new                      # 新建对话
-opencli deepseek ask "问题"               # 提问 (prompt positional)
+opencli notebooklm status                 # 检查页面状态
+opencli notebooklm list                   # 列出所有笔记本
+opencli notebooklm open <notebook>        # 打开笔记本
+opencli notebooklm current                # 当前笔记本信息
+opencli notebooklm get                    # 获取笔记本详情
+opencli notebooklm history                # 对话历史
+opencli notebooklm summary                # 笔记本摘要
+opencli notebooklm source-list            # 列出来源
+opencli notebooklm source-get <source>    # 获取来源详情
+opencli notebooklm source-fulltext <src>  # 来源全文
+opencli notebooklm source-guide <src>     # 来源指南
+opencli notebooklm note-list              # 笔记列表
+opencli notebooklm notes-get <note>       # 获取笔记内容
 ```
 
-## Qwen (通义千问)
+## Bluesky
 
 ```bash
-opencli qwen status                       # 检查 Qwen 页面状态
-opencli qwen new                          # 新建对话
-opencli qwen ask "问题"                   # 提问 (prompt positional)
+opencli bluesky search "关键词"           # 搜索帖子 (query positional)
+opencli bluesky profile <handle>          # 用户资料
+opencli bluesky user <handle>             # 用户详情
+opencli bluesky feeds <handle>            # 用户 feeds
+opencli bluesky followers <handle>        # 粉丝列表
+opencli bluesky following <handle>        # 关注列表
+opencli bluesky thread <uri>              # 帖子线程
+opencli bluesky trending                  # 热门话题
+opencli bluesky starter-packs             # Starter packs
+```
+
+## Douyin (抖音)
+
+```bash
+opencli douyin profile                    # 创作者资料
+opencli douyin videos --limit 10          # 浏览视频
+opencli douyin user-videos                # 我的作品列表
+opencli douyin activities                 # 动态
+opencli douyin collections                # 收藏夹
+opencli douyin hashtag <tag>              # 话题页
+opencli douyin location <poi>             # 地点页
+opencli douyin stats                      # 数据统计
+opencli douyin publish                    # 发布视频
+opencli douyin draft                      # 编辑草稿
+opencli douyin drafts                     # 草稿列表
+opencli douyin delete <id>                # 删除作品
+opencli douyin update <id>                # 更新作品信息
+```
+
+## Band
+
+```bash
+opencli band bands                        # 列出已加入的 bands
+opencli band posts <band-id>              # Band 帖子列表
+opencli band post <post-key>              # 帖子详情
+opencli band mentions                     # 提到我的消息
+```
+
+## ZSXQ (知识星球)
+
+```bash
+opencli zsxq groups                       # 我加入的星球
+opencli zsxq dynamics <group-id>          # 星球动态
+opencli zsxq topics <group-id>            # 主题列表
+opencli zsxq topic <topic-id>             # 主题详情
+opencli zsxq search "关键词"              # 搜索
+```
+
+## Tieba (百度贴吧)
+
+```bash
+opencli tieba hot                         # 热门贴吧
+opencli tieba search "关键词"             # 搜索
+opencli tieba posts <forum>               # 帖子列表
+opencli tieba read <thread-id>            # 阅读帖子
+```
+
+## 36kr
+
+```bash
+opencli 36kr hot                          # 热门文章
+opencli 36kr news                         # 最新资讯
+opencli 36kr search "关键词"              # 搜索文章
+opencli 36kr article <id>                 # 文章全文
+```
+
+## ONES
+
+```bash
+opencli ones login                        # 登录
+opencli ones me                           # 我的信息
+opencli ones tasks --team <id>            # 项目任务列表
+opencli ones my-tasks                     # 我的任务
+opencli ones task <id>                    # 任务详情
+opencli ones worklog --task <id>          # 工时日志
+opencli ones token-info                   # Token 信息
+opencli ones logout                       # 登出
 ```

@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.6.1](https://github.com/jackwener/opencli/compare/v1.6.0...v1.6.1) (2026-04-02)
+
+
+### Bug Fixes
+
+* sync package-lock.json version with package.json ([#698](https://github.com/jackwener/opencli/issues/698))
+
+
+## [1.6.0](https://github.com/jackwener/opencli/compare/v1.5.9...v1.6.0) (2026-04-02)
+
+
+### Features
+
+* **opencli-operate:** add browser control commands for Claude Code skill ([#614](https://github.com/jackwener/opencli/issues/614))
+* **docs:** add tab completion to getting started guides ([#658](https://github.com/jackwener/opencli/issues/658))
+
+
+### Bug Fixes
+
+* **twitter:** resolve article ID to tweet ID before GraphQL query ([#688](https://github.com/jackwener/opencli/issues/688))
+* **xiaohongshu:** clarify empty note shell hint ([#686](https://github.com/jackwener/opencli/issues/686))
+* **skills:** add YAML frontmatter for discovery and improve descriptions ([#694](https://github.com/jackwener/opencli/issues/694))
+
+
+### Refactoring
+
+* centralize daemon transport client ([#692](https://github.com/jackwener/opencli/issues/692))
+
+
 ## [1.5.9](https://github.com/jackwener/opencli/compare/v1.5.8...v1.5.9) (2026-04-02)
 
 

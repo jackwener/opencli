@@ -11,6 +11,8 @@
 | `opencli amazon product <asin-or-url>` | Read a product page with title, price, rating, breadcrumbs, and bullets |
 | `opencli amazon offer <asin-or-url>` | Read seller / fulfillment / buy-box facts from the product page |
 | `opencli amazon discussion <asin-or-url>` | Read review summary and sample customer reviews |
+| `opencli amazon movers-shakers [<url>]` | Amazon Movers & Shakers pages for short-term growth signals |
+| `opencli amazon new-releases [<url>]` | Amazon New Releases pages for early momentum discovery |
 
 ## Usage Examples
 
@@ -42,7 +44,7 @@ opencli amazon discussion B0FJS72893 --limit 5 -f json
 ## Notes
 
 - This adapter only returns fields visible on public Amazon pages.
-- `bestsellers` and `search` are for candidate discovery; `product`, `offer`, and `discussion` are the validation surfaces.
+- `bestsellers`, `movers-shakers`, `new-releases`, and `search` are for candidate discovery; `product`, `offer`, and `discussion` are the validation surfaces.
 - `offer` is the right surface for `sold_by`, `ships_from`, and Amazon-retail exclusion.
 - `discussion` may return review data even when Q&A is absent. Missing Q&A is a normal outcome, not an error.
 

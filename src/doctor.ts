@@ -25,6 +25,7 @@ export type ConnectivityResult = {
   durationMs: number;
 };
 
+
 export type DoctorReport = {
   cliVersion?: string;
   daemonRunning: boolean;
@@ -83,7 +84,7 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
   }
   if (status.running && !status.extensionConnected) {
     issues.push(
-      'Daemon is running but the Chrome extension is not connected.\n' +
+      'Daemon is running but the Chrome/Chromium extension is not connected.\n' +
       'Please install the opencli Browser Bridge extension:\n' +
       '  1. Download from https://github.com/jackwener/opencli/releases\n' +
       '  2. Open chrome://extensions/ → Enable Developer Mode\n' +
@@ -93,7 +94,6 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
   if (connectivity && !connectivity.ok) {
     issues.push(`Browser connectivity test failed: ${connectivity.error ?? 'unknown'}`);
   }
-
   if (status.extensionVersion && opts.cliVersion) {
     const extMajor = status.extensionVersion.split('.')[0];
     const cliMajor = opts.cliVersion.split('.')[0];

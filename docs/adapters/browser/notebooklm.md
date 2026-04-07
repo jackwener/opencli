@@ -45,13 +45,13 @@ opencli notebooklm status
 opencli notebooklm list -f json
 opencli notebooklm open nb-demo -f json
 opencli notebooklm current -f json
-opencli notebooklm metadata -f json
+opencli notebooklm get -f json
 opencli notebooklm source-list -f json
 opencli notebooklm source-get "Quarterly report" -f json
 opencli notebooklm source-guide "Quarterly report" -f json
 opencli notebooklm source-fulltext "Quarterly report" -f json
 opencli notebooklm history -f json
-opencli notebooklm notes-list -f json
+opencli notebooklm note-list -f json
 opencli notebooklm notes-get "Draft note" -f json
 opencli notebooklm summary -f json
 ```

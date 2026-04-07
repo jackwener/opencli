@@ -46,7 +46,7 @@ export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9222"
 
 ### 3. Start with the 5-command pattern
 
-For a new Electron adapter, implement these commands first in `src/clis/<app>/`:
+For a new Electron adapter, implement these commands first in `clis/<app>/`:
 
 - `status.ts` — verify the app is reachable through CDP
 - `dump.ts` — inspect DOM and snapshot structure before guessing selectors
@@ -125,12 +125,12 @@ await page.wait(1);
 For a TypeScript desktop adapter, the usual layout is:
 
 ```text
-src/clis/<app>/status.ts
-src/clis/<app>/dump.ts
-src/clis/<app>/read.ts
-src/clis/<app>/send.ts
-src/clis/<app>/new.ts
-src/clis/<app>/utils.ts
+clis/<app>/status.ts
+clis/<app>/dump.ts
+clis/<app>/read.ts
+clis/<app>/send.ts
+clis/<app>/new.ts
+clis/<app>/utils.ts
 ```
 
 If the app grows beyond the baseline, add higher-level commands such as:

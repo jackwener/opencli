@@ -15,6 +15,8 @@ export interface ElectronAppEntry {
   port: number;
   /** macOS process name for detection via pgrep */
   processName: string;
+  /** Candidate executable names inside Contents/MacOS/, tried in order */
+  executableNames?: string[];
   /** macOS bundle ID for path discovery */
   bundleId?: string;
   /** Human-readable name for prompts */
@@ -30,7 +32,13 @@ export const builtinApps: Record<string, ElectronAppEntry> = {
   notion:        { port: 9230, processName: 'Notion',       bundleId: 'notion.id',                      displayName: 'Notion' },
   'discord-app': { port: 9232, processName: 'Discord',      bundleId: 'com.discord.app',                 displayName: 'Discord' },
   'doubao-app':  { port: 9225, processName: 'Doubao',       bundleId: 'com.volcengine.doubao',          displayName: 'Doubao' },
-  antigravity:   { port: 9234, processName: 'Antigravity',  bundleId: 'dev.antigravity.app',            displayName: 'Antigravity' },
+  antigravity:   {
+    port: 9234,
+    processName: 'Antigravity',
+    executableNames: ['Electron', 'Antigravity'],
+    bundleId: 'dev.antigravity.app',
+    displayName: 'Antigravity',
+  },
   chatgpt:       { port: 9236, processName: 'ChatGPT',      bundleId: 'com.openai.chat',                displayName: 'ChatGPT' },
 };
 

@@ -6,65 +6,12 @@ const WS_RECONNECT_BASE_DELAY = 2e3;
 const WS_RECONNECT_MAX_DELAY = 5e3;
 
 const attached = /* @__PURE__ */ new Set();
-const BLANK_PAGE$1 = "data:text/html,<html></html>";
-const FOREIGN_EXTENSION_URL_PREFIX = "chrome-extension://";
-const ATTACH_RECOVERY_DELAY_MS = 120;
+const networkCaptures = /* @__PURE__ */ new Map();
 function isDebuggableUrl$1(url) {
   if (!url) return true;
-  return url.startsWith("http://") || url.startsWith("https://") || url === BLANK_PAGE$1;
+  return url.startsWith("http://") || url.startsWith("https://") || url === "about:blank" || url.startsWith("data:");
 }
-async function removeForeignExtensionEmbeds(tabId) {
-  const tab = await chrome.tabs.get(tabId);
-  if (!tab.url || !tab.url.startsWith("http://") && !tab.url.startsWith("https://")) {
-    return { removed: 0 };
-  }
-  if (!chrome.scripting?.executeScript) return { removed: 0 };
-  try {
-    const [result] = await chrome.scripting.executeScript({
-      target: { tabId },
-      args: [`${FOREIGN_EXTENSION_URL_PREFIX}${chrome.runtime.id}/`],
-      func: (ownExtensionPrefix) => {
-        const extensionPrefix = "chrome-extension://";
-        const selectors = ["iframe", "frame", "embed", "object"];
-        const visitedRoots = /* @__PURE__ */ new Set();
-        const roots = [document];
-        let removed = 0;
-        while (roots.length > 0) {
-          const root = roots.pop();
-          if (!root || visitedRoots.has(root)) continue;
-          visitedRoots.add(root);
-          for (const selector of selectors) {
-            const nodes = root.querySelectorAll(selector);
-            for (const node of nodes) {
-              const src = node.getAttribute("src") || node.getAttribute("data") || "";
-              if (!src.startsWith(extensionPrefix) || src.startsWith(ownExtensionPrefix)) continue;
-              node.remove();
-              removed++;
-            }
-          }
-          const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-          let current = walker.nextNode();
-          while (current) {
-            const element = current;
-            if (element.shadowRoot) roots.push(element.shadowRoot);
-            current = walker.nextNode();
-          }
-        }
-        return { removed };
-      }
-    });
-    return result?.result ?? { removed: 0 };
-  } catch {
-    return { removed: 0 };
-  }
-}
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-async function tryAttach(tabId) {
-  await chrome.debugger.attach({ tabId }, "1.3");
-}
-async function ensureAttached(tabId) {
+async function ensureAttached(tabId, aggressiveRetry = false) {
   try {
     const tab = await chrome.tabs.get(tabId);
     if (!isDebuggableUrl$1(tab.url)) {
@@ -87,59 +34,84 @@ async function ensureAttached(tabId) {
       attached.delete(tabId);
     }
   }
-  try {
-    await tryAttach(tabId);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const hint = msg.includes("chrome-extension://") ? ". Tip: another Chrome extension may be interfering — try disabling other extensions" : "";
-    if (msg.includes("chrome-extension://")) {
-      const recoveryCleanup = await removeForeignExtensionEmbeds(tabId);
-      if (recoveryCleanup.removed > 0) {
-        console.warn(`[opencli] Removed ${recoveryCleanup.removed} foreign extension frame(s) after attach failure on tab ${tabId}`);
-      }
-      await delay(ATTACH_RECOVERY_DELAY_MS);
-      try {
-        await tryAttach(tabId);
-      } catch {
-        throw new Error(`attach failed: ${msg}${hint}`);
-      }
-    } else if (msg.includes("Another debugger is already attached")) {
+  const MAX_ATTACH_RETRIES = aggressiveRetry ? 5 : 2;
+  const RETRY_DELAY_MS = aggressiveRetry ? 1500 : 500;
+  let lastError = "";
+  for (let attempt = 1; attempt <= MAX_ATTACH_RETRIES; attempt++) {
+    try {
       try {
         await chrome.debugger.detach({ tabId });
       } catch {
       }
-      try {
-        await tryAttach(tabId);
-      } catch {
-        throw new Error(`attach failed: ${msg}${hint}`);
+      await chrome.debugger.attach({ tabId }, "1.3");
+      lastError = "";
+      break;
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+      if (attempt < MAX_ATTACH_RETRIES) {
+        console.warn(`[opencli] attach attempt ${attempt}/${MAX_ATTACH_RETRIES} failed: ${lastError}, retrying in ${RETRY_DELAY_MS}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        try {
+          const tab = await chrome.tabs.get(tabId);
+          if (!isDebuggableUrl$1(tab.url)) {
+            lastError = `Tab URL changed to ${tab.url} during retry`;
+            break;
+          }
+        } catch {
+          lastError = `Tab ${tabId} no longer exists`;
+          break;
+        }
       }
-    } else {
-      throw new Error(`attach failed: ${msg}${hint}`);
     }
+  }
+  if (lastError) {
+    let finalUrl = "unknown";
+    let finalWindowId = "unknown";
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      finalUrl = tab.url ?? "undefined";
+      finalWindowId = String(tab.windowId);
+    } catch {
+    }
+    console.warn(`[opencli] attach failed for tab ${tabId}: url=${finalUrl}, windowId=${finalWindowId}, error=${lastError}`);
+    const hint = lastError.includes("chrome-extension://") ? ". Tip: another Chrome extension may be interfering — try disabling other extensions" : "";
+    throw new Error(`attach failed: ${lastError}${hint}`);
   }
   attached.add(tabId);
   try {
     await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
   } catch {
   }
-  try {
-    await chrome.debugger.sendCommand({ tabId }, "Debugger.enable");
-    await chrome.debugger.sendCommand({ tabId }, "Debugger.setBreakpointsActive", { active: false });
-  } catch {
-  }
 }
-async function evaluate(tabId, expression) {
-  await ensureAttached(tabId);
-  const result = await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
-    expression,
-    returnByValue: true,
-    awaitPromise: true
-  });
-  if (result.exceptionDetails) {
-    const errMsg = result.exceptionDetails.exception?.description || result.exceptionDetails.text || "Eval error";
-    throw new Error(errMsg);
+async function evaluate(tabId, expression, aggressiveRetry = false) {
+  const MAX_EVAL_RETRIES = aggressiveRetry ? 3 : 2;
+  for (let attempt = 1; attempt <= MAX_EVAL_RETRIES; attempt++) {
+    try {
+      await ensureAttached(tabId, aggressiveRetry);
+      const result = await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
+        expression,
+        returnByValue: true,
+        awaitPromise: true
+      });
+      if (result.exceptionDetails) {
+        const errMsg = result.exceptionDetails.exception?.description || result.exceptionDetails.text || "Eval error";
+        throw new Error(errMsg);
+      }
+      return result.result?.value;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const isNavigateError = msg.includes("Inspected target navigated") || msg.includes("Target closed");
+      const isAttachError = isNavigateError || msg.includes("attach failed") || msg.includes("Debugger is not attached") || msg.includes("chrome-extension://");
+      if (isAttachError && attempt < MAX_EVAL_RETRIES) {
+        attached.delete(tabId);
+        const retryMs = isNavigateError ? 200 : 500;
+        await new Promise((resolve) => setTimeout(resolve, retryMs));
+        continue;
+      }
+      throw e;
+    }
   }
-  return result.result?.value;
+  throw new Error("evaluate: max retries exhausted");
 }
 const evaluateAsync = evaluate;
 async function screenshot(tabId, options = {}) {
@@ -188,9 +160,67 @@ async function setFileInputFiles(tabId, files, selector) {
     nodeId: result.nodeId
   });
 }
+async function insertText(tabId, text) {
+  await ensureAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text });
+}
+function normalizeCapturePatterns(pattern) {
+  return String(pattern || "").split("|").map((part) => part.trim()).filter(Boolean);
+}
+function shouldCaptureUrl(url, patterns) {
+  if (!url) return false;
+  if (!patterns.length) return true;
+  return patterns.some((pattern) => url.includes(pattern));
+}
+function normalizeHeaders(headers) {
+  if (!headers || typeof headers !== "object") return {};
+  const out = {};
+  for (const [key, value] of Object.entries(headers)) {
+    out[String(key)] = String(value);
+  }
+  return out;
+}
+function getOrCreateNetworkCaptureEntry(tabId, requestId, fallback) {
+  const state = networkCaptures.get(tabId);
+  if (!state) return null;
+  const existingIndex = state.requestToIndex.get(requestId);
+  if (existingIndex !== void 0) {
+    return state.entries[existingIndex] || null;
+  }
+  const url = fallback?.url || "";
+  if (!shouldCaptureUrl(url, state.patterns)) return null;
+  const entry = {
+    kind: "cdp",
+    url,
+    method: fallback?.method || "GET",
+    requestHeaders: fallback?.requestHeaders || {},
+    timestamp: Date.now()
+  };
+  state.entries.push(entry);
+  state.requestToIndex.set(requestId, state.entries.length - 1);
+  return entry;
+}
+async function startNetworkCapture(tabId, pattern) {
+  await ensureAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, "Network.enable");
+  networkCaptures.set(tabId, {
+    patterns: normalizeCapturePatterns(pattern),
+    entries: [],
+    requestToIndex: /* @__PURE__ */ new Map()
+  });
+}
+async function readNetworkCapture(tabId) {
+  const state = networkCaptures.get(tabId);
+  if (!state) return [];
+  const entries = state.entries.slice();
+  state.entries = [];
+  state.requestToIndex.clear();
+  return entries;
+}
 async function detach(tabId) {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);
+  networkCaptures.delete(tabId);
   try {
     await chrome.debugger.detach({ tabId });
   } catch {
@@ -199,13 +229,70 @@ async function detach(tabId) {
 function registerListeners() {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
+    networkCaptures.delete(tabId);
   });
   chrome.debugger.onDetach.addListener((source) => {
-    if (source.tabId) attached.delete(source.tabId);
+    if (source.tabId) {
+      attached.delete(source.tabId);
+      networkCaptures.delete(source.tabId);
+    }
   });
   chrome.tabs.onUpdated.addListener(async (tabId, info) => {
     if (info.url && !isDebuggableUrl$1(info.url)) {
       await detach(tabId);
+    }
+  });
+  chrome.debugger.onEvent.addListener(async (source, method, params) => {
+    const tabId = source.tabId;
+    if (!tabId) return;
+    const state = networkCaptures.get(tabId);
+    if (!state) return;
+    if (method === "Network.requestWillBeSent") {
+      const requestId = String(params?.requestId || "");
+      const request = params?.request;
+      const entry = getOrCreateNetworkCaptureEntry(tabId, requestId, {
+        url: request?.url,
+        method: request?.method,
+        requestHeaders: normalizeHeaders(request?.headers)
+      });
+      if (!entry) return;
+      entry.requestBodyKind = request?.hasPostData ? "string" : "empty";
+      entry.requestBodyPreview = String(request?.postData || "").slice(0, 4e3);
+      try {
+        const postData = await chrome.debugger.sendCommand({ tabId }, "Network.getRequestPostData", { requestId });
+        if (postData?.postData) {
+          entry.requestBodyKind = "string";
+          entry.requestBodyPreview = postData.postData.slice(0, 4e3);
+        }
+      } catch {
+      }
+      return;
+    }
+    if (method === "Network.responseReceived") {
+      const requestId = String(params?.requestId || "");
+      const response = params?.response;
+      const entry = getOrCreateNetworkCaptureEntry(tabId, requestId, {
+        url: response?.url
+      });
+      if (!entry) return;
+      entry.responseStatus = response?.status;
+      entry.responseContentType = response?.mimeType || "";
+      entry.responseHeaders = normalizeHeaders(response?.headers);
+      return;
+    }
+    if (method === "Network.loadingFinished") {
+      const requestId = String(params?.requestId || "");
+      const stateEntryIndex = state.requestToIndex.get(requestId);
+      if (stateEntryIndex === void 0) return;
+      const entry = state.entries[stateEntryIndex];
+      if (!entry) return;
+      try {
+        const body = await chrome.debugger.sendCommand({ tabId }, "Network.getResponseBody", { requestId });
+        if (typeof body?.body === "string") {
+          entry.responsePreview = body.base64Encoded ? `base64:${body.body.slice(0, 4e3)}` : body.body.slice(0, 4e3);
+        }
+      } catch {
+      }
     }
   });
 }
@@ -301,6 +388,11 @@ function resetWindowIdleTimer(workspace) {
   session.idleTimer = setTimeout(async () => {
     const current = automationSessions.get(workspace);
     if (!current) return;
+    if (!current.owned) {
+      console.log(`[opencli] Borrowed workspace ${workspace} detached from window ${current.windowId} (idle timeout)`);
+      automationSessions.delete(workspace);
+      return;
+    }
     try {
       await chrome.windows.remove(current.windowId);
       console.log(`[opencli] Automation window ${current.windowId} (${workspace}) closed (idle timeout)`);
@@ -309,7 +401,7 @@ function resetWindowIdleTimer(workspace) {
     automationSessions.delete(workspace);
   }, WINDOW_IDLE_TIMEOUT);
 }
-async function getAutomationWindow(workspace) {
+async function getAutomationWindow(workspace, initialUrl) {
   const existing = automationSessions.get(workspace);
   if (existing) {
     try {
@@ -319,8 +411,9 @@ async function getAutomationWindow(workspace) {
       automationSessions.delete(workspace);
     }
   }
+  const startUrl = initialUrl && isSafeNavigationUrl(initialUrl) ? initialUrl : BLANK_PAGE;
   const win = await chrome.windows.create({
-    url: BLANK_PAGE,
+    url: startUrl,
     focused: false,
     width: 1280,
     height: 900,
@@ -329,12 +422,32 @@ async function getAutomationWindow(workspace) {
   const session = {
     windowId: win.id,
     idleTimer: null,
-    idleDeadlineAt: Date.now() + WINDOW_IDLE_TIMEOUT
+    idleDeadlineAt: Date.now() + WINDOW_IDLE_TIMEOUT,
+    owned: true,
+    preferredTabId: null
   };
   automationSessions.set(workspace, session);
-  console.log(`[opencli] Created automation window ${session.windowId} (${workspace})`);
+  console.log(`[opencli] Created automation window ${session.windowId} (${workspace}, start=${startUrl})`);
   resetWindowIdleTimer(workspace);
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  const tabs = await chrome.tabs.query({ windowId: win.id });
+  if (tabs[0]?.id) {
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 500);
+      const listener = (tabId, info) => {
+        if (tabId === tabs[0].id && info.status === "complete") {
+          chrome.tabs.onUpdated.removeListener(listener);
+          clearTimeout(timeout);
+          resolve();
+        }
+      };
+      if (tabs[0].status === "complete") {
+        clearTimeout(timeout);
+        resolve();
+      } else {
+        chrome.tabs.onUpdated.addListener(listener);
+      }
+    });
+  }
   return session.windowId;
 }
 chrome.windows.onRemoved.addListener((windowId) => {
@@ -390,10 +503,20 @@ async function handleCommand(cmd) {
         return await handleScreenshot(cmd, workspace);
       case "close-window":
         return await handleCloseWindow(cmd, workspace);
+      case "cdp":
+        return await handleCdp(cmd, workspace);
       case "sessions":
         return await handleSessions(cmd);
       case "set-file-input":
         return await handleSetFileInput(cmd, workspace);
+      case "insert-text":
+        return await handleInsertText(cmd, workspace);
+      case "bind-current":
+        return await handleBindCurrent(cmd, workspace);
+      case "network-capture-start":
+        return await handleNetworkCaptureStart(cmd, workspace);
+      case "network-capture-read":
+        return await handleNetworkCaptureRead(cmd, workspace);
       default:
         return { id: cmd.id, ok: false, error: `Unknown action: ${cmd.action}` };
     }
@@ -405,10 +528,10 @@ async function handleCommand(cmd) {
     };
   }
 }
-const BLANK_PAGE = "data:text/html,<html></html>";
+const BLANK_PAGE = "about:blank";
 function isDebuggableUrl(url) {
   if (!url) return true;
-  return url.startsWith("http://") || url.startsWith("https://") || url === BLANK_PAGE;
+  return url.startsWith("http://") || url.startsWith("https://") || url === "about:blank" || url.startsWith("data:");
 }
 function isSafeNavigationUrl(url) {
   return url.startsWith("http://") || url.startsWith("https://");
@@ -429,15 +552,55 @@ function normalizeUrlForComparison(url) {
 function isTargetUrl(currentUrl, targetUrl) {
   return normalizeUrlForComparison(currentUrl) === normalizeUrlForComparison(targetUrl);
 }
-async function resolveTabId(tabId, workspace) {
+function matchesDomain(url, domain) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`);
+  } catch {
+    return false;
+  }
+}
+function matchesBindCriteria(tab, cmd) {
+  if (!tab.id || !isDebuggableUrl(tab.url)) return false;
+  if (cmd.matchDomain && !matchesDomain(tab.url, cmd.matchDomain)) return false;
+  if (cmd.matchPathPrefix) {
+    try {
+      const parsed = new URL(tab.url);
+      if (!parsed.pathname.startsWith(cmd.matchPathPrefix)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+function setWorkspaceSession(workspace, session) {
+  const existing = automationSessions.get(workspace);
+  if (existing?.idleTimer) clearTimeout(existing.idleTimer);
+  automationSessions.set(workspace, {
+    ...session,
+    idleTimer: null,
+    idleDeadlineAt: Date.now() + WINDOW_IDLE_TIMEOUT
+  });
+}
+async function resolveTab(tabId, workspace, initialUrl) {
   if (tabId !== void 0) {
     try {
       const tab = await chrome.tabs.get(tabId);
       const session = automationSessions.get(workspace);
-      const matchesSession = session ? tab.windowId === session.windowId : false;
-      if (isDebuggableUrl(tab.url) && matchesSession) return tabId;
-      if (session && !matchesSession) {
-        console.warn(`[opencli] Tab ${tabId} is not bound to workspace ${workspace}, re-resolving`);
+      const matchesSession = session ? session.preferredTabId !== null ? session.preferredTabId === tabId : tab.windowId === session.windowId : false;
+      if (isDebuggableUrl(tab.url) && matchesSession) return { tabId, tab };
+      if (session && !matchesSession && session.preferredTabId === null && isDebuggableUrl(tab.url)) {
+        console.warn(`[opencli] Tab ${tabId} drifted to window ${tab.windowId}, moving back to ${session.windowId}`);
+        try {
+          await chrome.tabs.move(tabId, { windowId: session.windowId, index: -1 });
+          const moved = await chrome.tabs.get(tabId);
+          if (moved.windowId === session.windowId && isDebuggableUrl(moved.url)) {
+            return { tabId, tab: moved };
+          }
+        } catch (moveErr) {
+          console.warn(`[opencli] Failed to move tab back: ${moveErr}`);
+        }
       } else if (!isDebuggableUrl(tab.url)) {
         console.warn(`[opencli] Tab ${tabId} URL is not debuggable (${tab.url}), re-resolving`);
       }
@@ -445,28 +608,49 @@ async function resolveTabId(tabId, workspace) {
       console.warn(`[opencli] Tab ${tabId} no longer exists, re-resolving`);
     }
   }
-  const windowId = await getAutomationWindow(workspace);
+  const existingSession = automationSessions.get(workspace);
+  if (existingSession?.preferredTabId !== null) {
+    try {
+      const preferredTab = await chrome.tabs.get(existingSession.preferredTabId);
+      if (isDebuggableUrl(preferredTab.url)) return { tabId: preferredTab.id, tab: preferredTab };
+    } catch {
+      automationSessions.delete(workspace);
+    }
+  }
+  const windowId = await getAutomationWindow(workspace, initialUrl);
   const tabs = await chrome.tabs.query({ windowId });
   const debuggableTab = tabs.find((t) => t.id && isDebuggableUrl(t.url));
-  if (debuggableTab?.id) return debuggableTab.id;
+  if (debuggableTab?.id) return { tabId: debuggableTab.id, tab: debuggableTab };
   const reuseTab = tabs.find((t) => t.id);
   if (reuseTab?.id) {
     await chrome.tabs.update(reuseTab.id, { url: BLANK_PAGE });
     await new Promise((resolve) => setTimeout(resolve, 300));
     try {
       const updated = await chrome.tabs.get(reuseTab.id);
-      if (isDebuggableUrl(updated.url)) return reuseTab.id;
+      if (isDebuggableUrl(updated.url)) return { tabId: reuseTab.id, tab: updated };
       console.warn(`[opencli] data: URI was intercepted (${updated.url}), creating fresh tab`);
     } catch {
     }
   }
   const newTab = await chrome.tabs.create({ windowId, url: BLANK_PAGE, active: true });
   if (!newTab.id) throw new Error("Failed to create tab in automation window");
-  return newTab.id;
+  return { tabId: newTab.id, tab: newTab };
+}
+async function resolveTabId(tabId, workspace, initialUrl) {
+  const resolved = await resolveTab(tabId, workspace, initialUrl);
+  return resolved.tabId;
 }
 async function listAutomationTabs(workspace) {
   const session = automationSessions.get(workspace);
   if (!session) return [];
+  if (session.preferredTabId !== null) {
+    try {
+      return [await chrome.tabs.get(session.preferredTabId)];
+    } catch {
+      automationSessions.delete(workspace);
+      return [];
+    }
+  }
   try {
     return await chrome.tabs.query({ windowId: session.windowId });
   } catch {
@@ -482,7 +666,8 @@ async function handleExec(cmd, workspace) {
   if (!cmd.code) return { id: cmd.id, ok: false, error: "Missing code" };
   const tabId = await resolveTabId(cmd.tabId, workspace);
   try {
-    const data = await evaluateAsync(tabId, cmd.code);
+    const aggressive = workspace.startsWith("operate:");
+    const data = await evaluateAsync(tabId, cmd.code, aggressive);
     return { id: cmd.id, ok: true, data };
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -493,8 +678,9 @@ async function handleNavigate(cmd, workspace) {
   if (!isSafeNavigationUrl(cmd.url)) {
     return { id: cmd.id, ok: false, error: "Blocked URL scheme -- only http:// and https:// are allowed" };
   }
-  const tabId = await resolveTabId(cmd.tabId, workspace);
-  const beforeTab = await chrome.tabs.get(tabId);
+  const resolved = await resolveTab(cmd.tabId, workspace, cmd.url);
+  const tabId = resolved.tabId;
+  const beforeTab = resolved.tab ?? await chrome.tabs.get(tabId);
   const beforeNormalized = normalizeUrlForComparison(beforeTab.url);
   const targetUrl = cmd.url;
   if (beforeTab.status === "complete" && isTargetUrl(beforeTab.url, targetUrl)) {
@@ -544,7 +730,17 @@ async function handleNavigate(cmd, workspace) {
       finish();
     }, 15e3);
   });
-  const tab = await chrome.tabs.get(tabId);
+  let tab = await chrome.tabs.get(tabId);
+  const session = automationSessions.get(workspace);
+  if (session && tab.windowId !== session.windowId) {
+    console.warn(`[opencli] Tab ${tabId} drifted to window ${tab.windowId} during navigation, moving back to ${session.windowId}`);
+    try {
+      await chrome.tabs.move(tabId, { windowId: session.windowId, index: -1 });
+      tab = await chrome.tabs.get(tabId);
+    } catch (moveErr) {
+      console.warn(`[opencli] Failed to recover drifted tab: ${moveErr}`);
+    }
+  }
   return {
     id: cmd.id,
     ok: true,
@@ -645,12 +841,55 @@ async function handleScreenshot(cmd, workspace) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+const CDP_ALLOWLIST = /* @__PURE__ */ new Set([
+  // Agent DOM context
+  "Accessibility.getFullAXTree",
+  "DOM.getDocument",
+  "DOM.getBoxModel",
+  "DOM.getContentQuads",
+  "DOM.querySelectorAll",
+  "DOM.scrollIntoViewIfNeeded",
+  "DOMSnapshot.captureSnapshot",
+  // Native input events
+  "Input.dispatchMouseEvent",
+  "Input.dispatchKeyEvent",
+  "Input.insertText",
+  // Page metrics & screenshots
+  "Page.getLayoutMetrics",
+  "Page.captureScreenshot",
+  // Runtime.enable needed for CDP attach setup (Runtime.evaluate goes through 'exec' action)
+  "Runtime.enable",
+  // Emulation (used by screenshot full-page)
+  "Emulation.setDeviceMetricsOverride",
+  "Emulation.clearDeviceMetricsOverride"
+]);
+async function handleCdp(cmd, workspace) {
+  if (!cmd.cdpMethod) return { id: cmd.id, ok: false, error: "Missing cdpMethod" };
+  if (!CDP_ALLOWLIST.has(cmd.cdpMethod)) {
+    return { id: cmd.id, ok: false, error: `CDP method not permitted: ${cmd.cdpMethod}` };
+  }
+  const tabId = await resolveTabId(cmd.tabId, workspace);
+  try {
+    const aggressive = workspace.startsWith("operate:");
+    await ensureAttached(tabId, aggressive);
+    const data = await chrome.debugger.sendCommand(
+      { tabId },
+      cmd.cdpMethod,
+      cmd.cdpParams ?? {}
+    );
+    return { id: cmd.id, ok: true, data };
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 async function handleCloseWindow(cmd, workspace) {
   const session = automationSessions.get(workspace);
   if (session) {
-    try {
-      await chrome.windows.remove(session.windowId);
-    } catch {
+    if (session.owned) {
+      try {
+        await chrome.windows.remove(session.windowId);
+      } catch {
+      }
     }
     if (session.idleTimer) clearTimeout(session.idleTimer);
     automationSessions.delete(workspace);
@@ -669,6 +908,36 @@ async function handleSetFileInput(cmd, workspace) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+async function handleInsertText(cmd, workspace) {
+  if (typeof cmd.text !== "string") {
+    return { id: cmd.id, ok: false, error: "Missing text payload" };
+  }
+  const tabId = await resolveTabId(cmd.tabId, workspace);
+  try {
+    await insertText(tabId, cmd.text);
+    return { id: cmd.id, ok: true, data: { inserted: true } };
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+async function handleNetworkCaptureStart(cmd, workspace) {
+  const tabId = await resolveTabId(cmd.tabId, workspace);
+  try {
+    await startNetworkCapture(tabId, cmd.pattern);
+    return { id: cmd.id, ok: true, data: { started: true } };
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+async function handleNetworkCaptureRead(cmd, workspace) {
+  const tabId = await resolveTabId(cmd.tabId, workspace);
+  try {
+    const data = await readNetworkCapture(tabId);
+    return { id: cmd.id, ok: true, data };
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 async function handleSessions(cmd) {
   const now = Date.now();
   const data = await Promise.all([...automationSessions.entries()].map(async ([workspace, session]) => ({
@@ -678,4 +947,35 @@ async function handleSessions(cmd) {
     idleMsRemaining: Math.max(0, session.idleDeadlineAt - now)
   })));
   return { id: cmd.id, ok: true, data };
+}
+async function handleBindCurrent(cmd, workspace) {
+  const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const fallbackTabs = await chrome.tabs.query({ lastFocusedWindow: true });
+  const allTabs = await chrome.tabs.query({});
+  const boundTab = activeTabs.find((tab) => matchesBindCriteria(tab, cmd)) ?? fallbackTabs.find((tab) => matchesBindCriteria(tab, cmd)) ?? allTabs.find((tab) => matchesBindCriteria(tab, cmd));
+  if (!boundTab?.id) {
+    return {
+      id: cmd.id,
+      ok: false,
+      error: cmd.matchDomain || cmd.matchPathPrefix ? `No visible tab matching ${cmd.matchDomain ?? "domain"}${cmd.matchPathPrefix ? ` ${cmd.matchPathPrefix}` : ""}` : "No active debuggable tab found"
+    };
+  }
+  setWorkspaceSession(workspace, {
+    windowId: boundTab.windowId,
+    owned: false,
+    preferredTabId: boundTab.id
+  });
+  resetWindowIdleTimer(workspace);
+  console.log(`[opencli] Workspace ${workspace} explicitly bound to tab ${boundTab.id} (${boundTab.url})`);
+  return {
+    id: cmd.id,
+    ok: true,
+    data: {
+      tabId: boundTab.id,
+      windowId: boundTab.windowId,
+      url: boundTab.url,
+      title: boundTab.title,
+      workspace
+    }
+  };
 }

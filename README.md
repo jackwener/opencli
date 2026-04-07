@@ -1,7 +1,7 @@
 # OpenCLI
 
 > **Make any website, Electron App, or Local Tool your CLI.**
-> Zero risk · Reuse Chrome login · AI-powered discovery · Universal CLI Hub
+> Zero risk · Reuse Chrome/Chromium login · AI-powered discovery · Universal CLI Hub
 
 [![中文文档](https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-0F766E?style=flat-square)](./README.zh-CN.md)
 [![npm](https://img.shields.io/npm/v/@jackwener/opencli?style=flat-square)](https://www.npmjs.com/package/@jackwener/opencli)
@@ -10,7 +10,7 @@
 
 A CLI tool that turns **any website**, **Electron app**, or **local CLI tool** into a command-line interface — Bilibili, Zhihu, 小红书, Twitter/X, Reddit, YouTube, Antigravity, `gh`, `docker`, and [many more](#built-in-commands) — powered by browser session reuse and AI-native discovery.
 
-**Built for AI Agents** — Configure an instruction in your `AGENT.md` or `.cursorrules` to run `opencli list` via Bash. The AI will automatically discover and invoke all available tools.
+**Built for AI Agents** — Load the [`opencli-operate` skill](./skills/opencli-operate/SKILL.md) to give any AI agent (Claude Code, Cursor) direct browser control. Operate any website, then crystallize those interactions into reusable CLI commands. Configure `opencli list` in your `AGENT.md` or `.cursorrules` so the AI auto-discovers all available tools.
 
 **CLI Hub** — Register any local CLI (`opencli register mycli`) so AI agents can discover and call it alongside built-in commands. Auto-installs missing tools via your package manager (e.g. if `gh` isn't installed, `opencli gh ...` runs `brew install gh` first then re-executes seamlessly).
 
@@ -21,33 +21,17 @@ A CLI tool that turns **any website**, **Electron app**, or **local CLI tool** i
 ## Highlights
 
 - **CLI All Electron** — CLI-ify apps like Antigravity Ultra! Now AI can control itself natively.
-- **Account-safe** — Reuses Chrome's logged-in state; your credentials never leave the browser.
+- **Browser Automation** — `operate` gives AI agents direct browser control: click, type, extract, screenshot — any interaction, fully scriptable.
+- **Website → CLI** — Turn any website into a deterministic CLI: 70+ pre-built adapters, or crystallize your own with `opencli record`.
+- **Account-safe** — Reuses Chrome/Chromium logged-in state; your credentials never leave the browser.
 - **Anti-detection built-in** — Patches `navigator.webdriver`, stubs `window.chrome`, fakes plugin lists, cleans ChromeDriver/Playwright globals, and strips CDP frames from Error stack traces. Extensive anti-fingerprinting and risk-control evasion measures baked in at every layer.
-- **AI Agent ready** — `explore` discovers APIs, `synthesize` generates adapters, `cascade` finds auth strategies.
+- **AI Agent ready** — `explore` discovers APIs, `synthesize` generates adapters, `cascade` finds auth strategies, `operate` controls the browser directly.
 - **External CLI Hub** — Discover, auto-install, and passthrough commands to any external CLI (gh, obsidian, docker, etc). Zero setup.
 - **Self-healing setup** — `opencli doctor` diagnoses and auto-starts the daemon, extension, and live browser connectivity.
 - **Dynamic Loader** — Simply drop `.ts` or `.yaml` adapters into the `clis/` folder for auto-registration.
-- **Dual-Engine Architecture** — Supports both YAML declarative data pipelines and robust browser runtime TypeScript injections.
-
-## Why opencli?
-
-There are many great browser automation tools. Here's when opencli is the right choice:
-
-| Your need | Best tool | Why |
-|-----------|-----------|-----|
-| Scheduled data extraction from specific sites | **opencli** | Pre-built adapters, deterministic JSON, zero LLM cost |
-| AI agent needs reliable site operations | **opencli** | Hundreds of commands, structured output, fast deterministic response |
-| Explore an unknown website ad-hoc | Browser-Use, Stagehand | LLM-driven general browsing for one-off tasks |
-| Large-scale web crawling | Crawl4AI, Scrapy | Purpose-built for throughput and scale |
-| Control desktop Electron apps from terminal | **opencli** | CDP + AppleScript — the only CLI tool that does this |
-
-**What makes opencli different:**
-
 - **Zero LLM cost** — No tokens consumed at runtime. Run 10,000 times and pay nothing.
 - **Deterministic** — Same command, same output schema, every time. Pipeable, scriptable, CI-friendly.
-- **Broad coverage** — 50+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
-
-> For a detailed comparison with Browser-Use, Crawl4AI, Firecrawl, and others, see the [Comparison Guide](./docs/comparison.md).
+- **Broad coverage** — 79+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
 
 ---
 
@@ -55,7 +39,7 @@ There are many great browser automation tools. Here's when opencli is the right 
 
 ### 1. Install Browser Bridge Extension
 
-> OpenCLI connects to your browser through a lightweight **Browser Bridge** Chrome Extension + micro-daemon (zero config, auto-start).
+> OpenCLI connects to your browser through a lightweight **Browser Bridge** Chrome/Chromium extension + micro-daemon (zero config, auto-start).
 
 1. Go to the GitHub [Releases page](https://github.com/jackwener/opencli/releases) and download the latest `opencli-extension.zip`.
 2. Unzip the file and open `chrome://extensions`, enable **Developer mode** (top-right toggle).
@@ -67,6 +51,9 @@ There are many great browser automation tools. Here's when opencli is the right 
 
 ```bash
 npm install -g @jackwener/opencli
+
+# Install AI skills for Claude Code / Cursor
+npx skills add jackwener/opencli
 ```
 
 ### 3. Verify & Try
@@ -84,6 +71,12 @@ opencli hackernews top --limit 5       # Public API, no browser needed
 opencli bilibili hot --limit 5         # Browser command (requires Extension)
 ```
 
+### 4. Browser Automation — Make Websites Accessible for AI Agents
+
+Point your AI agent (Claude Code, Cursor) to [`skills/opencli-operate/SKILL.md`](./skills/opencli-operate/SKILL.md). It has everything needed — full command reference, examples, and workflow.
+
+Available commands: `open`, `state`, `click`, `type`, `select`, `keys`, `wait`, `get`, `screenshot`, `scroll`, `back`, `eval`, `network`, `init`, `verify`, `close`.
+
 ### Update
 
 ```bash
@@ -100,6 +93,7 @@ npx skills add jackwener/opencli
 
 # Or install specific skills
 npx skills add jackwener/opencli --skill opencli-usage      # Command reference
+npx skills add jackwener/opencli --skill opencli-operate     # Browser automation for AI agents
 npx skills add jackwener/opencli --skill opencli-explorer    # Adapter development guide
 npx skills add jackwener/opencli --skill opencli-oneshot     # Quick command reference
 ```
@@ -134,9 +128,9 @@ git clone git@github.com:jackwener/opencli.git && cd opencli && npm install && n
 ## Prerequisites
 
 - **Node.js**: >= 20.0.0 (or **Bun** >= 1.0)
-- **Chrome** running **and logged into the target site** (e.g. bilibili.com, zhihu.com, xiaohongshu.com).
+- **Chrome or Chromium** running **and logged into the target site** (e.g. bilibili.com, zhihu.com, xiaohongshu.com, goofish.com).
 
-> **⚠️ Important**: Browser commands reuse your Chrome login session. You must be logged into the target website in Chrome before running commands. If you get empty data or errors, check your login status first.
+> **⚠️ Important**: Browser commands reuse your Chrome/Chromium login session. You must be logged into the target website in Chrome or Chromium before running commands. If you get empty data or errors, check your login status first.
 
 ## Built-in Commands
 
@@ -145,14 +139,20 @@ git clone git@github.com:jackwener/opencli.git && cd opencli && npm install && n
 | **xiaohongshu** | `search` `note` `comments` `feed` `user` `download` `publish` `notifications` `creator-notes` `creator-notes-summary` `creator-note-detail` `creator-profile` `creator-stats` |
 | **bilibili** | `hot` `search` `history` `feed` `ranking` `download` `comments` `dynamic` `favorite` `following` `me` `subtitle` `user-videos` |
 | **tieba** | `hot` `posts` `search` `read` |
+| **hupu** | `hot` `search` `detail` `mentions` `reply` `like` `unlike` |
 | **twitter** | `trending` `search` `timeline` `bookmarks` `post` `download` `profile` `article` `like` `likes` `notifications` `reply` `reply-dm` `thread` `follow` `unfollow` `followers` `following` `block` `unblock` `bookmark` `unbookmark` `delete` `hide-reply` `accept` |
-| **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `user` `user-posts` `user-comments` `read` `save` `saved` `subscribe` `upvote` `upvoted` `comment` |
-| **amazon** | `bestsellers` `search` `product` `offer` `discussion` |
-| **gemini** | `new` `ask` `image` |
-| **notebooklm** | `status` `list` `open` `select` `current` `get` `metadata` `source-list` `source-get` `source-fulltext` `source-guide` `history` `note-list` `notes-list` `notes-get` `summary` |
+| **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `read` `user` `user-posts` `user-comments` `upvote` `upvoted` `save` `saved` `comment` `subscribe` |
+| **zhihu** | `hot` `search` `question` `download` `follow` `like` `favorite` `comment` `answer` |
+| **amazon** | `bestsellers` `search` `product` `offer` `discussion` `movers-shakers` `new-releases` |
+| **1688** | `search` `item` `assets` `download` `store` |
+| **gemini** | `new` `ask` `image` `deep-research` `deep-research-result` |
+| **yuanbao** | `new` `ask` |
+| **notebooklm** | `status` `list` `open` `current` `get` `history` `summary` `note-list` `notes-get` `source-list` `source-get` `source-fulltext` `source-guide` |
 | **spotify** | `auth` `status` `play` `pause` `next` `prev` `volume` `search` `queue` `shuffle` `repeat` |
+| **xianyu** | `search` `item` `chat` |
+| **xiaoe** | `courses` `detail` `catalog` `play-url` `content` |
 
-66+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
+79+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
 
 ## CLI Hub
 
@@ -202,6 +202,7 @@ OpenCLI supports downloading images, videos, and articles from supported platfor
 | **twitter** | Images, Videos | From user media tab or single tweet |
 | **douban** | Images | Poster / still image lists |
 | **pixiv** | Images | Original-quality illustrations, multi-page |
+| **1688** | Images, Videos | Downloads page-visible product media from item pages |
 | **zhihu** | Articles (Markdown) | Exports with optional image download |
 | **weixin** | Articles (Markdown) | WeChat Official Account articles |
 
@@ -211,6 +212,7 @@ For video downloads, install `yt-dlp` first: `brew install yt-dlp`
 opencli xiaohongshu download abc123 --output ./xhs
 opencli bilibili download BV1xxx --output ./bilibili
 opencli twitter download elonmusk --limit 20 --output ./twitter
+opencli 1688 download 841141931191 --output ./1688-downloads
 ```
 
 ## Output Formats
@@ -261,14 +263,15 @@ opencli plugin uninstall my-tool
 | [opencli-plugin-github-trending](https://github.com/ByteYue/opencli-plugin-github-trending) | YAML | GitHub Trending repositories |
 | [opencli-plugin-hot-digest](https://github.com/ByteYue/opencli-plugin-hot-digest) | TS | Multi-platform trending aggregator |
 | [opencli-plugin-juejin](https://github.com/Astro-Han/opencli-plugin-juejin) | YAML | 稀土掘金 (Juejin) hot articles |
+| [opencli-plugin-vk](https://github.com/flobo3/opencli-plugin-vk) | TS | VK (VKontakte) wall, feed, and search |
 
 See [Plugins Guide](./docs/guide/plugins.md) for creating your own plugin.
 
 ## For AI Agents (Developer Guide)
 
-> **Quick mode**: To generate a single command for a specific page URL, see [CLI-ONESHOT.md](./CLI-ONESHOT.md) — just a URL + one-line goal, 4 steps done.
+> **Quick mode**: To generate a single command for a specific page URL, see [opencli-oneshot skill](./skills/opencli-oneshot/SKILL.md) — just a URL + one-line goal, 4 steps done.
 
-> **Full mode**: Before writing any adapter code, read [CLI-EXPLORER.md](./CLI-EXPLORER.md). It contains the complete browser exploration workflow, the 5-tier authentication strategy decision tree, and debugging guide.
+> **Full mode**: Before writing any adapter code, read [opencli-explorer skill](./skills/opencli-explorer/SKILL.md). It contains the complete browser exploration workflow, the 5-tier authentication strategy decision tree, and debugging guide.
 
 ```bash
 opencli explore https://example.com --site mysite   # Discover APIs + capabilities
@@ -283,9 +286,9 @@ See **[TESTING.md](./TESTING.md)** for how to run and write tests.
 
 ## Troubleshooting
 
-- **"Extension not connected"** — Ensure the Browser Bridge extension is installed and **enabled** in `chrome://extensions`.
+- **"Extension not connected"** — Ensure the Browser Bridge extension is installed and **enabled** in `chrome://extensions` in Chrome or Chromium.
 - **"attach failed: Cannot access a chrome-extension:// URL"** — Another extension may be interfering. Try disabling other extensions temporarily.
-- **Empty data or 'Unauthorized' error** — Your Chrome login session may have expired. Navigate to the target site and log in again.
+- **Empty data or 'Unauthorized' error** — Your Chrome/Chromium login session may have expired. Navigate to the target site and log in again.
 - **Node API errors** — Ensure Node.js >= 20. Some dependencies require modern Node APIs.
 - **Daemon issues** — Check status: `curl localhost:19825/status` · View logs: `curl localhost:19825/logs`
 

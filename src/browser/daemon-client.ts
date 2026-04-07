@@ -21,7 +21,7 @@ function generateId(): string {
 
 export interface DaemonCommand {
   id: string;
-  action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input';
+  action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'insert-text' | 'bind-current' | 'network-capture-start' | 'network-capture-read' | 'cdp';
   tabId?: number;
   code?: string;
   workspace?: string;
@@ -29,13 +29,22 @@ export interface DaemonCommand {
   op?: string;
   index?: number;
   domain?: string;
+  matchDomain?: string;
+  matchPathPrefix?: string;
   format?: 'png' | 'jpeg';
   quality?: number;
   fullPage?: boolean;
+
   /** Local file paths for set-file-input action */
   files?: string[];
   /** CSS selector for file input element (set-file-input action) */
   selector?: string;
+  /** Raw text payload for insert-text action */
+  text?: string;
+  /** URL substring filter pattern for network capture */
+  pattern?: string;
+  cdpMethod?: string;
+  cdpParams?: Record<string, unknown>;
 }
 
 export interface DaemonResult {
@@ -159,4 +168,8 @@ export async function sendCommand(
 export async function listSessions(): Promise<BrowserSessionInfo[]> {
   const result = await sendCommand('sessions');
   return Array.isArray(result) ? result : [];
+}
+
+export async function bindCurrentTab(workspace: string, opts: { matchDomain?: string; matchPathPrefix?: string } = {}): Promise<unknown> {
+  return sendCommand('bind-current', { workspace, ...opts });
 }

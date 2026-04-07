@@ -9,6 +9,8 @@
 | `opencli gemini new` | Start a new Gemini web chat |
 | `opencli gemini ask <prompt>` | Send a prompt and return only the assistant reply |
 | `opencli gemini image <prompt>` | Generate images in Gemini and optionally save them locally |
+| `opencli gemini deep-research <prompt>` | Start a Gemini Deep Research run and confirm it |
+| `opencli gemini deep-research-result <query>` | Export Deep Research report URL from a Gemini conversation |
 
 ## Usage Examples
 

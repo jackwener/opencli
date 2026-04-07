@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-doc-coverage.sh — Verify every adapter in src/clis/ has a doc page.
+# check-doc-coverage.sh — Verify every adapter in clis/ has a doc page.
 #
 # Exit codes:
 #   0 — all adapters have docs
@@ -19,7 +19,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-SRC_DIR="$ROOT_DIR/src/clis"
+SRC_DIR="$ROOT_DIR/clis"
 DOCS_DIR="$ROOT_DIR/docs/adapters"
 
 missing=()

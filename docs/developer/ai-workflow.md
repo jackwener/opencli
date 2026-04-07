@@ -12,7 +12,7 @@ opencli generate https://example.com --goal "trending"
 
 This runs: explore → synthesize → register in one shot.
 
-For the complete one-shot workflow details, see [CLI-ONESHOT.md](https://github.com/jackwener/opencli/blob/main/CLI-ONESHOT.md).
+For the complete one-shot workflow details, see [opencli-oneshot skill](https://github.com/jackwener/opencli/blob/main/skills/opencli-oneshot/SKILL.md).
 
 ## Full Mode (Explorer Workflow)
 
@@ -63,4 +63,4 @@ The explorer uses a decision tree to determine the best authentication approach:
 4. **BROWSER** — Full browser automation
 5. **CDP** — Chrome DevTools Protocol for Electron apps
 
-For the complete browser exploration workflow and debugging guide, see [CLI-EXPLORER.md](https://github.com/jackwener/opencli/blob/main/CLI-EXPLORER.md).
+For the complete browser exploration workflow and debugging guide, see [opencli-explorer skill](https://github.com/jackwener/opencli/blob/main/skills/opencli-explorer/SKILL.md).

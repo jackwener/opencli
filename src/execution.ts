@@ -15,13 +15,14 @@ import type { IPage } from './types.js';
 import { pathToFileURL } from 'node:url';
 import { executePipeline } from './pipeline/index.js';
 import { AdapterLoadError, ArgumentError, BrowserConnectError, CommandExecutionError, getErrorMessage } from './errors.js';
+import { isDiagnosticEnabled, collectDiagnostic, emitDiagnostic } from './diagnostic.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
 import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMMAND_TIMEOUT } from './runtime.js';
 import { emitHook, type HookContext } from './hooks.js';
 import { checkDaemonStatus } from './browser/discover.js';
 import { log } from './logger.js';
 import { isElectronApp } from './electron-apps.js';
-import { resolveElectronEndpoint } from './launcher.js';
+import { probeCDP, resolveElectronEndpoint } from './launcher.js';
 
 const _loadedModules = new Set<string>();
 
@@ -131,23 +132,6 @@ function ensureRequiredEnv(cmd: CliCommand): void {
   );
 }
 
-/**
- * Check if the browser is already on the target domain, avoiding redundant navigation.
- * Returns true if current page hostname matches the pre-nav URL hostname.
- */
-async function isAlreadyOnDomain(page: IPage, targetUrl: string): Promise<boolean> {
-  if (!page.getCurrentUrl) return false;
-  try {
-    const currentUrl = await page.getCurrentUrl();
-    if (!currentUrl) return false;
-    const currentHost = new URL(currentUrl).hostname;
-    const targetHost = new URL(targetUrl).hostname;
-    return currentHost === targetHost;
-  } catch {
-    return false;
-  }
-}
-
 export async function executeCommand(
   cmd: CliCommand,
   rawKwargs: CommandArgs,
@@ -156,6 +140,7 @@ export async function executeCommand(
   let kwargs: CommandArgs;
   try {
     kwargs = coerceAndValidateArgs(cmd.args, rawKwargs);
+    cmd.validateArgs?.(kwargs);
   } catch (err) {
     if (err instanceof ArgumentError) throw err;
     throw new ArgumentError(getErrorMessage(err));
@@ -169,14 +154,27 @@ export async function executeCommand(
   await emitHook('onBeforeExecute', hookCtx);
 
   let result: unknown;
+  let diagnosticEmitted = false;
   try {
     if (shouldUseBrowserSession(cmd)) {
       const electron = isElectronApp(cmd.site);
       let cdpEndpoint: string | undefined;
 
       if (electron) {
-        // Electron apps: auto-detect, prompt restart if needed, launch with CDP
-        cdpEndpoint = await resolveElectronEndpoint(cmd.site);
+        // Electron apps: respect manual endpoint override, then try auto-detect
+        const manualEndpoint = process.env.OPENCLI_CDP_ENDPOINT;
+        if (manualEndpoint) {
+          const port = Number(new URL(manualEndpoint).port);
+          if (!await probeCDP(port)) {
+            throw new CommandExecutionError(
+              `CDP not reachable at ${manualEndpoint}`,
+              'Check that the app is running with --remote-debugging-port and the endpoint is correct.',
+            );
+          }
+          cdpEndpoint = manualEndpoint;
+        } else {
+          cdpEndpoint = await resolveElectronEndpoint(cmd.site);
+        }
       } else {
         // Browser Bridge: fail-fast when daemon is up but extension is missing.
         // 300ms timeout avoids a full 2s wait on cold-start.
@@ -186,7 +184,7 @@ export async function executeCommand(
             'Browser Bridge extension not connected',
             'Install the Browser Bridge:\n' +
             '  1. Download: https://github.com/jackwener/opencli/releases\n' +
-            '  2. chrome://extensions → Developer Mode → Load unpacked\n' +
+            '  2. In Chrome or Chromium, open chrome://extensions → Developer Mode → Load unpacked\n' +
             '  Then run: opencli doctor',
           );
         }
@@ -197,21 +195,32 @@ export async function executeCommand(
       result = await browserSession(BrowserFactory, async (page) => {
         const preNavUrl = resolvePreNav(cmd);
         if (preNavUrl) {
-          const skip = await isAlreadyOnDomain(page, preNavUrl);
-          if (skip) {
-            if (debug) log.debug('[pre-nav] Already on target domain, skipping navigation');
-          } else {
-            try {
-              await page.goto(preNavUrl);
-            } catch (err) {
-              if (debug) log.debug(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
-            }
+          // Navigate directly — the extension's handleNavigate already has a fast-path
+          // that skips navigation if the tab is already at the target URL.
+          // This avoids an extra exec round-trip (getCurrentUrl) on first command and
+          // lets the extension create the automation window with the target URL directly
+          // instead of about:blank.
+          try {
+            await page.goto(preNavUrl);
+          } catch (err) {
+            if (debug) log.debug(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
           }
         }
-        return runWithTimeout(runCommand(cmd, page, kwargs, debug), {
-          timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,
-          label: fullName(cmd),
-        });
+        try {
+          return await runWithTimeout(runCommand(cmd, page, kwargs, debug), {
+            timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,
+            label: fullName(cmd),
+          });
+        } catch (err) {
+          // Collect diagnostic while page is still alive (before browserSession closes it).
+          if (isDiagnosticEnabled()) {
+            const internal = cmd as InternalCliCommand;
+            const ctx = await collectDiagnostic(err, internal, page);
+            emitDiagnostic(ctx);
+            diagnosticEmitted = true;
+          }
+          throw err;
+        }
       }, { workspace: `site:${cmd.site}`, cdpEndpoint });
     } else {
       // Non-browser commands: apply timeout only when explicitly configured.
@@ -227,6 +236,13 @@ export async function executeCommand(
       }
     }
   } catch (err) {
+    // Emit diagnostic if not already emitted (browser session emits with page state;
+    // this fallback covers non-browser commands and pre-session failures like BrowserConnectError).
+    if (isDiagnosticEnabled() && !diagnosticEmitted) {
+      const internal = cmd as InternalCliCommand;
+      const ctx = await collectDiagnostic(err, internal, null);
+      emitDiagnostic(ctx);
+    }
     hookCtx.error = err;
     hookCtx.finishedAt = Date.now();
     await emitHook('onAfterExecute', hookCtx);

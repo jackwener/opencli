@@ -8,6 +8,8 @@ import yaml from 'js-yaml';
 
 export interface RenderOptions {
   fmt?: string;
+  /** True when the user explicitly passed -f on the command line */
+  fmtExplicit?: boolean;
   columns?: string[];
   title?: string;
   elapsed?: number;
@@ -26,7 +28,14 @@ function resolveColumns(rows: Record<string, unknown>[], opts: RenderOptions): s
 }
 
 export function render(data: unknown, opts: RenderOptions = {}): void {
-  const fmt = opts.fmt ?? 'table';
+  let fmt = opts.fmt ?? 'table';
+  // Non-TTY auto-downgrade only when format was NOT explicitly passed by user.
+  // Priority: explicit -f (any value) > OUTPUT env var > TTY auto-detect > table
+  if (!opts.fmtExplicit) {
+    const envFmt = process.env.OUTPUT?.trim().toLowerCase();
+    if (envFmt) fmt = envFmt;
+    else if (fmt === 'table' && !process.stdout.isTTY) fmt = 'yaml';
+  }
   if (data === null || data === undefined) {
     console.log(data);
     return;

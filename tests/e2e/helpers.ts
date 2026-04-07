@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const exec = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
-const MAIN = path.join(ROOT, 'dist', 'main.js');
+const MAIN = path.join(ROOT, 'dist', 'src', 'main.js');
 
 export interface CliResult {
   stdout: string;

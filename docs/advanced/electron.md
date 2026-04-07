@@ -27,7 +27,7 @@ ls /Applications/AppName.app/Contents/Frameworks/Electron\ Framework.framework
 
 ## The 5-Command Pattern (CDP / Electron)
 
-Every new Electron adapter should implement these 5 commands in `src/clis/<app_name>/`:
+Every new Electron adapter should implement these 5 commands in `clis/<app_name>/`:
 
 ### 1. `status.ts` — Connection Test
 ```typescript
