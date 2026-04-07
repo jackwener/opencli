@@ -6,7 +6,21 @@ allowed-tools: Bash(opencli:*), Read, Edit, Write
 
 # OpenCLI Repair — AI-Driven Adapter Self-Repair
 
-When an adapter breaks because a website changed its DOM, API, or auth flow, use this skill to diagnose the failure and patch the adapter.
+When an adapter breaks because a website changed its DOM, API, or response schema, use this skill to diagnose the failure and patch the adapter.
+
+## Safety Boundaries
+
+**Before starting any repair, check these hard stops:**
+
+- **`AUTH_REQUIRED`** (exit code 77) — **STOP.** Do not modify code. Tell the user to log into the site in Chrome.
+- **`BROWSER_CONNECT`** (exit code 69) — **STOP.** Do not modify code. Tell the user to run `opencli doctor`.
+- **CAPTCHA / rate limiting** — **STOP.** Not an adapter issue.
+
+**Scope constraint:**
+- **Only modify the file at `RepairContext.adapter.sourcePath`** — this is the authoritative adapter location (may be `clis/<site>/` in repo or `~/.opencli/clis/<site>/` for npm installs)
+- **Never modify** `src/`, `extension/`, `tests/`, `package.json`, or `tsconfig.json`
+
+**Retry budget:** Max **3 repair rounds** per failure. If 3 rounds of diagnose → fix → retry don't resolve it, stop and report what was tried.
 
 ## Prerequisites
 
@@ -16,7 +30,7 @@ opencli doctor    # Verify extension + daemon connectivity
 
 ## When to Use This Skill
 
-Use when `opencli <site> <command>` fails with errors like:
+Use when `opencli <site> <command>` fails with repairable errors:
 - **SELECTOR** — element not found (DOM changed)
 - **EMPTY_RESULT** — no data returned (API response changed)
 - **API_ERROR** / **NETWORK** — endpoint moved or broke
@@ -72,7 +86,7 @@ Read the diagnostic context and the adapter source. Classify the root cause:
 | SELECTOR | DOM restructured, class/id renamed | Explore current DOM → find new selector |
 | EMPTY_RESULT | API response schema changed, or data moved | Check network → find new response path |
 | API_ERROR | Endpoint URL changed, new params required | Discover new API via network intercept |
-| AUTH_REQUIRED | Login flow changed, cookies expired | Walk login flow with operate |
+| AUTH_REQUIRED | Login flow changed, cookies expired | **STOP** — tell user to log in, do not modify code |
 | TIMEOUT | Page loads differently, spinner/lazy-load | Add/update wait conditions |
 | PAGE_CHANGED | Major redesign | May need full adapter rewrite |
 
@@ -121,11 +135,11 @@ opencli operate state  # Look for login form fields
 
 ## Step 4: Patch the Adapter
 
-Read the adapter source file and make targeted fixes:
+Read the adapter source file at the path from `RepairContext.adapter.sourcePath` and make targeted fixes. This path is authoritative — it may be in the repo (`clis/`) or user-local (`~/.opencli/clis/`).
 
 ```bash
-# Read the adapter
-cat <sourcePath from diagnostic>
+# Read the adapter (use the exact path from diagnostic)
+cat <RepairContext.adapter.sourcePath>
 ```
 
 ### Common Fixes
@@ -169,18 +183,21 @@ cat <sourcePath from diagnostic>
 opencli <site> <command> [args...]
 ```
 
-If it still fails, go back to Step 3 and explore further. If the website has fundamentally changed (major redesign, removed feature), report that the adapter needs a full rewrite.
+If it still fails, go back to Step 1 and collect fresh diagnostics. You have a budget of **3 repair rounds** (diagnose → fix → retry). If the same error persists after a fix, try a different approach. After 3 rounds, stop and report what was tried.
 
-## When to Give Up
+## When to Stop
 
-Not all failures are repairable with a quick patch:
-
+**Hard stops (do not modify code):**
+- **AUTH_REQUIRED / BROWSER_CONNECT** — environment issue, not adapter bug
 - **Site requires CAPTCHA** — can't automate this
-- **Feature completely removed** — the data no longer exists
-- **Major redesign** — needs full adapter rewrite via `opencli-explorer` skill
 - **Rate limited / IP blocked** — not an adapter issue
 
-In these cases, clearly communicate the situation to the user rather than making futile patches.
+**Soft stops (report after attempting):**
+- **3 repair rounds exhausted** — stop, report what was tried and what failed
+- **Feature completely removed** — the data no longer exists
+- **Major redesign** — needs full adapter rewrite via `opencli-explorer` skill
+
+In all stop cases, clearly communicate the situation to the user rather than making futile patches.
 
 ## Example Repair Session
 
