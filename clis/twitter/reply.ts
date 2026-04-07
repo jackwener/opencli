@@ -269,7 +269,7 @@ cli({
 
       // Dedicated composer is more reliable than the inline tweet page reply box.
       await page.goto(buildReplyComposerUrl(kwargs.url), { waitUntil: 'load', settleMs: 2500 });
-      await page.wait({ selector: '[data-testid="tweetTextarea_0"]', timeout: 8 });
+      await page.wait({ selector: '[data-testid="tweetTextarea_0"]', timeout: 15 });
       if (localImagePath) {
         await page.wait({ selector: REPLY_FILE_INPUT_SELECTOR, timeout: 20 });
         await attachReplyImage(page, localImagePath);

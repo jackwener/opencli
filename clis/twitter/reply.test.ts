@@ -57,7 +57,7 @@ describe('twitter reply command', () => {
       'https://x.com/compose/post?in_reply_to=2040254679301718161',
       { waitUntil: 'load', settleMs: 2500 },
     );
-    expect(page.wait).toHaveBeenCalledWith({ selector: '[data-testid="tweetTextarea_0"]', timeout: 8 });
+    expect(page.wait).toHaveBeenCalledWith({ selector: '[data-testid="tweetTextarea_0"]', timeout: 15 });
     expect(result).toEqual([
       {
         status: 'success',
@@ -93,7 +93,7 @@ describe('twitter reply command', () => {
       'https://x.com/compose/post?in_reply_to=2040254679301718161',
       { waitUntil: 'load', settleMs: 2500 },
     );
-    expect(page.wait).toHaveBeenNthCalledWith(1, { selector: '[data-testid="tweetTextarea_0"]', timeout: 8 });
+    expect(page.wait).toHaveBeenNthCalledWith(1, { selector: '[data-testid="tweetTextarea_0"]', timeout: 15 });
     expect(page.wait).toHaveBeenNthCalledWith(2, { selector: 'input[type="file"][data-testid="fileInput"]', timeout: 20 });
     expect(setFileInput).toHaveBeenCalledWith([imagePath], 'input[type="file"][data-testid="fileInput"]');
     expect(result).toEqual([
