@@ -115,9 +115,10 @@ Do NOT modify test files.
 ${ctx.stuckHint ? `STUCK HINT: ${ctx.stuckHint}` : ''}`;
 
       try {
+        // Pass prompt via stdin `input` option to avoid shell metacharacter expansion
         const result = execSync(
-          `claude -p --dangerously-skip-permissions --allowedTools "Bash(npm:*),Bash(npx:*),Read,Edit,Write,Glob,Grep" --output-format text --no-session-persistence "${prompt.replace(/"/g, '\\"')}"`,
-          { cwd: ROOT, timeout: 180_000, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+          'claude -p --dangerously-skip-permissions --allowedTools "Bash(npm:*),Bash(npx:*),Read,Edit,Write,Glob,Grep" --output-format text --no-session-persistence',
+          { cwd: ROOT, timeout: 180_000, encoding: 'utf-8', input: prompt, stdio: ['pipe', 'pipe', 'pipe'] }
         ).trim();
         const lines = result.split('\n').filter(l => l.trim());
         return lines[lines.length - 1]?.trim()?.slice(0, 120) || 'fix attempt';

@@ -1,11 +1,8 @@
 /**
  * Generate: one-shot CLI creation from URL.
  *
- * Orchestrates the full pipeline:
- *   explore (Deep Explore) → synthesize (YAML generation) → register → verify
- *
- * Includes Strategy Cascade: if the initial strategy fails,
- * automatically downgrades and retries.
+ * Orchestrates the pipeline:
+ *   explore (Deep Explore) → synthesize (YAML generation + candidate ranking)
  */
 
 import { exploreUrl } from './explore.js';

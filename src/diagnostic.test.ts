@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  buildRepairContext, isDiagnosticEnabled, emitDiagnostic,
+  buildRepairContext, collectDiagnostic, isDiagnosticEnabled, emitDiagnostic,
   truncate, redactUrl, redactText, resolveAdapterSourcePath, MAX_DIAGNOSTIC_BYTES,
   type RepairContext,
 } from './diagnostic.js';
 import { SelectorError, CommandExecutionError } from './errors.js';
 import type { InternalCliCommand } from './registry.js';
+import type { IPage } from './types.js';
 
 function makeCmd(overrides: Partial<InternalCliCommand> = {}): InternalCliCommand {
   return {
@@ -250,5 +251,108 @@ describe('emitDiagnostic', () => {
     // with already-collected page state — redaction happens in collectPageState.
     // For unit test, verify redactUrl directly (tested above) and trust integration.
     expect(redactUrl('https://api.com/data?token=secret123')).toContain('[REDACTED]');
+  });
+});
+
+function makePage(overrides: Partial<IPage> = {}): IPage {
+  return {
+    goto: vi.fn(),
+    evaluate: vi.fn(),
+    getCookies: vi.fn(),
+    snapshot: vi.fn().mockResolvedValue('<div>...</div>'),
+    click: vi.fn(),
+    typeText: vi.fn(),
+    pressKey: vi.fn(),
+    scrollTo: vi.fn(),
+    getFormState: vi.fn(),
+    wait: vi.fn(),
+    tabs: vi.fn(),
+    selectTab: vi.fn(),
+    networkRequests: vi.fn().mockResolvedValue([]),
+    consoleMessages: vi.fn().mockResolvedValue([]),
+    scroll: vi.fn(),
+    autoScroll: vi.fn(),
+    installInterceptor: vi.fn(),
+    getInterceptedRequests: vi.fn().mockResolvedValue([]),
+    waitForCapture: vi.fn(),
+    screenshot: vi.fn(),
+    getCurrentUrl: vi.fn().mockResolvedValue('https://example.com/page'),
+    ...overrides,
+  } as IPage;
+}
+
+describe('collectDiagnostic', () => {
+  it('keeps intercepted payloads in a dedicated capturedPayloads field', async () => {
+    const page = makePage({
+      networkRequests: vi.fn().mockResolvedValue([{ url: '/api/data', status: 200 }]),
+      getInterceptedRequests: vi.fn().mockResolvedValue([{ items: [{ id: 1 }] }]),
+    });
+
+    const ctx = await collectDiagnostic(new Error('boom'), makeCmd(), page);
+
+    expect(ctx.page?.networkRequests).toEqual([
+      { url: '/api/data', status: 200 },
+    ]);
+    expect(ctx.page?.capturedPayloads).toEqual([
+      { source: 'interceptor', responseBody: { items: [{ id: 1 }] } },
+    ]);
+  });
+
+  it('preserves the previous network request output when interception is empty', async () => {
+    const page = makePage({
+      networkRequests: vi.fn().mockResolvedValue([{ url: '/api/data', status: 200 }]),
+      getInterceptedRequests: vi.fn().mockResolvedValue([]),
+    });
+
+    const ctx = await collectDiagnostic(new Error('boom'), makeCmd(), page);
+
+    expect(ctx.page?.networkRequests).toEqual([{ url: '/api/data', status: 200 }]);
+    expect(ctx.page?.capturedPayloads).toEqual([]);
+  });
+
+  it('swallows intercepted request failures and still returns page state', async () => {
+    const page = makePage({
+      networkRequests: vi.fn().mockResolvedValue([{ url: '/api/data', status: 200 }]),
+      getInterceptedRequests: vi.fn().mockRejectedValue(new Error('interceptor unavailable')),
+    });
+
+    const ctx = await collectDiagnostic(new Error('boom'), makeCmd(), page);
+
+    expect(ctx.page).toEqual({
+      url: 'https://example.com/page',
+      snapshot: '<div>...</div>',
+      networkRequests: [{ url: '/api/data', status: 200 }],
+      capturedPayloads: [],
+      consoleErrors: [],
+    });
+  });
+
+  it('redacts and truncates intercepted payloads recursively', async () => {
+    const page = makePage({
+      getInterceptedRequests: vi.fn().mockResolvedValue([{
+        token: 'token=abc123def456ghi789',
+        nested: {
+          cookie: 'cookie: session=super-secret-cookie-value',
+          body: 'x'.repeat(5000),
+        },
+      }]),
+    });
+
+    const ctx = await collectDiagnostic(new Error('boom'), makeCmd(), page);
+    const payload = ctx.page?.capturedPayloads?.[0] as Record<string, unknown>;
+    const body = ((payload.responseBody as Record<string, unknown>).nested as Record<string, unknown>).body as string;
+
+    expect(payload).toEqual({
+      source: 'interceptor',
+      responseBody: {
+        token: 'token=[REDACTED]',
+        nested: {
+          cookie: 'cookie: [REDACTED]',
+          body,
+        },
+      },
+    });
+    expect(body).toContain('[truncated,');
+    expect(body.length).toBeLessThan(5000);
   });
 });
