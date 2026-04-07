@@ -17,7 +17,7 @@ pipeline:
 
   - select: symbols
 
-  - filter: item.status
+  - filter: item.status === 'TRADING'
 
   - map:
       symbol: ${{ item.symbol }}

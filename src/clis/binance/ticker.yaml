@@ -15,8 +15,19 @@ pipeline:
   - fetch:
       url: https://data-api.binance.vision/api/v3/ticker/24hr
 
+  - map:
+      symbol: ${{ item.symbol }}
+      price: ${{ item.lastPrice }}
+      change_pct: ${{ item.priceChangePercent }}
+      high: ${{ item.highPrice }}
+      low: ${{ item.lowPrice }}
+      volume: ${{ item.volume }}
+      quote_vol: ${{ item.quoteVolume }}
+      trades: ${{ item.count }}
+      sort_volume: ${{ Number(item.quoteVolume) }}
+
   - sort:
-      by: quoteVolume
+      by: sort_volume
       order: desc
 
   - map:

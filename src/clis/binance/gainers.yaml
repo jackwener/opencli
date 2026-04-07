@@ -17,8 +17,15 @@ pipeline:
 
   - filter: item.priceChangePercent
 
+  - map:
+      symbol: ${{ item.symbol }}
+      price: ${{ item.lastPrice }}
+      change_24h: ${{ item.priceChangePercent }}
+      volume: ${{ item.quoteVolume }}
+      sort_change: ${{ Number(item.priceChangePercent) }}
+
   - sort:
-      by: priceChangePercent
+      by: sort_change
       order: desc
 
   - map:
