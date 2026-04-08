@@ -46,7 +46,7 @@ export interface ManifestEntry {
   type: 'ts';
   /** Relative path from clis/ dir, e.g. 'bilibili/search.js' */
   modulePath?: string;
-  /** Relative path to the original source file from clis/ dir (for YAML: 'site/cmd.yaml') */
+  /** Relative path to the original source file from clis/ dir (e.g. 'site/cmd.ts') */
   sourceFile?: string;
   /** Pre-navigation control — see CliCommand.navigateBefore */
   navigateBefore?: boolean | string;

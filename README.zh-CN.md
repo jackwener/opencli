@@ -383,7 +383,7 @@ opencli plugin uninstall my-tool                            # 卸载
 # 1. Deep Explore — 网络拦截 → 响应分析 → 能力推理 → 框架检测
 opencli explore https://example.com --site mysite
 
-# 2. Synthesize — 从探索成果物生成 evaluate-based YAML 适配器
+# 2. Synthesize — 从探索成果物生成 evaluate-based TS 适配器
 opencli synthesize mysite
 
 # 3. Generate — 一键完成：探索 → 合成 → 注册

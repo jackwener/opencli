@@ -28,7 +28,7 @@ A CLI tool that turns **any website**, **Electron app**, or **local CLI tool** i
 - **AI Agent ready** — `explore` discovers APIs, `synthesize` generates adapters, `cascade` finds auth strategies, `browser` controls the browser directly.
 - **External CLI Hub** — Discover, auto-install, and passthrough commands to any external CLI (gh, obsidian, docker, etc). Zero setup.
 - **Self-healing setup** — `opencli doctor` diagnoses and auto-starts the daemon, extension, and live browser connectivity.
-- **Dynamic Loader** — Simply drop `.ts` or `.yaml` adapters into the `clis/` folder for auto-registration.
+- **Dynamic Loader** — Simply drop `.ts` adapters into the `clis/` folder for auto-registration.
 - **Zero LLM cost** — No tokens consumed at runtime. Run 10,000 times and pay nothing.
 - **Deterministic** — Same command, same output schema, every time. Pipeable, scriptable, CI-friendly.
 - **Broad coverage** — 79+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
@@ -251,9 +251,9 @@ opencli plugin uninstall my-tool
 
 | Plugin | Type | Description |
 |--------|------|-------------|
-| [opencli-plugin-github-trending](https://github.com/ByteYue/opencli-plugin-github-trending) | YAML | GitHub Trending repositories |
+| [opencli-plugin-github-trending](https://github.com/ByteYue/opencli-plugin-github-trending) | TS | GitHub Trending repositories |
 | [opencli-plugin-hot-digest](https://github.com/ByteYue/opencli-plugin-hot-digest) | TS | Multi-platform trending aggregator |
-| [opencli-plugin-juejin](https://github.com/Astro-Han/opencli-plugin-juejin) | YAML | 稀土掘金 (Juejin) hot articles |
+| [opencli-plugin-juejin](https://github.com/Astro-Han/opencli-plugin-juejin) | TS | 稀土掘金 (Juejin) hot articles |
 | [opencli-plugin-vk](https://github.com/flobo3/opencli-plugin-vk) | TS | VK (VKontakte) wall, feed, and search |
 
 See [Plugins Guide](./docs/guide/plugins.md) for creating your own plugin.
@@ -266,7 +266,7 @@ See [Plugins Guide](./docs/guide/plugins.md) for creating your own plugin.
 
 ```bash
 opencli explore https://example.com --site mysite   # Discover APIs + capabilities
-opencli synthesize mysite                            # Generate YAML adapters
+opencli synthesize mysite                            # Generate TS adapters
 opencli generate https://example.com --goal "hot"   # One-shot: explore → synthesize → register
 opencli cascade https://api.example.com/data         # Auto-probe: PUBLIC → COOKIE → HEADER
 ```

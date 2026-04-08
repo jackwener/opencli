@@ -174,7 +174,7 @@ function buildTemplatedUrl(rawUrl: string, cap: SynthesizeCapability, _endpoint:
 
 /**
  * Build inline evaluate script for browser-based fetch+parse.
- * Follows patterns from bilibili/hot.yaml and twitter/trending.yaml.
+ * Follows patterns from bilibili/hot.ts and twitter/trending.ts.
  */
 function buildEvaluateScript(url: string, itemPath: string, endpoint: ExploreEndpointArtifact): string {
   const pathChain = itemPath.split('.').map((p: string) => `?.${p}`).join('');

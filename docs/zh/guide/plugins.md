@@ -26,7 +26,7 @@ opencli plugin uninstall github-trending
 
 ## 插件目录结构
 
-Plugins 存放在 `~/.opencli/plugins/<name>/`。每个子目录都会在启动时扫描 `.yaml`、`.ts`、`.js` 命令文件，格式与内置 adapters 相同。
+Plugins 存放在 `~/.opencli/plugins/<name>/`。每个子目录都会在启动时扫描 `.ts`、`.js` 命令文件，格式与内置 adapters 相同。
 
 ## 安装来源
 
