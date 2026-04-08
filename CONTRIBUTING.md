@@ -188,7 +188,7 @@ Common scopes: site name (`twitter`, `reddit`) or module name (`browser`, `pipel
    npx tsc --noEmit           # Type check
    npm test                   # Core unit tests
    npm run test:adapter       # Focused adapter tests (if you touched adapter logic)
-   opencli validate           # YAML validation (if applicable)
+   opencli validate           # Adapter validation
    ```
 4. Commit using conventional commit format
 5. Push and open a PR
