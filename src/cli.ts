@@ -17,7 +17,7 @@ import { render as renderOutput } from './output.js';
 import { getBrowserFactory, browserSession } from './runtime.js';
 import { PKG_VERSION } from './version.js';
 import { printCompletionScript } from './completion.js';
-import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
+import { loadExternalClis, executeExternalCli, installExternalCli, uninstallExternalCli, switchExternalCliVersion, registerExternalCli, listExternalClis, isBinaryInstalled } from './external.js';
 import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage } from './errors.js';
 import { daemonStatus, daemonStop, daemonRestart } from './commands/daemon.js';
@@ -105,12 +105,15 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         console.log();
       }
 
-      const externalClis = loadExternalClis();
+      const externalClis = listExternalClis(loadExternalClis());
       if (externalClis.length > 0) {
         console.log(chalk.bold.cyan('  external CLIs'));
         for (const ext of externalClis) {
-          const isInstalled = isBinaryInstalled(ext.binary);
-          const tag = isInstalled ? chalk.green('[installed]') : chalk.yellow('[auto-install]');
+          const tag = ext.installed
+            ? ext.installType === 'isolated'
+              ? chalk.green(`[isolated${ext.version ? ` @${ext.version}` : ''}]`)
+              : chalk.green('[installed]')
+            : chalk.yellow('[auto-install]');
           console.log(`    ${ext.name} ${tag}${ext.description ? chalk.dim(` — ${ext.description}`) : ''}`);
         }
         console.log();
@@ -957,14 +960,37 @@ cli({
     .command('install')
     .description('Install an external CLI')
     .argument('<name>', 'Name of the external CLI')
-    .action((name: string) => {
+    .option('--version <ver>', 'Install specific version (isolated mode only)')
+    .option('--isolated', 'Install in isolated directory (does not affect global)')
+    .action((name: string, opts: { version?: string; isolated?: boolean }) => {
       const ext = externalClis.find(e => e.name === name);
       if (!ext) {
         console.error(chalk.red(`External CLI '${name}' not found in registry.`));
         process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
-      installExternalCli(ext);
+      const success = installExternalCli(ext, { version: opts.version, isolated: opts.isolated });
+      if (!success) process.exitCode = 1;
+    });
+
+  program
+    .command('uninstall')
+    .description('Uninstall an isolated external CLI')
+    .argument('<name>', 'Name of the external CLI')
+    .option('--version <ver>', 'Uninstall only the specified version')
+    .action((name: string, opts: { version?: string }) => {
+      const success = uninstallExternalCli(name, opts.version);
+      if (!success) process.exitCode = 1;
+    });
+
+  program
+    .command('switch')
+    .description('Switch active version of an isolated external CLI')
+    .argument('<name>', 'Name of the external CLI')
+    .argument('<version>', 'Version to activate')
+    .action((name: string, version: string) => {
+      const success = switchExternalCliVersion(name, version);
+      if (!success) process.exitCode = 1;
     });
 
   program
