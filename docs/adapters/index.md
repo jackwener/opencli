@@ -11,7 +11,7 @@ Run `opencli list` for the live registry.
 | **[tieba](./browser/tieba)** | `hot` `posts` `search` `read` | 🔐 Browser |
 | **[hupu](./browser/hupu)** | `hot` `search` `detail` `mentions` `reply` `like` `unlike` | 🌐 / 🔐 |
 | **[bilibili](./browser/bilibili)** | `hot` `search` `me` `favorite` `history` `feed` `subtitle` `dynamic` `ranking` `following` `user-videos` `download` | 🔐 Browser |
-| **[zhihu](./browser/zhihu)** | `hot` `search` `question` `download` | 🔐 Browser |
+| **[zhihu](./browser/zhihu)** | `hot` `search` `question` `download` `follow` `like` `favorite` `comment` `answer` | 🔐 Browser |
 | **[xiaohongshu](./browser/xiaohongshu)** | `search` `notifications` `feed` `user` `note` `comments` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | 🔐 Browser |
 | **[xiaoe](./browser/xiaoe)** | `courses` `detail` `catalog` `play-url` `content` | 🔐 Browser |
 | **[xueqiu](./browser/xueqiu)** | `feed` `hot-stock` `hot` `search` `stock` `comments` `watchlist` `earnings-date` `fund-holdings` `fund-snapshot` | 🔐 Browser |
@@ -59,6 +59,7 @@ Run `opencli list` for the live registry.
 | **[bluesky](./browser/bluesky)** | `search` `profile` `user` `feeds` `followers` `following` `thread` `trending` `starter-packs` | 🌐 Public |
 | **[douyin](./browser/douyin)** | `profile` `videos` `user-videos` `activities` `collections` `hashtag` `location` `stats` `publish` `draft` `drafts` `delete` `update` | 🔐 Browser |
 | **[xianyu](./browser/xianyu)** | `search` `item` `chat` | 🔐 Browser |
+| **[quark](./browser/quark)** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` | 🔐 Browser |
 
 ## Public API Adapters
 

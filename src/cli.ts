@@ -313,11 +313,11 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
   operate.command('open').argument('<url>').description('Open URL in automation window')
     .action(operateAction(async (page, url) => {
       // Start session-level capture before navigation (catches initial requests)
-      await page.startNetworkCapture?.();
+      const hasSessionCapture = await page.startNetworkCapture?.().then(() => true).catch(() => false);
       await page.goto(url);
       await page.wait(2);
-      // Fallback: also inject JS interceptor for pages without session capture
-      if (!page.startNetworkCapture) {
+      // Fallback: inject JS interceptor when session capture is unavailable
+      if (!hasSessionCapture) {
         try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
       }
       console.log(`Navigated to: ${await page.getCurrentUrl?.() ?? url}`);
