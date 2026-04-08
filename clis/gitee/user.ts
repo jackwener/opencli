@@ -8,7 +8,6 @@ interface DomUserSnapshot {
   followers: string;
   publicRepos: string;
   giteeIndex: string;
-  contributionTotal: number;
 }
 
 const GITEE_BASE_URL = 'https://gitee.com';
@@ -156,14 +155,6 @@ cli({
           }
         }
 
-        const contributionTotal = Array.from(document.querySelectorAll('.users__contribution-container .box[data-content]'))
-          .map((el) => {
-            const raw = el.getAttribute('data-content') || '';
-            const match = raw.match(/(\\d+)\\s*个?贡献/);
-            return match ? Number(match[1]) : 0;
-          })
-          .reduce((sum, value) => sum + value, 0);
-
         return {
           notFound,
           blocked,
@@ -171,7 +162,6 @@ cli({
           followers,
           publicRepos,
           giteeIndex,
-          contributionTotal,
         };
       })()
     `) as unknown;
@@ -184,7 +174,6 @@ cli({
       followers: normalizeCount(domSnapshotRecord?.followers),
       publicRepos: normalizeCount(domSnapshotRecord?.publicRepos),
       giteeIndex: normalizeCount(domSnapshotRecord?.giteeIndex),
-      contributionTotal: Number(domSnapshotRecord?.contributionTotal ?? 0),
     };
 
     if (domSnapshot.notFound) {
@@ -248,8 +237,7 @@ cli({
     const giteeIndex = pickFirst(
       domSnapshot.giteeIndex,
       apiGiteeIndex(apiUser),
-      domSnapshot.contributionTotal > 0 ? String(domSnapshot.contributionTotal) : '',
-      '0',
+      '-',
     );
 
     return [
