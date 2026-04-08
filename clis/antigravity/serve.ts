@@ -15,6 +15,7 @@ import { CDPBridge } from '../../src/browser/cdp.js';
 import type { IPage } from '../../src/types.js';
 import { resolveElectronEndpoint } from '../../src/launcher.js';
 import { EXIT_CODES, getErrorMessage } from '../../src/errors.js';
+import { parseEnvTimeout, parseTimeoutValue } from '../../src/runtime.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -441,8 +442,9 @@ async function handleMessages(
 
 export async function startServe(opts: { port?: number; timeout?: number } = {}): Promise<void> {
   const port = opts.port ?? 8082;
-  const envTimeout = process.env.OPENCLI_ANTIGRAVITY_TIMEOUT ? parseInt(process.env.OPENCLI_ANTIGRAVITY_TIMEOUT) * 1000 : undefined;
-  const effectiveTimeout = opts.timeout ? opts.timeout * 1000 : envTimeout ?? 120_000;
+  const envTimeoutSeconds = parseEnvTimeout('OPENCLI_ANTIGRAVITY_TIMEOUT', 120);
+  const effectiveTimeoutSeconds = parseTimeoutValue(opts.timeout, '--timeout', envTimeoutSeconds);
+  const effectiveTimeout = effectiveTimeoutSeconds * 1000;
 
   console.error(`[serve] Starting Antigravity API proxy on port ${port} (timeout: ${effectiveTimeout / 1000}s)`);
 

@@ -1005,9 +1005,10 @@ cli({
     .option('--timeout <seconds>', 'Maximum time to wait for a reply (default: 120s)')
     .action(async (opts) => {
       const { startServe } = await import('../clis/antigravity/serve.js');
+      const { parseTimeoutValue } = await import('./runtime.js');
       await startServe({
-        port: parseInt(opts.port),
-        timeout: opts.timeout ? parseInt(opts.timeout) : undefined,
+        port: parseInt(opts.port, 10),
+        timeout: opts.timeout ? parseTimeoutValue(opts.timeout, '--timeout', 120) : undefined,
       });
     });
 
