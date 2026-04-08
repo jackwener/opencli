@@ -382,7 +382,7 @@ export async function exploreUrl(
   return browserSession(opts.BrowserFactory, async (page) => {
     return runWithTimeout((async () => {
       // Step 1: Navigate
-      await page.startNetworkCapture?.();
+      await page.startNetworkCapture?.().catch(() => {});
       await page.goto(url);
       await page.wait(waitSeconds);
 

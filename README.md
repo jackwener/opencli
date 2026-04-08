@@ -132,6 +132,7 @@ git clone git@github.com:jackwener/opencli.git && cd opencli && npm install && n
 | **hupu** | `hot` `search` `detail` `mentions` `reply` `like` `unlike` |
 | **twitter** | `trending` `search` `timeline` `bookmarks` `post` `download` `profile` `article` `like` `likes` `notifications` `reply` `reply-dm` `thread` `follow` `unfollow` `followers` `following` `block` `unblock` `bookmark` `unbookmark` `delete` `hide-reply` `accept` |
 | **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `read` `user` `user-posts` `user-comments` `upvote` `upvoted` `save` `saved` `comment` `subscribe` |
+| **zhihu** | `hot` `search` `question` `download` `follow` `like` `favorite` `comment` `answer` |
 | **amazon** | `bestsellers` `search` `product` `offer` `discussion` `movers-shakers` `new-releases` |
 | **1688** | `search` `item` `assets` `download` `store` |
 | **gemini** | `new` `ask` `image` `deep-research` `deep-research-result` |
@@ -140,6 +141,7 @@ git clone git@github.com:jackwener/opencli.git && cd opencli && npm install && n
 | **spotify** | `auth` `status` `play` `pause` `next` `prev` `volume` `search` `queue` `shuffle` `repeat` |
 | **xianyu** | `search` `item` `chat` |
 | **xiaoe** | `courses` `detail` `catalog` `play-url` `content` |
+| **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` |
 
 79+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
 
