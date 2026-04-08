@@ -16,20 +16,68 @@ if (process.platform !== 'win32') {
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { discoverClis, discoverPlugins, ensureUserCliCompatShims, ensureUserAdapters, USER_CLIS_DIR } from './discovery.js';
-import { getCompletions } from './completion.js';
-import { runCli } from './cli.js';
-import { emitHook } from './hooks.js';
-import { installNodeNetwork } from './node-network.js';
-import { registerUpdateNoticeOnExit, checkForUpdateBackground } from './update-check.js';
+import { getCompletionsFromManifest, hasManifest, printCompletionScriptFast } from './completion-fast.js';
+import { getCliManifestPath } from './package-paths.js';
+import { PKG_VERSION } from './version.js';
 import { EXIT_CODES } from './errors.js';
-
-installNodeNetwork();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const BUILTIN_CLIS = path.resolve(__dirname, '..', 'clis');
-const USER_CLIS = USER_CLIS_DIR;
+const USER_CLIS = path.join(os.homedir(), '.opencli', 'clis');
+
+// ── Ultra-fast path: lightweight commands bypass full discovery ──────────
+// These are high-frequency or trivial paths that must not pay the startup tax.
+const argv = process.argv.slice(2);
+
+// Fast path: --version
+if (argv.includes('--version') || argv.includes('-V')) {
+  process.stdout.write(PKG_VERSION + '\n');
+  process.exit(EXIT_CODES.SUCCESS);
+}
+
+// Fast path: completion <shell> — print shell script without discovery
+if (argv[0] === 'completion' && argv.length >= 2) {
+  if (printCompletionScriptFast(argv[1])) {
+    process.exit(EXIT_CODES.SUCCESS);
+  }
+  // Unknown shell — fall through to full path for proper error handling
+}
+
+// Fast path: --get-completions — read from manifest, skip discovery
+const getCompIdx = process.argv.indexOf('--get-completions');
+if (getCompIdx !== -1) {
+  const manifestPaths = [getCliManifestPath(BUILTIN_CLIS), getCliManifestPath(USER_CLIS)];
+  if (hasManifest(manifestPaths)) {
+    const rest = process.argv.slice(getCompIdx + 1);
+    let cursor: number | undefined;
+    const words: string[] = [];
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === '--cursor' && i + 1 < rest.length) {
+        cursor = parseInt(rest[i + 1], 10);
+        i++;
+      } else {
+        words.push(rest[i]);
+      }
+    }
+    if (cursor === undefined) cursor = words.length;
+    const candidates = getCompletionsFromManifest(words, cursor, manifestPaths);
+    process.stdout.write(candidates.join('\n') + '\n');
+    process.exit(EXIT_CODES.SUCCESS);
+  }
+  // No manifest — fall through to full discovery path below
+}
+
+// ── Full startup path ───────────────────────────────────────────────────
+// Dynamic imports: these are deferred so the fast path above never pays the cost.
+const { discoverClis, discoverPlugins, ensureUserCliCompatShims, ensureUserAdapters } = await import('./discovery.js');
+const { getCompletions } = await import('./completion.js');
+const { runCli } = await import('./cli.js');
+const { emitHook } = await import('./hooks.js');
+const { installNodeNetwork } = await import('./node-network.js');
+const { registerUpdateNoticeOnExit, checkForUpdateBackground } = await import('./update-check.js');
+
+installNodeNetwork();
 
 // Sequential: plugins must run after built-in discovery so they can override built-in commands.
 await ensureUserCliCompatShims();
@@ -42,9 +90,7 @@ registerUpdateNoticeOnExit();
 // Kick off background fetch for next run (non-blocking)
 checkForUpdateBackground();
 
-// ── Fast-path: handle --get-completions before commander parses ─────────
-// Usage: opencli --get-completions --cursor <N> [word1 word2 ...]
-const getCompIdx = process.argv.indexOf('--get-completions');
+// ── Fallback completion: manifest unavailable, use full registry ─────────
 if (getCompIdx !== -1) {
   const rest = process.argv.slice(getCompIdx + 1);
   let cursor: number | undefined;
@@ -52,7 +98,7 @@ if (getCompIdx !== -1) {
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--cursor' && i + 1 < rest.length) {
       cursor = parseInt(rest[i + 1], 10);
-      i++; // skip the value
+      i++;
     } else {
       words.push(rest[i]);
     }
