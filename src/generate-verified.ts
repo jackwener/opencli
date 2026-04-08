@@ -241,6 +241,18 @@ function buildDefaultArgs(candidate: CandidateYaml): Record<string, unknown> {
   return args;
 }
 
+function getUnsupportedVerificationArgs(candidate: CandidateYaml): string[] {
+  return Object.entries(candidate.args ?? {})
+    .filter(([name, def]) => {
+      if (!def.required || def.default !== undefined) return false;
+      if (def.type === 'int' || def.type === 'number') return false;
+      if (def.type === 'boolean' || def.type === 'bool') return false;
+      if (name === 'keyword' || name === 'query') return false;
+      return true;
+    })
+    .map(([name]) => name);
+}
+
 function assessResult(result: unknown, expectedFields: string[] = []): VerificationResult {
   if (!Array.isArray(result)) return { ok: false, reason: 'non-array-result' };
   if (result.length === 0) return { ok: false, reason: 'empty-result' };
@@ -326,6 +338,14 @@ async function registerVerifiedAdapter(candidate: CandidateYaml): Promise<string
   return filePath;
 }
 
+async function writeVerifiedArtifact(candidate: CandidateYaml, exploreDir: string): Promise<string> {
+  const outDir = path.join(exploreDir, 'verified');
+  const filePath = path.join(outDir, `${candidate.name}.verified.yaml`);
+  await fs.promises.mkdir(outDir, { recursive: true });
+  await fs.promises.writeFile(filePath, yaml.dump(candidate, { sortKeys: false, lineWidth: 120 }));
+  return filePath;
+}
+
 function classifySessionError(
   error: unknown,
   summary: SynthesizeCandidateSummary,
@@ -387,6 +407,17 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
 
   const expectedFields = Object.keys(context.endpoint.detectedFields ?? {});
   const originalCandidate = readCandidateYaml(selected.path);
+  const unsupportedArgs = getUnsupportedVerificationArgs(originalCandidate);
+
+  if (unsupportedArgs.length > 0) {
+    return {
+      version: 1,
+      status: 'needs-human-check',
+      candidate: buildCandidateInfo(bundle.manifest.site, selected),
+      issue: `auto-verification does not support required args: ${unsupportedArgs.join(', ')}`,
+      stats: baseStats,
+    };
+  }
 
   try {
     return await browserSession(opts.BrowserFactory, async (page) => {
@@ -405,7 +436,9 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
       const candidate = applyStrategy(originalCandidate, bestStrategy);
       const firstAttempt = await verifyCandidate(page, candidate, expectedFields);
       if (firstAttempt.ok) {
-        const finalPath = opts.noRegister ? selected.path : await registerVerifiedAdapter(candidate);
+        const finalPath = opts.noRegister
+          ? await writeVerifiedArtifact(candidate, exploreResult.out_dir)
+          : await registerVerifiedAdapter(candidate);
         return {
           version: 1,
           status: 'success',
@@ -467,7 +500,9 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
 
       const secondAttempt = await verifyCandidate(page, repaired, expectedFields);
       if (secondAttempt.ok) {
-        const finalPath = opts.noRegister ? selected.path : await registerVerifiedAdapter(repaired);
+        const finalPath = opts.noRegister
+          ? await writeVerifiedArtifact(repaired, exploreResult.out_dir)
+          : await registerVerifiedAdapter(repaired);
         return {
           version: 1,
           status: 'success',

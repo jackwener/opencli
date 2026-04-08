@@ -262,6 +262,85 @@ describe('generateVerifiedFromUrl', () => {
     }));
   });
 
+  it('writes a verified artifact for --no-register success instead of returning the original candidate path', async () => {
+    const candidatePath = path.join(tempDir, 'search.yaml');
+    fs.writeFileSync(candidatePath, yaml.dump({
+      site: 'demo',
+      name: 'search',
+      description: 'demo search',
+      domain: 'demo.test',
+      strategy: 'public',
+      browser: false,
+      args: {
+        keyword: { type: 'str', required: true },
+      },
+      columns: ['title', 'url'],
+      pipeline: [
+        { fetch: { url: 'https://demo.test/api/search?q=${{ args.keyword }}' } },
+        { select: 'payload.items' },
+        { map: { title: '${{ item.title }}', url: '${{ item.url }}' } },
+      ],
+    }, { sortKeys: false }));
+
+    mockExploreUrl.mockResolvedValue({
+      site: 'demo',
+      target_url: 'https://demo.test',
+      final_url: 'https://demo.test/home',
+      title: 'Demo',
+      framework: {},
+      stores: [],
+      top_strategy: 'cookie',
+      endpoint_count: 1,
+      api_endpoint_count: 1,
+      capabilities: [{ name: 'search' }],
+      auth_indicators: [],
+      out_dir: tempDir,
+    });
+    mockLoadExploreBundle.mockReturnValue({
+      manifest: { site: 'demo', target_url: 'https://demo.test', final_url: 'https://demo.test/home' },
+      endpoints: [{
+        pattern: 'demo.test/api/search',
+        url: 'https://demo.test/api/search?q=test',
+        itemPath: 'payload.items',
+        itemCount: 10,
+        detectedFields: { title: 'headline', url: 'permalink' },
+      }],
+      capabilities: [{ name: 'search', strategy: 'cookie', endpoint: 'demo.test/api/search', itemPath: 'payload.items' }],
+    });
+    mockSynthesizeFromExplore.mockReturnValue({
+      site: 'demo',
+      explore_dir: tempDir,
+      out_dir: tempDir,
+      candidate_count: 1,
+      candidates: [{ name: 'search', path: candidatePath, strategy: 'public' }],
+    });
+
+    const page = { goto: vi.fn() } as unknown as IPage;
+    mockBrowserSession.mockImplementation(async (_factory, fn) => fn(page));
+    mockCascadeProbe.mockResolvedValue({
+      bestStrategy: Strategy.COOKIE,
+      probes: [
+        { strategy: Strategy.PUBLIC, success: false },
+        { strategy: Strategy.COOKIE, success: true },
+      ],
+      confidence: 0.9,
+    });
+    mockExecutePipeline.mockResolvedValue([{ title: 'hello', url: 'https://demo.test/item/1' }]);
+
+    const result = await generateVerifiedFromUrl({
+      url: 'https://demo.test',
+      BrowserFactory: class {} as never,
+      goal: 'search',
+      noRegister: true,
+    });
+
+    expect(result.status).toBe('success');
+    expect(result.adapter?.path).toMatch(/verified\/search\.verified\.yaml$/);
+    expect(result.adapter?.path).not.toBe(candidatePath);
+    expect(fs.existsSync(result.adapter!.path)).toBe(true);
+    expect(mockRegisterCommand).not.toHaveBeenCalled();
+  });
+
   it('attempts a single itemPath repair on empty-result and returns needs-human-check when it still fails', async () => {
     const candidatePath = path.join(tempDir, 'hot.yaml');
     fs.writeFileSync(candidatePath, yaml.dump({
@@ -417,6 +496,73 @@ describe('generateVerifiedFromUrl', () => {
       version: 1,
       status: 'blocked',
       reason: 'auth-required',
+    }));
+  });
+
+  it('narrows v1 scope by sending unsupported required args to needs-human-check', async () => {
+    const candidatePath = path.join(tempDir, 'detail.yaml');
+    fs.writeFileSync(candidatePath, yaml.dump({
+      site: 'demo',
+      name: 'detail',
+      description: 'demo detail',
+      domain: 'demo.test',
+      strategy: 'public',
+      browser: false,
+      args: {
+        id: { type: 'str', required: true },
+      },
+      columns: ['title', 'url'],
+      pipeline: [
+        { fetch: { url: 'https://demo.test/api/detail?id=${{ args.id }}' } },
+        { select: 'data.item' },
+      ],
+    }, { sortKeys: false }));
+
+    mockExploreUrl.mockResolvedValue({
+      site: 'demo',
+      target_url: 'https://demo.test/detail/123',
+      final_url: 'https://demo.test/detail/123',
+      title: 'Demo detail',
+      framework: {},
+      stores: [],
+      top_strategy: 'public',
+      endpoint_count: 1,
+      api_endpoint_count: 1,
+      capabilities: [{ name: 'detail' }],
+      auth_indicators: [],
+      out_dir: tempDir,
+    });
+    mockLoadExploreBundle.mockReturnValue({
+      manifest: { site: 'demo', target_url: 'https://demo.test/detail/123', final_url: 'https://demo.test/detail/123' },
+      endpoints: [{
+        pattern: 'demo.test/api/detail',
+        url: 'https://demo.test/api/detail?id=123',
+        itemPath: 'data.item',
+        itemCount: 1,
+        detectedFields: { title: 'title', url: 'url' },
+      }],
+      capabilities: [{ name: 'detail', strategy: 'public', endpoint: 'demo.test/api/detail', itemPath: 'data.item' }],
+    });
+    mockSynthesizeFromExplore.mockReturnValue({
+      site: 'demo',
+      explore_dir: tempDir,
+      out_dir: tempDir,
+      candidate_count: 1,
+      candidates: [{ name: 'detail', path: candidatePath, strategy: 'public' }],
+    });
+
+    const result = await generateVerifiedFromUrl({
+      url: 'https://demo.test/detail/123',
+      BrowserFactory: class {} as never,
+      goal: 'detail',
+      noRegister: true,
+    });
+
+    expect(mockBrowserSession).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({
+      version: 1,
+      status: 'needs-human-check',
+      issue: expect.stringContaining('required args: id'),
     }));
   });
 });
