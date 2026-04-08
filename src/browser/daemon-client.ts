@@ -22,6 +22,9 @@ function generateId(): string {
 export interface DaemonCommand {
   id: string;
   action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'insert-text' | 'bind-current' | 'network-capture-start' | 'network-capture-read' | 'cdp';
+  /** Target page identity (targetId). Cross-layer contract — preferred over tabId. */
+  page?: string;
+  /** @deprecated Legacy tab ID — use `page` (targetId) instead. */
   tabId?: number;
   code?: string;
   workspace?: string;
@@ -52,6 +55,8 @@ export interface DaemonResult {
   ok: boolean;
   data?: unknown;
   error?: string;
+  /** Page identity (targetId) — present on page-scoped command responses */
+  page?: string;
 }
 
 export interface DaemonStatus {
@@ -164,6 +169,51 @@ export async function sendCommand(
   }
   // Unreachable — the loop always returns or throws
   throw new Error('sendCommand: max retries exhausted');
+}
+
+/**
+ * Like sendCommand, but returns both data and page identity (targetId).
+ * Use this for page-scoped commands where the caller needs the page identity.
+ */
+export async function sendCommandFull(
+  action: DaemonCommand['action'],
+  params: Omit<DaemonCommand, 'id' | 'action'> = {},
+): Promise<{ data: unknown; page?: string }> {
+  const maxRetries = 4;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const id = generateId();
+    const command: DaemonCommand = { id, action, ...params };
+    try {
+      const res = await requestDaemon('/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(command),
+        timeout: 30000,
+      });
+
+      const result = (await res.json()) as DaemonResult;
+
+      if (!result.ok) {
+        if (isTransientBrowserError(new Error(result.error ?? '')) && attempt < maxRetries) {
+          await sleep(1500);
+          continue;
+        }
+        throw new Error(result.error ?? 'Daemon command failed');
+      }
+
+      return { data: result.data, page: result.page };
+    } catch (err) {
+      const isRetryable = err instanceof TypeError
+        || (err instanceof Error && err.name === 'AbortError');
+      if (isRetryable && attempt < maxRetries) {
+        await sleep(500);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('sendCommandFull: max retries exhausted');
 }
 
 export async function listSessions(): Promise<BrowserSessionInfo[]> {

@@ -25,7 +25,9 @@ export interface Command {
   id: string;
   /** Action type */
   action: Action;
-  /** Target tab ID (omit for active tab) */
+  /** Target page identity (targetId). Cross-layer contract — preferred over tabId. */
+  page?: string;
+  /** @deprecated Legacy tab ID — use `page` (targetId) instead. Kept for backward compat. */
   tabId?: number;
   /** JS code to evaluate in page context (exec action) */
   code?: string;
@@ -72,6 +74,8 @@ export interface Result {
   data?: unknown;
   /** Error message on failure */
   error?: string;
+  /** Page identity (targetId) — present only on page-scoped command responses */
+  page?: string;
 }
 
 /** Default daemon port */

@@ -80,6 +80,22 @@ function createChromeMock() {
         return tab;
       }),
       onUpdated: { addListener: vi.fn(), removeListener: vi.fn() } as Listener<(id: number, info: chrome.tabs.TabChangeInfo) => void>,
+      onRemoved: { addListener: vi.fn() } as Listener<(tabId: number) => void>,
+    },
+    debugger: {
+      getTargets: vi.fn(async () => tabs.map(t => ({
+        type: 'page',
+        id: `target-${t.id}`,
+        tabId: t.id,
+        url: t.url ?? '',
+        title: t.title ?? '',
+        attached: false,
+      }))),
+      attach: vi.fn(),
+      detach: vi.fn(),
+      sendCommand: vi.fn(),
+      onDetach: { addListener: vi.fn() } as Listener<(source: { tabId?: number }) => void>,
+      onEvent: { addListener: vi.fn() } as Listener<(source: any, method: string, params: any) => void>,
     },
     windows: {
       get: vi.fn(async (windowId: number) => ({ id: windowId })),
@@ -130,7 +146,7 @@ describe('background tab isolation', () => {
     expect(result.data).toEqual([
       {
         index: 0,
-        tabId: 1,
+        page: 'target-1',
         url: 'https://automation.example',
         title: 'automation',
         active: true,
@@ -169,10 +185,10 @@ describe('background tab isolation', () => {
     expect(result).toEqual({
       id: 'same-url',
       ok: true,
+      page: 'target-1',
       data: {
         title: 'bilibili',
         url: 'https://www.bilibili.com/',
-        tabId: 1,
         timedOut: false,
       },
     });

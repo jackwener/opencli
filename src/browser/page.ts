@@ -4,14 +4,13 @@
  * All browser operations are ultimately 'exec' (JS evaluation via CDP)
  * plus a few native Chrome Extension APIs (tabs, cookies, navigate).
  *
- * IMPORTANT: After goto(), we remember the tabId returned by the navigate
- * action and pass it to all subsequent commands. This avoids the issue
- * where resolveTabId() in the extension picks a chrome:// or
- * chrome-extension:// tab that can't be debugged.
+ * IMPORTANT: After goto(), we remember the page identity (targetId) returned
+ * by the navigate action and pass it to all subsequent commands. This ensures
+ * page-scoped operations target the correct page without guessing.
  */
 
 import type { BrowserCookie, ScreenshotOptions } from '../types.js';
-import { sendCommand } from './daemon-client.js';
+import { sendCommand, sendCommandFull } from './daemon-client.js';
 import { wrapForEval } from './utils.js';
 import { saveBase64ToFile } from '../utils.js';
 import { generateStealthJs } from './stealth.js';
@@ -32,30 +31,30 @@ export class Page extends BasePage {
     super();
   }
 
-  /** Active tab ID, set after navigate and used in all subsequent commands */
-  private _tabId: number | undefined;
+  /** Active page identity (targetId), set after navigate and used in all subsequent commands */
+  private _page: string | undefined;
 
   /** Helper: spread workspace into command params */
   private _wsOpt(): { workspace: string } {
     return { workspace: this.workspace };
   }
 
-  /** Helper: spread workspace + tabId into command params */
+  /** Helper: spread workspace + page identity into command params */
   private _cmdOpts(): Record<string, unknown> {
     return {
       workspace: this.workspace,
-      ...(this._tabId !== undefined && { tabId: this._tabId }),
+      ...(this._page !== undefined && { page: this._page }),
     };
   }
 
   async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
-    const result = await sendCommand('navigate', {
+    const result = await sendCommandFull('navigate', {
       url,
       ...this._cmdOpts(),
-    }) as { tabId?: number };
-    // Remember the tabId and URL for subsequent calls
-    if (result?.tabId) {
-      this._tabId = result.tabId;
+    });
+    // Remember the page identity (targetId) for subsequent calls
+    if (result.page) {
+      this._page = result.page;
     }
     this._lastUrl = url;
     // Inject stealth + settle in a single round-trip instead of two sequential exec calls.
@@ -94,8 +93,14 @@ export class Page extends BasePage {
     }
   }
 
+  /** Get the active page identity (targetId) */
+  getActivePage(): string | undefined {
+    return this._page;
+  }
+
+  /** @deprecated Use getActivePage() instead */
   getActiveTabId(): number | undefined {
-    return this._tabId;
+    return undefined;
   }
 
   async evaluate(js: string): Promise<unknown> {
@@ -121,7 +126,7 @@ export class Page extends BasePage {
     } catch {
       // Window may already be closed or daemon may be down
     } finally {
-      this._tabId = undefined;
+      this._page = undefined;
       this._lastUrl = null;
     }
   }
@@ -132,8 +137,8 @@ export class Page extends BasePage {
   }
 
   async selectTab(index: number): Promise<void> {
-    const result = await sendCommand('tabs', { op: 'select', index, ...this._wsOpt() }) as { selected?: number };
-    if (result?.selected) this._tabId = result.selected;
+    const result = await sendCommandFull('tabs', { op: 'select', index, ...this._wsOpt() });
+    if (result.page) this._page = result.page;
   }
 
   /**
