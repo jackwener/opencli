@@ -30,16 +30,20 @@ interface ManifestCompletionEntry {
 }
 
 /**
- * Returns true if at least one manifest file exists and is readable.
+ * Returns true only if ALL manifest files exist and are readable.
+ * If any source lacks a manifest (e.g. user adapters without a compiled manifest),
+ * the fast path must not be used — otherwise those adapters would silently
+ * disappear from completion results.
  */
-export function hasManifest(manifestPaths: string[]): boolean {
+export function hasAllManifests(manifestPaths: string[]): boolean {
   for (const p of manifestPaths) {
     try {
       fs.accessSync(p);
-      return true;
-    } catch { /* continue */ }
+    } catch {
+      return false;
+    }
   }
-  return false;
+  return manifestPaths.length > 0;
 }
 
 /**

@@ -13,10 +13,11 @@ if (process.platform !== 'win32') {
   process.env.PATH = [...cur].join(':');
 }
 
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getCompletionsFromManifest, hasManifest, printCompletionScriptFast } from './completion-fast.js';
+import { getCompletionsFromManifest, hasAllManifests, printCompletionScriptFast } from './completion-fast.js';
 import { getCliManifestPath } from './package-paths.js';
 import { PKG_VERSION } from './version.js';
 import { EXIT_CODES } from './errors.js';
@@ -30,8 +31,9 @@ const USER_CLIS = path.join(os.homedir(), '.opencli', 'clis');
 // These are high-frequency or trivial paths that must not pay the startup tax.
 const argv = process.argv.slice(2);
 
-// Fast path: --version
-if (argv.includes('--version') || argv.includes('-V')) {
+// Fast path: --version (only when it's the top-level intent, not passed to a subcommand)
+// e.g. `opencli --version` or `opencli -V`, but NOT `opencli gh --version`
+if (argv[0] === '--version' || argv[0] === '-V') {
   process.stdout.write(PKG_VERSION + '\n');
   process.exit(EXIT_CODES.SUCCESS);
 }
@@ -47,8 +49,11 @@ if (argv[0] === 'completion' && argv.length >= 2) {
 // Fast path: --get-completions — read from manifest, skip discovery
 const getCompIdx = process.argv.indexOf('--get-completions');
 if (getCompIdx !== -1) {
-  const manifestPaths = [getCliManifestPath(BUILTIN_CLIS), getCliManifestPath(USER_CLIS)];
-  if (hasManifest(manifestPaths)) {
+  // Only require manifest for directories that actually exist.
+  // If user clis dir doesn't exist, there are no user adapters to miss.
+  const manifestPaths = [getCliManifestPath(BUILTIN_CLIS)];
+  try { fs.accessSync(USER_CLIS); manifestPaths.push(getCliManifestPath(USER_CLIS)); } catch { /* no user dir */ }
+  if (hasAllManifests(manifestPaths)) {
     const rest = process.argv.slice(getCompIdx + 1);
     let cursor: number | undefined;
     const words: string[] = [];
