@@ -67,7 +67,10 @@ Use OpenCLI directly when you want a reliable command instead of a live browser 
 
 ## For AI Agents
 
-Point Claude Code, Cursor, or another agent to [`skills/opencli-browser/SKILL.md`](./skills/opencli-browser/SKILL.md) when the agent needs direct browser control.
+Use two different entry points depending on the task:
+
+- [`skills/opencli-generate/SKILL.md`](./skills/opencli-generate/SKILL.md): the task-level entry point for requests like "generate a CLI for this site".
+- [`skills/opencli-browser/SKILL.md`](./skills/opencli-browser/SKILL.md): the low-level control surface for live browsing, debugging, and manual intervention.
 
 Install the packaged skills with:
 
@@ -79,10 +82,16 @@ Or install only what you need:
 
 ```bash
 npx skills add jackwener/opencli --skill opencli-usage
+npx skills add jackwener/opencli --skill opencli-generate
 npx skills add jackwener/opencli --skill opencli-browser
 npx skills add jackwener/opencli --skill opencli-explorer
 npx skills add jackwener/opencli --skill opencli-oneshot
 ```
+
+In practice:
+
+- start with `opencli-generate` when the agent needs a reusable command for a site
+- use `opencli-browser` when the agent needs to inspect or steer the page directly
 
 Available browser commands include `open`, `state`, `click`, `type`, `select`, `keys`, `wait`, `get`, `screenshot`, `scroll`, `back`, `eval`, `network`, `init`, `verify`, and `close`.
 
@@ -102,7 +111,7 @@ Use these commands when the site you need is not covered yet:
 
 - `explore` inspects the page, network activity, and capability surface.
 - `synthesize` turns exploration artifacts into evaluate-based YAML adapters.
-- `generate` runs an end-to-end path from exploration to generated adapter output.
+- `generate` runs the verified generation path and returns either a usable command or a structured explanation of why completion was blocked or needs human review.
 
 ### `cascade`: auth strategy discovery
 
