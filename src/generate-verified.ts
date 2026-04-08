@@ -18,7 +18,6 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import yaml from 'js-yaml';
 import { exploreUrl } from './explore.js';
 import { loadExploreBundle, synthesizeFromExplore, type CandidateYaml, type SynthesizeCandidateSummary } from './synthesize.js';
 import { normalizeGoal, selectCandidate } from './generate.js';
@@ -252,8 +251,8 @@ function buildStats(args: {
   };
 }
 
-function readCandidateYaml(filePath: string): CandidateYaml {
-  const loaded = yaml.load(fs.readFileSync(filePath, 'utf-8')) as CandidateYaml | null;
+function readCandidateJson(filePath: string): CandidateYaml {
+  const loaded = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as CandidateYaml | null;
   if (!loaded || typeof loaded !== 'object') {
     throw new CommandExecutionError(`Generated candidate is invalid: ${filePath}`);
   }
@@ -477,25 +476,100 @@ async function probeCandidateStrategy(page: IPage, endpointUrl: string): Promise
 
 // ── Artifact persistence ──────────────────────────────────────────────────────
 
-async function registerVerifiedAdapter(candidate: CandidateYaml, metadata: VerifiedArtifactMetadata): Promise<{ yamlPath: string; metadataPath: string }> {
-  const siteDir = path.join(USER_CLIS_DIR, candidate.site);
-  const yamlPath = path.join(siteDir, `${candidate.name}.yaml`);
-  const metadataPath = path.join(siteDir, `${candidate.name}.meta.json`);
-  await fs.promises.mkdir(siteDir, { recursive: true });
-  await fs.promises.writeFile(yamlPath, yaml.dump(candidate, { sortKeys: false, lineWidth: 120 }));
-  await fs.promises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
-  registerCommand(candidateToCommand(candidate, yamlPath));
-  return { yamlPath, metadataPath };
+function candidateToTs(candidate: CandidateYaml): string {
+  const strategyMap: Record<string, string> = {
+    public: 'Strategy.PUBLIC',
+    cookie: 'Strategy.COOKIE',
+    header: 'Strategy.HEADER',
+    intercept: 'Strategy.INTERCEPT',
+    ui: 'Strategy.UI',
+  };
+  const stratEnum = strategyMap[candidate.strategy?.toLowerCase()] ?? 'Strategy.COOKIE';
+  const browser = detectBrowserFlag(candidate);
+
+  const argsArray = Object.entries(candidate.args ?? {}).map(([name, def]) => {
+    const parts: string[] = [`name: '${name}'`];
+    if (def.type && def.type !== 'str') parts.push(`type: '${def.type}'`);
+    if (def.required) parts.push('required: true');
+    if (def.default !== undefined) parts.push(`default: ${JSON.stringify(def.default)}`);
+    if (def.description) parts.push(`help: '${def.description.replace(/'/g, "\\'")}'`);
+    return `    { ${parts.join(', ')} }`;
+  });
+
+  const formatStepValue = (v: unknown): string => {
+    if (typeof v === 'string') {
+      if (v.includes('\n') || v.includes("'")) {
+        return '`' + v.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${') + '`';
+      }
+      return `'${v.replace(/\\/g, '\\\\')}'`;
+    }
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (v === null || v === undefined) return 'undefined';
+    if (Array.isArray(v)) return `[${v.map(formatStepValue).join(', ')}]`;
+    if (typeof v === 'object') {
+      const entries = Object.entries(v as Record<string, unknown>);
+      const items = entries.map(([k, val]) => `${k}: ${formatStepValue(val)}`);
+      return `{ ${items.join(', ')} }`;
+    }
+    return String(v);
+  };
+
+  const pipelineSteps = (candidate.pipeline ?? []).map((step) => {
+    const entries = Object.entries(step as Record<string, unknown>);
+    if (entries.length === 1) {
+      const [op, value] = entries[0];
+      return `    { ${op}: ${formatStepValue(value)} }`;
+    }
+    return `    ${formatStepValue(step)}`;
+  });
+
+  const lines: string[] = [];
+  lines.push("import { cli, Strategy } from '@jackwener/opencli/registry';");
+  lines.push('');
+  lines.push('cli({');
+  lines.push(`  site: '${candidate.site}',`);
+  lines.push(`  name: '${candidate.name}',`);
+  if (candidate.description) lines.push(`  description: '${candidate.description.replace(/'/g, "\\'")}',`);
+  if (candidate.domain) lines.push(`  domain: '${candidate.domain}',`);
+  lines.push(`  strategy: ${stratEnum},`);
+  lines.push(`  browser: ${browser},`);
+  if (argsArray.length > 0) {
+    lines.push(`  args: [`);
+    lines.push(argsArray.join(',\n') + ',');
+    lines.push('  ],');
+  }
+  if (candidate.columns?.length) {
+    lines.push(`  columns: [${candidate.columns.map(c => `'${c}'`).join(', ')}],`);
+  }
+  if (pipelineSteps.length > 0) {
+    lines.push('  pipeline: [');
+    lines.push(pipelineSteps.join(',\n') + ',');
+    lines.push('  ],');
+  }
+  lines.push('});');
+  lines.push('');
+  return lines.join('\n');
 }
 
-async function writeVerifiedArtifact(candidate: CandidateYaml, exploreDir: string, metadata: VerifiedArtifactMetadata): Promise<{ yamlPath: string; metadataPath: string }> {
+async function registerVerifiedAdapter(candidate: CandidateYaml, metadata: VerifiedArtifactMetadata): Promise<{ adapterPath: string; metadataPath: string }> {
+  const siteDir = path.join(USER_CLIS_DIR, candidate.site);
+  const adapterPath = path.join(siteDir, `${candidate.name}.ts`);
+  const metadataPath = path.join(siteDir, `${candidate.name}.meta.json`);
+  await fs.promises.mkdir(siteDir, { recursive: true });
+  await fs.promises.writeFile(adapterPath, candidateToTs(candidate));
+  await fs.promises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+  registerCommand(candidateToCommand(candidate, adapterPath));
+  return { adapterPath, metadataPath };
+}
+
+async function writeVerifiedArtifact(candidate: CandidateYaml, exploreDir: string, metadata: VerifiedArtifactMetadata): Promise<{ adapterPath: string; metadataPath: string }> {
   const outDir = path.join(exploreDir, 'verified');
-  const yamlPath = path.join(outDir, `${candidate.name}.verified.yaml`);
+  const adapterPath = path.join(outDir, `${candidate.name}.verified.ts`);
   const metadataPath = path.join(outDir, `${candidate.name}.verified.meta.json`);
   await fs.promises.mkdir(outDir, { recursive: true });
-  await fs.promises.writeFile(yamlPath, yaml.dump(candidate, { sortKeys: false, lineWidth: 120 }));
+  await fs.promises.writeFile(adapterPath, candidateToTs(candidate));
   await fs.promises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
-  return { yamlPath, metadataPath };
+  return { adapterPath, metadataPath };
 }
 
 // ── Session error classification ──────────────────────────────────────────────
@@ -626,7 +700,7 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
   }
 
   const expectedFields = Object.keys(context.endpoint.detectedFields ?? {});
-  const originalCandidate = readCandidateYaml(selected.path);
+  const originalCandidate = readCandidateJson(selected.path);
   const unsupportedArgs = getUnsupportedVerificationArgs(originalCandidate);
 
   // ── Escalation: unsupported required args ───────────────────────────────
@@ -721,7 +795,7 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
             name: candidate.name,
             command: commandName(candidate.site, candidate.name),
             strategy: bestStrategy,
-            path: artifact.yamlPath,
+            path: artifact.adapterPath,
             metadata_path: artifact.metadataPath,
             reusability: 'verified-artifact',
           },
@@ -810,7 +884,7 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
             name: repaired.name,
             command: commandName(repaired.site, repaired.name),
             strategy: bestStrategy,
-            path: artifact.yamlPath,
+            path: artifact.adapterPath,
             metadata_path: artifact.metadataPath,
             reusability: 'verified-artifact',
           },
