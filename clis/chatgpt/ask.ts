@@ -60,7 +60,7 @@ export const askCommand = cli({
     let generationStarted = false;
 
     for (let i = 0; i < maxPolls; i++) {
-      execSync(`sleep ${pollInterval}`);
+      spawnSync('sleep', [String(pollInterval)]);
       const generating = isGenerating();
       if (generating) {
         generationStarted = true;

@@ -126,15 +126,23 @@ export class Engine {
   private commit(description: string): string | null {
     if (!this.config.scope.length) return null; // no scope = nothing to stage
     // Stage only files matching scope globs (avoid staging unrelated changes)
-    // Use execFileSync to bypass shell glob expansion so git handles pathspecs directly
-    execFileSync('git', ['add', '--', ...this.config.scope], {
-      cwd: ROOT, timeout: 30_000, stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    // Try each glob individually — skip globs that don't match any files
+    for (const glob of this.config.scope) {
+      try {
+        execFileSync('git', ['add', '--', glob], {
+          cwd: ROOT, timeout: 30_000, stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } catch {
+        // pathspec didn't match any files — skip silently
+      }
+    }
     const diff = exec('git diff --cached --quiet; echo $?');
     if (diff === '0') return null; // no changes
 
     try {
-      execStrict(`git commit -m "experiment(operate): ${description.replace(/"/g, '\\"')}"`);
+      execFileSync('git', ['commit', '-m', `experiment(operate): ${description}`], {
+        cwd: ROOT, timeout: 30_000, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
+      });
       return exec('git rev-parse --short HEAD');
     } catch {
       // Hook failure

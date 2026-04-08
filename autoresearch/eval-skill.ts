@@ -12,7 +12,7 @@
  *   npx tsx autoresearch/eval-skill.ts --task hn-top5     # Run single
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -113,12 +113,14 @@ At the very end of your response, output a JSON verdict on its own line:
 Always close the browser with 'opencli operate close' when done.`;
 
   try {
-    const output = execSync(
-      `claude -p --dangerously-skip-permissions --allowedTools "Bash(opencli:*)" --system-prompt ${JSON.stringify(skillContent)} --output-format json --no-session-persistence ${JSON.stringify(prompt)}`,
+    const output = execFileSync(
+      'claude',
+      ['-p', '--dangerously-skip-permissions', '--allowedTools', 'Bash(opencli:*)', '--system-prompt', skillContent, '--output-format', 'json', '--no-session-persistence'],
       {
         cwd: join(__dirname, '..'),
         timeout: (task.max_steps ?? 10) * 15_000,
         encoding: 'utf-8',
+        input: prompt,
         env: process.env,
         stdio: ['pipe', 'pipe', 'pipe'],
       }

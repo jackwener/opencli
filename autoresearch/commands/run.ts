@@ -61,11 +61,12 @@ async function modify(ctx: ModifyContext, config: AutoResearchConfig): Promise<s
   console.log('  Claude Code making a change...');
   try {
     const result = execSync(
-      `claude -p --dangerously-skip-permissions --allowedTools "Bash(npm:*),Bash(npx:*),Bash(git:*),Read,Edit,Write,Glob,Grep" --output-format text --no-session-persistence "${prompt.replace(/"/g, '\\"')}"`,
+      'claude -p --dangerously-skip-permissions --allowedTools "Bash(npm:*),Bash(npx:*),Bash(git:*),Read,Edit,Write,Glob,Grep" --output-format text --no-session-persistence',
       {
         cwd: ROOT,
         timeout: 300_000,
         encoding: 'utf-8',
+        input: prompt,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: process.env,
       }
