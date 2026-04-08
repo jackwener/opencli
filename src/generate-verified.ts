@@ -1,10 +1,12 @@
 /**
- * Verified adapter generation: explore → cascade → synthesize → verify → repair → register.
+ * Verified adapter generation:
+ * discover → synthesize → candidate-bound probe → single-session verify.
  *
- * v1 scope intentionally stays narrow:
- *   - auth: public + cookie only
- *   - capability: read-only commands
- *   - site shape: discoverable JSON endpoints with structured array responses
+ * v1 keeps the contract narrow on purpose:
+ *   - PUBLIC + COOKIE only
+ *   - read-only JSON API surfaces
+ *   - single best candidate only
+ *   - bounded repair: select/itemPath replacement once
  */
 
 import * as fs from 'node:fs';
@@ -13,38 +15,34 @@ import yaml from 'js-yaml';
 import { exploreUrl } from './explore.js';
 import { loadExploreBundle, synthesizeFromExplore, type CandidateYaml, type SynthesizeCandidateSummary } from './synthesize.js';
 import { normalizeGoal, selectCandidate } from './generate.js';
-import { browserSession } from './runtime.js';
-import type { IBrowserFactory } from './runtime.js';
-import { executeCommand } from './execution.js';
-import { registerCommand, Strategy, type CliCommand, type CommandArgs } from './registry.js';
+import { browserSession, type IBrowserFactory } from './runtime.js';
+import { executePipeline } from './pipeline/index.js';
+import { registerCommand, Strategy, type CliCommand } from './registry.js';
 import {
-  BrowserConnectError,
   AuthRequiredError,
-  TimeoutError,
+  BrowserConnectError,
   CommandExecutionError,
+  TimeoutError,
   getErrorMessage,
 } from './errors.js';
 import { USER_CLIS_DIR } from './discovery.js';
+import type { IPage } from './types.js';
 
 type SupportedStrategy = Strategy.PUBLIC | Strategy.COOKIE;
 type VerifyFailureReason = 'empty-result' | 'sparse-fields' | 'non-array-result';
 
 export type BlockReason =
   | 'no-api-discovered'
-  | 'html-only'
   | 'auth-required'
   | 'no-viable-candidate'
-  | 'browser-unavailable'
-  | 'cascade-failed';
+  | 'browser-unavailable';
 
 export interface GenerateStats {
   endpoint_count: number;
   api_endpoint_count: number;
   candidate_count: number;
-  verified_candidates: number;
-  repair_attempts: number;
-  best_strategy: SupportedStrategy | null;
-  registered: boolean;
+  verified: boolean;
+  repair_attempted: boolean;
   explore_dir: string;
 }
 
@@ -53,7 +51,7 @@ export interface VerifiedAdapter {
   name: string;
   command: string;
   strategy: SupportedStrategy;
-  path?: string;
+  path: string;
 }
 
 export interface CandidateInfo {
@@ -64,10 +62,15 @@ export interface CandidateInfo {
   path: string;
 }
 
-export type GenerateOutcome =
-  | { status: 'success'; adapter: VerifiedAdapter; stats: GenerateStats }
-  | { status: 'blocked'; reason: BlockReason; stats: GenerateStats }
-  | { status: 'needs-human-check'; candidate: CandidateInfo; issue: string; stats: GenerateStats };
+export type GenerateOutcome = {
+  version: 1;
+  status: 'success' | 'blocked' | 'needs-human-check';
+  adapter?: VerifiedAdapter;
+  reason?: BlockReason;
+  candidate?: CandidateInfo;
+  issue?: string;
+  stats: GenerateStats;
+};
 
 export interface GenerateVerifiedOptions {
   url: string;
@@ -101,33 +104,15 @@ interface ExploreBundleLike {
   }>;
 }
 
-interface VerificationSuccess {
-  ok: true;
-}
-
-interface VerificationFailure {
-  ok: false;
-  reason: VerifyFailureReason;
-}
-
-interface VerificationTerminal {
-  ok: false;
-  terminal: 'blocked' | 'needs-human-check';
-  reason?: BlockReason;
-  issue: string;
-}
-
-type VerificationResult = VerificationSuccess | VerificationFailure | VerificationTerminal;
-
 interface CandidateContext {
-  summary: SynthesizeCandidateSummary;
   capability: ExploreBundleLike['capabilities'][number] | undefined;
   endpoint: ExploreBundleLike['endpoints'][number] | null;
 }
 
-function cloneCandidate(candidate: CandidateYaml): CandidateYaml {
-  return JSON.parse(JSON.stringify(candidate)) as CandidateYaml;
-}
+type VerificationResult =
+  | { ok: true }
+  | { ok: false; reason: VerifyFailureReason }
+  | { ok: false; terminal: 'blocked' | 'needs-human-check'; reason?: BlockReason; issue: string };
 
 function parseSupportedStrategy(value: unknown): SupportedStrategy | null {
   return value === Strategy.PUBLIC || value === Strategy.COOKIE ? value : null;
@@ -141,20 +126,16 @@ function buildStats(args: {
   endpointCount: number;
   apiEndpointCount: number;
   candidateCount: number;
-  verifiedCandidates?: number;
-  repairAttempts?: number;
-  bestStrategy?: SupportedStrategy | null;
-  registered?: boolean;
+  verified?: boolean;
+  repairAttempted?: boolean;
   exploreDir: string;
 }): GenerateStats {
   return {
     endpoint_count: args.endpointCount,
     api_endpoint_count: args.apiEndpointCount,
     candidate_count: args.candidateCount,
-    verified_candidates: args.verifiedCandidates ?? 0,
-    repair_attempts: args.repairAttempts ?? 0,
-    best_strategy: args.bestStrategy ?? null,
-    registered: args.registered ?? false,
+    verified: args.verified ?? false,
+    repair_attempted: args.repairAttempted ?? false,
     explore_dir: args.exploreDir,
   };
 }
@@ -169,6 +150,14 @@ function buildCandidateInfo(site: string, summary: SynthesizeCandidateSummary): 
   };
 }
 
+function readCandidateYaml(filePath: string): CandidateYaml {
+  const loaded = yaml.load(fs.readFileSync(filePath, 'utf-8')) as CandidateYaml | null;
+  if (!loaded || typeof loaded !== 'object') {
+    throw new CommandExecutionError(`Generated candidate is invalid: ${filePath}`);
+  }
+  return loaded;
+}
+
 function chooseEndpoint(
   capability: ExploreBundleLike['capabilities'][number] | undefined,
   endpoints: ExploreBundleLike['endpoints'],
@@ -176,7 +165,8 @@ function chooseEndpoint(
   if (!endpoints.length) return null;
 
   if (capability?.endpoint) {
-    const exact = endpoints.find((endpoint) => endpoint.pattern === capability.endpoint || endpoint.url.includes(capability.endpoint!));
+    const endpointPattern = capability.endpoint;
+    const exact = endpoints.find((endpoint) => endpoint.pattern === endpointPattern || endpoint.url.includes(endpointPattern));
     if (exact) return exact;
   }
 
@@ -187,22 +177,8 @@ function chooseEndpoint(
   })[0] ?? null;
 }
 
-function orderCandidates(
-  site: string,
-  candidates: SynthesizeCandidateSummary[],
-  goal?: string | null,
-): SynthesizeCandidateSummary[] {
-  const selected = selectCandidate(candidates, goal);
-  if (!selected) return [];
-  return [selected, ...candidates.filter((candidate) => candidate.path !== selected.path)];
-}
-
-function readCandidateYaml(filePath: string): CandidateYaml {
-  const loaded = yaml.load(fs.readFileSync(filePath, 'utf-8')) as CandidateYaml | null;
-  if (!loaded || typeof loaded !== 'object') {
-    throw new CommandExecutionError(`Generated candidate is invalid: ${filePath}`);
-  }
-  return loaded;
+function cloneCandidate(candidate: CandidateYaml): CandidateYaml {
+  return JSON.parse(JSON.stringify(candidate)) as CandidateYaml;
 }
 
 function hasBrowserOnlyStep(pipeline: Record<string, unknown>[]): boolean {
@@ -237,8 +213,8 @@ function candidateToCommand(candidate: CandidateYaml, source: string): CliComman
   };
 }
 
-function buildDefaultArgs(candidate: CandidateYaml): CommandArgs {
-  const args: CommandArgs = {};
+function buildDefaultArgs(candidate: CandidateYaml): Record<string, unknown> {
+  const args: Record<string, unknown> = {};
   for (const [name, def] of Object.entries(candidate.args ?? {})) {
     if (def.default !== undefined) {
       args[name] = def.default;
@@ -260,14 +236,12 @@ function buildDefaultArgs(candidate: CandidateYaml): CommandArgs {
       continue;
     }
 
-    if (def.required) {
-      args[name] = 'test';
-    }
+    if (def.required) args[name] = 'test';
   }
   return args;
 }
 
-function assessResult(result: unknown): VerificationSuccess | VerificationFailure {
+function assessResult(result: unknown, expectedFields: string[] = []): VerificationResult {
   if (!Array.isArray(result)) return { ok: false, reason: 'non-array-result' };
   if (result.length === 0) return { ok: false, reason: 'empty-result' };
 
@@ -276,141 +250,49 @@ function assessResult(result: unknown): VerificationSuccess | VerificationFailur
     return { ok: false, reason: 'sparse-fields' };
   }
 
-  const populatedFields = Object.values(sample as Record<string, unknown>)
-    .filter((value) => value !== null && value !== undefined && value !== '')
-    .length;
+  const record = sample as Record<string, unknown>;
+  const keys = Object.keys(record);
+  const populated = keys.filter((key) => record[key] !== null && record[key] !== undefined && record[key] !== '');
+  if (populated.length < 2) return { ok: false, reason: 'sparse-fields' };
 
-  return populatedFields >= 2
-    ? { ok: true }
-    : { ok: false, reason: 'sparse-fields' };
-}
-
-function buildEvaluateScript(url: string, itemPath: string | null, detectedFields: Record<string, string>): string {
-  const pathChain = itemPath
-    ? itemPath.split('.').map((segment) => `?.${segment}`).join('')
-    : '';
-
-  const mappings = Object.entries(detectedFields)
-    .map(([role, field]) => `      ${role}: item${String(field).split('.').map((segment) => `?.${segment}`).join('')}`)
-    .join(',\n');
-
-  const mapCode = mappings
-    ? `.map((item) => ({\n${mappings}\n    }))`
-    : '';
-
-  return [
-    '(async () => {',
-    `  const res = await fetch(${JSON.stringify(url)}, { credentials: 'include' });`,
-    '  const data = await res.json();',
-    `  return (data${pathChain} || [])${mapCode};`,
-    '})()\n',
-  ].join('\n');
-}
-
-function getMapStep(candidate: CandidateYaml): Record<string, string> | null {
-  const mapStep = candidate.pipeline.find((step) => 'map' in step) as { map: Record<string, string> } | undefined;
-  return mapStep?.map ?? null;
-}
-
-function rebuildMapStep(candidate: CandidateYaml, endpoint: CandidateContext['endpoint']): Record<string, string> | null {
-  if (!endpoint) return null;
-
-  const columns = candidate.columns ?? Object.keys(getMapStep(candidate) ?? {}).filter((column) => column !== 'rank');
-  if (columns.length === 0) return null;
-
-  const nextMap: Record<string, string> = {};
-  const hasKeywordArg = Object.prototype.hasOwnProperty.call(candidate.args ?? {}, 'keyword');
-  if (!hasKeywordArg) nextMap.rank = '${{ index + 1 }}';
-
-  for (const column of columns) {
-    const fieldPath = endpoint.detectedFields?.[column];
-    nextMap[column] = fieldPath ? `\${{ item.${fieldPath} }}` : `\${{ item.${column} }}`;
+  if (expectedFields.length > 0) {
+    const matched = expectedFields.filter((field) => keys.includes(field));
+    if (matched.length === 0) return { ok: false, reason: 'sparse-fields' };
   }
 
-  return nextMap;
+  return { ok: true };
 }
 
-function withMapStep(candidate: CandidateYaml, map: Record<string, string>): CandidateYaml {
+function withItemPath(candidate: CandidateYaml, itemPath: string | null): CandidateYaml | null {
+  if (!itemPath) return null;
+
   const next = cloneCandidate(candidate);
-  const index = next.pipeline.findIndex((step) => 'map' in step);
-  if (index === -1) next.pipeline.push({ map });
-  else next.pipeline[index] = { map };
+  const selectIndex = next.pipeline.findIndex((step) => 'select' in step);
+  if (selectIndex === -1) return null;
+
+  const current = next.pipeline[selectIndex] as { select: string };
+  if (current.select === itemPath) return null;
+  next.pipeline[selectIndex] = { select: itemPath };
   return next;
 }
 
-function withItemPath(candidate: CandidateYaml, targetUrl: string, endpoint: CandidateContext['endpoint'], strategy: SupportedStrategy): CandidateYaml | null {
-  if (!endpoint) return null;
-
+function applyStrategy(candidate: CandidateYaml, strategy: SupportedStrategy): CandidateYaml {
   const next = cloneCandidate(candidate);
-  const fetchIndex = next.pipeline.findIndex((step) => 'fetch' in step);
-  const selectIndex = next.pipeline.findIndex((step) => 'select' in step);
-  const evaluateIndex = next.pipeline.findIndex((step) => 'evaluate' in step);
-
-  if (strategy === Strategy.COOKIE && fetchIndex !== -1) {
-    const fetchStep = next.pipeline[fetchIndex] as { fetch: { url: string } };
-    const mapStep = next.pipeline.find((step) => 'map' in step);
-    const limitStep = next.pipeline.find((step) => 'limit' in step);
-    next.pipeline = [
-      { navigate: targetUrl },
-      { evaluate: buildEvaluateScript(fetchStep.fetch.url, endpoint.itemPath, endpoint.detectedFields ?? {}) },
-      ...(mapStep ? [mapStep] : []),
-      ...(limitStep ? [limitStep] : []),
-    ];
-    next.browser = true;
-    next.strategy = Strategy.COOKIE;
-    return next;
-  }
-
-  if (selectIndex !== -1 && endpoint.itemPath) {
-    const current = next.pipeline[selectIndex] as { select: string };
-    if (current.select !== endpoint.itemPath) {
-      next.pipeline[selectIndex] = { select: endpoint.itemPath };
-      return next;
-    }
-  }
-
-  if (evaluateIndex !== -1) {
-    const evaluateUrl =
-      ((next.pipeline.find((step) => 'fetch' in step) as { fetch?: { url?: string } } | undefined)?.fetch?.url)
-      ?? endpoint.url;
-    const nextScript = buildEvaluateScript(evaluateUrl, endpoint.itemPath, endpoint.detectedFields ?? {});
-    const current = next.pipeline[evaluateIndex] as { evaluate: string };
-    if (current.evaluate !== nextScript) {
-      next.pipeline[evaluateIndex] = { evaluate: nextScript };
-      return next;
-    }
-  }
-
-  return null;
+  next.strategy = strategy;
+  if (strategy === Strategy.COOKIE) next.browser = true;
+  return next;
 }
 
-function repairCandidate(
+async function verifyCandidate(
+  page: IPage,
   candidate: CandidateYaml,
-  context: CandidateContext,
-  reason: VerifyFailureReason,
-  strategy: SupportedStrategy,
-  targetUrl: string,
-): CandidateYaml | null {
-  if (reason === 'empty-result') {
-    return withItemPath(candidate, targetUrl, context.endpoint, strategy);
-  }
-
-  if (reason === 'sparse-fields') {
-    const nextMap = rebuildMapStep(candidate, context.endpoint);
-    if (!nextMap) return null;
-    const currentMap = getMapStep(candidate);
-    if (JSON.stringify(currentMap) === JSON.stringify(nextMap)) return null;
-    return withMapStep(candidate, nextMap);
-  }
-
-  return null;
-}
-
-async function verifyCandidate(candidate: CandidateYaml): Promise<VerificationResult> {
+  expectedFields: string[],
+): Promise<VerificationResult> {
   try {
-    const cmd = candidateToCommand(candidate, 'generate-verified:temp');
-    const result = await executeCommand(cmd, buildDefaultArgs(candidate), false);
-    return assessResult(result);
+    const result = await executePipeline(page, candidate.pipeline as unknown[], {
+      args: buildDefaultArgs(candidate),
+    });
+    return assessResult(result, expectedFields);
   } catch (error) {
     if (error instanceof BrowserConnectError) {
       return { ok: false, terminal: 'blocked', reason: 'browser-unavailable', issue: getErrorMessage(error) };
@@ -428,19 +310,9 @@ async function verifyCandidate(candidate: CandidateYaml): Promise<VerificationRe
   }
 }
 
-async function probeBestStrategy(
-  url: string,
-  finalUrl: string,
-  endpointUrl: string,
-  BrowserFactory: new () => IBrowserFactory,
-  workspace?: string,
-): Promise<SupportedStrategy | null> {
+async function probeCandidateStrategy(page: IPage, endpointUrl: string): Promise<SupportedStrategy | null> {
   const { cascadeProbe } = await import('./cascade.js');
-  const result = await browserSession(BrowserFactory, async (page) => {
-    await page.goto(finalUrl || url);
-    return cascadeProbe(page, endpointUrl, { maxStrategy: Strategy.COOKIE });
-  }, { workspace });
-
+  const result = await cascadeProbe(page, endpointUrl, { maxStrategy: Strategy.COOKIE });
   const success = result.probes.find((probe) => probe.success);
   return parseSupportedStrategy(success?.strategy);
 }
@@ -454,6 +326,27 @@ async function registerVerifiedAdapter(candidate: CandidateYaml): Promise<string
   return filePath;
 }
 
+function classifySessionError(
+  error: unknown,
+  summary: SynthesizeCandidateSummary,
+  stats: GenerateStats,
+  site: string,
+): GenerateOutcome {
+  if (error instanceof BrowserConnectError) {
+    return { version: 1, status: 'blocked', reason: 'browser-unavailable', stats };
+  }
+  if (error instanceof AuthRequiredError) {
+    return { version: 1, status: 'blocked', reason: 'auth-required', stats };
+  }
+  return {
+    version: 1,
+    status: 'needs-human-check',
+    candidate: buildCandidateInfo(site, summary),
+    issue: getErrorMessage(error),
+    stats,
+  };
+}
+
 export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Promise<GenerateOutcome> {
   const normalizedGoal = normalizeGoal(opts.goal) ?? opts.goal ?? undefined;
   const exploreResult = await exploreUrl(opts.url, {
@@ -465,225 +358,208 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
   });
 
   const bundle = loadExploreBundle(exploreResult.out_dir) as ExploreBundleLike;
-  const candidateCountBeforeSynthesize = 0;
+  const synthesizeResult = synthesizeFromExplore(exploreResult.out_dir, { top: opts.top ?? 3 });
+  const selected = selectCandidate(synthesizeResult.candidates ?? [], opts.goal);
+
   const baseStats = buildStats({
     endpointCount: exploreResult.endpoint_count,
     apiEndpointCount: exploreResult.api_endpoint_count,
-    candidateCount: candidateCountBeforeSynthesize,
+    candidateCount: synthesizeResult.candidate_count,
     exploreDir: exploreResult.out_dir,
   });
 
-  if (exploreResult.endpoint_count === 0) {
-    return { status: 'blocked', reason: 'no-api-discovered', stats: baseStats };
-  }
-
   if (exploreResult.api_endpoint_count === 0) {
-    return { status: 'blocked', reason: 'html-only', stats: baseStats };
+    return { version: 1, status: 'blocked', reason: 'no-api-discovered', stats: baseStats };
   }
 
-  const topEndpoint = bundle.endpoints[0] ?? null;
-  if (!topEndpoint) {
-    return { status: 'blocked', reason: 'no-api-discovered', stats: baseStats };
+  if (!selected || synthesizeResult.candidate_count === 0) {
+    return { version: 1, status: 'blocked', reason: 'no-viable-candidate', stats: baseStats };
   }
 
-  const bestStrategy = await probeBestStrategy(
-    opts.url,
-    exploreResult.final_url,
-    topEndpoint.url,
-    opts.BrowserFactory,
-    opts.workspace,
-  );
+  const context: CandidateContext = {
+    capability: bundle.capabilities.find((capability) => capability.name === selected.name),
+    endpoint: chooseEndpoint(bundle.capabilities.find((capability) => capability.name === selected.name), bundle.endpoints),
+  };
 
-  if (!bestStrategy) {
-    return {
-      status: 'blocked',
-      reason: 'auth-required',
-      stats: buildStats({
-        endpointCount: exploreResult.endpoint_count,
-        apiEndpointCount: exploreResult.api_endpoint_count,
-        candidateCount: candidateCountBeforeSynthesize,
-        bestStrategy: null,
-        exploreDir: exploreResult.out_dir,
-      }),
-    };
+  if (!context.endpoint) {
+    return { version: 1, status: 'blocked', reason: 'no-viable-candidate', stats: baseStats };
   }
 
-  const synthesizeResult = synthesizeFromExplore(exploreResult.out_dir, { top: opts.top ?? 3 });
-  if (synthesizeResult.candidate_count === 0) {
-    return {
-      status: 'blocked',
-      reason: 'no-viable-candidate',
-      stats: buildStats({
-        endpointCount: exploreResult.endpoint_count,
-        apiEndpointCount: exploreResult.api_endpoint_count,
-        candidateCount: 0,
-        bestStrategy,
-        exploreDir: exploreResult.out_dir,
-      }),
-    };
-  }
+  const expectedFields = Object.keys(context.endpoint.detectedFields ?? {});
+  const originalCandidate = readCandidateYaml(selected.path);
 
-  const candidates = orderCandidates(bundle.manifest.site, synthesizeResult.candidates, opts.goal);
-  let verifiedCandidates = 0;
-  let repairAttempts = 0;
-  let lastIssue = 'verification failed';
-  let lastCandidate = candidates[0];
+  try {
+    return await browserSession(opts.BrowserFactory, async (page) => {
+      await page.goto(bundle.manifest.final_url ?? bundle.manifest.target_url);
 
-  for (const summary of candidates.slice(0, 3)) {
-    lastCandidate = summary;
-    const candidate = readCandidateYaml(summary.path);
-    const context: CandidateContext = {
-      summary,
-      capability: bundle.capabilities.find((capability) => capability.name === summary.name),
-      endpoint: chooseEndpoint(bundle.capabilities.find((capability) => capability.name === summary.name), bundle.endpoints),
-    };
-
-    let working = cloneCandidate(candidate);
-    working.strategy = bestStrategy;
-    if (bestStrategy === Strategy.COOKIE && !detectBrowserFlag(working)) {
-      const upgraded = withItemPath(working, bundle.manifest.final_url ?? bundle.manifest.target_url, context.endpoint, bestStrategy);
-      if (upgraded) working = upgraded;
-    }
-
-    const firstAttempt = await verifyCandidate(working);
-    verifiedCandidates += 1;
-
-    if (firstAttempt.ok) {
-      let filePath: string | undefined;
-      let registered = false;
-      if (!opts.noRegister) {
-        filePath = await registerVerifiedAdapter(working);
-        registered = true;
-      }
-      return {
-        status: 'success',
-        adapter: {
-          site: working.site,
-          name: working.name,
-          command: commandName(working.site, working.name),
-          strategy: bestStrategy,
-          ...(filePath ? { path: filePath } : {}),
-        },
-        stats: buildStats({
-          endpointCount: exploreResult.endpoint_count,
-          apiEndpointCount: exploreResult.api_endpoint_count,
-          candidateCount: synthesizeResult.candidate_count,
-          verifiedCandidates,
-          repairAttempts,
-          bestStrategy,
-          registered,
-          exploreDir: exploreResult.out_dir,
-        }),
-      };
-    }
-
-    if ('terminal' in firstAttempt) {
-      if (firstAttempt.terminal === 'blocked') {
+      const bestStrategy = await probeCandidateStrategy(page, context.endpoint!.url);
+      if (!bestStrategy) {
         return {
+          version: 1,
           status: 'blocked',
-          reason: firstAttempt.reason ?? 'cascade-failed',
+          reason: 'auth-required',
+          stats: baseStats,
+        };
+      }
+
+      const candidate = applyStrategy(originalCandidate, bestStrategy);
+      const firstAttempt = await verifyCandidate(page, candidate, expectedFields);
+      if (firstAttempt.ok) {
+        const finalPath = opts.noRegister ? selected.path : await registerVerifiedAdapter(candidate);
+        return {
+          version: 1,
+          status: 'success',
+          adapter: {
+            site: candidate.site,
+            name: candidate.name,
+            command: commandName(candidate.site, candidate.name),
+            strategy: bestStrategy,
+            path: finalPath,
+          },
           stats: buildStats({
             endpointCount: exploreResult.endpoint_count,
             apiEndpointCount: exploreResult.api_endpoint_count,
             candidateCount: synthesizeResult.candidate_count,
-            verifiedCandidates,
-            repairAttempts,
-            bestStrategy,
+            verified: true,
+            repairAttempted: false,
             exploreDir: exploreResult.out_dir,
           }),
         };
       }
-      lastIssue = firstAttempt.issue;
-      continue;
-    }
 
-    const repaired = repairCandidate(
-      working,
-      context,
-      firstAttempt.reason,
-      bestStrategy,
-      bundle.manifest.final_url ?? bundle.manifest.target_url,
-    );
-    if (!repaired) {
-      lastIssue = firstAttempt.reason;
-      continue;
-    }
-
-    repairAttempts += 1;
-    const secondAttempt = await verifyCandidate(repaired);
-    verifiedCandidates += 1;
-
-    if (secondAttempt.ok) {
-      let filePath: string | undefined;
-      let registered = false;
-      if (!opts.noRegister) {
-        filePath = await registerVerifiedAdapter(repaired);
-        registered = true;
+      if ('terminal' in firstAttempt) {
+        if (firstAttempt.terminal === 'blocked') {
+          return {
+            version: 1,
+            status: 'blocked',
+            reason: firstAttempt.reason ?? 'browser-unavailable',
+            stats: baseStats,
+          };
+        }
+        return {
+          version: 1,
+          status: 'needs-human-check',
+          candidate: buildCandidateInfo(bundle.manifest.site, selected),
+          issue: firstAttempt.issue,
+          stats: baseStats,
+        };
       }
+
+      const repaired = firstAttempt.reason === 'empty-result'
+        ? withItemPath(candidate, context.endpoint?.itemPath ?? null)
+        : null;
+
+      if (!repaired) {
+        return {
+          version: 1,
+          status: 'needs-human-check',
+          candidate: buildCandidateInfo(bundle.manifest.site, selected),
+          issue: firstAttempt.reason,
+          stats: buildStats({
+            endpointCount: exploreResult.endpoint_count,
+            apiEndpointCount: exploreResult.api_endpoint_count,
+            candidateCount: synthesizeResult.candidate_count,
+            repairAttempted: firstAttempt.reason === 'empty-result',
+            exploreDir: exploreResult.out_dir,
+          }),
+        };
+      }
+
+      const secondAttempt = await verifyCandidate(page, repaired, expectedFields);
+      if (secondAttempt.ok) {
+        const finalPath = opts.noRegister ? selected.path : await registerVerifiedAdapter(repaired);
+        return {
+          version: 1,
+          status: 'success',
+          adapter: {
+            site: repaired.site,
+            name: repaired.name,
+            command: commandName(repaired.site, repaired.name),
+            strategy: bestStrategy,
+            path: finalPath,
+          },
+          stats: buildStats({
+            endpointCount: exploreResult.endpoint_count,
+            apiEndpointCount: exploreResult.api_endpoint_count,
+            candidateCount: synthesizeResult.candidate_count,
+            verified: true,
+            repairAttempted: true,
+            exploreDir: exploreResult.out_dir,
+          }),
+        };
+      }
+
+      if ('terminal' in secondAttempt) {
+        if (secondAttempt.terminal === 'blocked') {
+          return {
+            version: 1,
+            status: 'blocked',
+            reason: secondAttempt.reason ?? 'browser-unavailable',
+            stats: buildStats({
+              endpointCount: exploreResult.endpoint_count,
+              apiEndpointCount: exploreResult.api_endpoint_count,
+              candidateCount: synthesizeResult.candidate_count,
+              repairAttempted: true,
+              exploreDir: exploreResult.out_dir,
+            }),
+          };
+        }
+        return {
+          version: 1,
+          status: 'needs-human-check',
+          candidate: buildCandidateInfo(bundle.manifest.site, selected),
+          issue: secondAttempt.issue,
+          stats: buildStats({
+            endpointCount: exploreResult.endpoint_count,
+            apiEndpointCount: exploreResult.api_endpoint_count,
+            candidateCount: synthesizeResult.candidate_count,
+            repairAttempted: true,
+            exploreDir: exploreResult.out_dir,
+          }),
+        };
+      }
+
       return {
-        status: 'success',
-        adapter: {
-          site: repaired.site,
-          name: repaired.name,
-          command: commandName(repaired.site, repaired.name),
-          strategy: bestStrategy,
-          ...(filePath ? { path: filePath } : {}),
-        },
+        version: 1,
+        status: 'needs-human-check',
+        candidate: buildCandidateInfo(bundle.manifest.site, selected),
+        issue: secondAttempt.reason,
         stats: buildStats({
           endpointCount: exploreResult.endpoint_count,
           apiEndpointCount: exploreResult.api_endpoint_count,
           candidateCount: synthesizeResult.candidate_count,
-          verifiedCandidates,
-          repairAttempts,
-          bestStrategy,
-          registered,
+          repairAttempted: true,
           exploreDir: exploreResult.out_dir,
         }),
       };
-    }
-
-    lastIssue = 'terminal' in secondAttempt
-      ? secondAttempt.issue
-      : secondAttempt.reason;
+    }, { workspace: opts.workspace });
+  } catch (error) {
+    return classifySessionError(error, selected, baseStats, bundle.manifest.site);
   }
-
-  return {
-    status: 'needs-human-check',
-    candidate: buildCandidateInfo(bundle.manifest.site, lastCandidate),
-    issue: lastIssue,
-    stats: buildStats({
-      endpointCount: exploreResult.endpoint_count,
-      apiEndpointCount: exploreResult.api_endpoint_count,
-      candidateCount: synthesizeResult.candidate_count,
-      verifiedCandidates,
-      repairAttempts,
-      bestStrategy,
-      exploreDir: exploreResult.out_dir,
-    }),
-  };
 }
 
 export function renderGenerateVerifiedSummary(result: GenerateOutcome): string {
   const lines = [
     `opencli generate: ${result.status.toUpperCase()}`,
+    `Schema version: ${result.version}`,
   ];
 
-  if (result.status === 'success') {
+  if (result.status === 'success' && result.adapter) {
     lines.push(`Command: ${result.adapter.command}`);
     lines.push(`Strategy: ${result.adapter.strategy}`);
-    if (result.adapter.path) lines.push(`Path: ${result.adapter.path}`);
-  } else if (result.status === 'blocked') {
+    lines.push(`Path: ${result.adapter.path}`);
+  } else if (result.status === 'blocked' && result.reason) {
     lines.push(`Reason: ${result.reason}`);
-  } else {
+  } else if (result.status === 'needs-human-check' && result.candidate) {
     lines.push(`Candidate: ${result.candidate.command}`);
-    lines.push(`Issue: ${result.issue}`);
+    if (result.issue) lines.push(`Issue: ${result.issue}`);
   }
 
   lines.push('');
   lines.push(`Explore: ${result.stats.endpoint_count} endpoints, ${result.stats.api_endpoint_count} API`);
-  lines.push(`Candidates: ${result.stats.candidate_count}, verified attempts: ${result.stats.verified_candidates}`);
-  lines.push(`Repairs: ${result.stats.repair_attempts}`);
-  if (result.stats.best_strategy) lines.push(`Best strategy: ${result.stats.best_strategy}`);
+  lines.push(`Candidates: ${result.stats.candidate_count}`);
+  lines.push(`Verified: ${result.stats.verified ? 'yes' : 'no'}`);
+  lines.push(`Repair attempted: ${result.stats.repair_attempted ? 'yes' : 'no'}`);
 
   return lines.join('\n');
 }

@@ -201,13 +201,13 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .option('--goal <text>')
     .option('--site <name>')
     .option('--format <fmt>', 'Output format: table, json', 'table')
-    .option('--no-register', 'Verify the generated adapter without registering it', false)
+    .option('--no-register', 'Verify the generated adapter without registering it')
     .option('-v, --verbose', 'Debug output')
     .action(async (url: string, opts: {
       goal?: string;
       site?: string;
       format?: string;
-      noRegister?: boolean;
+      register?: boolean;
       verbose?: boolean;
     }) => {
       applyVerbose(opts);
@@ -219,7 +219,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         goal: opts.goal,
         site: opts.site,
         workspace,
-        noRegister: opts.noRegister ?? false,
+        noRegister: opts.register === false,
       });
       if (opts.format === 'json') console.log(JSON.stringify(r, null, 2));
       else console.log(renderGenerateVerifiedSummary(r));

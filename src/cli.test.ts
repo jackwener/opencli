@@ -62,7 +62,7 @@ describe('built-in browser commands verbose wiring', () => {
 
     mockExploreUrl.mockReset().mockResolvedValue({ ok: true });
     mockRenderExploreSummary.mockReset().mockReturnValue('explore-summary');
-    mockGenerateVerifiedFromUrl.mockReset().mockResolvedValue({ status: 'success' });
+    mockGenerateVerifiedFromUrl.mockReset().mockResolvedValue({ version: 1, status: 'success' });
     mockRenderGenerateVerifiedSummary.mockReset().mockReturnValue('generate-summary');
     mockRecordSession.mockReset().mockResolvedValue({ candidateCount: 1 });
     mockRenderRecordSummary.mockReset().mockReturnValue('record-summary');
@@ -98,6 +98,16 @@ describe('built-in browser commands verbose wiring', () => {
     expect(process.env.OPENCLI_VERBOSE).toBe('1');
     expect(mockGenerateVerifiedFromUrl).toHaveBeenCalledWith(
       expect.objectContaining({ url: 'https://example.com', workspace: 'generate:example.com', noRegister: false }),
+    );
+  });
+
+  it('passes --no-register through the real CLI command', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'generate', 'https://example.com', '--no-register']);
+
+    expect(mockGenerateVerifiedFromUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://example.com', workspace: 'generate:example.com', noRegister: true }),
     );
   });
 

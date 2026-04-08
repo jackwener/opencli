@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import yaml from 'js-yaml';
+import type { IPage } from './types.js';
 
 const {
   mockExploreUrl,
@@ -10,7 +11,7 @@ const {
   mockSynthesizeFromExplore,
   mockBrowserSession,
   mockCascadeProbe,
-  mockExecuteCommand,
+  mockExecutePipeline,
   mockRegisterCommand,
 } = vi.hoisted(() => ({
   mockExploreUrl: vi.fn(),
@@ -18,7 +19,7 @@ const {
   mockSynthesizeFromExplore: vi.fn(),
   mockBrowserSession: vi.fn(),
   mockCascadeProbe: vi.fn(),
-  mockExecuteCommand: vi.fn(),
+  mockExecutePipeline: vi.fn(),
   mockRegisterCommand: vi.fn(),
 }));
 
@@ -39,8 +40,8 @@ vi.mock('./cascade.js', () => ({
   cascadeProbe: mockCascadeProbe,
 }));
 
-vi.mock('./execution.js', () => ({
-  executeCommand: mockExecuteCommand,
+vi.mock('./pipeline/index.js', () => ({
+  executePipeline: mockExecutePipeline,
 }));
 
 vi.mock('./registry.js', async () => {
@@ -68,7 +69,7 @@ describe('generateVerifiedFromUrl', () => {
     mockSynthesizeFromExplore.mockReset();
     mockBrowserSession.mockReset();
     mockCascadeProbe.mockReset();
-    mockExecuteCommand.mockReset();
+    mockExecutePipeline.mockReset();
     mockRegisterCommand.mockReset();
   });
 
@@ -76,7 +77,7 @@ describe('generateVerifiedFromUrl', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('returns blocked when explore finds no API endpoints', async () => {
+  it('returns blocked when discover finds no API endpoints', async () => {
     mockExploreUrl.mockResolvedValue({
       site: 'demo',
       target_url: 'https://demo.test',
@@ -85,7 +86,7 @@ describe('generateVerifiedFromUrl', () => {
       framework: {},
       stores: [],
       top_strategy: 'public',
-      endpoint_count: 0,
+      endpoint_count: 1,
       api_endpoint_count: 0,
       capabilities: [],
       auth_indicators: [],
@@ -96,6 +97,13 @@ describe('generateVerifiedFromUrl', () => {
       endpoints: [],
       capabilities: [],
     });
+    mockSynthesizeFromExplore.mockReturnValue({
+      site: 'demo',
+      explore_dir: tempDir,
+      out_dir: tempDir,
+      candidate_count: 0,
+      candidates: [],
+    });
 
     const result = await generateVerifiedFromUrl({
       url: 'https://demo.test',
@@ -103,16 +111,27 @@ describe('generateVerifiedFromUrl', () => {
       noRegister: true,
     });
 
-    expect(result).toEqual(expect.objectContaining({
+    expect(result).toEqual({
+      version: 1,
       status: 'blocked',
       reason: 'no-api-discovered',
-    }));
-    expect(mockSynthesizeFromExplore).not.toHaveBeenCalled();
+      stats: {
+        endpoint_count: 1,
+        api_endpoint_count: 0,
+        candidate_count: 0,
+        verified: false,
+        repair_attempted: false,
+        explore_dir: tempDir,
+      },
+    });
+    expect(mockBrowserSession).not.toHaveBeenCalled();
   });
 
-  it('returns success after verifying a generated candidate', async () => {
-    const candidatePath = path.join(tempDir, 'hot.yaml');
-    fs.writeFileSync(candidatePath, yaml.dump({
+  it('verifies the selected candidate in a single session and registers on success', async () => {
+    const hotPath = path.join(tempDir, 'hot.yaml');
+    const searchPath = path.join(tempDir, 'search.yaml');
+
+    fs.writeFileSync(hotPath, yaml.dump({
       site: 'demo',
       name: 'hot',
       description: 'demo hot',
@@ -131,6 +150,24 @@ describe('generateVerifiedFromUrl', () => {
       ],
     }, { sortKeys: false }));
 
+    fs.writeFileSync(searchPath, yaml.dump({
+      site: 'demo',
+      name: 'search',
+      description: 'demo search',
+      domain: 'demo.test',
+      strategy: 'public',
+      browser: false,
+      args: {
+        keyword: { type: 'str', required: true },
+      },
+      columns: ['title', 'url'],
+      pipeline: [
+        { fetch: { url: 'https://demo.test/api/search?q=${{ args.keyword }}' } },
+        { select: 'payload.items' },
+        { map: { title: '${{ item.title }}', url: '${{ item.url }}' } },
+      ],
+    }, { sortKeys: false }));
+
     mockExploreUrl.mockResolvedValue({
       site: 'demo',
       target_url: 'https://demo.test',
@@ -141,12 +178,127 @@ describe('generateVerifiedFromUrl', () => {
       top_strategy: 'cookie',
       endpoint_count: 2,
       api_endpoint_count: 2,
-      capabilities: [{ name: 'hot' }],
+      capabilities: [{ name: 'hot' }, { name: 'search' }],
       auth_indicators: [],
       out_dir: tempDir,
     });
     mockLoadExploreBundle.mockReturnValue({
       manifest: { site: 'demo', target_url: 'https://demo.test', final_url: 'https://demo.test/home' },
+      endpoints: [
+        {
+          pattern: 'demo.test/api/hot',
+          url: 'https://demo.test/api/hot?limit=20',
+          itemPath: 'data.items',
+          itemCount: 5,
+          detectedFields: { title: 'title', url: 'url' },
+        },
+        {
+          pattern: 'demo.test/api/search',
+          url: 'https://demo.test/api/search?q=test',
+          itemPath: 'payload.items',
+          itemCount: 10,
+          detectedFields: { title: 'headline', url: 'permalink' },
+        },
+      ],
+      capabilities: [
+        { name: 'hot', strategy: 'public', endpoint: 'demo.test/api/hot', itemPath: 'data.items' },
+        { name: 'search', strategy: 'cookie', endpoint: 'demo.test/api/search', itemPath: 'payload.items' },
+      ],
+    });
+    mockSynthesizeFromExplore.mockReturnValue({
+      site: 'demo',
+      explore_dir: tempDir,
+      out_dir: tempDir,
+      candidate_count: 2,
+      candidates: [
+        { name: 'hot', path: hotPath, strategy: 'public' },
+        { name: 'search', path: searchPath, strategy: 'public' },
+      ],
+    });
+
+    const page = { goto: vi.fn() } as unknown as IPage;
+    mockBrowserSession.mockImplementation(async (_factory, fn) => fn(page));
+    mockCascadeProbe.mockResolvedValue({
+      bestStrategy: Strategy.COOKIE,
+      probes: [
+        { strategy: Strategy.PUBLIC, success: false },
+        { strategy: Strategy.COOKIE, success: true },
+      ],
+      confidence: 0.9,
+    });
+    mockExecutePipeline.mockResolvedValue([{ title: 'hello', url: 'https://demo.test/item/1' }]);
+
+    const result = await generateVerifiedFromUrl({
+      url: 'https://demo.test',
+      BrowserFactory: class {} as never,
+      goal: 'search',
+      noRegister: false,
+    });
+
+    expect(mockBrowserSession).toHaveBeenCalledTimes(1);
+    expect(page.goto).toHaveBeenCalledWith('https://demo.test/home');
+    expect(mockCascadeProbe).toHaveBeenCalledWith(page, 'https://demo.test/api/search?q=test', { maxStrategy: Strategy.COOKIE });
+    expect(mockExecutePipeline).toHaveBeenCalledTimes(1);
+    expect(mockExecutePipeline).toHaveBeenCalledWith(
+      page,
+      expect.any(Array),
+      expect.objectContaining({
+        args: expect.objectContaining({ keyword: 'test' }),
+      }),
+    );
+    expect(mockRegisterCommand).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(expect.objectContaining({
+      version: 1,
+      status: 'success',
+      adapter: expect.objectContaining({
+        command: 'demo/search',
+        strategy: Strategy.COOKIE,
+      }),
+      stats: expect.objectContaining({
+        candidate_count: 2,
+        verified: true,
+        repair_attempted: false,
+      }),
+    }));
+  });
+
+  it('attempts a single itemPath repair on empty-result and returns needs-human-check when it still fails', async () => {
+    const candidatePath = path.join(tempDir, 'hot.yaml');
+    fs.writeFileSync(candidatePath, yaml.dump({
+      site: 'demo',
+      name: 'hot',
+      description: 'demo hot',
+      domain: 'demo.test',
+      strategy: 'public',
+      browser: false,
+      args: {
+        limit: { type: 'int', default: 20 },
+      },
+      columns: ['title', 'url'],
+      pipeline: [
+        { fetch: { url: 'https://demo.test/api/hot?limit=${{ args.limit | default(20) }}' } },
+        { select: 'wrong.items' },
+        { map: { rank: '${{ index + 1 }}', title: '${{ item.title }}', url: '${{ item.url }}' } },
+        { limit: '${{ args.limit | default(20) }}' },
+      ],
+    }, { sortKeys: false }));
+
+    mockExploreUrl.mockResolvedValue({
+      site: 'demo',
+      target_url: 'https://demo.test',
+      final_url: 'https://demo.test',
+      title: 'Demo',
+      framework: {},
+      stores: [],
+      top_strategy: 'public',
+      endpoint_count: 1,
+      api_endpoint_count: 1,
+      capabilities: [{ name: 'hot' }],
+      auth_indicators: [],
+      out_dir: tempDir,
+    });
+    mockLoadExploreBundle.mockReturnValue({
+      manifest: { site: 'demo', target_url: 'https://demo.test', final_url: 'https://demo.test' },
       endpoints: [{
         pattern: 'demo.test/api/hot',
         url: 'https://demo.test/api/hot?limit=20',
@@ -156,13 +308,84 @@ describe('generateVerifiedFromUrl', () => {
       }],
       capabilities: [{ name: 'hot', strategy: 'public', endpoint: 'demo.test/api/hot', itemPath: 'data.items' }],
     });
-    mockBrowserSession.mockImplementation(async (_factory, fn) => fn({
-      goto: vi.fn(),
-    }));
+    mockSynthesizeFromExplore.mockReturnValue({
+      site: 'demo',
+      explore_dir: tempDir,
+      out_dir: tempDir,
+      candidate_count: 1,
+      candidates: [{ name: 'hot', path: candidatePath, strategy: 'public' }],
+    });
+
+    const page = { goto: vi.fn() } as unknown as IPage;
+    mockBrowserSession.mockImplementation(async (_factory, fn) => fn(page));
     mockCascadeProbe.mockResolvedValue({
-      bestStrategy: Strategy.COOKIE,
-      probes: [{ strategy: Strategy.COOKIE, success: true }],
-      confidence: 0.9,
+      bestStrategy: Strategy.PUBLIC,
+      probes: [{ strategy: Strategy.PUBLIC, success: true }],
+      confidence: 1,
+    });
+    mockExecutePipeline.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    const result = await generateVerifiedFromUrl({
+      url: 'https://demo.test',
+      BrowserFactory: class {} as never,
+      noRegister: true,
+    });
+
+    expect(mockExecutePipeline).toHaveBeenCalledTimes(2);
+    expect(mockExecutePipeline.mock.calls[0]?.[1]).toEqual(expect.arrayContaining([{ select: 'wrong.items' }]));
+    expect(mockExecutePipeline.mock.calls[1]?.[1]).toEqual(expect.arrayContaining([{ select: 'data.items' }]));
+    expect(result).toEqual(expect.objectContaining({
+      version: 1,
+      status: 'needs-human-check',
+      issue: 'empty-result',
+      stats: expect.objectContaining({
+        repair_attempted: true,
+        verified: false,
+      }),
+    }));
+  });
+
+  it('returns blocked when no PUBLIC/COOKIE probe succeeds', async () => {
+    const candidatePath = path.join(tempDir, 'hot.yaml');
+    fs.writeFileSync(candidatePath, yaml.dump({
+      site: 'demo',
+      name: 'hot',
+      description: 'demo hot',
+      domain: 'demo.test',
+      strategy: 'public',
+      browser: false,
+      args: {},
+      columns: ['title', 'url'],
+      pipeline: [
+        { fetch: { url: 'https://demo.test/api/hot' } },
+        { select: 'data.items' },
+      ],
+    }, { sortKeys: false }));
+
+    mockExploreUrl.mockResolvedValue({
+      site: 'demo',
+      target_url: 'https://demo.test',
+      final_url: 'https://demo.test',
+      title: 'Demo',
+      framework: {},
+      stores: [],
+      top_strategy: 'cookie',
+      endpoint_count: 1,
+      api_endpoint_count: 1,
+      capabilities: [{ name: 'hot' }],
+      auth_indicators: [],
+      out_dir: tempDir,
+    });
+    mockLoadExploreBundle.mockReturnValue({
+      manifest: { site: 'demo', target_url: 'https://demo.test', final_url: 'https://demo.test' },
+      endpoints: [{
+        pattern: 'demo.test/api/hot',
+        url: 'https://demo.test/api/hot',
+        itemPath: 'data.items',
+        itemCount: 5,
+        detectedFields: { title: 'title', url: 'url' },
+      }],
+      capabilities: [{ name: 'hot', strategy: 'cookie', endpoint: 'demo.test/api/hot', itemPath: 'data.items' }],
     });
     mockSynthesizeFromExplore.mockReturnValue({
       site: 'demo',
@@ -171,103 +394,29 @@ describe('generateVerifiedFromUrl', () => {
       candidate_count: 1,
       candidates: [{ name: 'hot', path: candidatePath, strategy: 'public' }],
     });
-    mockExecuteCommand.mockResolvedValue([{ title: 'hello', url: 'https://demo.test/item/1' }]);
+
+    const page = { goto: vi.fn() } as unknown as IPage;
+    mockBrowserSession.mockImplementation(async (_factory, fn) => fn(page));
+    mockCascadeProbe.mockResolvedValue({
+      bestStrategy: Strategy.COOKIE,
+      probes: [
+        { strategy: Strategy.PUBLIC, success: false },
+        { strategy: Strategy.COOKIE, success: false },
+      ],
+      confidence: 0.3,
+    });
 
     const result = await generateVerifiedFromUrl({
       url: 'https://demo.test',
       BrowserFactory: class {} as never,
-      noRegister: false,
-    });
-
-    expect(result.status).toBe('success');
-    expect(mockExecuteCommand).toHaveBeenCalledTimes(1);
-    expect(mockExecuteCommand).toHaveBeenCalledWith(
-      expect.objectContaining({
-        strategy: Strategy.COOKIE,
-        browser: true,
-      }),
-      expect.any(Object),
-      false,
-    );
-    expect(mockRegisterCommand).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns needs-human-check after repair attempts are exhausted', async () => {
-    const candidatePath = path.join(tempDir, 'search.yaml');
-    fs.writeFileSync(candidatePath, yaml.dump({
-      site: 'demo',
-      name: 'search',
-      description: 'demo search',
-      domain: 'demo.test',
-      strategy: 'cookie',
-      browser: true,
-      args: {
-        keyword: { type: 'str', required: true },
-        limit: { type: 'int', default: 20 },
-      },
-      columns: ['title', 'url'],
-      pipeline: [
-        { navigate: 'https://demo.test' },
-        { evaluate: '(async () => [])()' },
-        { map: { title: '${{ item.title }}', url: '${{ item.url }}' } },
-        { limit: '${{ args.limit | default(20) }}' },
-      ],
-    }, { sortKeys: false }));
-
-    mockExploreUrl.mockResolvedValue({
-      site: 'demo',
-      target_url: 'https://demo.test/search',
-      final_url: 'https://demo.test/search',
-      title: 'Demo Search',
-      framework: {},
-      stores: [],
-      top_strategy: 'cookie',
-      endpoint_count: 1,
-      api_endpoint_count: 1,
-      capabilities: [{ name: 'search' }],
-      auth_indicators: [],
-      out_dir: tempDir,
-    });
-    mockLoadExploreBundle.mockReturnValue({
-      manifest: { site: 'demo', target_url: 'https://demo.test/search', final_url: 'https://demo.test/search' },
-      endpoints: [{
-        pattern: 'demo.test/api/search',
-        url: 'https://demo.test/api/search?q=test',
-        itemPath: 'payload.results',
-        itemCount: 10,
-        detectedFields: { title: 'headline', url: 'permalink' },
-      }],
-      capabilities: [{ name: 'search', strategy: 'cookie', endpoint: 'demo.test/api/search', itemPath: 'payload.results' }],
-    });
-    mockBrowserSession.mockImplementation(async (_factory, fn) => fn({
-      goto: vi.fn(),
-    }));
-    mockCascadeProbe.mockResolvedValue({
-      bestStrategy: Strategy.COOKIE,
-      probes: [{ strategy: Strategy.COOKIE, success: true }],
-      confidence: 0.9,
-    });
-    mockSynthesizeFromExplore.mockReturnValue({
-      site: 'demo',
-      explore_dir: tempDir,
-      out_dir: tempDir,
-      candidate_count: 1,
-      candidates: [{ name: 'search', path: candidatePath, strategy: 'cookie' }],
-    });
-    mockExecuteCommand
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
-
-    const result = await generateVerifiedFromUrl({
-      url: 'https://demo.test/search',
-      BrowserFactory: class {} as never,
       noRegister: true,
     });
 
+    expect(mockExecutePipeline).not.toHaveBeenCalled();
     expect(result).toEqual(expect.objectContaining({
-      status: 'needs-human-check',
-      issue: 'empty-result',
+      version: 1,
+      status: 'blocked',
+      reason: 'auth-required',
     }));
-    expect(mockExecuteCommand).toHaveBeenCalledTimes(2);
   });
 });
