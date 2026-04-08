@@ -71,10 +71,10 @@ export type SuggestedAction =
   | 'ask-for-sample-arg'         // needs human to provide a real arg value
   | 'manual-review';             // general human review needed
 
-export type ReusabilityKind =
-  | 'verified-artifact'          // fully verified, can be used directly (reusable: true)
-  | 'unverified-candidate'       // candidate exists but not verified; reusable depends on context
-  | 'not-reusable';              // nothing worth keeping (reusable: false)
+export type Reusability =
+  | 'verified-artifact'          // fully verified, can be used directly
+  | 'unverified-candidate'       // candidate exists but not verified, needs manual review
+  | 'not-reusable';              // nothing worth keeping
 
 // ── Outcome Types ─────────────────────────────────────────────────────────────
 
@@ -96,8 +96,7 @@ export interface VerifiedAdapter {
   strategy: SupportedStrategy;
   path: string;
   metadata_path?: string;
-  reusable: true;
-  reusability_reason: 'verified-artifact';
+  reusability: 'verified-artifact';
 }
 
 export interface EscalationContext {
@@ -109,8 +108,7 @@ export interface EscalationContext {
     name: string;
     command: string;
     path: string | null;
-    reusable: boolean;
-    reusability_reason: ReusabilityKind;
+    reusability: Reusability;
   };
 }
 
@@ -128,6 +126,10 @@ export type GenerateOutcome = {
 
   // needs-human-check path
   escalation?: EscalationContext;
+
+  // Explicit reusability — present on success and needs-human-check.
+  // Single source of truth: skill reads this, not path or sidecar metadata.
+  reusability?: Reusability;
 
   // human-readable summary (not the primary contract)
   message?: string;
@@ -390,7 +392,7 @@ function buildEscalation(
   reason: EscalationReason,
   summary: SynthesizeCandidateSummary,
   site: string,
-  opts?: { reusable?: boolean; reusabilityReason?: ReusabilityKind; confidence?: Confidence },
+  opts?: { reusability?: Reusability; confidence?: Confidence },
 ): EscalationContext {
   return {
     stage,
@@ -401,8 +403,7 @@ function buildEscalation(
       name: summary.name,
       command: commandName(site, summary.name),
       path: summary.path ?? null,
-      reusable: opts?.reusable ?? false,
-      reusability_reason: opts?.reusabilityReason ?? 'unverified-candidate',
+      reusability: opts?.reusability ?? 'unverified-candidate',
     },
   };
 }
@@ -503,10 +504,10 @@ function classifySessionError(
     version: 1,
     status: 'needs-human-check',
     escalation: buildEscalation('verify', 'verify-inconclusive', summary, site, {
-      reusable: false,
-      reusabilityReason: 'unverified-candidate',
+      reusability: 'unverified-candidate',
       confidence: 'low',
     }),
+    reusability: 'unverified-candidate',
     message: getErrorMessage(error),
     stats,
   };
@@ -588,10 +589,10 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
       version: 1,
       status: 'needs-human-check',
       escalation: buildEscalation('synthesize', 'unsupported-required-args', selected, bundle.manifest.site, {
-        reusable: true,
-        reusabilityReason: 'unverified-candidate',
+        reusability: 'unverified-candidate',
         confidence: 'high',
       }),
+      reusability: 'unverified-candidate',
       message: `Auto-verification does not support required args: ${unsupportedArgs.join(', ')}`,
       stats: baseStats,
     };
@@ -645,9 +646,9 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
             strategy: bestStrategy,
             path: artifact.yamlPath,
             metadata_path: artifact.metadataPath,
-            reusable: true,
-            reusability_reason: 'verified-artifact',
+            reusability: 'verified-artifact',
           },
+          reusability: 'verified-artifact',
           stats: buildStats({
             endpointCount: exploreResult.endpoint_count,
             apiEndpointCount: exploreResult.api_endpoint_count,
@@ -680,8 +681,9 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
             firstAttempt.escalationReason ?? 'verify-inconclusive',
             selected,
             bundle.manifest.site,
-            { reusable: false, reusabilityReason: 'unverified-candidate', confidence: 'medium' },
+            { reusability: 'unverified-candidate', confidence: 'medium' },
           ),
+          reusability: 'unverified-candidate',
           message: firstAttempt.issue,
           stats: baseStats,
         };
@@ -698,10 +700,10 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
           version: 1,
           status: 'needs-human-check',
           escalation: buildEscalation('verify', escalationReason, selected, bundle.manifest.site, {
-            reusable: false,
-            reusabilityReason: 'unverified-candidate',
+            reusability: 'unverified-candidate',
             confidence: 'medium',
           }),
+          reusability: 'unverified-candidate',
           message: `Verification failed: ${firstAttempt.reason}`,
           stats: buildStats({
             endpointCount: exploreResult.endpoint_count,
@@ -737,9 +739,9 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
             strategy: bestStrategy,
             path: artifact.yamlPath,
             metadata_path: artifact.metadataPath,
-            reusable: true,
-            reusability_reason: 'verified-artifact',
+            reusability: 'verified-artifact',
           },
+          reusability: 'verified-artifact',
           stats: { ...repairedStats, verified: true },
         };
       }
@@ -764,8 +766,9 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
             secondAttempt.escalationReason ?? 'verify-inconclusive',
             selected,
             bundle.manifest.site,
-            { reusable: false, reusabilityReason: 'unverified-candidate', confidence: 'low' },
+            { reusability: 'unverified-candidate', confidence: 'low' },
           ),
+          reusability: 'unverified-candidate',
           message: secondAttempt.issue,
           stats: repairedStats,
         };
@@ -777,10 +780,10 @@ export async function generateVerifiedFromUrl(opts: GenerateVerifiedOptions): Pr
         version: 1,
         status: 'needs-human-check',
         escalation: buildEscalation('fallback', escalationReason, selected, bundle.manifest.site, {
-          reusable: false,
-          reusabilityReason: 'unverified-candidate',
+          reusability: 'unverified-candidate',
           confidence: 'low',
         }),
+        reusability: 'unverified-candidate',
         message: `Repair exhausted: ${secondAttempt.reason}`,
         stats: repairedStats,
       };
@@ -812,7 +815,7 @@ export function renderGenerateVerifiedSummary(result: GenerateOutcome): string {
     lines.push(`Reason: ${result.escalation.reason}`);
     lines.push(`Suggested action: ${result.escalation.suggested_action}`);
     lines.push(`Candidate: ${result.escalation.candidate.command}`);
-    lines.push(`Reusable: ${result.escalation.candidate.reusable} (${result.escalation.candidate.reusability_reason})`);
+    lines.push(`Reusability: ${result.escalation.candidate.reusability}`);
     if (result.message) lines.push(`Message: ${result.message}`);
   }
 

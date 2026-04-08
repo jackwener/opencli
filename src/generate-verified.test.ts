@@ -319,8 +319,8 @@ describe('generateVerifiedFromUrl', () => {
     expect(result.adapter!.command).toBe('demo/search');
     expect(result.adapter!.strategy).toBe(Strategy.COOKIE);
     expect(result.adapter!.metadata_path).toBeDefined();
-    expect(result.adapter!.reusable).toBe(true);
-    expect(result.adapter!.reusability_reason).toBe('verified-artifact');
+    expect(result.adapter!.reusability).toBe('verified-artifact');
+    expect(result.reusability).toBe('verified-artifact');
     expect(result.stats.verified).toBe(true);
     expect(result.stats.repair_attempted).toBe(false);
 
@@ -504,8 +504,8 @@ describe('generateVerifiedFromUrl', () => {
     expect(result.escalation!.suggested_action).toBe('inspect-with-operate');
     expect(result.escalation!.candidate).toBeDefined();
     expect(result.escalation!.candidate.command).toBe('demo/hot');
-    expect(result.escalation!.candidate.reusable).toBe(false);
-    expect(result.escalation!.candidate.reusability_reason).toBe('unverified-candidate');
+    expect(result.escalation!.candidate.reusability).toBe('unverified-candidate');
+    expect(result.reusability).toBe('unverified-candidate');
     expect(result.message).toContain('Repair exhausted');
     expect(result.stats.repair_attempted).toBe(true);
     expect(result.stats.verified).toBe(false);
@@ -577,8 +577,8 @@ describe('generateVerifiedFromUrl', () => {
     expect(result.escalation!.reason).toBe('unsupported-required-args');
     expect(result.escalation!.confidence).toBe('high');
     expect(result.escalation!.suggested_action).toBe('ask-for-sample-arg');
-    expect(result.escalation!.candidate.reusable).toBe(true);
-    expect(result.escalation!.candidate.reusability_reason).toBe('unverified-candidate');
+    expect(result.escalation!.candidate.reusability).toBe('unverified-candidate');
+    expect(result.reusability).toBe('unverified-candidate');
     expect(result.message).toContain('required args: id');
   });
 
