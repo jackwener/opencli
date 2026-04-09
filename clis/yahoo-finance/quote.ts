@@ -67,7 +67,7 @@ cli({
         return {error: 'Could not fetch quote for ' + sym};
       })()
     `);
-    if (!data || data.error) throw new CommandExecutionError(data?.error || 'Failed to fetch quote');
+    if (!data || data.error) throw new CommandExecutionError(data?.error || `Failed to fetch quote for ${symbol}`);
     return [data];
   },
 });

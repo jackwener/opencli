@@ -112,7 +112,7 @@ cli({
       })()
     `);
 
-    if (!data || data.error) throw new CommandExecutionError(data?.error || 'Failed to fetch quote');
+    if (!data || data.error) throw new CommandExecutionError(data?.error || `Failed to fetch quote for ${symbol}`);
 
     const r = data.row || {};
     // API returns formatted strings like "+1.41" and "+0.56%"; use raw if available
