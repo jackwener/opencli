@@ -134,6 +134,18 @@ OpenCLI 不只是网站 CLI，还可以：
 
 ```bash
 npm install -g @jackwener/opencli@latest
+
+# 如果你在用打包发布的 OpenCLI skills，也一起刷新
+npx skills add jackwener/opencli
+```
+
+如果你只装了部分 skill，也可以只刷新自己在用的：
+
+```bash
+npx skills add jackwener/opencli --skill opencli-usage
+npx skills add jackwener/opencli --skill opencli-browser
+npx skills add jackwener/opencli --skill opencli-explorer
+npx skills add jackwener/opencli --skill opencli-oneshot
 ```
 
 ## 面向开发者

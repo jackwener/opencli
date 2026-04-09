@@ -146,6 +146,18 @@ OpenCLI is not only for websites. It can also:
 
 ```bash
 npm install -g @jackwener/opencli@latest
+
+# If you use the packaged OpenCLI skills, refresh them too
+npx skills add jackwener/opencli
+```
+
+Or refresh only the skills you actually use:
+
+```bash
+npx skills add jackwener/opencli --skill opencli-usage
+npx skills add jackwener/opencli --skill opencli-browser
+npx skills add jackwener/opencli --skill opencli-explorer
+npx skills add jackwener/opencli --skill opencli-oneshot
 ```
 
 ## For Developers
