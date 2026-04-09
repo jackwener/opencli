@@ -177,11 +177,15 @@ opencli cascade https://api.example.com/hot
   → ✅ Tier 1: public（公开 API，不需要浏览器）
   → ❌ fetch(url, {credentials:'include'}) 带 Cookie 能拿到？
        → ✅ Tier 2: cookie（最常见，evaluate 步骤内 fetch）
-       → ❌ → 加上 Bearer / CSRF header 后能拿到？
-              → ✅ Tier 3: header（如 Twitter ct0 + Bearer）
-              → ❌ → 网站有 Pinia/Vuex Store？
-                     → ✅ Tier 4: intercept（Store Action + XHR 拦截）
-                     → ❌ Tier 5: ui（UI 自动化，最后手段）
+       → ❌ → localStorage 有 token，Bearer header 能拿到？
+              → ✅ Tier 2.5: localStorage Bearer（现代 SaaS 主流）
+                  带了 Bearer 但 HTTP 400 "Missing X-Xxx header"？
+                  → 先调 /servers 或 /workspaces 拿业务上下文 ID，加进 headers
+              → ❌ → 加上 CSRF header 后能拿到？
+                     → ✅ Tier 3: header（如 Twitter ct0 + Bearer）
+                     → ❌ → 网站有 Pinia/Vuex Store？
+                            → ✅ Tier 4: intercept（Store Action + XHR 拦截）
+                            → ❌ Tier 5: ui（UI 自动化，最后手段）
 ```
 
 ### 各策略对比
@@ -190,6 +194,7 @@ opencli cascade https://api.example.com/hot
 |------|------|------|--------|---------|------|
 | 1 | `public` | ⚡ ~1s | 最简 | 公开 API，无需登录 | Hacker News, V2EX |
 | 2 | `cookie` | 🔄 ~7s | 简单 | Cookie 认证即可 | Bilibili, Zhihu, Reddit |
+| 2.5 | `localStorage Bearer` | 🔄 ~7s | 简单 | JWT 存 localStorage，API 在独立 domain | Slock, Linear, Notion |
 | 3 | `header` | 🔄 ~7s | 中等 | 需要 CSRF token 或 Bearer | Twitter GraphQL |
 | 4 | `intercept` | 🔄 ~10s | 较高 | 请求有复杂签名 | 小红书 (Pinia + XHR) |
 | 5 | `ui` | 🐌 ~15s+ | 最高 | 无 API，纯 DOM 解析 | 遗留网站 |
@@ -555,22 +560,27 @@ cli({
 
 ## Step 4: 测试
 
-> **构建通过 ≠ 功能正常**。`npm run build` 只验证 TypeScript 语法，不验证运行时行为。  
+> **构建通过 ≠ 功能正常**。`npm run build` 只验证 TypeScript 语法，不验证运行时行为。
 > 每个新命令 **必须实际运行** 并确认输出正确后才算完成。
+
+> **文件路径**：`~/.opencli/clis/<site>/<name>.ts`（opencli 从这里扫描注册，不是项目目录）
 
 ### 必做清单
 
 ```bash
-# 1. 构建（确认语法无误）
-npm run build
+# 推荐：一键验证（自动检查注册 + 运行）
+opencli browser verify <site>/<name>
 
-# 2. 确认命令已注册
+# 或手动：
+# 1. 确认命令已注册
 opencli list | grep mysite
 
-# 3. 实际运行命令（最关键！）
+# 2. 实际运行命令（最关键！）
 opencli mysite hot --limit 3 -v        # verbose 查看每步数据流
 opencli mysite hot --limit 3 -f json   # JSON 输出确认字段完整
 ```
+
+**Done 标准**：命令运行后返回非空表格，且字段符合预期。
 
 ### tap 步骤调试（intercept 策略专用）
 
@@ -628,10 +638,10 @@ opencli mysite hot -f csv > data.csv       # 确认 CSV 可导入
 
 ## Step 5: 提交发布
 
-文件放入 `clis/<site>/` 即自动注册（TS 文件无需手动 import），然后：
+文件放入 `~/.opencli/clis/<site>/` 即自动注册（TS 文件无需手动 import），然后：
 
 ```bash
-opencli list | grep mysite                            # 确认注册
+opencli browser verify mysite/hot                     # 验证运行正常（Done 标准：返回非空表格）
 git add clis/mysite/ && git commit -m "feat(mysite): add hot" && git push
 ```
 
@@ -719,6 +729,10 @@ cli({
 | evaluate 内嵌大段 JS | 调试困难，字符串转义问题 | 把逻辑放在 `func()` 内，用原生 TS 编写 |
 | **风控被拦截(伪200)** | 获取到的 JSON 里核心数据是 `""` (空串) | 极易被误判。必须添加断言！无核心数据立刻要求升级鉴权 Tier 并重新配置 Cookie |
 | **API 没找见** | `explore` 工具打分出来的都拿不到深层数据 | 点击页面按钮诱发懒加载数据，再结合 `getInterceptedRequests` 获取 |
+| **SPA 返回 HTML** | `fetch('/api/xxx')` 返回 HTML 200（`<!DOCTYPE html>`） | 页面 host 是 `app.xxx.com`，真实 API 在 `api.xxx.com`；搜 JS bundle 找 baseURL |
+| **400 缺少上下文 Header** | 带了 Bearer 仍然 400，报 `Missing X-Server-Id` 之类 | 多租户 SaaS 需要业务上下文 ID；先调 `/servers` 或 `/workspaces` 拿 ID 再带上 |
+| **network 命令为空** | `opencli browser network` 没有任何 API 请求 | 重新 `open` 刷新捕获；或检查是否 SPA 且 API 在独立 domain |
+| **文件写错目录** | `opencli list` 找不到命令 | 适配器必须放 `~/.opencli/clis/<site>/`，不是项目 `clis/` 目录 |
 
 ---
 
