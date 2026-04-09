@@ -24,18 +24,24 @@ tags: [opencli, adapter, quick-start, ts, cli, one-shot, automation]
 
 ### Step 1: 打开页面 + 抓包
 
-```
-1. browser_navigate → 打开目标 URL
-2. 等待 3-5 秒（让页面加载完、API 请求触发）
-3. browser_network_requests → 筛选 JSON API
+```bash
+opencli browser open <目标 URL>          # 打开目标页面（自动开始抓包）
+opencli browser wait time 3              # 等页面加载完、API 请求触发
+opencli browser network                  # 查看捕获的 JSON API 请求
 ```
 
-**关键**：只关注返回 `application/json` 的请求，忽略静态资源。
-如果没有自动触发 API，手动点击目标按钮/标签再抓一次。
+**关键**：`network` 默认已过滤静态资源，只显示 JSON/XML/text 的 API 请求。
+如果没有自动触发 API，用 `opencli browser state` 找到按钮索引，`opencli browser click <N>` 点击后再 `network` 抓一次。
 
 ### Step 2: 锁定一个接口
 
-从抓包结果中找到**那个**目标 API。看这几个字段：
+从 `opencli browser network` 结果中找到**那个**目标 API，用 `--detail` 查看完整响应：
+
+```bash
+opencli browser network --detail <N>     # 查看第 N 条请求的完整响应体
+```
+
+关注这几个字段：
 
 | 字段 | 关注什么 |
 |------|----------|
@@ -46,18 +52,21 @@ tags: [opencli, adapter, quick-start, ts, cli, one-shot, automation]
 
 ### Step 3: 验证接口能复现
 
-在 `browser_evaluate` 中用 `fetch` 复现请求：
+用 `opencli browser eval` 在页面内 `fetch` 复现请求：
 
-```javascript
-// Tier 2 (Cookie): 大多数情况
-fetch('/api/endpoint', { credentials: 'include' }).then(r => r.json())
+```bash
+# Tier 2 (Cookie): 大多数情况
+opencli browser eval "fetch('/api/endpoint', { credentials: 'include' }).then(r => r.json())"
 
-// Tier 3 (Header): 如 Twitter 需要额外 header
-const ct0 = document.cookie.match(/ct0=([^;]+)/)?.[1];
-fetch('/api/endpoint', {
-  headers: { 'Authorization': 'Bearer ...', 'X-Csrf-Token': ct0 },
-  credentials: 'include'
-}).then(r => r.json())
+# Tier 3 (Header): 如 Twitter 需要额外 header
+opencli browser eval "(async () => {
+  const ct0 = document.cookie.match(/ct0=([^;]+)/)?.[1];
+  const res = await fetch('/api/endpoint', {
+    headers: { 'Authorization': 'Bearer ...', 'X-Csrf-Token': ct0 },
+    credentials: 'include'
+  });
+  return res.json();
+})()"
 ```
 
 如果 fetch 能拿到数据 → 用 TS adapter（`cli()` pipeline 或 `func()`）。

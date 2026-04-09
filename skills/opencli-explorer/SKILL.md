@@ -32,23 +32,24 @@ tags: [opencli, adapter, browser, api-discovery, cli, web-scraping, automation, 
 
 ### AI Agent 探索工作流（必须遵循）
 
-| 步骤 | 工具 | 做什么 |
+| 步骤 | 命令 | 做什么 |
 |------|------|--------|
-| 0. 打开浏览器 | `browser_navigate` | 导航到目标页面 |
-| 1. 观察页面 | `browser_snapshot` | 观察可交互元素（按钮/标签/链接） |
-| 2. 首次抓包 | `browser_network_requests` | 筛选 JSON API 端点，记录 URL pattern |
-| 3. 模拟交互 | `browser_click` + `browser_wait_for` | 点击"字幕""评论""关注"等按钮 |
-| 4. 二次抓包 | `browser_network_requests` | 对比步骤 2，找出新触发的 API |
-| 5. 验证 API | `browser_evaluate` | `fetch(url, {credentials:'include'})` 测试返回结构 |
-| 6. 写代码 | — | 基于确认的 API 写适配器 |
+| 0. 打开浏览器 | `opencli browser open <url>` | 导航到目标页面 |
+| 1. 观察页面 | `opencli browser state` | 观察可交互元素（按钮/标签/链接），带 `[N]` 索引 |
+| 2. 首次抓包 | `opencli browser network` | 筛选 JSON API 端点，记录 URL pattern |
+| 3. 模拟交互 | `opencli browser click <N>` + `opencli browser wait time 2` | 点击"字幕""评论""关注"等按钮 |
+| 4. 二次抓包 | `opencli browser network` | 对比步骤 2，找出新触发的 API |
+| 5. 查看响应 | `opencli browser network --detail <N>` | 查看目标 API 的完整响应体 |
+| 6. 验证 API | `opencli browser eval "fetch(url, {credentials:'include'}).then(r=>r.json())"` | 验证 API 可复现 |
+| 7. 写代码 | — | 基于确认的 API 写适配器 |
 
 ### 常犯错误
 
 | ❌ 错误做法 | ✅ 正确做法 |
 |------------|------------|
-| 只用 `opencli explore` 命令，等结果自动出来 | 用浏览器工具打开页面，主动浏览 |
-| 直接在代码里 `fetch(url)`，不看浏览器实际请求 | 先在浏览器中确认 API 可用，再写代码 |
-| 页面打开后直接抓包，期望所有 API 都出现 | 模拟点击交互（展开评论/切换标签/加载更多） |
+| 只用 `opencli explore` 命令，等结果自动出来 | 用 `opencli browser open` 打开页面，主动浏览 |
+| 直接在代码里 `fetch(url)`，不看浏览器实际请求 | 先用 `opencli browser network` 确认 API 可用，再写代码 |
+| 页面打开后直接抓包，期望所有 API 都出现 | 用 `opencli browser click` 模拟交互（展开评论/切换标签/加载更多） |
 | 遇到 HTTP 200 但空数据就放弃 | 检查是否需要 Wbi 签名或 Cookie 鉴权 |
 | 完全依赖 `__INITIAL_STATE__` 拿所有数据 | `__INITIAL_STATE__` 只有首屏数据，深层数据要调 API |
 
@@ -56,16 +57,18 @@ tags: [opencli, adapter, browser, api-discovery, cli, web-scraping, automation, 
 
 以下是用上述工作流实际发现 Bilibili 关注列表 API 的完整过程：
 
-```
-1. browser_navigate → https://space.bilibili.com/{uid}/fans/follow
-2. browser_network_requests → 发现:
-   GET /x/relation/followings?vmid={uid}&pn=1&ps=24  →  [200]
-   GET /x/relation/stat?vmid={uid}                    →  [200]
-3. browser_evaluate → 验证 API:
-   fetch('/x/relation/followings?vmid=137702077&pn=1&ps=5', {credentials:'include'})
-   → { code: 0, data: { total: 1342, list: [{mid, uname, sign, ...}] } }
-4. 结论：标准 Cookie API，无需 Wbi 签名
-5. 写 following.ts → 一次构建通过
+```bash
+1. opencli browser open https://space.bilibili.com/{uid}/fans/follow
+2. opencli browser network
+   # 发现:
+   #   [0] GET 200 /x/relation/followings?vmid={uid}&pn=1&ps=24
+   #   [1] GET 200 /x/relation/stat?vmid={uid}
+3. opencli browser network --detail 0
+   # 查看完整响应体，确认数据结构
+4. opencli browser eval "fetch('/x/relation/followings?vmid=137702077&pn=1&ps=5', {credentials:'include'}).then(r=>r.json())"
+   # → { code: 0, data: { total: 1342, list: [{mid, uname, sign, ...}] } }
+5. 结论：标准 Cookie API，无需 Wbi 签名
+6. 写 following.ts → 一次构建通过
 ```
 
 **关键决策点**：
@@ -139,7 +142,7 @@ Explore 自动检测前端框架。如果需要手动确认：
 
 ```bash
 # 在已打开目标网站的情况下
-opencli evaluate "(()=>{
+opencli browser eval "(()=>{
   const vue3 = !!document.querySelector('#app')?.__vue_app__;
   const vue2 = !!document.querySelector('#app')?.__vue__;
   const react = !!window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
@@ -571,10 +574,10 @@ opencli mysite hot --limit 3 -f json   # JSON 输出确认字段完整
 在浏览器中打开目标网站后：
 
 ```bash
-opencli evaluate "(() => {
+opencli browser eval "(() => {
   const app = document.querySelector('#app')?.__vue_app__;
   const pinia = app?.config?.globalProperties?.\$pinia;
-  return [...pinia._s.keys()];
+  return JSON.stringify([...pinia._s.keys()]);
 })()"
 # 输出: ["user", "feed", "search", "notification", ...]
 ```
@@ -588,10 +591,12 @@ opencli evaluate "(() => {
 💡 Available: getNotification, replyComment, getNotificationCount, reset
 ```
 
-#### Step 3: 用 network requests 确认 capture 模式
+#### Step 3: 用 network 确认 capture 模式
 
 ```bash
-# 在浏览器打开目标页面，查看网络请求
+# 在浏览器打开目标页面后，查看网络请求
+opencli browser network                  # 列出捕获的 API 请求
+opencli browser network --detail <N>     # 查看第 N 条的完整响应
 # 找到目标 API 的 URL 特征（如 "/you/mentions"、"homefeed"）
 ```
 
