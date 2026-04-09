@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { getRegistry } from '@jackwener/opencli/registry';
 import './product.js';
 
-const { PRODUCT_COLUMNS, normalizeShopeeProductUrl, mergeProductDetails, hasMeaningfulProductData } =
+const {
+  PRODUCT_COLUMNS,
+  PRODUCT_FIELDS,
+  mergeProductDetails,
+  hasMeaningfulProductData,
+} =
   await import('./product.js').then((m) => (m as typeof import('./product.js')).__test__);
 
 describe('shopee product adapter', () => {
@@ -32,39 +37,52 @@ describe('shopee product adapter', () => {
         'title',
         'rating_score',
         'current_price_range',
+        'shopee_price',
+        'shopdora_price',
+        'main_image_url',
+        'video_url',
+        'thumbnail_url',
+        'attr_options',
+        'spec_options',
         'seller_name',
+        'shop_name',
+        'shop_url',
+        'shop_product_list_url',
         'stock',
       ]),
     );
     expect(command!.columns).toEqual(expect.arrayContaining(PRODUCT_COLUMNS));
   });
-});
 
-describe('normalizeShopeeProductUrl', () => {
-  it('accepts canonical Shopee product urls', () => {
-    expect(
-      normalizeShopeeProductUrl(
-        'https://shopee.sg/Jeep-EW121-True-Wireless-i.1058254930.25483790400',
-      ),
-    ).toBe('https://shopee.sg/Jeep-EW121-True-Wireless-i.1058254930.25483790400');
-  });
+  it('marks structured template fields with list metadata', () => {
+    const videoField = PRODUCT_FIELDS.find((field) => field.name === 'video_url');
+    const thumbnailField = PRODUCT_FIELDS.find((field) => field.name === 'thumbnail_url');
+    const attrOptionsField = PRODUCT_FIELDS.find((field) => field.name === 'attr_options');
+    const specOptionsField = PRODUCT_FIELDS.find((field) => field.name === 'spec_options');
 
-  it('accepts other shopee locales when the path matches a product page', () => {
-    expect(normalizeShopeeProductUrl('https://shopee.ph/sample-product-i.12345.67890?x=1')).toBe(
-      'https://shopee.ph/sample-product-i.12345.67890?x=1',
-    );
-  });
-
-  it('rejects non-shopee hosts', () => {
-    expect(() => normalizeShopeeProductUrl('https://example.com/item-i.1.2')).toThrow(
-      'Unsupported Shopee host',
-    );
-  });
-
-  it('rejects non-product shopee urls', () => {
-    expect(() => normalizeShopeeProductUrl('https://shopee.sg/search?keyword=earbuds')).toThrow(
-      'does not look like a Shopee product page',
-    );
+    expect(videoField).toMatchObject({
+      type: 'list',
+      fields: [
+        { name: 'video_url', type: 'attribute', attribute: 'src', transform: 'absolute_url' },
+      ],
+    });
+    expect(thumbnailField).toMatchObject({
+      type: 'list',
+      fields: [{ name: 'thumbnail_url', type: 'attribute', attribute: 'src' }],
+    });
+    expect(attrOptionsField).toMatchObject({
+      type: 'list',
+      fields: expect.arrayContaining([
+        expect.objectContaining({ name: 'image_url', type: 'attribute', attribute: 'src' }),
+        expect.objectContaining({ name: 'is_selected', transform: 'selected_class' }),
+      ]),
+    });
+    expect(specOptionsField).toMatchObject({
+      type: 'list',
+      fields: expect.arrayContaining([
+        expect.objectContaining({ name: 'is_selected', transform: 'selected_class' }),
+      ]),
+    });
   });
 });
 
