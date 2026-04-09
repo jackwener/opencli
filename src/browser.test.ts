@@ -49,20 +49,20 @@ describe('browser helpers', () => {
     await expect(withTimeoutMs(new Promise(() => {}), 10, 'timeout')).rejects.toThrow('timeout');
   });
 
-  it('classifies browser errors with correct retry advice', () => {
-    // CDP target navigation — retryable with short delay
+  it('classifies browser errors with correct kind and retry advice', () => {
+    // CDP target navigation — page-level settle retry
     const nav = classifyBrowserError(new Error('{"code":-32000,"message":"Inspected target navigated or closed"}'));
-    expect(nav.retryable).toBe(true);
+    expect(nav.kind).toBe('target-navigation');
     expect(nav.delayMs).toBe(200);
 
-    // Extension transient — retryable with longer delay
+    // Extension transient — daemon-client retry only, NOT page-level
     const ext = classifyBrowserError(new Error('Extension disconnected'));
-    expect(ext.retryable).toBe(true);
+    expect(ext.kind).toBe('extension-transient');
     expect(ext.delayMs).toBe(1500);
 
     // Non-transient errors — not retryable
-    expect(classifyBrowserError(new Error('malformed exec payload')).retryable).toBe(false);
-    expect(classifyBrowserError(new Error('Permission denied')).retryable).toBe(false);
+    expect(classifyBrowserError(new Error('malformed exec payload')).kind).toBe('non-retryable');
+    expect(classifyBrowserError(new Error('Permission denied')).kind).toBe('non-retryable');
   });
 
   it('prefers the real Electron app target over DevTools and blank pages', () => {

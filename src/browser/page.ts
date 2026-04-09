@@ -65,15 +65,15 @@ export class Page extends BasePage {
         await sendCommand('exec', combinedOpts);
       } catch (err) {
         const advice = classifyBrowserError(err);
-        if (!advice.retryable) throw err;
-        // SPA client-side redirects can invalidate the CDP target after
-        // chrome.tabs reports 'complete'. Wait briefly for the new document
-        // to load, then retry the settle probe once.
+        // Only settle-retry on target navigation (SPA client-side redirects).
+        // Extension/daemon errors are already retried by sendCommandRaw —
+        // retrying them here would silently swallow real failures.
+        if (advice.kind !== 'target-navigation') throw err;
         try {
           await new Promise((r) => setTimeout(r, advice.delayMs));
           await sendCommand('exec', combinedOpts);
         } catch (retryErr) {
-          if (!classifyBrowserError(retryErr).retryable) throw retryErr;
+          if (classifyBrowserError(retryErr).kind !== 'target-navigation') throw retryErr;
         }
       }
     } else {
@@ -105,7 +105,7 @@ export class Page extends BasePage {
       return await sendCommand('exec', { code, ...this._cmdOpts() });
     } catch (err) {
       const advice = classifyBrowserError(err);
-      if (!advice.retryable) throw err;
+      if (advice.kind !== 'target-navigation') throw err;
       await new Promise((resolve) => setTimeout(resolve, advice.delayMs));
       return sendCommand('exec', { code, ...this._cmdOpts() });
     }

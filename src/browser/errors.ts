@@ -16,8 +16,16 @@ import { DEFAULT_DAEMON_PORT } from '../constants.js';
  * separate pattern lists.
  */
 
+/** Error category — determines which layer should retry. */
+export type BrowserErrorKind =
+  | 'extension-transient'   // daemon/extension hiccup — daemon-client retries
+  | 'target-navigation'     // CDP target invalidated by SPA nav — page-level settle retry
+  | 'non-retryable';        // permanent error — no retry
+
 /** How the caller should handle the error. */
 export interface RetryAdvice {
+  /** Error category — callers use this to decide whether *they* should retry. */
+  kind: BrowserErrorKind;
   /** Whether the error is transient and worth retrying. */
   retryable: boolean;
   /** Suggested delay before retry (ms). */
@@ -62,20 +70,20 @@ export function classifyBrowserError(err: unknown): RetryAdvice {
 
   // Extension/daemon transient errors — longer recovery time
   if (EXTENSION_TRANSIENT_PATTERNS.some(p => msg.includes(p))) {
-    return { retryable: true, delayMs: 1500 };
+    return { kind: 'extension-transient', retryable: true, delayMs: 1500 };
   }
 
   // CDP target navigation errors — shorter recovery time
   if (TARGET_NAVIGATION_PATTERNS.some(p => msg.includes(p))) {
-    return { retryable: true, delayMs: 200 };
+    return { kind: 'target-navigation', retryable: true, delayMs: 200 };
   }
 
   // CDP protocol error with target context (e.g., -32000 "target closed")
   if (msg.includes('-32000') && msg.toLowerCase().includes('target')) {
-    return { retryable: true, delayMs: 200 };
+    return { kind: 'target-navigation', retryable: true, delayMs: 200 };
   }
 
-  return { retryable: false, delayMs: 0 };
+  return { kind: 'non-retryable', retryable: false, delayMs: 0 };
 }
 
 /**
