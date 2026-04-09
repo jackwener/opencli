@@ -72,7 +72,8 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
   }
   subCmd
     .option('-f, --format <fmt>', 'Output format: table, plain, json, yaml, md, csv', 'table')
-    .option('-v, --verbose', 'Debug output', false);
+    .option('-v, --verbose', 'Debug output', false)
+    .option('--raw', 'Output raw unformatted result as JSON (for adapter development)', false);
 
   subCmd.addHelpText('after', formatRegistryHelpText(cmd));
 
@@ -98,6 +99,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       cmd.validateArgs?.(kwargs);
 
       const verbose = optionsRecord.verbose === true;
+      const raw = optionsRecord.raw === true;
       let format = typeof optionsRecord.format === 'string' ? optionsRecord.format : 'table';
       const formatExplicit = subCmd.getOptionValueSource('format') === 'cli';
       if (verbose) process.env.OPENCLI_VERBOSE = '1';
@@ -109,6 +111,12 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
 
       const result = await executeCommand(cmd, kwargs, verbose);
       if (result === null || result === undefined) {
+        return;
+      }
+
+      // --raw: output raw unformatted result as JSON, skip all formatting
+      if (raw) {
+        console.log(JSON.stringify(result, null, 2));
         return;
       }
 

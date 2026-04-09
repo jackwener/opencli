@@ -49,7 +49,7 @@ export interface ManifestEntry {
   /** Relative path to the original source file from clis/ dir (e.g. 'site/cmd.ts') */
   sourceFile?: string;
   /** Pre-navigation control — see CliCommand.navigateBefore */
-  navigateBefore?: boolean | string;
+  navigateBefore?: boolean | string | { url: string; waitUntil?: 'load' | 'none'; settleMs?: number };
 }
 
 import { isRecord } from './utils.js';
