@@ -26,6 +26,7 @@ Requires: Chrome running + OpenCLI Browser Bridge extension installed.
 6. **`eval` is read-only** — use `eval` ONLY for data extraction (`JSON.stringify(...)`), never for clicking, typing, or navigating. Always wrap in IIFE to avoid variable conflicts: `eval "(function(){ const x = ...; return JSON.stringify(x); })()"`.
 7. **Minimize total tool calls** — plan your sequence before acting. A good task completion uses 3-5 tool calls, not 15-20. Combine `open + state` as one call. Combine `type + type + click` as one call. Only run `state` separately when you need to discover new indices.
 8. **Prefer `network` to discover APIs** — most sites have JSON APIs. API-based adapters are more reliable than DOM scraping.
+9. **Always close the automation window when the task is done** — run `opencli browser close` once you have the answer or when you abandon the attempt, unless the user explicitly asks you to leave the page open. Do not leave search/debug tabs hanging around.
 
 ## Command Cost Guide
 
@@ -71,8 +72,9 @@ opencli browser click 7            # all three together
 3. **Interact**: use indices — `click`, `type`, `select`, `keys`
 4. **Wait** (if needed): `opencli browser wait selector ".loaded"` or `wait text "Success"`
 5. **Verify**: `opencli browser state` or `opencli browser get value <N>`
-6. **Repeat**: browser stays open between commands
-7. **Save**: write a TS adapter to `~/.opencli/clis/<site>/<command>.ts`
+6. **Repeat**: browser stays open between commands while the task is active
+7. **Close**: run `opencli browser close` when the task is complete or aborted unless the user asked to keep the browser open
+8. **Save**: write a TS adapter to `~/.opencli/clis/<site>/<command>.ts`
 
 ## Commands
 
@@ -173,6 +175,8 @@ opencli browser verify hn/top            # Test the adapter (adds --limit 3 only
 opencli browser close                   # Close automation window
 ```
 
+Use `close` as the default final step for search / browse / debug tasks. Only skip it when the user explicitly wants the session to remain open.
+
 ## Example: Extract HN Stories
 
 ```bash
@@ -217,7 +221,7 @@ opencli browser init hn/top                    # Creates ~/.opencli/clis/hn/top.
 opencli browser verify hn/top                  # Runs the adapter and shows output
 
 # 6. If verify fails, edit and retry
-# 7. Close when done
+# 7. Close when done unless the user asked to keep the session open
 opencli browser close
 ```
 
