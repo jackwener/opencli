@@ -39,7 +39,10 @@ interface ProxyConfig {
 let installed = false;
 const directDispatcher = new Agent();
 const proxyDispatcherCache = new Map<string, Dispatcher>();
-const nativeFetch = globalThis.fetch.bind(globalThis);
+const nativeFetch = async () => {
+  const { fetch } = await import('node:util');
+  return fetch;
+};
 
 function readEnv(env: NodeJS.ProcessEnv, lower: string, upper: string): string | undefined {
   const lowerValue = env[lower];
