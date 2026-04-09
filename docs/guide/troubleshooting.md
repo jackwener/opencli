@@ -31,15 +31,11 @@ OPENCLI_CDP_TARGET=detail.1688.com opencli 1688 item 841141931191 -f json
 ### Daemon issues
 
 ```bash
-# Check daemon status (PID, uptime, extension connection, memory)
-opencli daemon status
-
 # View extension logs
 curl localhost:19825/logs
 
-# Stop or restart the daemon
+# Stop the daemon
 opencli daemon stop
-opencli daemon restart
 
 # Full diagnostics
 opencli doctor

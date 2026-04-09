@@ -41,9 +41,7 @@ The daemon manages the WebSocket connection between your CLI commands and the Ch
 The daemon auto-starts on first browser command and stays alive persistently.
 
 ```bash
-opencli daemon status    # Check daemon state (PID, uptime, extension, memory)
 opencli daemon stop      # Graceful shutdown
-opencli daemon restart   # Stop + restart
 ```
 
 The daemon is persistent — it stays alive until you explicitly stop it (`opencli daemon stop`) or uninstall the package.

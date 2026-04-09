@@ -57,7 +57,6 @@ OpenCLI connects to Chrome/Chromium through a lightweight Browser Bridge extensi
 
 ```bash
 opencli doctor
-opencli daemon status
 ```
 
 ### 4. Run your first commands
@@ -75,7 +74,7 @@ Use OpenCLI directly when you want a reliable command instead of a live browser 
 - `opencli list` shows every registered command.
 - `opencli <site> <command>` runs a built-in or generated adapter.
 - `opencli register mycli` exposes a local CLI through the same discovery surface.
-- `opencli daemon status` and `opencli doctor` help diagnose browser connectivity.
+- `opencli doctor` helps diagnose browser connectivity.
 
 ## For AI Agents
 

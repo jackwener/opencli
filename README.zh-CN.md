@@ -45,7 +45,6 @@ OpenCLI 通过轻量 Browser Bridge 扩展和本地微型 daemon 与 Chrome/Chro
 
 ```bash
 opencli doctor
-opencli daemon status
 ```
 
 ### 4. 跑第一个命令
@@ -63,7 +62,7 @@ opencli bilibili hot --limit 5
 - `opencli list` 查看当前所有命令
 - `opencli <site> <command>` 调用内置或生成好的适配器
 - `opencli register mycli` 把本地 CLI 接入同一发现入口
-- `opencli doctor` / `opencli daemon status` 处理浏览器连通性问题
+- `opencli doctor` 处理浏览器连通性问题
 
 ## 给 AI Agent
 

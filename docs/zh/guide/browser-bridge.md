@@ -28,9 +28,7 @@ opencli doctor            # 检查扩展 + 守护进程连接
 Daemon 在首次运行浏览器命令时自动启动，之后保持常驻运行。
 
 ```bash
-opencli daemon status    # 查看 daemon 状态（PID、运行时长、扩展连接、内存）
 opencli daemon stop      # 优雅关停
-opencli daemon restart   # 重启
 ```
 
 Daemon 为常驻模式，会一直运行直到你显式停止（`opencli daemon stop`）或卸载包。
