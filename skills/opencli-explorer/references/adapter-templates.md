@@ -102,6 +102,7 @@ cli({
 ```typescript
 // clis/slock/channels.ts
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { AuthRequiredError } from '@jackwener/opencli/errors';
 
 cli({
   site: 'slock',
@@ -119,7 +120,7 @@ cli({
     await page.goto('https://app.slock.ai');
     const data = await page.evaluate(`(async () => {
       const token = localStorage.getItem('slock_access_token');
-      if (!token) return { error: 'Not logged in', help: 'Open https://app.slock.ai and log in, then retry' };
+      if (!token) return { error: 'Not logged in' };
 
       // 多租户 SaaS：先拿工作空间列表
       const slug = ${JSON.stringify(kwargs.server || null)} || localStorage.getItem('slock_last_server_slug');
@@ -134,7 +135,7 @@ cli({
       });
       return res.json();
     })()`);
-    if ((data as any).error) return [data as any];
+    if ((data as any).error) throw new AuthRequiredError('app.slock.ai');
     return (data as any[]).slice(0, kwargs.limit).map((ch: any, i: number) => ({
       rank: i + 1,
       name: ch.name || '',
@@ -156,6 +157,7 @@ cli({
 ```typescript
 // clis/twitter/lists.ts
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { AuthRequiredError } from '@jackwener/opencli/errors';
 
 cli({
   site: 'twitter',
@@ -172,7 +174,7 @@ cli({
     await page.goto('https://x.com');
     const data = await page.evaluate(`(async () => {
       const ct0 = document.cookie.match(/ct0=([^;]+)/)?.[1];
-      if (!ct0) return { error: 'Not logged in', help: 'Open https://x.com and log in, then retry' };
+      if (!ct0) return { error: 'Not logged in' };
       const bearer = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
       const res = await fetch('/i/api/graphql/QUERY_ID/ListsManagePinTimeline', {
         headers: {
@@ -188,7 +190,7 @@ cli({
         ?.filter(e => e.content?.itemContent?.list)
         ?.map(e => e.content.itemContent.list) || [];
     })()`);
-    if ((data as any).error) return [data as any];
+    if ((data as any).error) throw new AuthRequiredError('x.com');
     return (data as any[]).slice(0, kwargs.limit).map((l: any, i: number) => ({
       rank: i + 1,
       name: l.name || '',
@@ -349,7 +351,7 @@ const server = servers.find(s => s.slug === slug) || servers[0];
 // clis/mysite/utils.ts
 export async function getServerContext(slug: string | null): Promise<{ token: string; server: any }> {
   const token = localStorage.getItem('mysite_access_token');
-  if (!token) throw { error: 'Not logged in', help: 'Open https://app.mysite.com and log in, then retry' };
+  if (!token) throw new Error('Not logged in');
   const servers = await fetch('https://api.mysite.com/api/servers', {
     headers: { 'Authorization': 'Bearer ' + token }
   }).then(r => r.json());
@@ -380,42 +382,51 @@ func: async (page, kwargs) => {
 
 ## 错误处理规范
 
-### 返回 `{ error, help }` 而非 throw
+### 使用 `throw CliError` 子类
+
+所有错误都通过 `throw` 类型化的 `CliError` 子类来表达。框架层统一捕获并输出 YAML Error Envelope 到 stderr + 非零 exit code。**不要用 `return [{error, help}]`**——stdout 是纯数据通道。
 
 ```typescript
-// ❌ 不推荐：throw 导致 CLI 打印 stack trace，用户不知道怎么修复
-if (!token) throw new Error('Not logged in');
+import { AuthRequiredError, EmptyResultError, CommandExecutionError } from '@jackwener/opencli/errors';
 
-// ✅ 推荐：返回结构化错误，help 告诉 AI Agent 或用户下一步怎么做
-if (!token) return [{ error: 'Not logged in', help: 'Open https://site.com and log in, then retry' }];
+// ❌ 不推荐：错误伪装成数据混入 stdout
+if (!token) return [{ error: 'Not logged in', help: '...' }];
+
+// ✅ 推荐：throw 类型化错误，框架自动输出 YAML envelope 到 stderr
+if (!token) throw new AuthRequiredError('site.com');
 ```
 
-**字段约定**：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `error` | `string` | 问题描述，事实性，不带感叹号 |
-| `help` | `string` | 具体的修复动作，可直接执行 |
-
-**常用 help 模板**：
+**注意 `page.evaluate()` 内部**：browser 环境没有 CliError，在 evaluate 内返回 `{ error, help }` 后，在 `func()` 体内检查并 throw：
 
 ```typescript
-// 未登录
-{ error: 'Not logged in', help: 'Open https://site.com in the browser and log in, then retry' }
-
-// 找不到资源
-{ error: `Channel not found: ${kwargs.channel}`, help: 'Run `opencli site channels` to see available channels' }
-
-// 权限不足
-{ error: 'Forbidden (403)', help: 'Check that your account has access to this resource' }
-
-// API 结构变更
-{ error: 'Unexpected response structure', help: 'Run `opencli browser network --detail N` to inspect the current API response' }
-
-// 风控降级（伪 200）
-{ error: 'Core data is empty — possible risk-control block', help: 'Re-login to the site in the browser, then retry' }
+const data = await page.evaluate(`(async () => {
+  const token = localStorage.getItem('token');
+  if (!token) return { error: 'Not logged in' };
+  // ...
+})()`);
+if ((data as any).error) throw new AuthRequiredError('site.com', (data as any).error);
 ```
 
-**何时 throw vs 返回 error 对象**：
-- 程序错误（参数类型错、配置缺失）→ `throw`，这是 bug
-- 运行时用户可修复的情况（未登录、找不到资源、API 变更）→ 返回 `{ error, help }`
+**可用的 CliError 子类**：
+
+| 子类 | code | 场景 | exit code |
+|------|------|------|-----------|
+| `AuthRequiredError` | AUTH_REQUIRED | 未登录、Cookie 过期 | 77 |
+| `EmptyResultError` | EMPTY_RESULT | API 返回空数据 | 66 |
+| `CommandExecutionError` | COMMAND_EXEC | 通用执行失败 | 1 |
+| `TimeoutError` | TIMEOUT | 超时 | 75 |
+| `ArgumentError` | ARGUMENT | 参数错误 | 2 |
+| `SelectorError` | SELECTOR | DOM 元素找不到 | 1 |
+| `BrowserConnectError` | BROWSER_CONNECT | 浏览器连接失败 | 69 |
+| `ConfigError` | CONFIG | 配置缺失 | 78 |
+
+**错误输出示例**（YAML envelope → stderr）：
+
+```yaml
+ok: false
+error:
+  code: AUTH_REQUIRED
+  message: Not logged in to site.com
+  help: Please open Chrome or Chromium and log in to https://site.com
+  exitCode: 77
+```

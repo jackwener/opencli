@@ -143,13 +143,19 @@ function emitAutoFixHint(envelope: string, cmdName: string): string {
   return envelope + `# AutoFix: re-run with OPENCLI_DIAGNOSTIC=1 for repair context\n# OPENCLI_DIAGNOSTIC=1 ${cmdName}\n`;
 }
 
-function renderError(err: unknown, cmdName: string, _verbose: boolean): void {
+function renderError(err: unknown, cmdName: string, verbose: boolean): void {
   const envelope = toEnvelope(err);
+
+  // In verbose mode, include stack trace for debugging
+  if (verbose && err instanceof Error && err.stack) {
+    (envelope.error as Record<string, unknown>).stack = err.stack;
+  }
+
   let output = yaml.dump(envelope, { sortKeys: false, lineWidth: 120, noRefs: true });
 
   // Append AutoFix hint for repairable errors
   const code = envelope.error.code;
-  if (code === 'SELECTOR' || code === 'EMPTY_RESULT' || code === 'UNKNOWN') {
+  if (code === 'SELECTOR' || code === 'EMPTY_RESULT' || code === 'ADAPTER_LOAD' || code === 'UNKNOWN') {
     output = emitAutoFixHint(output, cmdName);
   }
 

@@ -1,4 +1,5 @@
 import { cli } from '@jackwener/opencli/registry';
+import { EmptyResultError } from '@jackwener/opencli/errors';
 import { fetchXueqiuJson } from './utils.js';
 
 function fmtAmount(v: number | null | undefined): string | null {
@@ -29,8 +30,7 @@ cli({
     const symbol = String(kwargs.symbol).toUpperCase();
     const url = `https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=${encodeURIComponent(symbol)}`;
     const d = await fetchXueqiuJson(page, url);
-    if ('error' in d) return [d];
-    if (!d.data?.items?.length) return [{ error: '未找到股票: ' + symbol, help: '请确认股票代码是否正确，如 SH600519、AAPL' }];
+    if (!d.data?.items?.length) throw new EmptyResultError('xueqiu/stock', '请确认股票代码是否正确: ' + symbol);
     const item = d.data.items[0];
     const q = item.quote || {};
     const m = item.market || {};

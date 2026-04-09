@@ -10,6 +10,7 @@
 
 ```typescript
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { AuthRequiredError } from '@jackwener/opencli/errors';
 import type { IPage } from '@jackwener/opencli/types';
 import { apiGet } from './utils.js'; // 复用平台 SDK
 
@@ -40,7 +41,7 @@ cli({
     // Step 4: 断言风控降级（空值断言）
     const subtitles = payload.data?.subtitle?.subtitles || [];
     const url = subtitles[0]?.subtitle_url;
-    if (!url) return [{ error: 'subtitle_url is empty — possible risk-control block', help: 'Re-login to Bilibili, then retry' }];
+    if (!url) throw new AuthRequiredError('bilibili.com', 'subtitle_url is empty — possible risk-control block');
 
     // Step 5: 拉取最终数据（CDN JSON）
     const items = await page.evaluate(`(async () => {

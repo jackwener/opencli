@@ -1,4 +1,5 @@
 import { cli } from '@jackwener/opencli/registry';
+import { AuthRequiredError } from '@jackwener/opencli/errors';
 import { fetchXueqiuJson } from './utils.js';
 
 cli({
@@ -21,8 +22,7 @@ cli({
     const pid = String(kwargs.pid || '-1');
     const url = `https://stock.xueqiu.com/v5/stock/portfolio/stock/list.json?size=100&category=1&pid=${encodeURIComponent(pid)}`;
     const d = await fetchXueqiuJson(page, url);
-    if ('error' in d) return [d];
-    if (!d.data?.stocks) return [{ error: '获取失败', help: '请确认已登录雪球（https://xueqiu.com）' }];
+    if (!d.data?.stocks) throw new AuthRequiredError('xueqiu.com');
     return ((d.data.stocks || []) as any[]).slice(0, kwargs.limit as number).map((s: any) => ({
       symbol: s.symbol,
       name: s.name,

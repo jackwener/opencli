@@ -1,4 +1,5 @@
 import { cli } from '@jackwener/opencli/registry';
+import { EmptyResultError } from '@jackwener/opencli/errors';
 import { fetchXueqiuJson } from './utils.js';
 
 cli({
@@ -23,8 +24,7 @@ cli({
     const symbol = String(kwargs.symbol).toUpperCase();
     const url = `https://stock.xueqiu.com/v5/stock/screener/event/list.json?symbol=${encodeURIComponent(symbol)}&page=1&size=100`;
     const d = await fetchXueqiuJson(page, url);
-    if ('error' in d) return [d];
-    if (!d.data?.items) return [{ error: '获取失败: ' + symbol, help: '请确认股票代码是否正确' }];
+    if (!d.data?.items) throw new EmptyResultError('xueqiu/earnings-date', '请确认股票代码是否正确: ' + symbol);
 
     // subtype 2 = 预计财报发布
     const now = Date.now();

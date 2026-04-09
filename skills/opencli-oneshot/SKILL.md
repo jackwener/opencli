@@ -246,6 +246,7 @@ cli({
 
 ```typescript
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { AuthRequiredError } from '@jackwener/opencli/errors';
 
 cli({
   site: 'twitter',
@@ -274,6 +275,7 @@ cli({
       });
       return res.json();
     })()`);
+    if ((data as any).error) throw new AuthRequiredError('x.com');
     // 解析 data...
     return [];
   },

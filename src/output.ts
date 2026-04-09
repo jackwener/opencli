@@ -24,11 +24,6 @@ function normalizeRows(data: unknown): Record<string, unknown>[] {
 }
 
 function resolveColumns(rows: Record<string, unknown>[], opts: RenderOptions): string[] {
-  // When a command returns an error row ({ error, help }), override the declared
-  // columns so the error is visible in table/csv/markdown output.
-  if (opts.columns && rows.length > 0 && 'error' in rows[0] && !opts.columns.includes('error')) {
-    return Object.keys(rows[0]);
-  }
   return opts.columns ?? Object.keys(rows[0] ?? {});
 }
 
