@@ -329,6 +329,53 @@ func: async (page, kwargs) => {
 
 ---
 
+## 同站点多 adapter：提取 utils.ts
+
+同一站点写第二个 adapter 时，如果发现要复制 auth context 解析逻辑，就应该提取 `clis/<site>/utils.ts`。
+
+**判断标准**：两个 adapter 里出现了几乎相同的这几行：
+
+```typescript
+const token = localStorage.getItem('xxx_access_token');
+const servers = await fetch('https://api.xxx.com/api/servers', {
+  headers: { 'Authorization': 'Bearer ' + token }
+}).then(r => r.json());
+const server = servers.find(s => s.slug === slug) || servers[0];
+```
+
+**正确做法**：提取成 helper，所有 adapter import 复用：
+
+```typescript
+// clis/mysite/utils.ts
+export async function getServerContext(slug: string | null): Promise<{ token: string; server: any }> {
+  const token = localStorage.getItem('mysite_access_token');
+  if (!token) throw { error: 'Not logged in', remedy: 'Open https://app.mysite.com and log in, then retry' };
+  const servers = await fetch('https://api.mysite.com/api/servers', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  }).then(r => r.json());
+  const server = servers.find((s: any) => s.slug === slug) || servers[0];
+  return { token, server };
+}
+```
+
+```typescript
+// clis/mysite/channels.ts — import 复用
+import { getServerContext } from './utils.js';
+
+func: async (page, kwargs) => {
+  await page.goto('https://app.mysite.com');
+  const data = await page.evaluate(`(async () => {
+    const { token, server } = await (${getServerContext.toString()})(${JSON.stringify(kwargs.server || null)});
+    // ...
+  })()`);
+}
+```
+
+> **现有参考**：`clis/bilibili/utils.ts` 里的 `fetchJson` / `apiGet` / `getSelfUid` 是同类实践。
+> `clis/slock/` 三个 adapter（tasks / members / send）都有重复的 server 解析逻辑，是反例。
+
+---
+
 ## 错误处理规范
 
 ### 返回 `{ error, remedy }` 而非 throw
