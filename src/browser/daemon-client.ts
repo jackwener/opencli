@@ -4,13 +4,11 @@
  * Provides a typed send() function that posts a Command and returns a Result.
  */
 
-import { DEFAULT_DAEMON_PORT } from '../constants.js';
+import { getDaemonBaseUrl, resolveDaemonConfig } from '../daemon-config.js';
 import type { BrowserSessionInfo } from '../types.js';
 import { sleep } from '../utils.js';
 import { isTransientBrowserError } from './errors.js';
 
-const DAEMON_PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
-const DAEMON_URL = `http://127.0.0.1:${DAEMON_PORT}`;
 const OPENCLI_HEADERS = { 'X-OpenCLI': '1' };
 
 let _idCounter = 0;
@@ -63,15 +61,17 @@ export interface DaemonStatus {
   pending: number;
   lastCliRequestTime: number;
   memoryMB: number;
+  host: string;
   port: number;
 }
 
 async function requestDaemon(pathname: string, init?: RequestInit & { timeout?: number }): Promise<Response> {
+  const daemonUrl = getDaemonBaseUrl(resolveDaemonConfig());
   const { timeout = 2000, headers, ...rest } = init ?? {};
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetch(`${DAEMON_URL}${pathname}`, {
+    return await fetch(`${daemonUrl}${pathname}`, {
       ...rest,
       headers: { ...OPENCLI_HEADERS, ...headers },
       signal: controller.signal,

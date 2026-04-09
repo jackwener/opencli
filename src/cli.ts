@@ -20,7 +20,7 @@ import { printCompletionScript } from './completion.js';
 import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
 import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage } from './errors.js';
-import { daemonStatus, daemonStop, daemonRestart } from './commands/daemon.js';
+import { daemonStatus, daemonStop, daemonRestart, daemonConfigGet, daemonConfigSet, daemonConfigUnset } from './commands/daemon.js';
 
 const CLI_FILE = fileURLToPath(import.meta.url);
 
@@ -948,6 +948,25 @@ cli({
     .command('restart')
     .description('Restart the daemon')
     .action(async () => { await daemonRestart(); });
+  const daemonConfigCmd = daemonCmd
+    .command('config')
+    .description('Read or update daemon config');
+  daemonConfigCmd
+    .command('get')
+    .description('Show configured daemon host and port')
+    .action(() => { daemonConfigGet(); });
+  daemonConfigCmd
+    .command('set')
+    .description('Set daemon host and port')
+    .option('--host <host>', 'Daemon listen host')
+    .option('--port <port>', 'Daemon listen port')
+    .action((opts) => { daemonConfigSet(opts); });
+  daemonConfigCmd
+    .command('unset')
+    .description('Remove daemon host and/or port from config')
+    .option('--host', 'Remove configured host')
+    .option('--port', 'Remove configured port')
+    .action((opts) => { daemonConfigUnset(opts); });
 
   // ── External CLIs ─────────────────────────────────────────────────────────
 

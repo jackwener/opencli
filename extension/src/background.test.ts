@@ -100,6 +100,12 @@ function createChromeMock() {
     cookies: {
       getAll: vi.fn(async () => []),
     },
+    storage: {
+      local: {
+        get: vi.fn(async () => ({})),
+        set: vi.fn(async () => {}),
+      },
+    },
   };
 
   return { chrome, tabs, query, create, update };

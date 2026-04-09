@@ -1,9 +1,38 @@
-const DAEMON_PORT = 19825;
-const DAEMON_HOST = "localhost";
-const DAEMON_WS_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}/ext`;
-const DAEMON_PING_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}/ping`;
 const WS_RECONNECT_BASE_DELAY = 2e3;
 const WS_RECONNECT_MAX_DELAY = 5e3;
+
+const DEFAULT_DAEMON_HOST = "127.0.0.1";
+const DEFAULT_DAEMON_PORT = 19825;
+function normalizeHost(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : void 0;
+}
+function normalizePort(value) {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 65535) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isInteger(parsed) && parsed > 0 && parsed <= 65535) return parsed;
+  }
+  return void 0;
+}
+async function getDaemonEndpointConfig(storage = chrome.storage?.local) {
+  if (!storage) {
+    return {
+      host: DEFAULT_DAEMON_HOST,
+      port: DEFAULT_DAEMON_PORT
+    };
+  }
+  const raw = await storage.get(["daemonHost", "daemonPort"]);
+  return {
+    host: normalizeHost(raw.daemonHost) ?? DEFAULT_DAEMON_HOST,
+    port: normalizePort(raw.daemonPort) ?? DEFAULT_DAEMON_PORT
+  };
+}
+function buildDaemonUrls(config) {
+  return {
+    pingUrl: `http://${config.host}:${config.port}/ping`,
+    wsUrl: `ws://${config.host}:${config.port}/ext`
+  };
+}
 
 const attached = /* @__PURE__ */ new Set();
 const networkCaptures = /* @__PURE__ */ new Map();
@@ -248,8 +277,9 @@ function registerListeners() {
     const state = networkCaptures.get(tabId);
     if (!state) return;
     if (method === "Network.requestWillBeSent") {
-      const requestId = String(params?.requestId || "");
-      const request = params?.request;
+      const networkParams = params;
+      const requestId = String(networkParams?.requestId || "");
+      const request = networkParams?.request;
       const entry = getOrCreateNetworkCaptureEntry(tabId, requestId, {
         url: request?.url,
         method: request?.method,
@@ -269,8 +299,9 @@ function registerListeners() {
       return;
     }
     if (method === "Network.responseReceived") {
-      const requestId = String(params?.requestId || "");
-      const response = params?.response;
+      const networkParams = params;
+      const requestId = String(networkParams?.requestId || "");
+      const response = networkParams?.response;
       const entry = getOrCreateNetworkCaptureEntry(tabId, requestId, {
         url: response?.url
       });
@@ -281,7 +312,8 @@ function registerListeners() {
       return;
     }
     if (method === "Network.loadingFinished") {
-      const requestId = String(params?.requestId || "");
+      const networkParams = params;
+      const requestId = String(networkParams?.requestId || "");
       const stateEntryIndex = state.requestToIndex.get(requestId);
       if (stateEntryIndex === void 0) return;
       const entry = state.entries[stateEntryIndex];
@@ -325,14 +357,16 @@ console.error = (...args) => {
 };
 async function connect() {
   if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
+  const endpoint = await getDaemonEndpointConfig();
+  const urls = buildDaemonUrls(endpoint);
   try {
-    const res = await fetch(DAEMON_PING_URL, { signal: AbortSignal.timeout(1e3) });
+    const res = await fetch(urls.pingUrl, { signal: AbortSignal.timeout(1e3) });
     if (!res.ok) return;
   } catch {
     return;
   }
   try {
-    ws = new WebSocket(DAEMON_WS_URL);
+    ws = new WebSocket(urls.wsUrl);
   } catch {
     scheduleReconnect();
     return;
@@ -479,10 +513,71 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "getStatus") {
-    sendResponse({
-      connected: ws?.readyState === WebSocket.OPEN,
-      reconnecting: reconnectTimer !== null
+    void getDaemonEndpointConfig().then((endpoint) => {
+      sendResponse({
+        connected: ws?.readyState === WebSocket.OPEN,
+        reconnecting: reconnectTimer !== null,
+        host: endpoint.host,
+        port: endpoint.port
+      });
     });
+    return true;
+  }
+  if (msg?.type === "getDaemonConfig") {
+    void getDaemonEndpointConfig().then((endpoint) => {
+      sendResponse(endpoint);
+    });
+    return true;
+  }
+  if (msg?.type === "setDaemonConfig") {
+    const nextHost = typeof msg.host === "string" ? msg.host.trim() : "";
+    const nextPort = Number.parseInt(String(msg.port ?? ""), 10);
+    const updates = {};
+    const removals = [];
+    if (nextHost) updates.daemonHost = nextHost;
+    else removals.push("daemonHost");
+    if (String(msg.port ?? "").trim()) {
+      if (!Number.isInteger(nextPort) || nextPort <= 0 || nextPort > 65535) {
+        sendResponse({ ok: false, error: "Invalid port" });
+        return true;
+      }
+      updates.daemonPort = nextPort;
+    } else {
+      removals.push("daemonPort");
+    }
+    void Promise.resolve().then(async () => {
+      if (Object.keys(updates).length > 0) {
+        await chrome.storage.local.set(updates);
+      }
+      if (removals.length > 0) {
+        await chrome.storage.local.remove(removals);
+      }
+      const endpoint = await getDaemonEndpointConfig();
+      if (ws) {
+        try {
+          ws.close();
+        } catch {
+          ws = null;
+        }
+      } else {
+        ws = null;
+      }
+      reconnectTimer = null;
+      void connect();
+      sendResponse({
+        ok: true,
+        host: endpoint.host,
+        port: endpoint.port,
+        connected: false,
+        reconnecting: true
+      });
+    }).catch((err) => {
+      sendResponse({
+        ok: false,
+        error: err instanceof Error ? err.message : String(err)
+      });
+    });
+    return true;
   }
   return false;
 });
@@ -609,7 +704,7 @@ async function resolveTab(tabId, workspace, initialUrl) {
     }
   }
   const existingSession = automationSessions.get(workspace);
-  if (existingSession?.preferredTabId !== null) {
+  if (existingSession && existingSession.preferredTabId !== null) {
     try {
       const preferredTab = await chrome.tabs.get(existingSession.preferredTabId);
       if (isDebuggableUrl(preferredTab.url)) return { tabId: preferredTab.id, tab: preferredTab };
@@ -666,7 +761,7 @@ async function handleExec(cmd, workspace) {
   if (!cmd.code) return { id: cmd.id, ok: false, error: "Missing code" };
   const tabId = await resolveTabId(cmd.tabId, workspace);
   try {
-    const aggressive = workspace.startsWith("operate:");
+    const aggressive = workspace.startsWith("browser:") || workspace.startsWith("operate:");
     const data = await evaluateAsync(tabId, cmd.code, aggressive);
     return { id: cmd.id, ok: true, data };
   } catch (err) {
@@ -870,7 +965,7 @@ async function handleCdp(cmd, workspace) {
   }
   const tabId = await resolveTabId(cmd.tabId, workspace);
   try {
-    const aggressive = workspace.startsWith("operate:");
+    const aggressive = workspace.startsWith("browser:") || workspace.startsWith("operate:");
     await ensureAttached(tabId, aggressive);
     const data = await chrome.debugger.sendCommand(
       { tabId },

@@ -6,7 +6,8 @@
  */
 
 import type { Command, Result } from './protocol';
-import { DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
+import { WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
+import { buildDaemonUrls, getDaemonEndpointConfig } from './daemon-config';
 import * as executor from './cdp';
 
 let ws: WebSocket | null = null;
@@ -43,16 +44,18 @@ console.error = (...args: unknown[]) => { _origError(...args); forwardLog('error
  */
 async function connect(): Promise<void> {
   if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
+  const endpoint = await getDaemonEndpointConfig();
+  const urls = buildDaemonUrls(endpoint);
 
   try {
-    const res = await fetch(DAEMON_PING_URL, { signal: AbortSignal.timeout(1000) });
+    const res = await fetch(urls.pingUrl, { signal: AbortSignal.timeout(1000) });
     if (!res.ok) return; // unexpected response — not our daemon
   } catch {
     return; // daemon not running — skip WebSocket to avoid console noise
   }
 
   try {
-    ws = new WebSocket(DAEMON_WS_URL);
+    ws = new WebSocket(urls.wsUrl);
   } catch {
     scheduleReconnect();
     return;
@@ -254,10 +257,75 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === 'getStatus') {
-    sendResponse({
-      connected: ws?.readyState === WebSocket.OPEN,
-      reconnecting: reconnectTimer !== null,
+    void getDaemonEndpointConfig().then((endpoint) => {
+      sendResponse({
+        connected: ws?.readyState === WebSocket.OPEN,
+        reconnecting: reconnectTimer !== null,
+        host: endpoint.host,
+        port: endpoint.port,
+      });
     });
+    return true;
+  }
+
+  if (msg?.type === 'getDaemonConfig') {
+    void getDaemonEndpointConfig().then((endpoint) => {
+      sendResponse(endpoint);
+    });
+    return true;
+  }
+
+  if (msg?.type === 'setDaemonConfig') {
+    const nextHost = typeof msg.host === 'string' ? msg.host.trim() : '';
+    const nextPort = Number.parseInt(String(msg.port ?? ''), 10);
+    const updates: Record<string, string | number> = {};
+    const removals: string[] = [];
+    if (nextHost) updates.daemonHost = nextHost;
+    else removals.push('daemonHost');
+    if (String(msg.port ?? '').trim()) {
+      if (!Number.isInteger(nextPort) || nextPort <= 0 || nextPort > 65535) {
+        sendResponse({ ok: false, error: 'Invalid port' });
+        return true;
+      }
+      updates.daemonPort = nextPort;
+    } else {
+      removals.push('daemonPort');
+    }
+    void Promise.resolve()
+      .then(async () => {
+        if (Object.keys(updates).length > 0) {
+          await chrome.storage.local.set(updates);
+        }
+        if (removals.length > 0) {
+          await chrome.storage.local.remove(removals);
+        }
+        const endpoint = await getDaemonEndpointConfig();
+        if (ws) {
+          try {
+            ws.close();
+          } catch {
+            ws = null;
+          }
+        } else {
+          ws = null;
+        }
+        reconnectTimer = null;
+        void connect();
+        sendResponse({
+          ok: true,
+          host: endpoint.host,
+          port: endpoint.port,
+          connected: false,
+          reconnecting: true,
+        });
+      })
+      .catch((err) => {
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    return true;
   }
   return false;
 });
@@ -415,7 +483,7 @@ async function resolveTab(tabId: number | undefined, workspace: string, initialU
   }
 
   const existingSession = automationSessions.get(workspace);
-  if (existingSession?.preferredTabId !== null) {
+  if (existingSession && existingSession.preferredTabId !== null) {
     try {
       const preferredTab = await chrome.tabs.get(existingSession.preferredTabId);
       if (isDebuggableUrl(preferredTab.url)) return { tabId: preferredTab.id!, tab: preferredTab };

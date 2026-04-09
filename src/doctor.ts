@@ -5,7 +5,6 @@
  */
 
 import chalk from 'chalk';
-import { DEFAULT_DAEMON_PORT } from './constants.js';
 import { BrowserBridge } from './browser/index.js';
 import { getDaemonHealth, listSessions } from './browser/daemon-client.js';
 import { getErrorMessage } from './errors.js';
@@ -31,6 +30,8 @@ export type DoctorReport = {
   cliVersion?: string;
   daemonRunning: boolean;
   daemonFlaky?: boolean;
+  daemonHost?: string;
+  daemonPort?: number;
   extensionConnected: boolean;
   extensionFlaky?: boolean;
   extensionVersion?: string;
@@ -128,6 +129,8 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
     cliVersion: opts.cliVersion,
     daemonRunning,
     daemonFlaky,
+    daemonHost: health.status?.host,
+    daemonPort: health.status?.port,
     extensionConnected,
     extensionFlaky,
     extensionVersion,
@@ -146,7 +149,7 @@ export function renderBrowserDoctorReport(report: DoctorReport): string {
     : report.daemonRunning ? chalk.green('[OK]') : chalk.red('[MISSING]');
   const daemonLabel = report.daemonFlaky
     ? 'unstable (running during live check, then stopped)'
-    : report.daemonRunning ? `running on port ${DEFAULT_DAEMON_PORT}` : 'not running';
+    : report.daemonRunning ? `running on ${report.daemonHost ?? '127.0.0.1'}:${report.daemonPort ?? 19825}` : 'not running';
   lines.push(`${daemonIcon} Daemon: ${daemonLabel}`);
 
   // Extension status

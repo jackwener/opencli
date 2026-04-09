@@ -16,16 +16,19 @@
  * Lifecycle:
  *   - Auto-spawned by opencli on first browser command
  *   - Auto-exits after idle timeout (default 4h, configurable via OPENCLI_DAEMON_TIMEOUT)
- *   - Listens on localhost:19825
+ *   - Listens on 127.0.0.1:19825 by default
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
-import { DEFAULT_DAEMON_PORT, DEFAULT_DAEMON_IDLE_TIMEOUT } from './constants.js';
+import { DEFAULT_DAEMON_IDLE_TIMEOUT } from './constants.js';
+import { resolveDaemonConfig } from './daemon-config.js';
 import { EXIT_CODES } from './errors.js';
 import { IdleManager } from './idle-manager.js';
 
-const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
+const DAEMON_CONFIG = resolveDaemonConfig();
+const HOST = DAEMON_CONFIG.host;
+const PORT = DAEMON_CONFIG.port;
 const IDLE_TIMEOUT = Number(process.env.OPENCLI_DAEMON_TIMEOUT ?? DEFAULT_DAEMON_IDLE_TIMEOUT);
 
 // ─── State ───────────────────────────────────────────────────────────
@@ -135,13 +138,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       pending: pending.size,
       lastCliRequestTime: idleManager.lastCliRequestTime,
       memoryMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
+      host: HOST,
       port: PORT,
     });
     return;
   }
 
   if (req.method === 'GET' && pathname === '/logs') {
-    const params = new URL(url, `http://localhost:${PORT}`).searchParams;
+    const params = new URL(url, `http://${HOST}:${PORT}`).searchParams;
     const level = params.get('level');
     const filtered = level
       ? logBuffer.filter(e => e.level === level)
@@ -210,7 +214,7 @@ const wss = new WebSocketServer({
   verifyClient: ({ req }: { req: IncomingMessage }) => {
     // Block browser-originated WebSocket connections.  Browsers don't
     // enforce CORS on WebSocket, so a malicious webpage could connect to
-    // ws://localhost:19825/ext and impersonate the Extension.  Real Chrome
+    // ws://127.0.0.1:19825/ext and impersonate the Extension.  Real Chrome
     // Extensions send origin chrome-extension://<id>.
     const origin = req.headers['origin'] as string | undefined;
     return !origin || origin.startsWith('chrome-extension://');
@@ -308,8 +312,8 @@ wss.on('connection', (ws: WebSocket) => {
 
 // ─── Start ───────────────────────────────────────────────────────────
 
-httpServer.listen(PORT, '127.0.0.1', () => {
-  console.error(`[daemon] Listening on http://127.0.0.1:${PORT}`);
+httpServer.listen(PORT, HOST, () => {
+  console.error(`[daemon] Listening on http://${HOST}:${PORT}`);
   idleManager.onCliRequest();
 });
 

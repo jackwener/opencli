@@ -35,7 +35,7 @@ OPENCLI_CDP_TARGET=detail.1688.com opencli 1688 item 841141931191 -f json
 opencli daemon status
 
 # View extension logs
-curl localhost:19825/logs
+curl http://127.0.0.1:19825/logs
 
 # Stop or restart the daemon
 opencli daemon stop
@@ -46,6 +46,7 @@ opencli doctor
 ```
 
 > The daemon auto-exits after 4 hours of inactivity (no CLI requests and no extension connection). Override with `OPENCLI_DAEMON_TIMEOUT` (milliseconds, `0` = never timeout).
+> If you changed the daemon address or port, use the values from `~/.opencli/daemon.yaml` or `opencli daemon status`.
 
 ### Desktop adapter connection issues
 

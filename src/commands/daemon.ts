@@ -6,6 +6,7 @@
  */
 
 import chalk from 'chalk';
+import { loadDaemonConfig, saveDaemonConfig, type DaemonFileConfig, getDaemonConfigPath } from '../daemon-config.js';
 import { fetchDaemonStatus, requestDaemonShutdown } from '../browser/daemon-client.js';
 import { formatDuration } from '../download/progress.js';
 
@@ -30,6 +31,7 @@ export async function daemonStatus(): Promise<void> {
   console.log(`Extension: ${status.extensionConnected ? chalk.green('connected') : chalk.yellow('disconnected')}`);
   console.log(`Last CLI request: ${formatTimeSince(status.lastCliRequestTime)}`);
   console.log(`Memory: ${status.memoryMB} MB`);
+  console.log(`Host: ${status.host}`);
   console.log(`Port: ${status.port}`);
 }
 
@@ -77,4 +79,47 @@ export async function daemonRestart(): Promise<void> {
     console.error(chalk.red(`Failed to restart daemon: ${err instanceof Error ? err.message : err}`));
     process.exitCode = 1;
   }
+}
+
+export function daemonConfigGet(): void {
+  const config = loadDaemonConfig();
+  const configPath = getDaemonConfigPath();
+  if (config.host === undefined && config.port === undefined) {
+    console.log(chalk.dim(`No daemon config found at ${configPath}`));
+    return;
+  }
+
+  console.log(`Config: ${configPath}`);
+  if (config.host !== undefined) console.log(`Host: ${config.host}`);
+  if (config.port !== undefined) console.log(`Port: ${config.port}`);
+}
+
+export function daemonConfigSet(opts: { host?: string; port?: string | number }): void {
+  const current = loadDaemonConfig();
+  const next: DaemonFileConfig = { ...current };
+
+  if (typeof opts.host === 'string' && opts.host.trim()) {
+    next.host = opts.host.trim();
+  }
+  if (opts.port !== undefined) {
+    const parsed = Number.parseInt(String(opts.port), 10);
+    if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
+      console.error(chalk.red(`Invalid port: ${opts.port}`));
+      process.exitCode = 1;
+      return;
+    }
+    next.port = parsed;
+  }
+
+  saveDaemonConfig(next);
+  console.log(chalk.green(`Saved daemon config to ${getDaemonConfigPath()}`));
+}
+
+export function daemonConfigUnset(opts: { host?: boolean; port?: boolean }): void {
+  const current = loadDaemonConfig();
+  const next: DaemonFileConfig = { ...current };
+  if (opts.host) delete next.host;
+  if (opts.port) delete next.port;
+  saveDaemonConfig(next);
+  console.log(chalk.green(`Updated daemon config at ${getDaemonConfigPath()}`));
 }

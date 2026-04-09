@@ -3,9 +3,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const {
   fetchDaemonStatusMock,
   requestDaemonShutdownMock,
+  loadDaemonConfigMock,
+  saveDaemonConfigMock,
+  getDaemonConfigPathMock,
 } = vi.hoisted(() => ({
   fetchDaemonStatusMock: vi.fn(),
   requestDaemonShutdownMock: vi.fn(),
+  loadDaemonConfigMock: vi.fn(),
+  saveDaemonConfigMock: vi.fn(),
+  getDaemonConfigPathMock: vi.fn(() => '/tmp/.opencli/daemon.yaml'),
 }));
 
 vi.mock('chalk', () => ({
@@ -29,7 +35,13 @@ vi.mock('../browser/daemon-client.js', () => ({
   requestDaemonShutdown: requestDaemonShutdownMock,
 }));
 
-import { daemonStatus, daemonStop, daemonRestart } from './daemon.js';
+vi.mock('../daemon-config.js', () => ({
+  loadDaemonConfig: loadDaemonConfigMock,
+  saveDaemonConfig: saveDaemonConfigMock,
+  getDaemonConfigPath: getDaemonConfigPathMock,
+}));
+
+import { daemonStatus, daemonStop, daemonRestart, daemonConfigGet, daemonConfigSet, daemonConfigUnset } from './daemon.js';
 
 describe('daemon commands', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -40,6 +52,8 @@ describe('daemon commands', () => {
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     fetchDaemonStatusMock.mockReset();
     requestDaemonShutdownMock.mockReset();
+    loadDaemonConfigMock.mockReset();
+    saveDaemonConfigMock.mockReset();
   });
 
   afterEach(() => {
@@ -73,6 +87,7 @@ describe('daemon commands', () => {
         pending: 0,
         lastCliRequestTime: Date.now() - 30_000,
         memoryMB: 64,
+        host: '127.0.0.1',
         port: 19825,
       };
 
@@ -85,6 +100,7 @@ describe('daemon commands', () => {
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('1h 1m'));
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('connected'));
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('64 MB'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('127.0.0.1'));
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('19825'));
     });
 
@@ -97,6 +113,7 @@ describe('daemon commands', () => {
         pending: 0,
         lastCliRequestTime: Date.now() - 5000,
         memoryMB: 32,
+        host: '127.0.0.1',
         port: 19825,
       };
 
@@ -126,6 +143,7 @@ describe('daemon commands', () => {
         pending: 0,
         lastCliRequestTime: Date.now(),
         memoryMB: 50,
+        host: '127.0.0.1',
         port: 19825,
       });
       requestDaemonShutdownMock.mockResolvedValue(true);
@@ -145,6 +163,7 @@ describe('daemon commands', () => {
         pending: 0,
         lastCliRequestTime: Date.now(),
         memoryMB: 50,
+        host: '127.0.0.1',
         port: 19825,
       });
       requestDaemonShutdownMock.mockResolvedValue(false);
@@ -164,6 +183,7 @@ describe('daemon commands', () => {
       pending: 0,
       lastCliRequestTime: Date.now(),
       memoryMB: 50,
+      host: '127.0.0.1',
       port: 19825,
     };
 
@@ -199,6 +219,51 @@ describe('daemon commands', () => {
 
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to stop daemon'));
       expect(mockConnect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('daemon config', () => {
+    it('shows missing config when unset', () => {
+      loadDaemonConfigMock.mockReturnValue({});
+
+      daemonConfigGet();
+
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('No daemon config found'));
+    });
+
+    it('shows configured host and port', () => {
+      loadDaemonConfigMock.mockReturnValue({ host: '0.0.0.0', port: 29876 });
+
+      daemonConfigGet();
+
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('/tmp/.opencli/daemon.yaml'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('0.0.0.0'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('29876'));
+    });
+
+    it('writes updated daemon config', () => {
+      loadDaemonConfigMock.mockReturnValue({ host: '127.0.0.1' });
+
+      daemonConfigSet({ port: '29876' });
+
+      expect(saveDaemonConfigMock).toHaveBeenCalledWith({ host: '127.0.0.1', port: 29876 });
+    });
+
+    it('rejects invalid port values', () => {
+      loadDaemonConfigMock.mockReturnValue({});
+
+      daemonConfigSet({ port: 'abc' });
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid port'));
+      expect(saveDaemonConfigMock).not.toHaveBeenCalled();
+    });
+
+    it('unsets selected keys from daemon config', () => {
+      loadDaemonConfigMock.mockReturnValue({ host: '0.0.0.0', port: 29876 });
+
+      daemonConfigUnset({ host: true, port: false });
+
+      expect(saveDaemonConfigMock).toHaveBeenCalledWith({ port: 29876 });
     });
   });
 });

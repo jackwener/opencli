@@ -47,3 +47,24 @@ opencli daemon restart   # Stop + restart
 ```
 
 Override the timeout via the `OPENCLI_DAEMON_TIMEOUT` environment variable (milliseconds). Set to `0` to keep the daemon alive indefinitely.
+
+To customize the daemon bind address and port persistently, create `~/.opencli/daemon.yaml`:
+
+```yaml
+host: 127.0.0.1
+port: 19825
+```
+
+- `host`: the address the daemon listens on
+- `port`: the daemon HTTP/WebSocket port
+
+If `host` is set to `0.0.0.0`, the CLI automatically connects via `127.0.0.1`.
+
+Environment variables still work and take precedence:
+
+```bash
+OPENCLI_DAEMON_HOST=0.0.0.0
+OPENCLI_DAEMON_PORT=29876
+```
+
+The browser extension popup also lets you set the daemon host and port it should connect to.

@@ -325,7 +325,7 @@ See **[TESTING.md](./TESTING.md)** for how to run and write tests.
 - **"attach failed: Cannot access a chrome-extension:// URL"** — Another extension may be interfering. Try disabling other extensions temporarily.
 - **Empty data or 'Unauthorized' error** — Your Chrome/Chromium login session may have expired. Navigate to the target site and log in again.
 - **Node API errors** — Ensure Node.js >= 20. Some dependencies require modern Node APIs.
-- **Daemon issues** — Check status: `curl localhost:19825/status` · View logs: `curl localhost:19825/logs`
+- **Daemon issues** — Check status: `opencli daemon status` · View logs: `curl http://127.0.0.1:19825/logs`
 
 ## Star History
 

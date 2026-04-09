@@ -60,6 +60,47 @@
       font-size: 11px;
       color: #999;
     }
+    .config {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .config-row {
+      display: grid;
+      gap: 4px;
+    }
+    .config-row label {
+      font-size: 11px;
+      color: #666;
+    }
+    .config-row input {
+      width: 100%;
+      border: 1px solid #d8dde6;
+      border-radius: 6px;
+      padding: 7px 8px;
+      font-size: 12px;
+    }
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .actions button {
+      border: 0;
+      border-radius: 6px;
+      padding: 7px 10px;
+      background: #007aff;
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .save-status {
+      font-size: 11px;
+      color: #666;
+      min-height: 14px;
+    }
     .footer a { color: #007aff; text-decoration: none; }
     .footer a:hover { text-decoration: underline; }
   </style>
@@ -75,6 +116,20 @@
   </div>
   <div class="hint" id="hint">
     This is normal. The extension connects automatically when you run any <code>opencli</code> command.
+  </div>
+  <div class="config">
+    <div class="config-row">
+      <label for="daemon-host">Daemon Host</label>
+      <input id="daemon-host" type="text" placeholder="127.0.0.1">
+    </div>
+    <div class="config-row">
+      <label for="daemon-port">Daemon Port</label>
+      <input id="daemon-port" type="number" min="1" max="65535" placeholder="19825">
+    </div>
+    <div class="actions">
+      <button id="save">Save</button>
+      <span class="save-status" id="save-status"></span>
+    </div>
   </div>
   <div class="footer">
     <a href="https://github.com/jackwener/opencli" target="_blank">Documentation</a>

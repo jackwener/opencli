@@ -8,9 +8,9 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { IPage } from '../types.js';
 import type { IBrowserFactory } from '../runtime.js';
+import { resolveDaemonConfig } from '../daemon-config.js';
 import { Page } from './page.js';
 import { getDaemonHealth } from './daemon-client.js';
-import { DEFAULT_DAEMON_PORT } from '../constants.js';
 import { BrowserConnectError } from '../errors.js';
 
 const DAEMON_SPAWN_TIMEOUT = 10000; // 10s to wait for daemon + extension
@@ -123,7 +123,7 @@ export class BrowserBridge implements IBrowserFactory {
 
     throw new BrowserConnectError(
       'Failed to start opencli daemon',
-      `Try running manually:\n  node ${daemonPath}\nMake sure port ${DEFAULT_DAEMON_PORT} is available.`,
+      `Try running manually:\n  node ${daemonPath}\nMake sure ${resolveDaemonConfig().host}:${resolveDaemonConfig().port} is available.`,
       'daemon-not-running',
     );
   }

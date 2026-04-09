@@ -6,7 +6,7 @@
  */
 
 import { BrowserConnectError, type BrowserConnectKind } from '../errors.js';
-import { DEFAULT_DAEMON_PORT } from '../constants.js';
+import { resolveDaemonConfig } from '../daemon-config.js';
 
 /**
  * Transient browser error patterns — shared across daemon-client, pipeline executor,
@@ -36,12 +36,14 @@ export type ConnectFailureKind = BrowserConnectKind;
 
 export function formatBrowserConnectError(kind: ConnectFailureKind, detail?: string): BrowserConnectError {
   switch (kind) {
-    case 'daemon-not-running':
+    case 'daemon-not-running': {
+      const daemon = resolveDaemonConfig();
       return new BrowserConnectError(
         'Cannot connect to opencli daemon.' + (detail ? `\n\n${detail}` : ''),
-        `The daemon should auto-start. If it keeps failing, make sure port ${DEFAULT_DAEMON_PORT} is available.`,
+        `The daemon should auto-start. If it keeps failing, make sure ${daemon.host}:${daemon.port} is available.`,
         kind,
       );
+    }
     case 'extension-not-connected':
       return new BrowserConnectError(
         'Browser Bridge extension is not connected.' + (detail ? `\n\n${detail}` : ''),

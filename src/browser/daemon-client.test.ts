@@ -25,6 +25,7 @@ describe('daemon-client', () => {
       pending: 0,
       lastCliRequestTime: Date.now(),
       memoryMB: 32,
+      host: '127.0.0.1',
       port: 19825,
     };
     const fetchMock = vi.mocked(fetch);
@@ -77,6 +78,7 @@ describe('daemon-client', () => {
       pending: 0,
       lastCliRequestTime: Date.now(),
       memoryMB: 16,
+      host: '127.0.0.1',
       port: 19825,
     };
     vi.mocked(fetch).mockResolvedValue({
@@ -97,6 +99,7 @@ describe('daemon-client', () => {
       pending: 0,
       lastCliRequestTime: Date.now(),
       memoryMB: 32,
+      host: '127.0.0.1',
       port: 19825,
     };
     vi.mocked(fetch).mockResolvedValue({
