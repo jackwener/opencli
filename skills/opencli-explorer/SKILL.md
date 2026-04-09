@@ -40,7 +40,7 @@ tags: [opencli, adapter, browser, api-discovery, cli, web-scraping, automation, 
 | 3. 模拟交互 | `opencli browser click <N>` + `opencli browser wait time 2` | 点击"字幕""评论""关注"等按钮 |
 | 4. 二次抓包 | `opencli browser network` | 对比步骤 2，找出新触发的 API |
 | 5. 查看响应 | `opencli browser network --detail <N>` | 查看目标 API 的完整响应体 |
-| 6. 验证 API | `opencli browser eval "fetch(url, {credentials:'include'}).then(r=>r.json())"` | 验证 API 可复现 |
+| 6. 验证 API | `opencli browser eval "fetch('<API URL>', {credentials:'include'}).then(r=>r.json())"` | 用实际 URL 替换 `<API URL>`，验证 API 可复现 |
 | 7. 写代码 | — | 基于确认的 API 写适配器 |
 
 ### 常犯错误
@@ -91,9 +91,22 @@ tags: [opencli, adapter, browser, api-discovery, cli, web-scraping, automation, 
 
 ## Step 1: 发现 API
 
-### 1a. 自动化发现（推荐）
+### 1a. 浏览器主动探索（主路径）
 
-OpenCLI 内置 Deep Explore，自动分析网站网络请求：
+**必须先用 `opencli browser` 主动打开网站、观察请求、模拟交互。** 这是发现 API 的主路径：
+
+```bash
+opencli browser open https://www.example.com        # 打开目标页面
+opencli browser state                                # 观察可交互元素
+opencli browser network                              # 查看已捕获的 API 请求
+opencli browser click <N>                            # 点击按钮/标签触发懒加载 API
+opencli browser network                              # 再看一次，找新触发的 API
+opencli browser network --detail <N>                 # 查看目标 API 完整响应体
+```
+
+### 1b. `opencli explore` 辅助分析（补充，不替代浏览器探索）
+
+`opencli explore` 是自动化辅助工具，用于**补充**浏览器探索的发现。它能批量分析请求并生成结构化报告，但**不能替代**浏览器主动探索——懒加载 API、需要交互才触发的请求，它发现不了。
 
 ```bash
 opencli explore https://www.example.com --site mysite
@@ -108,15 +121,9 @@ opencli explore https://www.example.com --site mysite
 | `capabilities.json` | 推理出的功能（`hot`、`search`、`feed`…），含置信度和推荐参数 |
 | `auth.json` | 认证方式检测（Cookie/Header/无认证），策略候选列表 |
 
-### 1b. 手动抓包验证
-
-Explore 的自动分析可能不完美，用 verbose 模式手动确认：
+### 1c. 已有命令的数据流查看
 
 ```bash
-# 在浏览器中打开目标页面，观察网络请求
-opencli explore https://www.example.com --site mysite -v
-
-# 或直接用 evaluate 测试 API
 opencli bilibili hot -v   # 查看已有命令的 pipeline 每步数据流
 ```
 
