@@ -188,18 +188,26 @@ const FORBIDDEN_EXPR_PATTERNS = /\b(constructor|__proto__|prototype|globalThis|p
  * the expensive JSON round-trip is performed only once. The WeakMap
  * lets entries be GC'd when the source object is no longer referenced.
  */
-const _sanitizeCache = new WeakMap<object, unknown>();
+/**
+ * Cache serialized JSON strings (not parsed objects) by source reference.
+ * Caching the parsed object would be unsafe: the VM sandbox could mutate it,
+ * and the polluted version would leak to subsequent calls. By caching the
+ * string and returning a fresh JSON.parse() each time, every evaluation gets
+ * its own clean deep-copy while still avoiding redundant JSON.stringify()
+ * for the same unchanged source object across loop iterations.
+ */
+const _sanitizeCache = new WeakMap<object, string>();
 
 function sanitizeContext(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj !== 'object' && typeof obj !== 'function') return obj;
   const objRef = obj as object;
   const cached = _sanitizeCache.get(objRef);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) return JSON.parse(cached);
   try {
-    const result = JSON.parse(JSON.stringify(obj));
-    _sanitizeCache.set(objRef, result);
-    return result;
+    const jsonStr = JSON.stringify(obj);
+    _sanitizeCache.set(objRef, jsonStr);
+    return JSON.parse(jsonStr);
   } catch {
     return {};
   }
@@ -265,6 +273,13 @@ function getReusableContext(): { sandbox: Record<string, unknown>; context: vm.C
   return { sandbox: _reusableSandbox, context: _reusableContext };
 }
 
+/** Properties that are part of the sandbox's initial shape and safe to keep. */
+const SANDBOX_WHITELIST = new Set([
+  'args', 'item', 'data', 'index',
+  'encodeURIComponent', 'decodeURIComponent',
+  'JSON', 'Math', 'Number', 'String', 'Boolean', 'Array', 'Date',
+]);
+
 function evalJsExpr(expr: string, ctx: RenderContext): unknown {
   // Guard against absurdly long expressions that could indicate injection.
   if (expr.length > 2000) return undefined;
@@ -275,6 +290,15 @@ function evalJsExpr(expr: string, ctx: RenderContext): unknown {
   try {
     const script = getOrCompileScript(expr);
     const { sandbox, context } = getReusableContext();
+
+    // Clean non-whitelisted properties that a previous script may have added.
+    // Without this, `${{ x = 42 }}` would leak `x` into subsequent evaluations.
+    for (const key of Object.keys(sandbox)) {
+      if (!SANDBOX_WHITELIST.has(key)) {
+        delete sandbox[key];
+      }
+    }
+
     // Update mutable sandbox properties — sanitizeContext severs prototype chains.
     sandbox.args = sanitizeContext(ctx.args ?? {});
     sandbox.item = sanitizeContext(ctx.item ?? {});

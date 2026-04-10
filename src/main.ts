@@ -88,8 +88,12 @@ installNodeNetwork();
 
 // Parallelise independent startup I/O:
 //  - Built-in adapter discovery has no dependency on user-dir setup.
-//  - ensureUserCliCompatShims and ensureUserAdapters operate on different paths.
-// User-CLI discovery must wait for shims + adapters; plugins run last to allow overrides.
+//  - ensureUserCliCompatShims and ensureUserAdapters operate on different paths
+//    (~/.opencli/node_modules/ vs ~/.opencli/clis/ + adapter-manifest.json).
+//  - registerCommand() overwrites on name collision (see registry.ts), so
+//    user-CLI discovery MUST run after built-in discovery to preserve the
+//    intended override order (user adapters override built-in ones).
+//  - discoverPlugins runs last: plugins may override both built-in and user CLIs.
 const [, ,] = await Promise.all([
   ensureUserCliCompatShims(),
   ensureUserAdapters(),
