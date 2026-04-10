@@ -80,4 +80,18 @@ describe('procurement detail runner', () => {
     })).rejects.toThrow('[taxonomy=extraction_drift]');
     expect(attempts).toBe(1);
   });
+
+  it('rejects captcha/verification pages as selector_drift', async () => {
+    const page = createPage(async () => ({
+      title: '验证码',
+      detailText: '请在下图依次点击：槨畽黛',
+      publishTime: '',
+    }));
+
+    await expect(runProcurementDetail(page as never, {
+      url: 'https://www.jianyu360.cn/nologin/content/ABC.html',
+      site: 'jianyu',
+      query: '电梯',
+    })).rejects.toThrow('[taxonomy=selector_drift]');
+  });
 });

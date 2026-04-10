@@ -43,7 +43,13 @@ const NAVIGATION_PATH_PREFIXES = [
   '/exhibition/',
   '/swordfish/page_big_pc/search/',
 ];
+const BLOCKED_DETAIL_PATH_PREFIXES = [
+  '/nologin/content/',
+  '/article/bdprivate/',
+];
 const JIANYU_API_TYPES = ['fType', 'eType', 'vType', 'mType'] as const;
+
+type DetailStatus = 'ok' | 'blocked' | 'entry_only';
 
 interface JianyuApiPayload {
   antiVerify?: number;
@@ -103,6 +109,94 @@ function isLikelyNavigationUrl(rawUrl: string): boolean {
   }
 }
 
+function classifyDetailStatus(rawUrl: string): { detail_status: DetailStatus; detail_reason: string } {
+  const urlText = cleanText(rawUrl);
+  if (!urlText) {
+    return {
+      detail_status: 'blocked',
+      detail_reason: 'missing_url',
+    };
+  }
+
+  try {
+    const parsed = new URL(urlText);
+    const path = cleanText(parsed.pathname).toLowerCase().replace(/\/+$/, '/') || '/';
+    if (path.includes('/jybx/')) {
+      return {
+        detail_status: 'ok',
+        detail_reason: 'jybx_detail',
+      };
+    }
+    if (BLOCKED_DETAIL_PATH_PREFIXES.some((prefix) => path.includes(prefix))) {
+      return {
+        detail_status: 'blocked',
+        detail_reason: 'verification_or_paid_wall',
+      };
+    }
+    if (isLikelyNavigationUrl(urlText)) {
+      return {
+        detail_status: 'entry_only',
+        detail_reason: 'navigation_or_profile_entry',
+      };
+    }
+    return {
+      detail_status: 'entry_only',
+      detail_reason: 'non_jybx_entry',
+    };
+  } catch {
+    return {
+      detail_status: 'blocked',
+      detail_reason: 'invalid_url',
+    };
+  }
+}
+
+function extractNoticeId(rawUrl: string): string {
+  const value = cleanText(rawUrl);
+  if (!value) return '';
+  try {
+    const parsed = new URL(value);
+    const path = cleanText(parsed.pathname);
+    const jybxMatched = path.match(/\/jybx\/([^/?#]+)\.html$/i);
+    if (jybxMatched?.[1]) return cleanText(jybxMatched[1]);
+    const segments = path.split('/').filter(Boolean);
+    const tail = cleanText(segments[segments.length - 1] || '');
+    return cleanText(tail.replace(/\.html?$/i, ''));
+  } catch {
+    return '';
+  }
+}
+
+function isWithinSinceDays(
+  dateText: string,
+  sinceDays: number,
+  now: Date = new Date(),
+): boolean {
+  const normalized = normalizeDate(dateText);
+  if (!normalized) return false;
+  const timestamp = Date.parse(`${normalized}T00:00:00Z`);
+  if (!Number.isFinite(timestamp)) return false;
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const deltaDays = Math.floor((today - timestamp) / (24 * 3600 * 1000));
+  return deltaDays >= 0 && deltaDays <= sinceDays;
+}
+
+function dedupeByNoticeKey<T extends { source_id?: string; notice_id?: string; title: string; url: string }>(items: T[]): T[] {
+  const deduped: T[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    const source = cleanText(item.source_id || '');
+    const notice = cleanText(item.notice_id || '');
+    const key = source && notice
+      ? `${source}\t${notice}`
+      : `${cleanText(item.title)}\t${cleanText(item.url)}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
+}
+
 function filterNavigationRows(query: string, items: Array<{
   title?: string;
   url?: string;
@@ -124,6 +218,8 @@ function filterNavigationRows(query: string, items: Array<{
     }))
     .filter((item) => {
       if (!item.title || !item.url) return false;
+      const detailSignal = classifyDetailStatus(item.url);
+      if (detailSignal.detail_status !== 'ok') return false;
       const haystack = `${item.title} ${item.contextText}`.toLowerCase();
       const hasQuery = queryTokens.length === 0 || queryTokens.some((token) => haystack.includes(token));
       const hasProcurementHint = PROCUREMENT_TITLE_HINT.test(`${item.title} ${item.contextText}`);
@@ -491,11 +587,13 @@ cli({
   args: [
     { name: 'query', required: true, positional: true, help: 'Search keyword, e.g. "procurement"' },
     { name: 'limit', type: 'int', default: 20, help: 'Number of results (max 50)' },
+    { name: 'since_days', type: 'int', default: 30, help: 'Only keep rows published within N days' },
   ],
-  columns: ['rank', 'content_type', 'title', 'publish_time', 'project_code', 'budget_or_limit', 'url'],
+  columns: ['rank', 'content_type', 'title', 'published_at', 'detail_status', 'project_code', 'budget_or_limit', 'url'],
   func: async (page, kwargs) => {
     const query = cleanText(kwargs.query);
     const limit = Math.max(1, Math.min(Number(kwargs.limit) || 20, 50));
+    const sinceDays = Math.max(1, Math.min(Number(kwargs.since_days) || 30, 3650));
     const apiResult = await fetchJianyuApiRows(page, query, limit);
     const mergedRows = dedupeCandidates(filterNavigationRows(query, apiResult.rows));
 
@@ -512,11 +610,31 @@ cli({
       const indexedRows = await fetchDuckDuckGoIndexRows(query, limit);
       const filteredIndexedRows = dedupeCandidates(filterNavigationRows(query, indexedRows));
       if (filteredIndexedRows.length > 0) {
-        return toProcurementSearchRecords(filteredIndexedRows, {
+        const records = toProcurementSearchRecords(filteredIndexedRows, {
           site: SITE,
           query,
           limit,
         });
+        const enriched = dedupeByNoticeKey(records.map((row) => {
+          const detailSignal = classifyDetailStatus(row.url);
+          const publishedAt = normalizeDate(row.publish_time || row.date);
+          return {
+            ...row,
+            source_id: SITE,
+            notice_id: extractNoticeId(row.url),
+            published_at: publishedAt,
+            detail_status: detailSignal.detail_status,
+            detail_reason: detailSignal.detail_reason,
+          };
+        }))
+          .filter((row) => row.detail_status === 'ok')
+          .filter((row) => isWithinSinceDays(row.published_at, sinceDays))
+          .slice(0, limit)
+          .map((row, index) => ({
+            ...row,
+            rank: index + 1,
+          }));
+        return enriched;
       }
 
       if (apiResult.challenge || await isAuthRequired(page)) {
@@ -527,11 +645,31 @@ cli({
       }
     }
 
-    return toProcurementSearchRecords(rows, {
+    const records = toProcurementSearchRecords(rows, {
       site: SITE,
       query,
       limit,
     });
+    const enriched = dedupeByNoticeKey(records.map((row) => {
+      const detailSignal = classifyDetailStatus(row.url);
+      const publishedAt = normalizeDate(row.publish_time || row.date);
+      return {
+        ...row,
+        source_id: SITE,
+        notice_id: extractNoticeId(row.url),
+        published_at: publishedAt,
+        detail_status: detailSignal.detail_status,
+        detail_reason: detailSignal.detail_reason,
+      };
+    }))
+      .filter((row) => row.detail_status === 'ok')
+      .filter((row) => isWithinSinceDays(row.published_at, sinceDays))
+      .slice(0, limit)
+      .map((row, index) => ({
+        ...row,
+        rank: index + 1,
+      }));
+    return enriched;
   },
 });
 
@@ -547,4 +685,8 @@ export const __test__ = {
   normalizeApiRow,
   fetchJianyuApiRows,
   collectApiRowsFromResponses,
+  classifyDetailStatus,
+  extractNoticeId,
+  isWithinSinceDays,
+  dedupeByNoticeKey,
 };
