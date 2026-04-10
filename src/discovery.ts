@@ -144,7 +144,6 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
     const manifest = JSON.parse(raw) as ManifestEntry[];
     for (const entry of manifest) {
       if (!entry.modulePath) continue;
-      const strategy = parseStrategy(entry.strategy ?? 'cookie');
       const modulePath = path.resolve(clisDir, entry.modulePath);
       const cmd: InternalCliCommand = {
         site: entry.site,
@@ -152,8 +151,8 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         aliases: entry.aliases,
         description: entry.description ?? '',
         domain: entry.domain,
-        strategy,
-        browser: entry.browser ?? true,
+        strategy: parseStrategy(entry.strategy),
+        browser: entry.browser,
         args: entry.args ?? [],
         columns: entry.columns,
         pipeline: entry.pipeline,
@@ -165,6 +164,7 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         _lazy: true,
         _modulePath: modulePath,
       };
+      // normalizeCommand inside registerCommand handles strategy → browser/navigateBefore
       registerCommand(cmd);
     }
     return true;

@@ -10,7 +10,7 @@
  * 6. Lifecycle hooks (onBeforeExecute / onAfterExecute)
  */
 
-import { type CliCommand, type InternalCliCommand, type Arg, type CommandArgs, Strategy, getRegistry, fullName } from './registry.js';
+import { type CliCommand, type InternalCliCommand, type Arg, type CommandArgs, getRegistry, fullName } from './registry.js';
 import type { IPage } from './types.js';
 import { pathToFileURL } from 'node:url';
 import { executePipeline } from './pipeline/index.js';
@@ -111,10 +111,7 @@ async function runCommand(
 function resolvePreNav(cmd: CliCommand): string | null {
   if (cmd.navigateBefore === false) return null;
   if (typeof cmd.navigateBefore === 'string') return cmd.navigateBefore;
-
-  if ((cmd.strategy === Strategy.COOKIE || cmd.strategy === Strategy.HEADER) && cmd.domain) {
-    return `https://${cmd.domain}`;
-  }
+  // strategy → navigateBefore expansion already happened in normalizeCommand().
   return null;
 }
 
