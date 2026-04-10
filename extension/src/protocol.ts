@@ -27,7 +27,9 @@ export interface Command {
   id: string;
   /** Action type */
   action: Action;
-  /** Target tab ID (omit for active tab) */
+  /** Target page identity (targetId). Cross-layer contract — preferred over tabId. */
+  page?: string;
+  /** @deprecated Legacy tab ID — use `page` (targetId) instead. Kept for backward compat. */
   tabId?: number;
   /** JS code to evaluate in page context (exec action) */
   code?: string;
@@ -63,6 +65,8 @@ export interface Command {
   cdpMethod?: string;
   /** CDP method params for 'cdp' action */
   cdpParams?: Record<string, unknown>;
+  /** When true, automation windows are created in the foreground (focused) */
+  windowFocused?: boolean;
 }
 
 export interface Result {
@@ -74,6 +78,8 @@ export interface Result {
   data?: unknown;
   /** Error message on failure */
   error?: string;
+  /** Page identity (targetId) — present only on page-scoped command responses */
+  page?: string;
 }
 
 /** Default daemon port */

@@ -21,7 +21,7 @@ import { printCompletionScript } from './completion.js';
 import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
 import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage } from './errors.js';
-import { daemonStatus, daemonStop, daemonRestart } from './commands/daemon.js';
+import { daemonStop } from './commands/daemon.js';
 
 const CLI_FILE = fileURLToPath(import.meta.url);
 
@@ -620,7 +620,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         const fs = await import('node:fs');
         const path = await import('node:path');
         const dir = path.join(os.homedir(), '.opencli', 'clis', site);
-        const filePath = path.join(dir, `${command}.ts`);
+        const filePath = path.join(dir, `${command}.js`);
 
         if (fs.existsSync(filePath)) {
           console.log(`Adapter already exists: ${filePath}`);
@@ -684,7 +684,7 @@ cli({
 
         const { execFileSync } = await import('node:child_process');
         const os = await import('node:os');
-        const filePath = path.join(os.homedir(), '.opencli', 'clis', site, `${command}.ts`);
+        const filePath = path.join(os.homedir(), '.opencli', 'clis', site, `${command}.js`);
         if (!fs.existsSync(filePath)) {
           console.error(`Adapter not found: ${filePath}`);
           console.error(`Run "opencli browser init ${name}" to create it.`);
@@ -958,17 +958,9 @@ cli({
   // ── Built-in: daemon ──────────────────────────────────────────────────────
   const daemonCmd = program.command('daemon').description('Manage the opencli daemon');
   daemonCmd
-    .command('status')
-    .description('Show daemon status')
-    .action(async () => { await daemonStatus(); });
-  daemonCmd
     .command('stop')
     .description('Stop the daemon')
     .action(async () => { await daemonStop(); });
-  daemonCmd
-    .command('restart')
-    .description('Restart the daemon')
-    .action(async () => { await daemonRestart(); });
 
   // ── External CLIs ─────────────────────────────────────────────────────────
 
@@ -1032,6 +1024,7 @@ cli({
     .description('Start Anthropic-compatible API proxy for Antigravity')
     .option('--port <port>', 'Server port (default: 8082)', '8082')
     .action(async (opts) => {
+      // @ts-expect-error JS adapter — no type declarations
       const { startServe } = await import('../clis/antigravity/serve.js');
       await startServe({ port: parseInt(opts.port) });
     });

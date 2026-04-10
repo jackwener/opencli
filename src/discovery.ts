@@ -1,9 +1,9 @@
 /**
- * CLI discovery: finds TS CLI definitions and registers them.
+ * CLI discovery: finds JS CLI definitions and registers them.
  *
  * Supports two modes:
  * 1. FAST PATH (manifest): If a pre-compiled cli-manifest.json exists,
- *    registers commands instantly. TS modules are loaded lazily only
+ *    registers commands instantly. JS modules are loaded lazily only
  *    when their command is executed.
  * 2. FALLBACK (filesystem scan): Traditional runtime discovery for development.
  */
@@ -190,13 +190,10 @@ async function discoverClisFromFs(dir: string): Promise<void> {
       await Promise.all(files.map(async (file) => {
         const filePath = path.join(siteDir, file);
         if (file.endsWith('.yaml') || file.endsWith('.yml')) {
-          log.warn(`Ignoring YAML adapter ${filePath} — YAML format is no longer supported. Convert to TypeScript using cli() from '@jackwener/opencli/registry'.`);
+          log.warn(`Ignoring YAML adapter ${filePath} — YAML format is no longer supported. Convert to JavaScript using cli() from '@jackwener/opencli/registry'.`);
           return;
         }
-        if (
-          (file.endsWith('.js') && !file.endsWith('.d.js')) ||
-          (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts'))
-        ) {
+        if (file.endsWith('.js') && !file.endsWith('.d.js') && !file.endsWith('.test.js')) {
           if (!(await isCliModule(filePath))) return;
           await import(pathToFileURL(filePath).href).catch((err) => {
             log.warn(`Failed to load module ${filePath}: ${getErrorMessage(err)}`);
@@ -232,7 +229,7 @@ async function discoverPluginDir(dir: string, site: string): Promise<void> {
   await Promise.all(files.map(async (file) => {
     const filePath = path.join(dir, file);
     if (file.endsWith('.yaml') || file.endsWith('.yml')) {
-      log.warn(`Ignoring YAML plugin ${filePath} — YAML format is no longer supported. Convert to TypeScript using cli() from '@jackwener/opencli/registry'.`);
+      log.warn(`Ignoring YAML plugin ${filePath} — YAML format is no longer supported. Convert to JavaScript using cli() from '@jackwener/opencli/registry'.`);
       return;
     }
     if (file.endsWith('.js') && !file.endsWith('.d.js')) {

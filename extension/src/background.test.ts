@@ -80,6 +80,22 @@ function createChromeMock() {
         return tab;
       }),
       onUpdated: { addListener: vi.fn(), removeListener: vi.fn() } as Listener<(id: number, info: chrome.tabs.TabChangeInfo) => void>,
+      onRemoved: { addListener: vi.fn() } as Listener<(tabId: number) => void>,
+    },
+    debugger: {
+      getTargets: vi.fn(async () => tabs.map(t => ({
+        type: 'page',
+        id: `target-${t.id}`,
+        tabId: t.id,
+        url: t.url ?? '',
+        title: t.title ?? '',
+        attached: false,
+      }))),
+      attach: vi.fn(),
+      detach: vi.fn(),
+      sendCommand: vi.fn(),
+      onDetach: { addListener: vi.fn() } as Listener<(source: { tabId?: number }) => void>,
+      onEvent: { addListener: vi.fn() } as Listener<(source: any, method: string, params: any) => void>,
     },
     windows: {
       get: vi.fn(async (windowId: number) => ({ id: windowId })),
@@ -100,13 +116,6 @@ function createChromeMock() {
     },
     cookies: {
       getAll: vi.fn(async () => []),
-    },
-    debugger: {
-      attach: vi.fn(async () => {}),
-      detach: vi.fn(async () => {}),
-      sendCommand: vi.fn(async (_target: unknown, _method: string) => ({})),
-      onDetach: { addListener: vi.fn() } as Listener<(source: { tabId?: number }) => void>,
-      onEvent: { addListener: vi.fn() } as Listener<(source: { tabId?: number }, method: string, params: unknown) => void>,
     },
     scripting: {
       executeScript: vi.fn(async () => [{ result: { removed: 1 } }]),
@@ -141,7 +150,7 @@ describe('background tab isolation', () => {
     expect(result.data).toEqual([
       {
         index: 0,
-        tabId: 1,
+        page: 'target-1',
         url: 'https://automation.example',
         title: 'automation',
         active: true,
@@ -176,14 +185,14 @@ describe('background tab isolation', () => {
     expect(result.data).toEqual([
       {
         index: 0,
-        tabId: 1,
+        page: 'target-1',
         url: 'https://automation.example',
         title: 'automation',
         active: true,
       },
       {
         index: 1,
-        tabId: 4,
+        page: 'target-4',
         url: 'https://second.example',
         title: 'second',
         active: false,
@@ -223,10 +232,10 @@ describe('background tab isolation', () => {
     expect(result).toEqual({
       id: 'same-url',
       ok: true,
+      page: 'target-1',
       data: {
         title: 'bilibili',
         url: 'https://www.bilibili.com/',
-        tabId: 1,
         timedOut: false,
       },
     });
@@ -389,6 +398,7 @@ describe('background tab isolation', () => {
       id: 'console-1',
       ok: true,
       data: [],
+      page: 'target-1',
     });
 
     const stopResult = await mod.__test__.handleCommand({
@@ -400,6 +410,7 @@ describe('background tab isolation', () => {
       id: 'stop-1',
       ok: true,
       data: { stopped: true },
+      page: 'target-1',
     });
   });
 });

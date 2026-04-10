@@ -26,6 +26,9 @@ opencli list  # Now you can use it anywhere!
 
 ```bash
 npm install -g @jackwener/opencli@latest
+
+# If you use the packaged OpenCLI skills, refresh them too
+npx skills add jackwener/opencli
 ```
 
 ## Verify Installation

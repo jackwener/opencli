@@ -410,7 +410,7 @@ describe('generateVerifiedFromUrl', () => {
     expect(result.status).toBe('success');
     expect(
       path.normalize(result.adapter!.path).endsWith(
-        path.join('verified', 'search.verified.ts'),
+        path.join('verified', 'search.verified.js'),
       ),
     ).toBe(true);
     expect(result.adapter?.path).not.toBe(candidatePath);

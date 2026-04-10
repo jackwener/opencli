@@ -17,8 +17,8 @@ describe('discoverClis', () => {
   it('imports only CLI command modules during filesystem discovery', async () => {
     const tempRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-discovery-'));
     const siteDir = path.join(tempRoot, 'temp-site');
-    const helperPath = path.join(siteDir, 'helper.ts');
-    const commandPath = path.join(siteDir, 'hello.ts');
+    const helperPath = path.join(siteDir, 'helper.js');
+    const commandPath = path.join(siteDir, 'hello.js');
 
     try {
       await fs.promises.mkdir(siteDir, { recursive: true });
@@ -53,7 +53,7 @@ cli({
     const tempBuildRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-manifest-fallback-'));
     const distDir = path.join(tempBuildRoot, 'dist');
     const siteDir = path.join(distDir, 'fallback-site');
-    const commandPath = path.join(siteDir, 'hello.ts');
+    const commandPath = path.join(siteDir, 'hello.js');
     const manifestPath = path.join(tempBuildRoot, 'cli-manifest.json');
 
     try {
@@ -83,7 +83,7 @@ cli({
     const tempOpencliRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-user-clis-'));
     const userClisDir = path.join(tempOpencliRoot, 'clis');
     const siteDir = path.join(userClisDir, 'legacy-site');
-    const commandPath = path.join(siteDir, 'hello.ts');
+    const commandPath = path.join(siteDir, 'hello.js');
 
     try {
       await ensureUserCliCompatShims(tempOpencliRoot);

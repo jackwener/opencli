@@ -10,7 +10,7 @@
  * - Skips if already installed at the same version
  *
  * Only runs on global install (npm install -g) or explicit OPENCLI_FETCH=1.
- * No network calls — copies directly from dist/clis/ in the installed package.
+ * No network calls — copies directly from clis/ in the installed package.
  *
  * This is an ESM script (package.json type: module). No TypeScript, no src/ imports.
  */
@@ -23,7 +23,7 @@ const OPENCLI_DIR = join(homedir(), '.opencli');
 const USER_CLIS_DIR = join(OPENCLI_DIR, 'clis');
 const MANIFEST_PATH = join(OPENCLI_DIR, 'adapter-manifest.json');
 const PACKAGE_ROOT = resolve(import.meta.dirname, '..');
-const BUILTIN_CLIS = join(PACKAGE_ROOT, 'dist', 'clis');
+const BUILTIN_CLIS = join(PACKAGE_ROOT, 'clis');
 
 function log(msg) {
   console.log(`[opencli] ${msg}`);
@@ -95,7 +95,7 @@ export function fetchAdapters() {
   }
 
   if (!existsSync(BUILTIN_CLIS)) {
-    log('Warning: dist/clis/ not found in package — skipping adapter copy');
+    log('Warning: clis/ not found in package — skipping adapter copy');
     return;
   }
 

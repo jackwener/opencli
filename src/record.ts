@@ -553,8 +553,8 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
   const pollMs = opts.pollMs ?? 2000;
   const timeoutMs = opts.timeoutMs ?? 60_000;
   const allRequests: RecordedRequest[] = [];
-  // Track which tabIds have already had the interceptor injected
-  const injectedTabs = new Set<number>();
+  // Track which pages (targetIds) have already had the interceptor injected
+  const injectedPages = new Set<string>();
 
   // Infer site name from URL
   const site = opts.site ?? (() => {
@@ -581,7 +581,7 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
     // Inject into initial tab
     const initialTabs = await listTabs(workspace);
     for (const tab of initialTabs) {
-      await injectIntoTab(workspace, tab.tabId, injectedTabs);
+      if (tab.page) await injectIntoPage(workspace, tab.page, injectedPages);
     }
 
     console.log(chalk.bold('\n  Recording. Use the page in the browser automation window.'));
@@ -605,15 +605,15 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
         // Discover and inject into any new tabs
         const tabs = await listTabs(workspace);
         for (const tab of tabs) {
-          await injectIntoTab(workspace, tab.tabId, injectedTabs);
+          if (tab.page) await injectIntoPage(workspace, tab.page, injectedPages);
         }
 
-        // Drain captured data from all known tabs
-        for (const tabId of injectedTabs) {
-          const batch = await execOnTab(workspace, tabId, generateReadRecordedJs()) as RecordedRequest[] | null;
+        // Drain captured data from all known pages
+        for (const page of injectedPages) {
+          const batch = await execOnPage(workspace, page, generateReadRecordedJs()) as RecordedRequest[] | null;
           if (Array.isArray(batch) && batch.length > 0) {
             for (const r of batch) allRequests.push(r);
-            console.log(chalk.dim(`  [tab:${tabId}] +${batch.length} captured — total: ${allRequests.length}`));
+            console.log(chalk.dim(`  [page:${page.slice(0, 8)}] +${batch.length} captured — total: ${allRequests.length}`));
           }
         }
       } catch {
@@ -625,10 +625,10 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
     cleanupEnter(); // Always clean up readline to prevent process from hanging
     clearInterval(pollInterval);
 
-    // Final drain from all known tabs
-    for (const tabId of injectedTabs) {
+    // Final drain from all known pages
+    for (const page of injectedPages) {
       try {
-        const last = await execOnTab(workspace, tabId, generateReadRecordedJs()) as RecordedRequest[] | null;
+        const last = await execOnPage(workspace, page, generateReadRecordedJs()) as RecordedRequest[] | null;
         if (Array.isArray(last) && last.length > 0) {
           for (const r of last) allRequests.push(r);
         }
@@ -646,30 +646,30 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
   }
 }
 
-// ── Tab helpers ────────────────────────────────────────────────────────────
+// ── Page helpers ───────────────────────────────────────────────────────────
 
-interface TabInfo { tabId: number; url?: string }
+interface TabInfo { page?: string; url?: string }
 
 async function listTabs(workspace: string): Promise<TabInfo[]> {
   try {
     const result = await sendCommand('tabs', { op: 'list', workspace }) as TabInfo[] | null;
-    return Array.isArray(result) ? result.filter(t => t.tabId != null) : [];
+    return Array.isArray(result) ? result.filter(t => t.page != null) : [];
   } catch { return []; }
 }
 
-async function execOnTab(workspace: string, tabId: number, code: string): Promise<unknown> {
-  return sendCommand('exec', { code, workspace, tabId });
+async function execOnPage(workspace: string, page: string, code: string): Promise<unknown> {
+  return sendCommand('exec', { code, workspace, page });
 }
 
-async function injectIntoTab(workspace: string, tabId: number, injectedTabs: Set<number>): Promise<void> {
+async function injectIntoPage(workspace: string, page: string, injectedPages: Set<string>): Promise<void> {
   try {
-    await execOnTab(workspace, tabId, generateFullCaptureInterceptorJs());
-    if (!injectedTabs.has(tabId)) {
-      injectedTabs.add(tabId);
-      console.log(chalk.green(`  ✓  Interceptor injected into tab:${tabId}`));
+    await execOnPage(workspace, page, generateFullCaptureInterceptorJs());
+    if (!injectedPages.has(page)) {
+      injectedPages.add(page);
+      console.log(chalk.green(`  ✓  Interceptor injected into page:${page.slice(0, 8)}`));
     }
   } catch {
-    // Tab not debuggable (e.g. chrome:// pages) — skip silently
+    // Page not debuggable (e.g. chrome:// pages) — skip silently
   }
 }
 

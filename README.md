@@ -57,7 +57,6 @@ OpenCLI connects to Chrome/Chromium through a lightweight Browser Bridge extensi
 
 ```bash
 opencli doctor
-opencli daemon status
 ```
 
 ### 4. Run your first commands
@@ -75,7 +74,7 @@ Use OpenCLI directly when you want a reliable command instead of a live browser 
 - `opencli list` shows every registered command.
 - `opencli <site> <command>` runs a built-in or generated adapter.
 - `opencli register mycli` exposes a local CLI through the same discovery surface.
-- `opencli daemon status` and `opencli doctor` help diagnose browser connectivity.
+- `opencli doctor` helps diagnose browser connectivity.
 
 ## For AI Agents
 
@@ -142,10 +141,36 @@ OpenCLI is not only for websites. It can also:
 
 > **Important**: Browser-backed commands reuse your Chrome/Chromium login session. If you get empty data or permission-like failures, first confirm the site is already open and authenticated in Chrome/Chromium.
 
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENCLI_DAEMON_PORT` | `19825` | HTTP port for the daemon-extension bridge |
+| `OPENCLI_WINDOW_FOCUSED` | `false` | Set to `1` to open automation windows in the foreground (useful for debugging) |
+| `OPENCLI_BROWSER_CONNECT_TIMEOUT` | `30` | Seconds to wait for browser connection |
+| `OPENCLI_BROWSER_COMMAND_TIMEOUT` | `60` | Seconds to wait for a single browser command |
+| `OPENCLI_BROWSER_EXPLORE_TIMEOUT` | `120` | Seconds to wait for explore/record operations |
+| `OPENCLI_CDP_ENDPOINT` | — | Chrome DevTools Protocol endpoint for remote browser or Electron apps |
+| `OPENCLI_CDP_TARGET` | — | Filter CDP targets by URL substring (e.g. `detail.1688.com`) |
+| `OPENCLI_VERBOSE` | `false` | Enable verbose logging (`-v` flag also works) |
+| `OPENCLI_DIAGNOSTIC` | `false` | Set to `1` to capture structured diagnostic context on failures |
+
 ## Update
 
 ```bash
 npm install -g @jackwener/opencli@latest
+
+# If you use the packaged OpenCLI skills, refresh them too
+npx skills add jackwener/opencli
+```
+
+Or refresh only the skills you actually use:
+
+```bash
+npx skills add jackwener/opencli --skill opencli-usage
+npx skills add jackwener/opencli --skill opencli-browser
+npx skills add jackwener/opencli --skill opencli-explorer
+npx skills add jackwener/opencli --skill opencli-oneshot
 ```
 
 ## For Developers

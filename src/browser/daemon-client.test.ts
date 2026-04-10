@@ -23,7 +23,6 @@ describe('daemon-client', () => {
       extensionConnected: true,
       extensionVersion: '1.2.3',
       pending: 0,
-      lastCliRequestTime: Date.now(),
       memoryMB: 32,
       port: 19825,
     };
@@ -75,7 +74,6 @@ describe('daemon-client', () => {
       uptime: 10,
       extensionConnected: false,
       pending: 0,
-      lastCliRequestTime: Date.now(),
       memoryMB: 16,
       port: 19825,
     };
@@ -95,7 +93,6 @@ describe('daemon-client', () => {
       extensionConnected: true,
       extensionVersion: '1.2.3',
       pending: 0,
-      lastCliRequestTime: Date.now(),
       memoryMB: 32,
       port: 19825,
     };

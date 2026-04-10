@@ -15,18 +15,16 @@
  *
  * Lifecycle:
  *   - Auto-spawned by opencli on first browser command
- *   - Auto-exits after idle timeout (default 4h, configurable via OPENCLI_DAEMON_TIMEOUT)
+ *   - Persistent — stays alive until explicit shutdown, SIGTERM, or uninstall
  *   - Listens on localhost:19825
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
-import { DEFAULT_DAEMON_PORT, DEFAULT_DAEMON_IDLE_TIMEOUT } from './constants.js';
+import { DEFAULT_DAEMON_PORT } from './constants.js';
 import { EXIT_CODES } from './errors.js';
-import { IdleManager } from './idle-manager.js';
 
 const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
-const IDLE_TIMEOUT = Number(process.env.OPENCLI_DAEMON_TIMEOUT ?? DEFAULT_DAEMON_IDLE_TIMEOUT);
 
 // ─── State ───────────────────────────────────────────────────────────
 
@@ -46,13 +44,6 @@ function pushLog(entry: LogEntry): void {
   logBuffer.push(entry);
   if (logBuffer.length > LOG_BUFFER_SIZE) logBuffer.shift();
 }
-
-// ─── Idle auto-exit ──────────────────────────────────────────────────
-
-const idleManager = new IdleManager(IDLE_TIMEOUT, () => {
-  console.error('[daemon] Idle timeout (no CLI requests + no Extension), shutting down');
-  process.exit(EXIT_CODES.SUCCESS);
-});
 
 // ─── HTTP Server ─────────────────────────────────────────────────────
 
@@ -133,7 +124,6 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       extensionConnected: extensionWs?.readyState === WebSocket.OPEN,
       extensionVersion,
       pending: pending.size,
-      lastCliRequestTime: idleManager.lastCliRequestTime,
       memoryMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
       port: PORT,
     });
@@ -163,7 +153,6 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   if (req.method === 'POST' && url === '/command') {
-    idleManager.onCliRequest();
     try {
       const body = JSON.parse(await readBody(req));
       if (!body.id) {
@@ -221,7 +210,6 @@ wss.on('connection', (ws: WebSocket) => {
   console.error('[daemon] Extension connected');
   extensionWs = ws;
   extensionVersion = null; // cleared until hello message arrives
-  idleManager.setExtensionConnected(true);
 
   // ── Heartbeat: ping every 15s, close if 2 pongs missed ──
   let missedPongs = 0;
@@ -280,7 +268,6 @@ wss.on('connection', (ws: WebSocket) => {
     if (extensionWs === ws) {
       extensionWs = null;
       extensionVersion = null;
-      idleManager.setExtensionConnected(false);
       // Reject all pending requests since the extension is gone
       for (const [id, p] of pending) {
         clearTimeout(p.timer);
@@ -295,7 +282,6 @@ wss.on('connection', (ws: WebSocket) => {
     if (extensionWs === ws) {
       extensionWs = null;
       extensionVersion = null;
-      idleManager.setExtensionConnected(false);
       // Reject pending requests in case 'close' does not follow this 'error'
       for (const [, p] of pending) {
         clearTimeout(p.timer);
@@ -310,7 +296,6 @@ wss.on('connection', (ws: WebSocket) => {
 
 httpServer.listen(PORT, '127.0.0.1', () => {
   console.error(`[daemon] Listening on http://127.0.0.1:${PORT}`);
-  idleManager.onCliRequest();
 });
 
 httpServer.on('error', (err: NodeJS.ErrnoException) => {

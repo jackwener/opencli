@@ -182,6 +182,20 @@ opencli record <url>            # Record API calls manually
 
 All commands support: `--format` / `-f` with `table` `json` `yaml` `md` `csv`
 
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENCLI_DAEMON_PORT` | `19825` | Daemon-extension bridge port |
+| `OPENCLI_WINDOW_FOCUSED` | `false` | `1` = open automation windows in foreground |
+| `OPENCLI_BROWSER_CONNECT_TIMEOUT` | `30` | Browser connection timeout (seconds) |
+| `OPENCLI_BROWSER_COMMAND_TIMEOUT` | `60` | Single command timeout (seconds) |
+| `OPENCLI_BROWSER_EXPLORE_TIMEOUT` | `120` | Explore/record timeout (seconds) |
+| `OPENCLI_CDP_ENDPOINT` | — | CDP endpoint for remote browser / Electron apps |
+| `OPENCLI_CDP_TARGET` | — | Filter CDP targets by URL substring |
+| `OPENCLI_VERBOSE` | `false` | Verbose logging (`-v` flag also works) |
+| `OPENCLI_DIAGNOSTIC` | `false` | `1` = structured diagnostic on failures |
+
 ## Self-Repair
 
 If a command fails due to a site change (selector, API, or response schema), **automatically fix the adapter and retry** instead of reporting failure. Re-run the command with `OPENCLI_DIAGNOSTIC=1` to get structured diagnostic context, then fix the adapter file at `RepairContext.adapter.sourcePath` and retry. Max 3 repair rounds. See the `opencli-autofix` skill for the full workflow.

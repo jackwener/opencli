@@ -18,13 +18,15 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getCompletionsFromManifest, hasAllManifests, printCompletionScriptFast } from './completion-fast.js';
-import { getCliManifestPath } from './package-paths.js';
+import { findPackageRoot, getCliManifestPath } from './package-paths.js';
 import { PKG_VERSION } from './version.js';
 import { EXIT_CODES } from './errors.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const BUILTIN_CLIS = path.resolve(__dirname, '..', 'clis');
+// Adapters are JS-first and live at <package-root>/clis/.
+// Use findPackageRoot so the path works both in dev (src/main.ts) and prod (dist/src/main.js).
+const BUILTIN_CLIS = path.join(findPackageRoot(__filename), 'clis');
 const USER_CLIS = path.join(os.homedir(), '.opencli', 'clis');
 
 // ── Ultra-fast path: lightweight commands bypass full discovery ──────────

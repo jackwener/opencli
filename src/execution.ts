@@ -202,10 +202,14 @@ export async function executeCommand(
           }
         }
         try {
-          return await runWithTimeout(runCommand(cmd, page, kwargs, debug), {
+          const result = await runWithTimeout(runCommand(cmd, page, kwargs, debug), {
             timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,
             label: fullName(cmd),
           });
+          // Adapter commands are one-shot — close the automation window immediately
+          // instead of waiting for the 30s idle timeout.
+          await page.closeWindow?.().catch(() => {});
+          return result;
         } catch (err) {
           // Collect diagnostic while page is still alive (before browserSession closes it).
           if (isDiagnosticEnabled()) {

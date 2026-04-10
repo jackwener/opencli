@@ -7,7 +7,7 @@
 import { DEFAULT_DAEMON_PORT } from '../constants.js';
 import type { BrowserSessionInfo } from '../types.js';
 import { sleep } from '../utils.js';
-import { isTransientBrowserError } from './errors.js';
+import { classifyBrowserError } from './errors.js';
 
 const DAEMON_PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 const DAEMON_URL = `http://127.0.0.1:${DAEMON_PORT}`;
@@ -22,6 +22,9 @@ function generateId(): string {
 export interface DaemonCommand {
   id: string;
   action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'insert-text' | 'bind-current' | 'network-capture-start' | 'network-capture-read' | 'console-read' | 'capture-stop' | 'cdp';
+  /** Target page identity (targetId). Cross-layer contract — preferred over tabId. */
+  page?: string;
+  /** @deprecated Legacy tab ID — use `page` (targetId) instead. */
   tabId?: number;
   code?: string;
   workspace?: string;
@@ -45,6 +48,8 @@ export interface DaemonCommand {
   pattern?: string;
   cdpMethod?: string;
   cdpParams?: Record<string, unknown>;
+  /** When true, automation windows are created in the foreground */
+  windowFocused?: boolean;
 }
 
 export interface DaemonResult {
@@ -52,6 +57,8 @@ export interface DaemonResult {
   ok: boolean;
   data?: unknown;
   error?: string;
+  /** Page identity (targetId) — present on page-scoped command responses */
+  page?: string;
 }
 
 export interface DaemonStatus {
@@ -61,7 +68,6 @@ export interface DaemonStatus {
   extensionConnected: boolean;
   extensionVersion?: string;
   pending: number;
-  lastCliRequestTime: number;
   memoryMB: number;
   port: number;
 }
@@ -117,20 +123,25 @@ export async function requestDaemonShutdown(opts?: { timeout?: number }): Promis
 }
 
 /**
- * Send a command to the daemon and wait for a result.
- * Retries up to 4 times: network errors retry at 500ms,
- * transient extension errors retry at 1500ms.
+ * Internal: send a command to the daemon with retry logic.
+ * Returns the raw DaemonResult. All retry policy lives here — callers
+ * (sendCommand, sendCommandFull) only shape the return value.
+ *
+ * Retries up to 4 times:
+ * - Network errors (TypeError, AbortError): retry at 500ms
+ * - Transient browser errors: retry at the delay suggested by classifyBrowserError()
  */
-export async function sendCommand(
+async function sendCommandRaw(
   action: DaemonCommand['action'],
-  params: Omit<DaemonCommand, 'id' | 'action'> = {},
-): Promise<unknown> {
+  params: Omit<DaemonCommand, 'id' | 'action'>,
+): Promise<DaemonResult> {
   const maxRetries = 4;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // Generate a fresh ID per attempt to avoid daemon-side duplicate detection
     const id = generateId();
-    const command: DaemonCommand = { id, action, ...params };
+    const wf = process.env.OPENCLI_WINDOW_FOCUSED;
+    const windowFocused = (wf === '1' || wf === 'true') ? true : undefined;
+    const command: DaemonCommand = { id, action, ...params, ...(windowFocused && { windowFocused }) };
     try {
       const res = await requestDaemon('/command', {
         method: 'POST',
@@ -142,28 +153,49 @@ export async function sendCommand(
       const result = (await res.json()) as DaemonResult;
 
       if (!result.ok) {
-        // Check if error is a transient extension issue worth retrying
-        if (isTransientBrowserError(new Error(result.error ?? '')) && attempt < maxRetries) {
-          // Longer delay for extension recovery (service worker restart)
-          await sleep(1500);
+        const advice = classifyBrowserError(new Error(result.error ?? ''));
+        if (advice.retryable && attempt < maxRetries) {
+          await sleep(advice.delayMs);
           continue;
         }
         throw new Error(result.error ?? 'Daemon command failed');
       }
 
-      return result.data;
+      return result;
     } catch (err) {
-      const isRetryable = err instanceof TypeError  // fetch network error
+      const isNetworkError = err instanceof TypeError
         || (err instanceof Error && err.name === 'AbortError');
-      if (isRetryable && attempt < maxRetries) {
+      if (isNetworkError && attempt < maxRetries) {
         await sleep(500);
         continue;
       }
       throw err;
     }
   }
-  // Unreachable — the loop always returns or throws
   throw new Error('sendCommand: max retries exhausted');
+}
+
+/**
+ * Send a command to the daemon and return the result data.
+ */
+export async function sendCommand(
+  action: DaemonCommand['action'],
+  params: Omit<DaemonCommand, 'id' | 'action'> = {},
+): Promise<unknown> {
+  const result = await sendCommandRaw(action, params);
+  return result.data;
+}
+
+/**
+ * Like sendCommand, but returns both data and page identity (targetId).
+ * Use this for page-scoped commands where the caller needs the page identity.
+ */
+export async function sendCommandFull(
+  action: DaemonCommand['action'],
+  params: Omit<DaemonCommand, 'id' | 'action'> = {},
+): Promise<{ data: unknown; page?: string }> {
+  const result = await sendCommandRaw(action, params);
+  return { data: result.data, page: result.page };
 }
 
 export async function listSessions(): Promise<BrowserSessionInfo[]> {

@@ -2,11 +2,11 @@
 /**
  * Build-time CLI manifest compiler.
  *
- * Scans all TS CLI definitions and pre-compiles them into a single
+ * Scans all JS CLI definitions in clis/ and pre-compiles them into a single
  * manifest.json for instant cold-start registration.
  *
  * Usage: npx tsx src/build-manifest.ts
- * Output: cli-manifest.json at the package root
+ * Output: cli-manifest.json next to clis/
  */
 
 import * as fs from 'node:fs';
@@ -18,6 +18,7 @@ import { findPackageRoot, getCliManifestPath } from './package-paths.js';
 
 const PACKAGE_ROOT = findPackageRoot(fileURLToPath(import.meta.url));
 const CLIS_DIR = path.join(PACKAGE_ROOT, 'clis');
+// Write manifest next to clis/ so both dev and installed runtime can find it.
 const OUTPUT = getCliManifestPath(CLIS_DIR);
 
 export interface ManifestEntry {
@@ -43,10 +44,10 @@ export interface ManifestEntry {
   timeout?: number;
   deprecated?: boolean | string;
   replacedBy?: string;
-  type: 'ts';
+  type: 'js';
   /** Relative path from clis/ dir, e.g. 'bilibili/search.js' */
   modulePath?: string;
-  /** Relative path to the original source file from clis/ dir (e.g. 'site/cmd.ts') */
+  /** Relative path to the source file from clis/ dir (e.g. 'site/cmd.js') */
   sourceFile?: string;
   /** Pre-navigation control — see CliCommand.navigateBefore */
   navigateBefore?: boolean | string;
@@ -69,7 +70,7 @@ function toManifestArgs(args: CliCommand['args']): ManifestEntry['args'] {
   }));
 }
 
-function toTsModulePath(filePath: string, site: string): string {
+function toModulePath(filePath: string, site: string): string {
   const baseName = path.basename(filePath, path.extname(filePath));
   return `${site}/${baseName}.js`;
 }
@@ -96,14 +97,14 @@ function toManifestEntry(cmd: CliCommand, modulePath: string, sourceFile?: strin
     timeout: cmd.timeoutSeconds,
     deprecated: cmd.deprecated,
     replacedBy: cmd.replacedBy,
-    type: 'ts',
+    type: 'js',
     modulePath,
     sourceFile,
     navigateBefore: cmd.navigateBefore,
   };
 }
 
-export async function loadTsManifestEntries(
+export async function loadManifestEntries(
   filePath: string,
   site: string,
   importer: (moduleHref: string) => Promise<unknown> = moduleHref => import(moduleHref),
@@ -114,7 +115,7 @@ export async function loadTsManifestEntries(
     // Helper/test modules should not appear as CLI commands in the manifest.
     if (!CLI_MODULE_PATTERN.test(src)) return [];
 
-    const modulePath = toTsModulePath(filePath, site);
+    const modulePath = toModulePath(filePath, site);
     const registry = getRegistry();
     const before = new Map(registry.entries());
     const mod = await importer(pathToFileURL(filePath).href);
@@ -132,6 +133,9 @@ export async function loadTsManifestEntries(
         })
         .map(([, cmd]) => cmd);
 
+    // Resolve sourceFile relative to clis/.
+    const sourceRelative = path.relative(CLIS_DIR, filePath);
+
     const seen = new Set<string>();
     return runtimeCommands
       .filter((cmd) => {
@@ -141,7 +145,7 @@ export async function loadTsManifestEntries(
         return true;
       })
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map(cmd => toManifestEntry(cmd, modulePath, path.relative(CLIS_DIR, filePath)));
+      .map(cmd => toManifestEntry(cmd, modulePath, sourceRelative));
   } catch (err) {
     // If parsing fails, log a warning (matching scanYaml behaviour) and skip the entry.
     process.stderr.write(`Warning: failed to scan ${filePath}: ${getErrorMessage(err)}\n`);
@@ -152,17 +156,16 @@ export async function loadTsManifestEntries(
 export async function buildManifest(): Promise<ManifestEntry[]> {
   const manifest = new Map<string, ManifestEntry>();
 
+  // Scan JS adapters directly from clis/.
+  // Adapters are now JS-first — no compilation step needed.
   if (fs.existsSync(CLIS_DIR)) {
     for (const site of fs.readdirSync(CLIS_DIR)) {
       const siteDir = path.join(CLIS_DIR, site);
       if (!fs.statSync(siteDir).isDirectory()) continue;
       for (const file of fs.readdirSync(siteDir)) {
-        if (
-          (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts') && file !== 'index.ts') ||
-          (file.endsWith('.js') && !file.endsWith('.d.js') && !file.endsWith('.test.js') && file !== 'index.js')
-        ) {
+        if (file.endsWith('.js') && !file.endsWith('.d.js') && !file.endsWith('.test.js') && file !== 'index.js') {
           const filePath = path.join(siteDir, file);
-          const entries = await loadTsManifestEntries(filePath, site);
+          const entries = await loadManifestEntries(filePath, site);
           for (const entry of entries) {
             const key = `${entry.site}/${entry.name}`;
             manifest.set(key, entry);

@@ -15,6 +15,13 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'extension',
+          include: ['extension/src/**/*.test.ts'],
+          sequence: { groupOrder: 0 },
+        },
+      },
+      {
+        test: {
           name: 'adapter',
           include: ['clis/**/*.test.ts'],
           sequence: { groupOrder: 1 },

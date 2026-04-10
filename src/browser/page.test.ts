@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { sendCommandMock } = vi.hoisted(() => ({
+const { sendCommandMock, sendCommandFullMock } = vi.hoisted(() => ({
   sendCommandMock: vi.fn(),
+  sendCommandFullMock: vi.fn(),
 }));
 
 const {
@@ -16,6 +17,7 @@ const {
 
 vi.mock('./daemon-client.js', () => ({
   sendCommand: sendCommandMock,
+  sendCommandFull: sendCommandFullMock,
 }));
 
 vi.mock('./workspace-tab-cache.js', () => ({
@@ -29,6 +31,7 @@ import { Page } from './page.js';
 describe('Page.getCurrentUrl', () => {
   beforeEach(() => {
     sendCommandMock.mockReset();
+    sendCommandFullMock.mockReset();
     loadWorkspaceTabIdMock.mockReset().mockReturnValue(undefined);
     saveWorkspaceTabIdMock.mockReset();
     clearWorkspaceTabIdMock.mockReset();
@@ -75,6 +78,7 @@ describe('Page.getCurrentUrl', () => {
 describe('Page.evaluate', () => {
   beforeEach(() => {
     sendCommandMock.mockReset();
+    sendCommandFullMock.mockReset();
     loadWorkspaceTabIdMock.mockReset().mockReturnValue(undefined);
     saveWorkspaceTabIdMock.mockReset();
     clearWorkspaceTabIdMock.mockReset();
@@ -96,6 +100,7 @@ describe('Page.evaluate', () => {
 describe('Page.consoleMessages', () => {
   beforeEach(() => {
     sendCommandMock.mockReset();
+    sendCommandFullMock.mockReset();
     loadWorkspaceTabIdMock.mockReset().mockReturnValue(undefined);
     saveWorkspaceTabIdMock.mockReset();
     clearWorkspaceTabIdMock.mockReset();
@@ -148,9 +153,8 @@ describe('Page.consoleMessages', () => {
   });
 
   it('persists the resolved tab after navigation and clears it when the window closes', async () => {
-    sendCommandMock
-      .mockResolvedValueOnce({ tabId: 99 })
-      .mockResolvedValueOnce(null);
+    sendCommandFullMock.mockResolvedValueOnce({ data: { tabId: 99 } });
+    sendCommandMock.mockResolvedValueOnce(null);
 
     const page = new Page('operate:default');
     await page.goto('https://example.com', { waitUntil: 'none' });

@@ -476,7 +476,7 @@ async function probeCandidateStrategy(page: IPage, endpointUrl: string): Promise
 
 // ── Artifact persistence ──────────────────────────────────────────────────────
 
-function candidateToTs(candidate: CandidateYaml): string {
+function candidateToJs(candidate: CandidateYaml): string {
   const strategyMap: Record<string, string> = {
     public: 'Strategy.PUBLIC',
     cookie: 'Strategy.COOKIE',
@@ -488,8 +488,8 @@ function candidateToTs(candidate: CandidateYaml): string {
   const browser = detectBrowserFlag(candidate);
 
   const argsArray = Object.entries(candidate.args ?? {}).map(([name, def]) => {
-    const parts: string[] = [`name: '${name}'`];
-    if (def.type && def.type !== 'str') parts.push(`type: '${def.type}'`);
+    const parts: string[] = [`name: '${name.replace(/'/g, "\\'")}'`];
+    if (def.type && def.type !== 'str') parts.push(`type: '${def.type.replace(/'/g, "\\'")}'`);
     if (def.required) parts.push('required: true');
     if (def.default !== undefined) parts.push(`default: ${JSON.stringify(def.default)}`);
     if (def.description) parts.push(`help: '${def.description.replace(/'/g, "\\'")}'`);
@@ -527,10 +527,10 @@ function candidateToTs(candidate: CandidateYaml): string {
   lines.push("import { cli, Strategy } from '@jackwener/opencli/registry';");
   lines.push('');
   lines.push('cli({');
-  lines.push(`  site: '${candidate.site}',`);
-  lines.push(`  name: '${candidate.name}',`);
+  lines.push(`  site: '${candidate.site.replace(/'/g, "\\'")}',`);
+  lines.push(`  name: '${candidate.name.replace(/'/g, "\\'")}',`);
   if (candidate.description) lines.push(`  description: '${candidate.description.replace(/'/g, "\\'")}',`);
-  if (candidate.domain) lines.push(`  domain: '${candidate.domain}',`);
+  if (candidate.domain) lines.push(`  domain: '${candidate.domain.replace(/'/g, "\\'")}',`);
   lines.push(`  strategy: ${stratEnum},`);
   lines.push(`  browser: ${browser},`);
   if (argsArray.length > 0) {
@@ -553,10 +553,10 @@ function candidateToTs(candidate: CandidateYaml): string {
 
 async function registerVerifiedAdapter(candidate: CandidateYaml, metadata: VerifiedArtifactMetadata): Promise<{ adapterPath: string; metadataPath: string }> {
   const siteDir = path.join(USER_CLIS_DIR, candidate.site);
-  const adapterPath = path.join(siteDir, `${candidate.name}.ts`);
+  const adapterPath = path.join(siteDir, `${candidate.name}.js`);
   const metadataPath = path.join(siteDir, `${candidate.name}.meta.json`);
   await fs.promises.mkdir(siteDir, { recursive: true });
-  await fs.promises.writeFile(adapterPath, candidateToTs(candidate));
+  await fs.promises.writeFile(adapterPath, candidateToJs(candidate));
   await fs.promises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
   registerCommand(candidateToCommand(candidate, adapterPath));
   return { adapterPath, metadataPath };
@@ -564,10 +564,10 @@ async function registerVerifiedAdapter(candidate: CandidateYaml, metadata: Verif
 
 async function writeVerifiedArtifact(candidate: CandidateYaml, exploreDir: string, metadata: VerifiedArtifactMetadata): Promise<{ adapterPath: string; metadataPath: string }> {
   const outDir = path.join(exploreDir, 'verified');
-  const adapterPath = path.join(outDir, `${candidate.name}.verified.ts`);
+  const adapterPath = path.join(outDir, `${candidate.name}.verified.js`);
   const metadataPath = path.join(outDir, `${candidate.name}.verified.meta.json`);
   await fs.promises.mkdir(outDir, { recursive: true });
-  await fs.promises.writeFile(adapterPath, candidateToTs(candidate));
+  await fs.promises.writeFile(adapterPath, candidateToJs(candidate));
   await fs.promises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
   return { adapterPath, metadataPath };
 }
