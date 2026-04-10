@@ -30,6 +30,11 @@ for adapter_dir in "$SRC_DIR"/*/; do
   adapter_name="$(basename "$adapter_dir")"
   # Skip internal directories (e.g., _shared)
   [[ "$adapter_name" == _* ]] && continue
+  # Skip helper-only directories that do not expose any top-level adapter commands.
+  top_level_files="$(find "$adapter_dir" -maxdepth 1 -type f | awk -F/ '{print $NF}')"
+  if [[ -n "$top_level_files" ]] && ! printf '%s\n' "$top_level_files" | grep -qv '^_'; then
+    continue
+  fi
   total=$((total + 1))
 
   # Check if doc exists in browser/ or desktop/ subdirectories
