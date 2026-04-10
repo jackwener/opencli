@@ -245,7 +245,6 @@ wss.on('connection', (ws: WebSocket) => {
 
       // Handle log messages from extension
       if (msg.type === 'log') {
-        const prefix = msg.level === 'error' ? '❌' : msg.level === 'warn' ? '⚠️' : '📋';
         if (msg.level === 'error') log.error(`[ext] ${msg.msg}`);
         else if (msg.level === 'warn') log.warn(`[ext] ${msg.msg}`);
         else log.info(`[ext] ${msg.msg}`);
