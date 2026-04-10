@@ -9,6 +9,7 @@ import type { Command, Result } from './protocol';
 import { DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
 import * as executor from './cdp';
 import * as identity from './identity';
+import { generateSnapshotJs } from '@src/browser/dom-snapshot.js';
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -265,9 +266,170 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       connected: ws?.readyState === WebSocket.OPEN,
       reconnecting: reconnectTimer !== null,
     });
+  } else if (msg?.type === 'getPageState') {
+    // Handle getPageState message
+    handleGetPageState().then(result => {
+      sendResponse(result);
+    }).catch(err => {
+      sendResponse({
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    return true; // Indicates we will send a response asynchronously
   }
   return false;
 });
+
+// ─── Keyboard Shortcut Listener ────────────────────────────────────
+
+// Listen for keyboard shortcuts
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'get-page-state') {
+    handleGetPageState().then(result => {
+      // Show notification if needed
+      if (result.ok) {
+        chrome.notifications.create('opencli-page-state', {
+          type: 'basic',
+          title: 'OpenCLI',
+          message: 'Page state captured successfully',
+          iconUrl: 'icons/icon-48.png'
+        });
+      } else {
+        chrome.notifications.create('opencli-page-state-error', {
+          type: 'basic',
+          title: 'OpenCLI Error',
+          message: `Failed to capture page state: ${result.error}`,
+          iconUrl: 'icons/icon-48.png'
+        });
+      }
+    });
+  }
+});
+
+// ─── Get Page State Handler ─────────────────────────────────────────
+
+async function handleGetPageState(): Promise<Result> {
+  const workspace = 'browser:default';
+  try {
+    // 绑定到当前活跃标签页
+    const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const fallbackTabs = await chrome.tabs.query({ lastFocusedWindow: true });
+    const allTabs = await chrome.tabs.query({});
+    const boundTab = activeTabs.find((tab) => tab.id && (tab.url?.startsWith('http://') || tab.url?.startsWith('https://')))
+      ?? fallbackTabs.find((tab) => tab.id && (tab.url?.startsWith('http://') || tab.url?.startsWith('https://')))
+      ?? allTabs.find((tab) => tab.id && (tab.url?.startsWith('http://') || tab.url?.startsWith('https://')));
+    
+    if (!boundTab?.id) {
+      return {
+        id: 'popup-state',
+        ok: false,
+        error: 'No active debuggable tab found',
+      };
+    }
+    
+    // 设置工作区会话
+    setWorkspaceSession(workspace, {
+      windowId: boundTab.windowId,
+      owned: false,
+      preferredTabId: boundTab.id,
+    });
+    resetWindowIdleTimer(workspace);
+    
+    // 生成快照脚本
+    const snapshotJs = generateSnapshotJs({
+      viewportExpand: 2000,
+      maxDepth: 50,
+      interactiveOnly: false,
+      maxTextLength: 120,
+      includeScrollInfo: true,
+      bboxDedup: true,
+      includeShadowDom: true,
+      includeIframes: true,
+      maxIframes: 5,
+      paintOrderCheck: true,
+      annotateRefs: true,
+      reportHidden: true,
+      filterAds: true,
+      markdownTables: true,
+      previousHashes: null,
+    });
+    
+    // 执行快照脚本
+    const aggressive = workspace.startsWith('browser:') || workspace.startsWith('operate:');
+    const data = await executor.evaluateAsync(boundTab.id, snapshotJs, aggressive);
+    
+    // 在页面上标记元素序号
+    const markElementsScript = `
+      (() => {
+        'use strict';
+
+        // 移除之前的标记
+        document.querySelectorAll('.opencli-element-mark').forEach(el => el.remove());
+
+        // 遍历所有带有 data-opencli-ref 属性的元素
+        document.querySelectorAll('[data-opencli-ref]').forEach(el => {
+          try {
+            const rect = el.getBoundingClientRect();
+            const ref = el.getAttribute('data-opencli-ref');
+            
+            if (rect.width > 0 && rect.height > 0 && ref) {
+              // 创建标记元素
+              const mark = document.createElement('div');
+              mark.className = 'opencli-element-mark';
+              mark.textContent = ref;
+              mark.style.position = 'absolute';
+              mark.style.left = '0';
+              mark.style.top = '0';
+              mark.style.transform = 'translate(-50%, -50%)';
+              mark.style.background = 'rgba(255, 0, 0, 0.8)';
+              mark.style.color = 'white';
+              mark.style.fontSize = '12px';
+              mark.style.fontWeight = 'bold';
+              mark.style.padding = '2px 6px';
+              mark.style.borderRadius = '10px';
+              mark.style.zIndex = '9999';
+              mark.style.pointerEvents = 'none';
+              mark.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.3)';
+              
+              // 计算中心位置
+              const centerX = rect.left + rect.width / 2;
+              const centerY = rect.top + rect.height / 2;
+              
+              // 设置位置
+              mark.style.left = centerX + 'px';
+              mark.style.top = centerY + 'px';
+              
+              // 添加到文档
+              document.body.appendChild(mark);
+            }
+          } catch (e) {
+            // 忽略错误
+          }
+        });
+      })()
+    `;
+    
+    // 执行标记脚本
+    try {
+      await executor.evaluateAsync(boundTab.id, markElementsScript, aggressive);
+    } catch (err) {
+      // 忽略标记错误，不影响主功能
+    }
+    
+    return {
+      id: 'popup-state',
+      ok: true,
+      data,
+    };
+  } catch (err) {
+    return {
+      id: 'popup-state',
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
 
 // ─── Command dispatcher ─────────────────────────────────────────────
 
