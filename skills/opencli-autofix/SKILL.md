@@ -1,12 +1,12 @@
 ---
 name: opencli-autofix
-description: Automatically fix broken OpenCLI adapters when commands fail. Load this skill when an opencli command fails — it guides you through diagnosing the failure via OPENCLI_DIAGNOSTIC, patching the adapter, and retrying. Works with any AI agent.
-allowed-tools: Bash(opencli:*), Read, Edit, Write
+description: Automatically fix broken OpenCLI adapters when commands fail. Load this skill when an opencli command fails — it guides you through diagnosing the failure via OPENCLI_DIAGNOSTIC, patching the adapter, retrying, and preparing an upstream GitHub issue draft after a verified local fix. Works with any AI agent.
+allowed-tools: Bash(opencli:*), Bash(gh:*), Read, Edit, Write
 ---
 
 # OpenCLI AutoFix — Automatic Adapter Self-Repair
 
-When an `opencli` command fails because a website changed its DOM, API, or response schema, **automatically diagnose, fix the adapter, and retry** — don't just report the error.
+When an `opencli` command fails because a website changed its DOM, API, or response schema, **automatically diagnose, fix the adapter, retry, and prepare an upstream issue draft after the fix is verified** — don't just report the error.
 
 ## Safety Boundaries
 
@@ -186,6 +186,51 @@ opencli <site> <command> [args...]
 
 If it still fails, go back to Step 1 and collect fresh diagnostics. You have a budget of **3 repair rounds** (diagnose → fix → retry). If the same error persists after a fix, try a different approach. After 3 rounds, stop and report what was tried.
 
+## Step 6: Prepare an Upstream Issue Draft
+
+If the retry **passes**, treat that as a signal that the local adapter drifted from upstream. Prepare a GitHub issue draft so the repair can flow back to `jackwener/OpenCLI`.
+
+**Rules:**
+- **Only do this after a verified local fix** — retry must pass
+- **Ask before filing** — prepare the draft automatically, then confirm with the user before creating the issue
+- **Do not file** for `AUTH_REQUIRED`, `BROWSER_CONNECT`, CAPTCHA, or obvious local environment problems
+
+### Source checkout
+
+```bash
+node scripts/autofix-issue.js prepare \
+  --diagnostic diagnostic.json \
+  --summary "Updated selector/API path locally; retry passed." \
+  --output autofix-issue.json
+```
+
+### npm/global install
+
+```bash
+node ~/.opencli/node_modules/@jackwener/opencli/scripts/autofix-issue.js prepare \
+  --diagnostic diagnostic.json \
+  --summary "Updated selector/API path locally; retry passed." \
+  --output autofix-issue.json
+```
+
+This generates a structured draft with:
+- site
+- command
+- original error code
+- local override path
+- OpenCLI version
+- a concise fix summary
+
+Show that draft to the user. If they confirm and `gh auth status` passes, create the issue:
+
+```bash
+# Source checkout
+node scripts/autofix-issue.js create --draft autofix-issue.json
+
+# npm/global install
+node ~/.opencli/node_modules/@jackwener/opencli/scripts/autofix-issue.js create --draft autofix-issue.json
+```
+
 ## When to Stop
 
 **Hard stops (do not modify code):**
@@ -218,4 +263,9 @@ In all stop cases, clearly communicate the situation to the user rather than mak
 
 6. AI verifies: opencli zhihu hot
    → Success: returns hot topics
+
+7. AI prepares upstream issue draft:
+   → `node scripts/autofix-issue.js prepare --diagnostic diag.json --summary "...retry passed..." --output autofix-issue.json`
+
+8. AI asks the user, then files the issue if approved
 ```

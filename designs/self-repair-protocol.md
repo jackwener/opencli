@@ -48,8 +48,8 @@ Agent runs: opencli <site> <command> [args...]
 **Only modify the adapter file identified by `RepairContext.adapter.sourcePath`.**
 
 The diagnostic resolves the actual editable source path at runtime — it may be:
-- `clis/<site>/*.ts` — repo-local adapters (dev/source checkout)
-- `~/.opencli/clis/<site>/*.ts` — user-local adapters (npm install scenario)
+- `clis/<site>/*.js` — repo-local adapters (dev/source checkout)
+- `~/.opencli/clis/<site>/*.js` — user-local adapters (npm install scenario)
 
 The agent must use the path from the diagnostic, not guess a repo-relative path. This is critical for npm-installed users where `clis/` is not in the repo.
 
@@ -98,12 +98,14 @@ The agent should recognize non-repairable failures and stop:
 |-----------|-------------|
 | `skills/opencli-autofix/SKILL.md` (renamed from `opencli-repair`) | AutoFix skill with safety boundaries, sourcePath-based scope, 3-round limit. The primary delivery mechanism for the self-repair protocol. |
 | `skills/opencli-usage/SKILL.md` (updated) | Self-Repair section for discoverability |
+| `scripts/autofix-issue.js` | Helper script that prepares a GitHub issue draft after a verified local autofix, and creates the issue after explicit user confirmation. |
 
 ### Delivery mechanism
 
 The `opencli-autofix` skill is the portable self-repair protocol. Any AI agent — regardless of framework, provider, or working directory — can load this skill to get the full autofix workflow. It is not tied to any specific agent framework or repo location.
 
 - **No new runtime code** — the diagnostic infrastructure already exists
+- **One package-local helper script** — `scripts/autofix-issue.js` prepares or files upstream issue drafts after successful local repairs
 - **No CLAUDE.md dependency** — the skill is the protocol, not a repo-local file
 
 ---
@@ -117,7 +119,8 @@ The `opencli-autofix` skill instructs agents:
 3. Parse the RepairContext (error code, adapter source, DOM snapshot)
 4. Read and fix the adapter at `RepairContext.adapter.sourcePath`
 5. Retry the original command
-6. Max 3 repair rounds, then stop
+6. If the retry passes, prepare a GitHub issue draft for `jackwener/OpenCLI`, ask the user, then file it when approved
+7. Max 3 repair rounds, then stop
 
 ---
 
@@ -134,7 +137,7 @@ The spec/runner framework is the "asset layer" — it turns ad-hoc repairs into 
 
 ## Usage
 
-No new commands. No new scripts. The agent loads the `opencli-autofix` skill and uses opencli normally:
+No new CLI command is required. The agent loads the `opencli-autofix` skill and uses opencli normally:
 
 ```bash
 # Agent runs a command as part of its task
@@ -145,5 +148,6 @@ opencli weibo hot --limit 5 -f json
 # 2. Reads the diagnostic context
 # 3. Fixes the adapter at RepairContext.adapter.sourcePath
 # 4. Retries: opencli weibo hot --limit 5 -f json
-# 5. Continues with the task
+# 5. If retry passes, runs scripts/autofix-issue.js to prepare an upstream issue draft
+# 6. Continues with the task
 ```
