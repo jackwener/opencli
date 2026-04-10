@@ -10,7 +10,7 @@
 
 OpenCLI 可以用同一套 CLI 做三类事情：
 
-- **直接使用现成适配器**：B站、知乎、小红书、Twitter/X、Reddit、HackerNews 等 [79+ 站点](#内置命令) 开箱即用。
+- **直接使用现成适配器**：B站、知乎、小红书、Twitter/X、Reddit、HackerNews 等 [87+ 站点](#内置命令) 开箱即用。
 - **直接驱动浏览器**：用 `opencli browser` 让 AI Agent 实时点击、输入、提取、截图、检查页面状态。
 - **把新网站生成成 CLI**：通过 `explore`、`synthesize`、`generate`、`cascade` 从真实页面行为推导出新的适配器。
 
@@ -124,7 +124,7 @@ OpenCLI 不只是网站 CLI，还可以：
 
 ## 前置要求
 
-- **Node.js**: >= 20.0.0
+- **Node.js**: >= 21.0.0
 - 浏览器型命令需要 Chrome 或 Chromium 处于运行中，并已登录目标网站
 
 > **重要**：浏览器型命令直接复用你的 Chrome/Chromium 登录态。如果拿到空数据或出现权限类失败，先确认目标站点已经在浏览器里打开并完成登录。
@@ -262,7 +262,7 @@ npm link
 | **douyin** | `videos` `publish` `drafts` `draft` `delete` `stats` `profile` `update` `hashtag` `location` `activities` `collections` | 浏览器 |
 | **yuanbao** | `new` `ask` | 浏览器 |
 
-79+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
+87+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
 
 ### 外部 CLI 枢纽
 
@@ -460,7 +460,7 @@ opencli cascade https://api.example.com/data
 - **返回空数据，或者报错 "Unauthorized"**
   - Chrome/Chromium 里的登录态可能已经过期。请打开当前页面，在新标签页重新手工登录或刷新该页面。
 - **Node API 错误 (如 parseArgs, fs 等)**
-  - 确保 Node.js 版本 `>= 20`。
+  - 确保 Node.js 版本 `>= 21`（`node:util` 的 `styleText` 需要 Node 21+）。
 - **Daemon 问题**
   - 检查 daemon 状态：`curl localhost:19825/status`
   - 查看扩展日志：`curl localhost:19825/logs`

@@ -33,7 +33,7 @@ It also works as a **CLI hub** for local tools such as `gh`, `docker`, and other
 - **Dynamic Loader** — Simply drop `.ts` adapters into the `clis/` folder for auto-registration.
 - **Zero LLM cost** — No tokens consumed at runtime. Run 10,000 times and pay nothing.
 - **Deterministic** — Same command, same output schema, every time. Pipeable, scriptable, CI-friendly.
-- **Broad coverage** — 79+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
+- **Broad coverage** — 87+ sites across global and Chinese platforms (Bilibili, Zhihu, Xiaohongshu, Reddit, HackerNews, and more), plus desktop Electron apps via CDP.
 
 ---
 
@@ -136,7 +136,7 @@ OpenCLI is not only for websites. It can also:
 
 ## Prerequisites
 
-- **Node.js**: >= 20.0.0 (or **Bun** >= 1.0)
+- **Node.js**: >= 21.0.0 (or **Bun** >= 1.0)
 - **Chrome or Chromium** running and logged into the target site for browser-backed commands
 
 > **Important**: Browser-backed commands reuse your Chrome/Chromium login session. If you get empty data or permission-like failures, first confirm the site is already open and authenticated in Chrome/Chromium.
@@ -212,7 +212,7 @@ To load the source Browser Bridge extension:
 | **xiaoe** | `courses` `detail` `catalog` `play-url` `content` |
 | **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` |
 
-79+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
+87+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
 
 ## CLI Hub
 
@@ -349,7 +349,7 @@ See **[TESTING.md](./TESTING.md)** for how to run and write tests.
 - **"Extension not connected"** — Ensure the Browser Bridge extension is installed and **enabled** in `chrome://extensions` in Chrome or Chromium.
 - **"attach failed: Cannot access a chrome-extension:// URL"** — Another extension may be interfering. Try disabling other extensions temporarily.
 - **Empty data or 'Unauthorized' error** — Your Chrome/Chromium login session may have expired. Navigate to the target site and log in again.
-- **Node API errors** — Ensure Node.js >= 20. Some dependencies require modern Node APIs.
+- **Node API errors** — Ensure Node.js >= 21. Some features require `node:util` styleText (stable in Node 21+).
 - **Daemon issues** — Check status: `curl localhost:19825/status` · View logs: `curl localhost:19825/logs`
 
 ## Star History

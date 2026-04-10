@@ -55,6 +55,22 @@ complete -c opencli -f -a '(
 )'
 `;
 
+// ── Daemon restart ────────────────────────────────────────────────────────
+// After install/update, the running daemon may cache stale adapter modules.
+// Send a graceful shutdown so it restarts fresh on next use.
+function restartDaemon() {
+  const port = process.env.OPENCLI_DAEMON_PORT || '19825';
+  try {
+    fetch(`http://127.0.0.1:${port}/shutdown`, {
+      method: 'POST',
+      headers: { 'X-OpenCLI': '1' },
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => {});
+  } catch {
+    // Best-effort; daemon may not be running
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function detectShell() {
@@ -168,6 +184,9 @@ function main() {
   console.log('');
   console.log('  Then run \x1b[36mopencli doctor\x1b[0m to verify.');
   console.log('');
+
+  // Restart daemon so it picks up updated adapters
+  restartDaemon();
 }
 
 main();

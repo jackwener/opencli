@@ -215,15 +215,15 @@ OpenCLI autofix repaired this adapter locally, and the retry passed.
 ## Original failure
 - Error code: `<error_code>`
 
-\```text
+~~~
 <error_message>
-\```
+~~~
 
 ## Local fix summary
 
-\```text
+~~~
 <1-2 sentence description of what you changed and why>
-\```
+~~~
 
 _Issue filed by OpenCLI autofix after a verified local repair._
 ```
