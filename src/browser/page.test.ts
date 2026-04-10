@@ -26,6 +26,11 @@ vi.mock('./workspace-tab-cache.js', () => ({
   clearWorkspaceTabId: clearWorkspaceTabIdMock,
 }));
 
+vi.mock('../interceptor.js', () => ({
+  generateInterceptorJs: vi.fn((patternExpr: string) => `() => "INTERCEPT:${patternExpr}"`),
+  generateReadInterceptedJs: vi.fn(() => '() => []'),
+}));
+
 import { Page } from './page.js';
 
 describe('Page.getCurrentUrl', () => {
@@ -162,5 +167,27 @@ describe('Page.consoleMessages', () => {
 
     expect(saveWorkspaceTabIdMock).toHaveBeenCalledWith('operate:default', 99);
     expect(clearWorkspaceTabIdMock).toHaveBeenCalledWith('operate:default');
+  });
+
+  it('reinstalls the interceptor after navigation when fallback capture is active', async () => {
+    sendCommandMock.mockResolvedValue(undefined);
+    sendCommandFullMock.mockResolvedValueOnce({ page: 'page-1' });
+
+    const page = new Page('site:test');
+    await page.installInterceptor('');
+    sendCommandMock.mockClear();
+
+    await page.goto('https://example.com');
+
+    expect(sendCommandMock).toHaveBeenCalledTimes(2);
+    expect(sendCommandMock).toHaveBeenNthCalledWith(1, 'exec', expect.objectContaining({
+      workspace: 'site:test',
+      page: 'page-1',
+    }));
+    expect(sendCommandMock).toHaveBeenNthCalledWith(2, 'exec', expect.objectContaining({
+      workspace: 'site:test',
+      page: 'page-1',
+      code: expect.stringContaining('INTERCEPT:""'),
+    }));
   });
 });

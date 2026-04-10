@@ -33,6 +33,7 @@ function isUnsupportedCaptureError(err: unknown): boolean {
 export class Page extends BasePage {
   private _nativeCaptureSupported: boolean | undefined;
   private _legacyTabId: number | undefined;
+  private _interceptorPattern: string | undefined;
 
   constructor(private readonly workspace: string = 'default') {
     super();
@@ -102,6 +103,7 @@ export class Page extends BasePage {
         // Non-fatal: stealth is best-effort
       }
     }
+    await this._restoreInterceptorAfterNavigation();
   }
 
   /** Get the active page identity (targetId) */
@@ -196,6 +198,11 @@ export class Page extends BasePage {
     }
   }
 
+  async installInterceptor(pattern: string): Promise<void> {
+    this._interceptorPattern = pattern;
+    await super.installInterceptor(pattern);
+  }
+
   async readNetworkCapture(): Promise<unknown[]> {
     try {
       const result = await sendCommand('network-capture-read', {
@@ -241,6 +248,15 @@ export class Page extends BasePage {
 
   hasNativeCaptureSupport(): boolean | undefined {
     return this._nativeCaptureSupported;
+  }
+
+  private async _restoreInterceptorAfterNavigation(): Promise<void> {
+    if (this._interceptorPattern === undefined) return;
+    try {
+      await super.installInterceptor(this._interceptorPattern);
+    } catch {
+      // Best-effort: unsupported native capture fallback should not break navigation.
+    }
   }
 
   /**

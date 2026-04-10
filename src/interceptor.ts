@@ -74,7 +74,10 @@ export function generateInterceptorJs(
       if (!window.${arr}) __defHidden(window, '${arr}', []);
       if (!window.${arr}_errors) __defHidden(window, '${arr}_errors', []);
       __defHidden(window, '${patternVar}', ${patternExpr});
-      const __checkMatch = (url) => window.${patternVar} && url.includes(window.${patternVar});
+      const __checkMatch = (url) => {
+        const pattern = window.${patternVar};
+        return pattern === '' || (pattern && url.includes(pattern));
+      };
 
       if (!window.${guard}) {
         // ── Patch fetch ──

@@ -299,12 +299,14 @@ async function collectPageState(page: IPage): Promise<RepairContext['page'] | un
       ]);
       const intercepted = interceptedRequests as unknown[];
       const interceptedPayloads = normalizeInterceptedRequests(intercepted);
-      const interceptedNetworkFallback = hasNativeCaptureSupport(page) === false && interceptedPayloads.length > 0
+      const nativeCaptureUnsupported = hasNativeCaptureSupport(page) === false;
+      const interceptedNetworkFallback = nativeCaptureUnsupported && interceptedPayloads.length > 0
         ? interceptedPayloads
         : null;
-      const networkRequests = Array.isArray(capturedNetworkRequests) && capturedNetworkRequests.length > 0
-        ? capturedNetworkRequests
-        : interceptedNetworkFallback ?? await page.networkRequests().catch(() => []);
+      const networkRequests = interceptedNetworkFallback
+        ?? (Array.isArray(capturedNetworkRequests) && capturedNetworkRequests.length > 0
+          ? capturedNetworkRequests
+          : await page.networkRequests().catch(() => []));
 
       const rawUrl = url ?? 'unknown';
       return {
