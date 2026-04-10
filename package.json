@@ -51,7 +51,7 @@
     "postinstall": "node scripts/postinstall.js || true; node scripts/fetch-adapters.js || true",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "prepare": "[ -d src ] && npm run build || true",
+    "prepare": "node scripts/prepare.cjs",
     "prepublishOnly": "npm run build",
     "test": "vitest run --project unit --project extension",
     "test:bun": "bun vitest run --project unit --project extension",
