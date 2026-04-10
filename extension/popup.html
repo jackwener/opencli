@@ -54,6 +54,36 @@
       border-radius: 3px;
       font-size: 11px;
     }
+    .action-button {
+      margin-top: 14px;
+      width: 100%;
+      padding: 10px;
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .action-button:hover {
+      background: #0066cc;
+    }
+    .action-button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 14px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f5f5f5;
+      font-size: 11px;
+      color: #333;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+    }
     .footer {
       margin-top: 14px;
       text-align: center;
@@ -76,6 +106,8 @@
   <div class="hint" id="hint">
     This is normal. The extension connects automatically when you run any <code>opencli</code> command.
   </div>
+  <button class="action-button" id="stateButton" disabled>Get Page State</button>
+  <div class="result" id="result"></div>
   <div class="footer">
     <a href="https://github.com/jackwener/opencli" target="_blank">Documentation</a>
   </div>
