@@ -151,12 +151,12 @@ fetch(url) 直接能拿到？
 
 ```bash
 ls clis/<site>/             # 看同站点已有什么
-cat clis/<site>/feed.ts     # 读最相似的那个
+cat clis/<site>/feed.js     # 读最相似的那个
 ```
 
 改 3 处即可：`name`、API URL、字段映射。
 
-**Bilibili 平台 SDK**（`clis/bilibili/utils.ts`）：
+**Bilibili 平台 SDK**（`clis/bilibili/utils.js`）：
 - `fetchJson(page, url)` → 普通 Cookie-tier API
 - `apiGet(page, path, {signed, params})` → URL 含 `/wbi/` 的接口（自动签名）
 - `getSelfUid(page)` / `resolveUid(page, input)` → 用户 UID 处理
@@ -165,7 +165,7 @@ cat clis/<site>/feed.ts     # 读最相似的那个
 
 ## Step 3: 编写适配器
 
-所有适配器统一使用 TypeScript `cli()` API，放入 `clis/<site>/<name>.ts` 即自动注册。
+所有适配器统一使用 `cli()` API，放入 `clis/<site>/<name>.js` 即自动注册。
 
 完整模板（Tier 1~4）、分页模式、错误处理规范（`throw CliError` + YAML envelope）→ **[adapter-templates.md](references/adapter-templates.md)**
 
@@ -209,8 +209,8 @@ cli({
 
 <!-- keep in sync with oneshot SKILL.md §测试 -->
 **两种开发场景**：
-- **Repo 贡献**：文件放 `clis/<site>/<name>.ts`，`npm run build` 后自动注册
-- **私人 adapter**（本地使用，无需提 PR）：文件放 `~/.opencli/clis/<site>/<name>.ts`，无需 build
+- **Repo 贡献**：文件放 `clis/<site>/<name>.js`，`npm run build` 后自动注册
+- **私人 adapter**（本地使用，无需提 PR）：文件放 `~/.opencli/clis/<site>/<name>.js`，无需 build
 
 ```bash
 # Repo 贡献：build 后直接运行

@@ -15,7 +15,7 @@ OpenCLI turns **any website** or **Electron app** into a command-line interface 
 - **Account-safe** — Reuses Chrome's logged-in state; your credentials never leave the browser.
 - **AI Agent ready** — `explore` discovers APIs, `synthesize` generates adapters, `cascade` finds auth strategies.
 - **Self-healing setup** — `opencli doctor` auto-starts the daemon and diagnoses extension + live browser connectivity.
-- **Dynamic Loader** — Simply drop `.ts` adapters into the `clis/` folder for auto-registration.
+- **Dynamic Loader** — Simply drop `.js` adapters into the `clis/` folder for auto-registration.
 - **Dual-Engine Architecture** — Supports both declarative pipeline adapters and robust browser runtime TypeScript injections.
 
 ## Quick Start

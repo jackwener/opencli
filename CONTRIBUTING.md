@@ -30,7 +30,7 @@ All adapters use TypeScript. Use the pipeline API for data-fetching commands, an
 
 ### Pipeline Adapter (Recommended for data-fetching commands)
 
-Create a file like `clis/<site>/<command>.ts`:
+Create a file like `clis/<site>/<command>.js`:
 
 ```typescript
 import { cli, Strategy } from '@jackwener/opencli/registry';
@@ -60,11 +60,11 @@ cli({
 });
 ```
 
-See [`hackernews/top.ts`](clis/hackernews/top.ts) for a real example.
+See [`hackernews/top.js`](clis/hackernews/top.js) for a real example.
 
 ### func() Adapter (For complex browser interactions)
 
-Create a file like `clis/<site>/<command>.ts`:
+Create a file like `clis/<site>/<command>.js`:
 
 ```typescript
 import { cli, Strategy } from '@jackwener/opencli/registry';

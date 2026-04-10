@@ -31,5 +31,5 @@ features:
     details: "opencli doctor auto-starts the daemon and diagnoses extension + live browser connectivity."
   - icon: 📦
     title: Dynamic Loader
-    details: Simply drop .ts adapters into the clis/ folder for auto-registration. Zero boilerplate.
+    details: Simply drop .js adapters into the clis/ folder for auto-registration. Zero boilerplate.
 ---
