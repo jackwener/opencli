@@ -12,6 +12,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { log } from './logger.js';
 import yaml from 'js-yaml';
 import { type CliCommand, fullName, getRegistry } from './registry.js';
 import { formatRegistryHelpText } from './serialization.js';
@@ -96,7 +97,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       if (cmd.deprecated) {
         const message = typeof cmd.deprecated === 'string' ? cmd.deprecated : `${fullName(cmd)} is deprecated.`;
         const replacement = cmd.replacedBy ? ` Use ${cmd.replacedBy} instead.` : '';
-        console.error(chalk.yellow(`Deprecated: ${message}${replacement}`));
+        log.warn(`Deprecated: ${message}${replacement}`);
       }
 
       const result = await executeCommand(cmd, kwargs, verbose);
@@ -110,7 +111,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       }
 
       if (verbose && (!result || (Array.isArray(result) && result.length === 0))) {
-        console.error(chalk.yellow('[Verbose] Warning: Command returned an empty result.'));
+        log.warn('Command returned an empty result.');
       }
       renderOutput(result, {
         fmt: format,

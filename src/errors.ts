@@ -137,6 +137,12 @@ export class SelectorError extends CliError {
   }
 }
 
+export class PluginError extends CliError {
+  constructor(message: string, hint?: string) {
+    super('PLUGIN', message, hint, EXIT_CODES.GENERIC_ERROR);
+  }
+}
+
 // ── Error Envelope ──────────────────────────────────────────────────────────
 
 /** Structured error output — unified contract for all consumers (AI agents, scripts, humans). */

@@ -139,6 +139,9 @@ export async function executeCommand(
   let kwargs: CommandArgs;
   try {
     kwargs = coerceAndValidateArgs(cmd.args, rawKwargs);
+    // Note: validateArgs may also be called in commanderAdapter for early rejection
+    // (before browser session setup). This post-coercion call ensures validation
+    // on properly typed values for all callers of executeCommand.
     cmd.validateArgs?.(kwargs);
   } catch (err) {
     if (err instanceof ArgumentError) throw err;
@@ -189,7 +192,7 @@ export async function executeCommand(
           try {
             await page.goto(preNavUrl);
           } catch (err) {
-            if (debug) log.debug(`[pre-nav] Failed to navigate to ${preNavUrl}: ${err instanceof Error ? err.message : err}`);
+            log.warn(`Pre-navigation to ${preNavUrl} failed: ${err instanceof Error ? err.message : err}`);
           }
         }
         try {

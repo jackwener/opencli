@@ -233,12 +233,14 @@ class CDPPage extends BasePage {
   }
 
   async startNetworkCapture(pattern: string = ''): Promise<void> {
+    // Always update the filter pattern
     this._networkCapturePattern = pattern;
-    this._networkEntries = [];
-    this._pendingRequests.clear();
-    this._pendingBodyFetches.clear();
 
+    // Reset state only on first start; avoid wiping entries if already capturing
     if (!this._networkCapturing) {
+      this._networkEntries = [];
+      this._pendingRequests.clear();
+      this._pendingBodyFetches.clear();
       await this.bridge.send('Network.enable');
 
       // Step 1: Record request method/url on requestWillBeSent

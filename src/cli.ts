@@ -385,13 +385,13 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   get.command('text').argument('<index>', 'Element index').description('Element text content')
     .action(browserAction(async (page, index) => {
-      const text = await page.evaluate(`document.querySelector('[data-opencli-ref="${index}"]')?.textContent?.trim()`);
+      const text = await page.evaluate(`((idx) => document.querySelector('[data-opencli-ref="' + idx + '"]')?.textContent?.trim())(${JSON.stringify(String(index))})`);
       console.log(text ?? '(empty)');
     }));
 
   get.command('value').argument('<index>', 'Element index').description('Input/textarea value')
     .action(browserAction(async (page, index) => {
-      const val = await page.evaluate(`document.querySelector('[data-opencli-ref="${index}"]')?.value`);
+      const val = await page.evaluate(`((idx) => document.querySelector('[data-opencli-ref="' + idx + '"]')?.value)(${JSON.stringify(String(index))})`);
       console.log(val ?? '(empty)');
     }));
 
@@ -404,7 +404,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   get.command('attributes').argument('<index>', 'Element index').description('Element attributes')
     .action(browserAction(async (page, index) => {
-      const attrs = await page.evaluate(`JSON.stringify(Object.fromEntries([...document.querySelector('[data-opencli-ref="${index}"]')?.attributes].map(a=>[a.name,a.value])))`);
+      const attrs = await page.evaluate(`((idx) => JSON.stringify(Object.fromEntries([...document.querySelector('[data-opencli-ref="' + idx + '"]')?.attributes].map(a=>[a.name,a.value]))))(${JSON.stringify(String(index))})`);
       console.log(attrs ?? '{}');
     }));
 

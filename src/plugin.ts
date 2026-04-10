@@ -13,8 +13,9 @@ import * as path from 'node:path';
 import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PLUGINS_DIR } from './discovery.js';
-import { getErrorMessage } from './errors.js';
+import { getErrorMessage, PluginError } from './errors.js';
 import { log } from './logger.js';
+import { isRecord } from './utils.js';
 import {
   readPluginManifest,
   isMonorepo,
@@ -100,9 +101,7 @@ function toLocalPluginSource(pluginDir: string): string {
   return toStoredPluginSource({ kind: 'local', path: pluginDir });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+// isRecord is imported from './utils.js'
 
 function normalizeLegacyMonorepo(
   value: unknown,
@@ -231,7 +230,7 @@ function createSiblingTempPath(dest: string, kind: 'tmp' | 'bak'): string {
  */
 function promoteDir(stagingDir: string, dest: string, fsOps: PromoteDirFsOps = fs): void {
   if (fsOps.existsSync(dest)) {
-    throw new Error(`Destination already exists: ${dest}`);
+    throw new PluginError(`Destination already exists: ${dest}`);
   }
 
   fsOps.mkdirSync(path.dirname(dest), { recursive: true });
@@ -263,7 +262,7 @@ function cloneRepoToTemp(cloneUrl: string): string {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
   } catch (err) {
-    throw new Error(`Failed to clone plugin: ${getErrorMessage(err)}`);
+    throw new PluginError(`Failed to clone plugin: ${getErrorMessage(err)}`, 'Check the repository URL and your network connection.');
   }
 
   return tmpCloneDir;
@@ -578,7 +577,7 @@ function installDependencies(dir: string): void {
       ...(isWindows && { shell: true }),
     });
   } catch (err) {
-    throw new Error(`npm install failed in ${dir}: ${getErrorMessage(err)}`);
+    throw new PluginError(`npm install failed in ${dir}: ${getErrorMessage(err)}`, 'Check your network connection and npm configuration.');
   }
 }
 
@@ -612,7 +611,7 @@ function postInstallMonorepoLifecycle(repoDir: string, pluginDirs: string[]): vo
 function ensureStandalonePluginReady(pluginDir: string): void {
   const validation = validatePluginStructure(pluginDir);
   if (!validation.valid) {
-    throw new Error(`Invalid plugin structure:\n- ${validation.errors.join('\n- ')}`);
+    throw new PluginError(`Invalid plugin structure:\n- ${validation.errors.join('\n- ')}`);
   }
 
   postInstallLifecycle(pluginDir);
@@ -735,7 +734,7 @@ function installSinglePlugin(
   const targetDir = path.join(PLUGINS_DIR, pluginName);
 
   if (fs.existsSync(targetDir)) {
-    throw new Error(`Plugin "${pluginName}" is already installed at ${targetDir}`);
+    throw new PluginError(`Plugin "${pluginName}" is already installed at ${targetDir}`, 'Use "opencli plugin uninstall" first, or pick a different name.');
   }
 
   ensureStandalonePluginReady(cloneDir);
@@ -760,19 +759,20 @@ function installSinglePlugin(
  */
 function installLocalPlugin(localPath: string, name: string): string {
   if (!fs.existsSync(localPath)) {
-    throw new Error(`Local plugin path does not exist: ${localPath}`);
+    throw new PluginError(`Local plugin path does not exist: ${localPath}`);
   }
 
   const stat = fs.statSync(localPath);
   if (!stat.isDirectory()) {
-    throw new Error(`Local plugin path is not a directory: ${localPath}`);
+    throw new PluginError(`Local plugin path is not a directory: ${localPath}`);
   }
 
   const manifest = readPluginManifest(localPath);
 
   if (manifest?.opencli && !checkCompatibility(manifest.opencli)) {
-    throw new Error(
-      `Plugin requires opencli ${manifest.opencli}, but current version is incompatible.`
+    throw new PluginError(
+      `Plugin requires opencli ${manifest.opencli}, but current version is incompatible.`,
+      'Upgrade opencli to a compatible version.',
     );
   }
 
@@ -780,12 +780,12 @@ function installLocalPlugin(localPath: string, name: string): string {
   const targetDir = path.join(PLUGINS_DIR, pluginName);
 
   if (fs.existsSync(targetDir)) {
-    throw new Error(`Plugin "${pluginName}" is already installed at ${targetDir}`);
+    throw new PluginError(`Plugin "${pluginName}" is already installed at ${targetDir}`, 'Use "opencli plugin uninstall" first, or pick a different name.');
   }
 
   const validation = validatePluginStructure(localPath);
   if (!validation.valid) {
-    throw new Error(`Invalid plugin structure:\n- ${validation.errors.join('\n- ')}`);
+    throw new PluginError(`Invalid plugin structure:\n- ${validation.errors.join('\n- ')}`);
   }
 
   fs.mkdirSync(PLUGINS_DIR, { recursive: true });
@@ -847,7 +847,7 @@ function installMonorepo(
   const effectiveManifest = repoAlreadyInstalled ? readPluginManifest(repoDir) : manifest;
 
   if (!effectiveManifest || !isMonorepo(effectiveManifest)) {
-    throw new Error(`Monorepo manifest missing or invalid at ${repoRoot}`);
+    throw new PluginError(`Monorepo manifest missing or invalid at ${repoRoot}`);
   }
 
   let pluginsToInstall = getEnabledPlugins(effectiveManifest);
@@ -859,9 +859,9 @@ function installMonorepo(
       // Check if it exists but is disabled
       const disabled = effectiveManifest.plugins?.[subPlugin];
       if (disabled) {
-        throw new Error(`Sub-plugin "${subPlugin}" is disabled in the manifest.`);
+        throw new PluginError(`Sub-plugin "${subPlugin}" is disabled in the manifest.`);
       }
-      throw new Error(
+      throw new PluginError(
         `Sub-plugin "${subPlugin}" not found in monorepo. Available: ${Object.keys(effectiveManifest.plugins ?? {}).join(', ')}`
       );
     }
@@ -880,7 +880,11 @@ function installMonorepo(
       continue;
     }
 
-    const subDir = path.join(repoRoot, entry.path);
+    const subDir = path.resolve(repoRoot, entry.path);
+    if (!subDir.startsWith(repoRoot + path.sep) && subDir !== repoRoot) {
+      log.warn(`Skipping "${name}": path "${entry.path}" escapes repo root.`);
+      continue;
+    }
     if (!fs.existsSync(subDir)) {
       log.warn(`Skipping "${name}": path "${entry.path}" not found in repo.`);
       continue;
