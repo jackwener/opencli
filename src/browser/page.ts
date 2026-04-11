@@ -213,8 +213,9 @@ export class Page extends BasePage {
     } catch (err) {
       if (!isUnsupportedCaptureError(err)) throw err;
       this._nativeCaptureSupported = false;
-      if (this._interceptorPattern !== undefined) {
-        return this.getInterceptedRequests().catch(() => []);
+      const intercepted = await this.getInterceptedRequests().catch(() => []);
+      if (intercepted.length > 0) {
+        return intercepted;
       }
       return this.networkRequests(false);
     }
@@ -229,7 +230,9 @@ export class Page extends BasePage {
     } catch (err) {
       if (!isUnsupportedCaptureError(err)) throw err;
       this._nativeCaptureSupported = false;
+      await super.uninstallInterceptor().catch(() => {});
     }
+    this._interceptorPattern = undefined;
   }
 
   async consoleMessages(level: string = 'all'): Promise<ConsoleMessage[]> {

@@ -29,6 +29,7 @@ vi.mock('./workspace-tab-cache.js', () => ({
 vi.mock('../interceptor.js', () => ({
   generateInterceptorJs: vi.fn((patternExpr: string) => `() => "INTERCEPT:${patternExpr}"`),
   generateReadInterceptedJs: vi.fn(() => '() => []'),
+  generateUninstallInterceptorJs: vi.fn(() => '() => "UNINSTALL_INTERCEPT"'),
 }));
 
 import { Page } from './page.js';
@@ -157,6 +158,50 @@ describe('Page.consoleMessages', () => {
     expect(page.hasNativeCaptureSupport()).toBe(false);
   });
 
+  it('uninstalls the fallback interceptor when stale extensions do not support capture-stop', async () => {
+    sendCommandMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Unknown action: capture-stop'))
+      .mockResolvedValueOnce(undefined);
+
+    const page = new Page('site:test');
+    await page.installInterceptor('');
+    sendCommandMock.mockClear();
+
+    await expect(page.stopCapture()).resolves.toBeUndefined();
+
+    expect(sendCommandMock).toHaveBeenCalledTimes(2);
+    expect(sendCommandMock).toHaveBeenNthCalledWith(1, 'capture-stop', expect.objectContaining({
+      workspace: 'site:test',
+    }));
+    expect(sendCommandMock).toHaveBeenNthCalledWith(2, 'exec', expect.objectContaining({
+      workspace: 'site:test',
+      code: expect.stringContaining('UNINSTALL_INTERCEPT'),
+    }));
+  });
+
+  it('uninstalls the fallback interceptor across fresh Page instances when capture-stop is unsupported', async () => {
+    sendCommandMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Unknown action: capture-stop'))
+      .mockResolvedValueOnce(undefined);
+
+    const opener = new Page('site:test');
+    await opener.installInterceptor('');
+    sendCommandMock.mockClear();
+
+    const closer = new Page('site:test');
+    await expect(closer.stopCapture()).resolves.toBeUndefined();
+
+    expect(sendCommandMock).toHaveBeenNthCalledWith(1, 'capture-stop', expect.objectContaining({
+      workspace: 'site:test',
+    }));
+    expect(sendCommandMock).toHaveBeenNthCalledWith(2, 'exec', expect.objectContaining({
+      workspace: 'site:test',
+      code: expect.stringContaining('UNINSTALL_INTERCEPT'),
+    }));
+  });
+
   it('returns intercepted payloads from readNetworkCapture when native capture is unsupported and a fallback interceptor is installed', async () => {
     sendCommandMock
       .mockResolvedValueOnce({ ok: true })
@@ -168,6 +213,27 @@ describe('Page.consoleMessages', () => {
     await page.installInterceptor('');
     await expect(page.readNetworkCapture()).resolves.toEqual([{ items: [{ id: 1 }] }]);
     expect(page.hasNativeCaptureSupport()).toBe(false);
+  });
+
+  it('reads intercepted fallback payloads across fresh Page instances when native capture is unsupported', async () => {
+    sendCommandMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Unknown action: network-capture-read'))
+      .mockResolvedValueOnce([{ items: [{ id: 1 }] }]);
+
+    const opener = new Page('site:test');
+    await opener.installInterceptor('');
+    sendCommandMock.mockClear();
+
+    const reader = new Page('site:test');
+    await expect(reader.readNetworkCapture()).resolves.toEqual([{ items: [{ id: 1 }] }]);
+    expect(reader.hasNativeCaptureSupport()).toBe(false);
+    expect(sendCommandMock).toHaveBeenNthCalledWith(1, 'network-capture-read', expect.objectContaining({
+      workspace: 'site:test',
+    }));
+    expect(sendCommandMock).toHaveBeenNthCalledWith(2, 'exec', expect.objectContaining({
+      workspace: 'site:test',
+    }));
   });
 
   it('persists the resolved tab after navigation and clears it when the window closes', async () => {

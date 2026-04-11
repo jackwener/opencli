@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
-import type { CaptureCapablePage, IPage } from './types.js';
+import type { IPage } from './types.js';
 import { findPackageRoot, getBuiltEntryCandidates } from './package-paths.js';
 import { type CliCommand, fullName, getRegistry, strategyLabel } from './registry.js';
 import { serializeCommand, formatArgSummary } from './serialization.js';
@@ -36,10 +36,6 @@ async function getBrowserPage(): Promise<import('./types.js').IPage> {
 type CaptureAwarePage = IPage & {
   hasNativeCaptureSupport?: () => boolean | undefined;
 };
-
-function asCapturePage(page: IPage): CaptureCapablePage {
-  return page as CaptureCapablePage;
-}
 
 function hasNativeCaptureSupport(page: IPage): boolean | undefined {
   return (page as CaptureAwarePage).hasNativeCaptureSupport?.();
@@ -94,7 +90,11 @@ function normalizeCapturedRequests(raw: unknown[]): CapturedRequest[] {
 }
 
 async function startOperateCapture(page: IPage): Promise<void> {
-  await asCapturePage(page).startNetworkCapture();
+  await page.startNetworkCapture?.();
+}
+
+async function resetOperateCapture(page: IPage): Promise<void> {
+  await page.stopCapture?.();
 }
 
 async function installOperateFallbackCapture(page: IPage): Promise<void> {
@@ -107,11 +107,14 @@ async function installOperateFallbackCapture(page: IPage): Promise<void> {
 }
 
 async function readOperateCapture(page: IPage): Promise<CapturedRequest[]> {
-  const raw = await asCapturePage(page).readNetworkCapture();
+  const raw = page.readNetworkCapture
+    ? await page.readNetworkCapture()
+    : await page.networkRequests(false);
   if (hasNativeCaptureSupport(page) === false) {
-    if (raw.length > 0) return normalizeCapturedRequests(raw);
     const intercepted = await page.getInterceptedRequests();
     if (intercepted.length > 0) return normalizeCapturedRequests(intercepted);
+    if (raw.length > 0) return normalizeCapturedRequests(raw);
+    return [];
   }
   return normalizeCapturedRequests(raw);
 }
@@ -400,6 +403,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   browser.command('open').argument('<url>').description('Open URL in automation window')
     .action(browserAction(async (page, url) => {
+      await resetOperateCapture(page);
       // Start session-level capture before navigation (catches initial requests)
       await startOperateCapture(page);
       await installOperateFallbackCapture(page);

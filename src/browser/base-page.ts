@@ -190,6 +190,14 @@ export abstract class BasePage implements IPage {
     }));
   }
 
+  async uninstallInterceptor(): Promise<void> {
+    const { generateUninstallInterceptorJs } = await import('../interceptor.js');
+    await this.evaluate(generateUninstallInterceptorJs({
+      arrayName: '__opencli_xhr',
+      patchGuard: '__opencli_interceptor_patched',
+    }));
+  }
+
   async getInterceptedRequests(): Promise<unknown[]> {
     const { generateReadInterceptedJs } = await import('../interceptor.js');
     const result = await this.evaluate(generateReadInterceptedJs('__opencli_xhr'));

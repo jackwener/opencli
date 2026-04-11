@@ -61,6 +61,9 @@ export function generateInterceptorJs(
 ): string {
   const arr = opts.arrayName ?? '__opencli_intercepted';
   const guard = opts.patchGuard ?? '__opencli_interceptor_patched';
+  const fetchOrig = `${guard}_orig_fetch`;
+  const xhrOpenOrig = `${guard}_orig_xhr_open`;
+  const xhrSendOrig = `${guard}_orig_xhr_send`;
 
   // Store the current pattern in a separate global so it can be updated
   // without re-patching fetch/XHR (the patchGuard only prevents double-patching).
@@ -82,6 +85,7 @@ export function generateInterceptorJs(
       if (!window.${guard}) {
         // ── Patch fetch ──
         const __origFetch = window.fetch;
+        __defHidden(window, '${fetchOrig}', __origFetch);
         window.fetch = __disguise(async function(...args) {
           const reqUrl = typeof args[0] === 'string' ? args[0]
             : (args[0] && args[0].url) || '';
@@ -100,6 +104,8 @@ export function generateInterceptorJs(
         const __XHR = XMLHttpRequest.prototype;
         const __origOpen = __XHR.open;
         const __origSend = __XHR.send;
+        __defHidden(window, '${xhrOpenOrig}', __origOpen);
+        __defHidden(window, '${xhrSendOrig}', __origSend);
         __XHR.open = __disguise(function(method, url) {
           Object.defineProperty(this, '__iurl', { value: String(url), writable: true, enumerable: false, configurable: true });
           return __origOpen.apply(this, arguments);
@@ -117,6 +123,41 @@ export function generateInterceptorJs(
 
         __defHidden(window, '${guard}', true);
       }
+    }
+  `;
+}
+
+export function generateUninstallInterceptorJs(
+  opts: { arrayName?: string; patchGuard?: string } = {},
+): string {
+  const arr = opts.arrayName ?? '__opencli_intercepted';
+  const guard = opts.patchGuard ?? '__opencli_interceptor_patched';
+  const patternVar = `${guard}_pattern`;
+  const fetchOrig = `${guard}_orig_fetch`;
+  const xhrOpenOrig = `${guard}_orig_xhr_open`;
+  const xhrSendOrig = `${guard}_orig_xhr_send`;
+
+  return `
+    () => {
+      try {
+        if (window.${fetchOrig}) {
+          window.fetch = window.${fetchOrig};
+        }
+        if (window.${xhrOpenOrig}) {
+          XMLHttpRequest.prototype.open = window.${xhrOpenOrig};
+        }
+        if (window.${xhrSendOrig}) {
+          XMLHttpRequest.prototype.send = window.${xhrSendOrig};
+        }
+      } catch {}
+
+      try { delete window.${guard}; } catch { window.${guard} = false; }
+      try { delete window.${patternVar}; } catch { window.${patternVar} = ''; }
+      try { delete window.${fetchOrig}; } catch {}
+      try { delete window.${xhrOpenOrig}; } catch {}
+      try { delete window.${xhrSendOrig}; } catch {}
+      try { window.${arr} = []; } catch {}
+      try { window.${arr}_errors = []; } catch {}
     }
   `;
 }
