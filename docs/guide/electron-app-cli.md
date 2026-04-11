@@ -122,15 +122,15 @@ await page.wait(1);
 
 ## Where to put files
 
-For a TypeScript desktop adapter, the usual layout is:
+For a desktop adapter, the usual layout is:
 
 ```text
-clis/<app>/status.ts
-clis/<app>/dump.ts
-clis/<app>/read.ts
-clis/<app>/send.ts
-clis/<app>/new.ts
-clis/<app>/utils.ts
+clis/<app>/status.js
+clis/<app>/dump.js
+clis/<app>/read.js
+clis/<app>/send.js
+clis/<app>/new.js
+clis/<app>/utils.js
 ```
 
 If the app grows beyond the baseline, add higher-level commands such as:

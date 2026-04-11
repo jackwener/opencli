@@ -69,7 +69,7 @@ opencli browser network
 opencli browser network --detail 0
 # 确认数据结构：{ code: 0, data: { total: 1342, list: [{mid, uname, ...}] } }
 opencli browser eval "fetch('/x/relation/followings?vmid=137702077&pn=1&ps=5', {credentials:'include'}).then(r=>r.json())"
-# → 有数据，结论：Tier 2 Cookie，写 following.ts
+# → 有数据，结论：Tier 2 Cookie，写 following.js
 ```
 
 ---

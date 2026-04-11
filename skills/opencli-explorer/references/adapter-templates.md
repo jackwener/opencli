@@ -331,7 +331,7 @@ func: async (page, kwargs) => {
 
 ---
 
-## 同站点多 adapter：提取 utils.ts
+## 同站点多 adapter：提取 utils.js
 
 同一站点写第二个 adapter 时，如果发现要复制 auth context 解析逻辑，就应该提取 `clis/<site>/utils.js`。
 
