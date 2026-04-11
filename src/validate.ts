@@ -44,12 +44,11 @@ export function validateClisWithTarget(_dirs: string[], target?: string): Valida
     return { ok: true, results: [r], errors: 0, warnings: 1, commands: 0 };
   }
 
-  // Resolve alias target: if target is "site/alias", find the canonical command
+  // Resolve alias target: if target is "site/alias", resolve to canonical "site/name"
   let resolvedTarget = target;
-  if (target?.includes('/') && !registry.has(target)) {
-    // target might be an alias key — look it up
-    const aliasCmd = registry.get(target);
-    if (aliasCmd) resolvedTarget = fullName(aliasCmd);
+  if (target?.includes('/')) {
+    const cmd = registry.get(target);
+    if (cmd) resolvedTarget = fullName(cmd);
   }
 
   // Deduplicate: registry maps both canonical "site/name" and aliases to the same command
