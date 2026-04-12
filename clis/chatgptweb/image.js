@@ -53,11 +53,9 @@ export const imageCommand = cli({
         const timeout = 120;
 
         // Navigate to chatgpt.com/new with full reload to clear React sidebar state
-        await page.goto(`https://${CHATGPT_DOMAIN}/new`, {
-            timeout: 30000,
-            waitUntil: 'networkidle0'
-        });
-        await page.wait(2000);
+        await page.goto(`https://${CHATGPT_DOMAIN}/new`, { settleMs: 2000 });
+
+        const beforeUrls = await getChatGPTVisibleImageUrls(page);
 
         // Send the image generation prompt - must be explicit
         const sent = await sendChatGPTMessage(page, `Generate an image of: ${prompt}`);
@@ -66,7 +64,6 @@ export const imageCommand = cli({
         }
 
         // Wait for response and images
-        const beforeUrls = await getChatGPTVisibleImageUrls(page);
         const urls = await waitForChatGPTImages(page, beforeUrls, timeout);
         const link = await currentChatGPTLink(page);
 

@@ -60,10 +60,10 @@ export async function sendChatGPTMessage(page, text) {
             if (closeBtn) closeBtn.click();
         })()
     `);
-    await page.wait(500);
+    await page.wait(0.5);
 
     // Wait for composer to be ready and use Playwright's type()
-    await page.wait(1500);
+    await page.wait(1.5);
     
     const typeResult = await page.evaluate(`
         (() => {
@@ -80,7 +80,11 @@ export async function sendChatGPTMessage(page, text) {
     
     // Use page.type() which is Playwright's native method
     try {
-        await page.type('[aria-label="Chat with ChatGPT"]', text, { delay: 10 });
+        if (page.nativeType) {
+            await page.nativeType(text);
+        } else {
+            throw new Error('nativeType unavailable');
+        }
     } catch (e) {
         // Fallback: use execCommand
         await page.evaluate(`
@@ -94,7 +98,7 @@ export async function sendChatGPTMessage(page, text) {
     }
     
     // Wait for send button to appear (it only shows when there's text)
-    await page.wait(1500);
+    await page.wait(1.5);
 
     // Click send button
     const sent = await page.evaluate(`
