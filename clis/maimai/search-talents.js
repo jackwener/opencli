@@ -9,7 +9,7 @@ cli({
   name: 'search-talents',
   description: 'Search for candidates on Maimai with multi-dimensional filters',
   domain: 'maimai.cn',
-  strategy: Strategy.AUTH,
+  strategy: Strategy.COOKIE,
   browser: true,
   args: [
     { name: 'query', positional: true, required: true, help: 'Search keyword (e.g., "Java", "产品经理")' },
