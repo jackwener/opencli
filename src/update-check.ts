@@ -27,6 +27,15 @@ interface UpdateCache {
   latestExtensionVersion?: string;
 }
 
+interface GitHubReleaseAsset {
+  name: string;
+}
+
+interface GitHubRelease {
+  tag_name: string;
+  assets?: GitHubReleaseAsset[];
+}
+
 // Read cache once at module load — shared by both exported functions
 const _cache: UpdateCache | null = (() => {
   try {
@@ -89,7 +98,20 @@ export function registerUpdateNoticeOnExit(): void {
   });
 }
 
-/** Fetch the latest extension version from GitHub Releases (looks for ext-v* tags or extension zip assets). */
+function extractLatestExtensionVersionFromReleases(releases: GitHubRelease[]): string | undefined {
+  for (const release of releases) {
+    for (const asset of release.assets ?? []) {
+      const assetMatch = asset.name.match(/^opencli-extension-v(.+)\.zip$/);
+      if (assetMatch) return assetMatch[1];
+    }
+
+    const tagMatch = release.tag_name.match(/^ext-v(.+)$/);
+    if (tagMatch) return tagMatch[1];
+  }
+  return undefined;
+}
+
+/** Fetch the latest extension version from GitHub Releases. */
 async function fetchLatestExtensionVersion(): Promise<string | undefined> {
   try {
     const controller = new AbortController();
@@ -100,20 +122,8 @@ async function fetchLatestExtensionVersion(): Promise<string | undefined> {
     });
     clearTimeout(timer);
     if (!res.ok) return undefined;
-    const releases = await res.json() as Array<{ tag_name: string; assets?: Array<{ name: string }> }>;
-    // Look for releases that have the extension zip attached
-    for (const release of releases) {
-      const hasExtZip = release.assets?.some(a => a.name === 'opencli-extension.zip');
-      if (!hasExtZip) continue;
-      // Extract extension version from release body or tag
-      // For now, use the tag to derive CLI version — extension version is embedded in the zip
-      // The best approach: look for ext-v* tags first
-      const extMatch = release.tag_name.match(/^ext-v(.+)$/);
-      if (extMatch) return extMatch[1];
-    }
-    // Fallback: find the latest release that has the extension zip
-    // and read the extension version from a release body pattern like "Extension: v1.0.0"
-    return undefined;
+    const releases = await res.json() as GitHubRelease[];
+    return extractLatestExtensionVersionFromReleases(releases);
   } catch {
     return undefined;
   }
@@ -155,3 +165,7 @@ export function checkForUpdateBackground(): void {
 export function getCachedLatestExtensionVersion(): string | undefined {
   return _cache?.latestExtensionVersion;
 }
+
+export {
+  extractLatestExtensionVersionFromReleases as _extractLatestExtensionVersionFromReleases,
+};

@@ -44,8 +44,10 @@ jobs:
 
       - name: Create Extension ZIP
         run: |
+          EXT_VERSION=$(node -p "require('./extension/package.json').version")
           cd extension-package
           zip -r ../opencli-extension.zip .
+          cp ../opencli-extension.zip ../opencli-extension-v${EXT_VERSION}.zip
 
       - name: Upload Artifacts (Action Run)
         uses: actions/upload-artifact@v7
@@ -53,6 +55,7 @@ jobs:
           name: opencli-extension-build
           path: |
             opencli-extension.zip
+            opencli-extension-v*.zip
           retention-days: 7
 
       - name: Attach to GitHub Release
@@ -61,6 +64,7 @@ jobs:
         with:
           files: |
             opencli-extension.zip
+            opencli-extension-v*.zip
           draft: false
           prerelease: false
         env:
