@@ -14,11 +14,12 @@ import { type CliCommand, type InternalCliCommand, type Arg, type CommandArgs, g
 import type { IPage } from './types.js';
 import { pathToFileURL } from 'node:url';
 import { executePipeline } from './pipeline/index.js';
-import { AdapterLoadError, ArgumentError, CommandExecutionError, getErrorMessage } from './errors.js';
+import { AdapterLoadError, ArgumentError, BrowserConnectError, CommandExecutionError, getErrorMessage } from './errors.js';
 import { isDiagnosticEnabled, collectDiagnostic, emitDiagnostic } from './diagnostic.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
 import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMMAND_TIMEOUT } from './runtime.js';
 import { emitHook, type HookContext } from './hooks.js';
+import { getDaemonHealth } from './browser/daemon-client.js';
 import { log } from './logger.js';
 import { isElectronApp } from './electron-apps.js';
 import { probeCDP, resolveElectronEndpoint } from './launcher.js';
@@ -173,6 +174,24 @@ export async function executeCommand(
           cdpEndpoint = manualEndpoint;
         } else {
           cdpEndpoint = await resolveElectronEndpoint(cmd.site);
+        }
+      } else {
+        const manualEndpoint = process.env.OPENCLI_CDP_ENDPOINT?.trim() || undefined;
+        if (manualEndpoint) {
+          cdpEndpoint = manualEndpoint;
+        } else {
+          // Browser Bridge: fail-fast when daemon is up but extension is missing.
+          // 300ms timeout avoids a full 2s wait on cold-start.
+          const health = await getDaemonHealth({ timeout: 300 });
+          if (health.state === 'no-extension') {
+            throw new BrowserConnectError(
+              'Browser Bridge extension not connected',
+              'Install the Browser Bridge:\n' +
+              '  1. Download: https://github.com/jackwener/opencli/releases\n' +
+              '  2. In Chrome or Chromium, open chrome://extensions → Developer Mode → Load unpacked\n' +
+              '  Then run: opencli doctor',
+            );
+          }
         }
       }
 
