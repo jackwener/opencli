@@ -186,6 +186,24 @@ export function fetchAdapters() {
   }
   if (tsCleaned > 0) log(`Cleaned up ${tsCleaned} stale .ts adapter files`);
 
+  // 3b. Clean up stale .yaml/.yml adapter files left by older versions (pre-1.7.0)
+  // Older versions shipped adapters as YAML; current versions use .js only.
+  // These cause "Ignoring YAML adapter" warnings on every run (issue #953).
+  let yamlCleaned = 0;
+  for (const relPath of walkFiles(USER_CLIS_DIR)) {
+    if (relPath.endsWith('.yaml') || relPath.endsWith('.yml')) {
+      const site = relPath.split('/')[0];
+      if (siteFiles.has(site)) {
+        try {
+          unlinkSync(join(USER_CLIS_DIR, relPath));
+          pruneEmptyDirs(join(USER_CLIS_DIR, relPath), USER_CLIS_DIR);
+          yamlCleaned++;
+        } catch { /* ignore */ }
+      }
+    }
+  }
+  if (yamlCleaned > 0) log(`Cleaned up ${yamlCleaned} stale .yaml adapter files`);
+
   // 4. Clean up legacy compat shim files from ~/.opencli/
   // These were created by an older approach that placed re-export shims directly
   // in ~/.opencli/ (e.g., registry.js, errors.js, browser/). The current approach
@@ -256,7 +274,8 @@ export function fetchAdapters() {
   }, null, 2));
 
   log(`Synced adapters: ${cleared} local override(s) cleared` +
-    (tsCleaned > 0 ? `, ${tsCleaned} stale .ts files removed` : ''));
+    (tsCleaned > 0 ? `, ${tsCleaned} stale .ts files removed` : '') +
+    (yamlCleaned > 0 ? `, ${yamlCleaned} stale .yaml files removed` : ''));
 }
 
 function main() {
