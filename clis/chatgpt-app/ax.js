@@ -121,11 +121,14 @@ let args = CommandLine.arguments
 let target = args.count > 1 ? args[1] : ""
 let needsLegacy = args.count > 2 && args[2] == "legacy"
 
-// Step 1: Click the "Options" button to open the popover
-guard let optionsBtn = findByDesc(win, "Options") else {
+// Step 1: Click the "Options" button to open the popover (support both English and Chinese UI)
+var optionsBtn: AXUIElement? = nil
+if let btn = findByDesc(win, "Options") { optionsBtn = btn }
+else if let btn = findByDesc(win, "选项") { optionsBtn = btn }
+guard let options = optionsBtn else {
     fputs("Could not find Options button\\n", stderr); exit(1)
 }
-press(optionsBtn)
+press(options)
 Thread.sleep(forTimeInterval: 0.8)
 
 // Step 2: Find the popover that appeared, search ONLY within it
