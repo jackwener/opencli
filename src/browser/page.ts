@@ -9,7 +9,7 @@
  * page-scoped operations target the correct page without guessing.
  */
 
-import type { BrowserCookie, ScreenshotOptions } from '../types.js';
+import type { BrowserCookie, ConsoleMessage, ScreenshotOptions } from '../types.js';
 import { sendCommand, sendCommandFull } from './daemon-client.js';
 import { wrapForEval } from './utils.js';
 import { saveBase64ToFile } from '../utils.js';
@@ -17,13 +17,27 @@ import { generateStealthJs } from './stealth.js';
 import { waitForDomStableJs } from './dom-helpers.js';
 import { BasePage } from './base-page.js';
 import { classifyBrowserError } from './errors.js';
+import { clearWorkspaceTabId, loadWorkspaceTabId, saveWorkspaceTabId } from './workspace-tab-cache.js';
+
+function isUnsupportedCaptureError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('Unknown action')
+    || message.includes('network-capture')
+    || message.includes('console-read')
+    || message.includes('capture-stop');
+}
 
 /**
  * Page — implements IPage by talking to the daemon via HTTP.
  */
 export class Page extends BasePage {
+  private _nativeCaptureSupported: boolean | undefined;
+  private _legacyTabId: number | undefined;
+  private _interceptorPattern: string | undefined;
+
   constructor(private readonly workspace: string = 'default') {
     super();
+    this._legacyTabId = loadWorkspaceTabId(workspace);
   }
 
   /** Active page identity (targetId), set after navigate and used in all subsequent commands */
@@ -39,6 +53,7 @@ export class Page extends BasePage {
     return {
       workspace: this.workspace,
       ...(this._page !== undefined && { page: this._page }),
+      ...(this._page === undefined && this._legacyTabId !== undefined && { tabId: this._legacyTabId }),
     };
   }
 
@@ -47,13 +62,18 @@ export class Page extends BasePage {
       url,
       ...this._cmdOpts(),
     });
-    // Remember the page identity (targetId) for subsequent calls
     if (result.page) {
       this._page = result.page;
+      this._legacyTabId = undefined;
+      clearWorkspaceTabId(this.workspace);
+    } else {
+      const data = result.data as { tabId?: number } | undefined;
+      if (data?.tabId) {
+        this._legacyTabId = data.tabId;
+        saveWorkspaceTabId(this.workspace, data.tabId);
+      }
     }
     this._lastUrl = url;
-    // Inject stealth + settle in a single round-trip instead of two sequential exec calls.
-    // The stealth guard flag prevents double-injection; settle uses DOM stability detection.
     if (options?.waitUntil !== 'none') {
       const maxMs = options?.settleMs ?? 1000;
       const combinedCode = `${generateStealthJs()};\n${waitForDomStableJs(maxMs, Math.min(500, maxMs))}`;
@@ -65,9 +85,6 @@ export class Page extends BasePage {
         await sendCommand('exec', combinedOpts);
       } catch (err) {
         const advice = classifyBrowserError(err);
-        // Only settle-retry on target navigation (SPA client-side redirects).
-        // Extension/daemon errors are already retried by sendCommandRaw —
-        // retrying them here would silently swallow real failures.
         if (advice.kind !== 'target-navigation') throw err;
         try {
           await new Promise((r) => setTimeout(r, advice.delayMs));
@@ -77,7 +94,6 @@ export class Page extends BasePage {
         }
       }
     } else {
-      // Even with waitUntil='none', still inject stealth (best-effort)
       try {
         await sendCommand('exec', {
           code: generateStealthJs(),
@@ -87,6 +103,7 @@ export class Page extends BasePage {
         // Non-fatal: stealth is best-effort
       }
     }
+    await this._restoreInterceptorAfterNavigation();
   }
 
   /** Get the active page identity (targetId) */
@@ -96,7 +113,7 @@ export class Page extends BasePage {
 
   /** @deprecated Use getActivePage() instead */
   getActiveTabId(): number | undefined {
-    return undefined;
+    return this._legacyTabId;
   }
 
   async evaluate(js: string): Promise<unknown> {
@@ -124,7 +141,9 @@ export class Page extends BasePage {
       // Window may already be closed or daemon may be down
     } finally {
       this._page = undefined;
+      this._legacyTabId = undefined;
       this._lastUrl = null;
+      clearWorkspaceTabId(this.workspace);
     }
   }
 
@@ -135,7 +154,17 @@ export class Page extends BasePage {
 
   async selectTab(index: number): Promise<void> {
     const result = await sendCommandFull('tabs', { op: 'select', index, ...this._wsOpt() });
-    if (result.page) this._page = result.page;
+    if (result.page) {
+      this._page = result.page;
+      this._legacyTabId = undefined;
+      clearWorkspaceTabId(this.workspace);
+      return;
+    }
+    const data = result.data as { selected?: number } | undefined;
+    if (typeof data?.selected === 'number') {
+      this._legacyTabId = data.selected;
+      saveWorkspaceTabId(this.workspace, data.selected);
+    }
   }
 
   /**
@@ -157,18 +186,85 @@ export class Page extends BasePage {
   }
 
   async startNetworkCapture(pattern: string = ''): Promise<void> {
-    await sendCommand('network-capture-start', {
-      pattern,
-      ...this._cmdOpts(),
-    });
+    try {
+      await sendCommand('network-capture-start', {
+        pattern,
+        ...this._cmdOpts(),
+      });
+      this._nativeCaptureSupported = true;
+    } catch (err) {
+      if (!isUnsupportedCaptureError(err)) throw err;
+      this._nativeCaptureSupported = false;
+    }
+  }
+
+  async installInterceptor(pattern: string): Promise<void> {
+    this._interceptorPattern = pattern;
+    await super.installInterceptor(pattern);
   }
 
   async readNetworkCapture(): Promise<unknown[]> {
-    const result = await sendCommand('network-capture-read', {
-      ...this._cmdOpts(),
-    });
-    return Array.isArray(result) ? result : [];
+    try {
+      const result = await sendCommand('network-capture-read', {
+        ...this._cmdOpts(),
+      });
+      this._nativeCaptureSupported = true;
+      return Array.isArray(result) ? result : [];
+    } catch (err) {
+      if (!isUnsupportedCaptureError(err)) throw err;
+      this._nativeCaptureSupported = false;
+      const intercepted = await this.getInterceptedRequests().catch(() => []);
+      if (intercepted.length > 0) {
+        return intercepted;
+      }
+      return this.networkRequests(false);
+    }
   }
+
+  async stopCapture(): Promise<void> {
+    try {
+      await sendCommand('capture-stop', {
+        ...this._cmdOpts(),
+      });
+      this._nativeCaptureSupported = true;
+    } catch (err) {
+      if (!isUnsupportedCaptureError(err)) throw err;
+      this._nativeCaptureSupported = false;
+      await super.uninstallInterceptor().catch(() => {});
+    }
+    this._interceptorPattern = undefined;
+  }
+
+  async consoleMessages(level: string = 'all'): Promise<ConsoleMessage[]> {
+    let messages: ConsoleMessage[] = [];
+    try {
+      const result = await sendCommand('console-read', {
+        ...this._cmdOpts(),
+      });
+      this._nativeCaptureSupported = true;
+      messages = Array.isArray(result) ? result as ConsoleMessage[] : [];
+    } catch (err) {
+      if (!isUnsupportedCaptureError(err)) throw err;
+      this._nativeCaptureSupported = false;
+    }
+    if (level === 'all') return messages;
+    if (level === 'error') return messages.filter((message) => message.level === 'error' || message.level === 'warn');
+    return messages.filter((message) => message.level === level);
+  }
+
+  hasNativeCaptureSupport(): boolean | undefined {
+    return this._nativeCaptureSupported;
+  }
+
+  private async _restoreInterceptorAfterNavigation(): Promise<void> {
+    if (this._interceptorPattern === undefined) return;
+    try {
+      await super.installInterceptor(this._interceptorPattern);
+    } catch {
+      // Best-effort: unsupported native capture fallback should not break navigation.
+    }
+  }
+
   /**
    * Set local file paths on a file input element via CDP DOM.setFileInputFiles.
    * Chrome reads the files directly from the local filesystem, avoiding the
@@ -218,7 +314,6 @@ export class Page extends BasePage {
     const safeRef = JSON.stringify(ref);
     const cssSelector = `[data-opencli-ref="${ref.replace(/"/g, '\\"')}"]`;
 
-    // Scroll element into view first
     await this.evaluate(`
       (() => {
         const el = document.querySelector('[data-opencli-ref="' + ${safeRef} + '"]');
@@ -228,7 +323,6 @@ export class Page extends BasePage {
     `);
 
     try {
-      // Find DOM node via CDP
       const doc = await this.cdp('DOM.getDocument', {}) as { root: { nodeId: number } };
       const result = await this.cdp('DOM.querySelectorAll', {
         nodeId: doc.root.nodeId,
@@ -239,7 +333,6 @@ export class Page extends BasePage {
 
       const nodeId = result.nodeIds[0];
 
-      // Try getContentQuads first (precise for inline elements)
       try {
         const quads = await this.cdp('DOM.getContentQuads', { nodeId }) as { quads: number[][] };
         if (quads.quads?.length) {
@@ -249,9 +342,8 @@ export class Page extends BasePage {
           await this.nativeClick(Math.round(cx), Math.round(cy));
           return;
         }
-      } catch { /* fallthrough */ }
+      } catch {}
 
-      // Try getBoxModel
       try {
         const box = await this.cdp('DOM.getBoxModel', { nodeId }) as { model: { content: number[] } };
         if (box.model?.content) {
@@ -261,10 +353,9 @@ export class Page extends BasePage {
           await this.nativeClick(Math.round(cx), Math.round(cy));
           return;
         }
-      } catch { /* fallthrough */ }
-    } catch { /* fallthrough */ }
+      } catch {}
+    } catch {}
 
-    // Final fallback: regular click
     await this.evaluate(`
       (() => {
         const el = document.querySelector('[data-opencli-ref="' + ${safeRef} + '"]');
@@ -291,7 +382,6 @@ export class Page extends BasePage {
   }
 
   async nativeType(text: string): Promise<void> {
-    // Use Input.insertText for reliable Unicode/CJK text insertion
     await this.cdp('Input.insertText', { text });
   }
 

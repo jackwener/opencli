@@ -112,9 +112,13 @@ function createChromeMock() {
       onStartup: { addListener: vi.fn() } as Listener<() => void>,
       onMessage: { addListener: vi.fn() } as Listener<(msg: unknown, sender: unknown, sendResponse: (value: unknown) => void) => void>,
       getManifest: vi.fn(() => ({ version: 'test-version' })),
+      id: 'opencli-test',
     },
     cookies: {
       getAll: vi.fn(async () => []),
+    },
+    scripting: {
+      executeScript: vi.fn(async () => [{ result: { removed: 1 } }]),
     },
   };
 
@@ -162,6 +166,49 @@ describe('background tab isolation', () => {
     mod.__test__.setAutomationWindowId('site:twitter', 1);
 
     const result = await mod.__test__.handleTabs({ id: '2', action: 'tabs', op: 'new', url: 'https://new.example', workspace: 'site:twitter' }, 'site:twitter');
+
+    expect(result.ok).toBe(true);
+    expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'https://new.example', active: true });
+  });
+
+  it('lists all owned automation-window web tabs even when a preferred tab is remembered', async () => {
+    const { chrome, tabs } = createChromeMock();
+    tabs.push({ id: 4, windowId: 1, url: 'https://second.example', title: 'second', active: false, status: 'complete' });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession('site:twitter', { windowId: 1, owned: true, preferredTabId: 4 });
+
+    const result = await mod.__test__.handleTabs({ id: 'owned-list', action: 'tabs', op: 'list', workspace: 'site:twitter' }, 'site:twitter');
+
+    expect(result.ok).toBe(true);
+    expect(result.data).toEqual([
+      {
+        index: 0,
+        page: 'target-1',
+        url: 'https://automation.example',
+        title: 'automation',
+        active: true,
+      },
+      {
+        index: 1,
+        page: 'target-4',
+        url: 'https://second.example',
+        title: 'second',
+        active: false,
+      },
+    ]);
+  });
+
+  it('does not reuse a preferred tab from another window for owned sessions', async () => {
+    const { chrome, tabs, create } = createChromeMock();
+    tabs.push({ id: 4, windowId: 2, url: 'https://drifted.example', title: 'drifted', active: false, status: 'complete' });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession('site:twitter', { windowId: 1, owned: true, preferredTabId: 4 });
+
+    const result = await mod.__test__.handleTabs({ id: 'owned-new', action: 'tabs', op: 'new', url: 'https://new.example', workspace: 'site:twitter' }, 'site:twitter');
 
     expect(result.ok).toBe(true);
     expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'https://new.example', active: true });
@@ -291,5 +338,102 @@ describe('background tab isolation', () => {
 
     expect(chrome.windows.remove).toHaveBeenCalledWith(1);
     expect(mod.__test__.getSession('site:notebooklm')).toBeNull();
+  });
+
+  it('best-effort rearms capture after navigate when capture intent exists', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const executor = await import('./cdp');
+    const ensureAttachedSpy = vi.spyOn(executor, 'ensureAttached');
+    const mod = await import('./background');
+
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+    await executor.startNetworkCapture(1, '/api/');
+    chrome.debugger.sendCommand.mockClear();
+
+    await mod.__test__.handleNavigate(
+      { id: 'n1', action: 'navigate', url: 'https://x.com/home', workspace: 'site:twitter' },
+      'site:twitter',
+    );
+
+    expect(ensureAttachedSpy).toHaveBeenLastCalledWith(1, true);
+    expect(chrome.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 1 }, 'Network.enable');
+    expect(chrome.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 1 }, 'Runtime.enable');
+  });
+
+  it('remembers the navigated tab for owned workspaces', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('operate:default', 1);
+
+    await mod.__test__.handleNavigate(
+      { id: 'remember-tab', action: 'navigate', url: 'https://example.com', workspace: 'operate:default' },
+      'operate:default',
+    );
+
+    expect(mod.__test__.getSession('operate:default')).toEqual(expect.objectContaining({
+      windowId: 1,
+      owned: true,
+      preferredTabId: 1,
+    }));
+  });
+
+  it('clears preferredTabId when a remembered owned-session tab is closed', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession('operate:default', {
+      windowId: 1,
+      owned: true,
+      preferredTabId: 1,
+    });
+
+    const onRemoved = chrome.tabs.onRemoved.addListener.mock.calls[0]?.[0];
+    onRemoved?.(1);
+
+    expect(mod.__test__.getSession('operate:default')).toEqual(expect.objectContaining({
+      windowId: 1,
+      owned: true,
+      preferredTabId: null,
+    }));
+  });
+
+  it('routes console-read and capture-stop through the executor', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const executor = await import('./cdp');
+    const mod = await import('./background');
+
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+    await executor.startNetworkCapture(1, '/api/');
+
+    const consoleResult = await mod.__test__.handleCommand({
+      id: 'console-1',
+      action: 'console-read',
+      workspace: 'site:twitter',
+    });
+    expect(consoleResult).toEqual({
+      id: 'console-1',
+      ok: true,
+      data: [],
+      page: 'target-1',
+    });
+
+    const stopResult = await mod.__test__.handleCommand({
+      id: 'stop-1',
+      action: 'capture-stop',
+      workspace: 'site:twitter',
+    });
+    expect(stopResult).toEqual({
+      id: 'stop-1',
+      ok: true,
+      data: { stopped: true },
+      page: 'target-1',
+    });
   });
 });

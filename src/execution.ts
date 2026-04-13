@@ -25,6 +25,24 @@ import { probeCDP, resolveElectronEndpoint } from './launcher.js';
 
 const _loadedModules = new Map<string, Promise<void>>();
 
+type CaptureAwarePage = IPage & {
+  hasNativeCaptureSupport?: () => boolean | undefined;
+};
+
+function hasNativeCaptureSupport(page: IPage): boolean | undefined {
+  return (page as CaptureAwarePage).hasNativeCaptureSupport?.();
+}
+
+async function startDiagnosticCapture(page: IPage): Promise<void> {
+  await page.startNetworkCapture?.();
+  if (hasNativeCaptureSupport(page) !== false) return;
+  try {
+    await page.installInterceptor('');
+  } catch {
+    // The legacy interceptor is best-effort compatibility for stale extensions.
+  }
+}
+
 export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): CommandArgs {
   const result: CommandArgs = { ...kwargs };
 
@@ -179,6 +197,9 @@ export async function executeCommand(
       ensureRequiredEnv(cmd);
       const BrowserFactory = getBrowserFactory(cmd.site);
       result = await browserSession(BrowserFactory, async (page) => {
+        const diagnosticEnabled = isDiagnosticEnabled();
+        let captureStopped = false;
+        let closeWindowAttempted = false;
         const preNavUrl = resolvePreNav(cmd);
         if (preNavUrl) {
           // Navigate directly — the extension's handleNavigate already has a fast-path
@@ -195,13 +216,29 @@ export async function executeCommand(
             );
           }
         }
+        if (diagnosticEnabled) {
+          try {
+            await startDiagnosticCapture(page);
+          } catch (err) {
+            if (debug) log.debug(`[capture] Failed to start capture: ${err instanceof Error ? err.message : err}`);
+          }
+        }
         try {
           const result = await runWithTimeout(runCommand(cmd, page, kwargs, debug), {
             timeout: cmd.timeoutSeconds ?? DEFAULT_BROWSER_COMMAND_TIMEOUT,
             label: fullName(cmd),
           });
+          if (diagnosticEnabled) {
+            try {
+              await page.stopCapture?.();
+              captureStopped = true;
+            } catch (err) {
+              if (debug) log.debug(`[capture] Failed to stop capture: ${err instanceof Error ? err.message : err}`);
+            }
+          }
           // Adapter commands are one-shot — close the automation window immediately
           // instead of waiting for the 30s idle timeout.
+          closeWindowAttempted = true;
           await page.closeWindow?.().catch(() => {});
           return result;
         } catch (err) {
@@ -213,6 +250,14 @@ export async function executeCommand(
             diagnosticEmitted = true;
           }
           throw err;
+        } finally {
+          if (diagnosticEnabled && !captureStopped && !closeWindowAttempted) {
+            try {
+              await page.stopCapture?.();
+            } catch (err) {
+              if (debug) log.debug(`[capture] Failed to stop capture: ${err instanceof Error ? err.message : err}`);
+            }
+          }
         }
       }, { workspace: `site:${cmd.site}`, cdpEndpoint });
     } else {
@@ -229,8 +274,8 @@ export async function executeCommand(
       }
     }
   } catch (err) {
-    // Emit diagnostic if not already emitted (browser session emits with page state;
-    // this fallback covers non-browser commands and pre-session failures like BrowserConnectError).
+    // Emit diagnostic if not already emitted. Browser-session failures emit with
+    // live page state; this fallback covers non-browser commands and earlier failures.
     if (isDiagnosticEnabled() && !diagnosticEmitted) {
       const internal = cmd as InternalCliCommand;
       const ctx = await collectDiagnostic(err, internal, null);

@@ -13,6 +13,7 @@ const {
   mockRenderCascadeResult,
   mockGetBrowserFactory,
   mockBrowserSession,
+  mockBridgeConnect,
 } = vi.hoisted(() => ({
   mockExploreUrl: vi.fn(),
   mockRenderExploreSummary: vi.fn(),
@@ -24,6 +25,7 @@ const {
   mockRenderCascadeResult: vi.fn(),
   mockGetBrowserFactory: vi.fn(() => ({ name: 'BrowserFactory' })),
   mockBrowserSession: vi.fn(),
+  mockBridgeConnect: vi.fn(),
 }));
 
 vi.mock('./explore.js', () => ({
@@ -49,6 +51,12 @@ vi.mock('./cascade.js', () => ({
 vi.mock('./runtime.js', () => ({
   getBrowserFactory: mockGetBrowserFactory,
   browserSession: mockBrowserSession,
+}));
+
+vi.mock('./browser/index.js', () => ({
+  BrowserBridge: class {
+    connect = mockBridgeConnect;
+  },
 }));
 
 import { createProgram, findPackageRoot, resolveBrowserVerifyInvocation } from './cli.js';
@@ -234,5 +242,96 @@ describe('findPackageRoot', () => {
     ]);
 
     expect(findPackageRoot(cliFile, (candidate) => exists.has(candidate))).toBe(packageRoot);
+  });
+});
+
+describe('browser capture compatibility', () => {
+  const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  beforeEach(() => {
+    process.exitCode = undefined;
+    mockGetBrowserFactory.mockClear();
+    mockBrowserSession.mockReset();
+    mockBridgeConnect.mockReset();
+    consoleLogSpy.mockClear();
+    consoleErrorSpy.mockClear();
+  });
+
+  it('installs the legacy interceptor after open when native capture is unavailable', async () => {
+    const startNetworkCapture = vi.fn().mockResolvedValue(undefined);
+    const hasNativeCaptureSupport = vi.fn().mockReturnValue(false);
+    const installInterceptor = vi.fn().mockResolvedValue(undefined);
+    const goto = vi.fn().mockResolvedValue(undefined);
+    const wait = vi.fn().mockResolvedValue(undefined);
+    const getCurrentUrl = vi.fn().mockResolvedValue('https://example.com');
+    const page = {
+      startNetworkCapture,
+      hasNativeCaptureSupport,
+      installInterceptor,
+      goto,
+      wait,
+      getCurrentUrl,
+    } as unknown as IPage;
+
+    mockBridgeConnect.mockResolvedValue(page);
+
+    const program = createProgram('', '');
+    await program.parseAsync(['node', 'opencli', 'browser', 'open', 'https://example.com']);
+
+    expect(page.startNetworkCapture).toHaveBeenCalledTimes(1);
+    expect(page.installInterceptor).toHaveBeenCalledWith('');
+    expect(installInterceptor.mock.invocationCallOrder[0]).toBeLessThan(goto.mock.invocationCallOrder[0]);
+  });
+
+  it('falls back to legacy intercepted requests for browser network when native capture is unavailable', async () => {
+    const page = {
+      readNetworkCapture: vi.fn().mockResolvedValue([
+        {
+          ok: true,
+          items: [{ id: 1 }],
+        },
+      ]),
+      hasNativeCaptureSupport: vi.fn().mockReturnValue(false),
+      getInterceptedRequests: vi.fn().mockResolvedValue([]),
+    } as unknown as IPage;
+
+    mockBridgeConnect.mockResolvedValue(page);
+
+    const program = createProgram('', '');
+    await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+
+    expect(page.readNetworkCapture).toHaveBeenCalledTimes(1);
+    expect(page.getInterceptedRequests).toHaveBeenCalledTimes(1);
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Captured 1 API requests:'));
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('(interceptor payload)'));
+  });
+
+  it('resets browser open capture before starting a new open session', async () => {
+    const stopCapture = vi.fn().mockResolvedValue(undefined);
+    const startNetworkCapture = vi.fn().mockResolvedValue(undefined);
+    const hasNativeCaptureSupport = vi.fn().mockReturnValue(true);
+    const goto = vi.fn().mockResolvedValue(undefined);
+    const wait = vi.fn().mockResolvedValue(undefined);
+    const getCurrentUrl = vi.fn().mockResolvedValue('https://example.com');
+    const page = {
+      stopCapture,
+      startNetworkCapture,
+      hasNativeCaptureSupport,
+      goto,
+      wait,
+      getCurrentUrl,
+    } as unknown as IPage;
+
+    mockBridgeConnect.mockResolvedValue(page);
+
+    const program = createProgram('', '');
+    await program.parseAsync(['node', 'opencli', 'browser', 'open', 'https://example.com/a']);
+    await program.parseAsync(['node', 'opencli', 'browser', 'open', 'https://example.com/b']);
+
+    expect(stopCapture).toHaveBeenCalledTimes(2);
+    expect(startNetworkCapture).toHaveBeenCalledTimes(2);
+    expect(stopCapture.mock.invocationCallOrder[0]).toBeLessThan(startNetworkCapture.mock.invocationCallOrder[0]);
+    expect(stopCapture.mock.invocationCallOrder[1]).toBeLessThan(startNetworkCapture.mock.invocationCallOrder[1]);
   });
 });

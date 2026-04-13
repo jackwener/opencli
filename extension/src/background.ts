@@ -230,6 +230,11 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 // Evict identity mappings when tabs are closed
 chrome.tabs.onRemoved.addListener((tabId) => {
   identity.evictTab(tabId);
+  for (const session of automationSessions.values()) {
+    if (session.preferredTabId === tabId) {
+      session.preferredTabId = null;
+    }
+  }
 });
 
 // ─── Lifecycle events ────────────────────────────────────────────────
@@ -304,6 +309,10 @@ async function handleCommand(cmd: Command): Promise<Result> {
         return await handleNetworkCaptureStart(cmd, workspace);
       case 'network-capture-read':
         return await handleNetworkCaptureRead(cmd, workspace);
+      case 'console-read':
+        return await handleConsoleRead(cmd, workspace);
+      case 'capture-stop':
+        return await handleCaptureStop(cmd, workspace);
       default:
         return { id: cmd.id, ok: false, error: `Unknown action: ${cmd.action}` };
     }
@@ -385,6 +394,12 @@ function setWorkspaceSession(workspace: string, session: Omit<AutomationSession,
   });
 }
 
+function rememberWorkspaceTab(workspace: string, tabId: number): void {
+  const session = automationSessions.get(workspace);
+  if (!session) return;
+  session.preferredTabId = tabId;
+}
+
 /**
  * Resolve tabId from command's page (targetId) or legacy tabId field.
  * page (targetId) takes precedence. Returns undefined if neither is provided.
@@ -407,7 +422,7 @@ async function resolveTab(tabId: number | undefined, workspace: string, initialU
       const tab = await chrome.tabs.get(tabId);
       const session = automationSessions.get(workspace);
       const matchesSession = session
-        ? (session.preferredTabId !== null ? session.preferredTabId === tabId : tab.windowId === session.windowId)
+        ? (session.owned ? tab.windowId === session.windowId : (session.preferredTabId !== null ? session.preferredTabId === tabId : tab.windowId === session.windowId))
         : false;
       if (isDebuggableUrl(tab.url) && matchesSession) return { tabId, tab };
       if (session && !matchesSession && session.preferredTabId === null && isDebuggableUrl(tab.url)) {
@@ -435,7 +450,10 @@ async function resolveTab(tabId: number | undefined, workspace: string, initialU
   if (existingSession?.preferredTabId !== null) {
     try {
       const preferredTab = await chrome.tabs.get(existingSession.preferredTabId);
-      if (isDebuggableUrl(preferredTab.url)) return { tabId: preferredTab.id!, tab: preferredTab };
+      const ownedWindowMatches = !existingSession.owned || preferredTab.windowId === existingSession.windowId;
+      if (isDebuggableUrl(preferredTab.url) && ownedWindowMatches) {
+        return { tabId: preferredTab.id!, tab: preferredTab };
+      }
     } catch {
       automationSessions.delete(workspace);
     }
@@ -484,7 +502,7 @@ async function resolveTabId(tabId: number | undefined, workspace: string, initia
 async function listAutomationTabs(workspace: string): Promise<chrome.tabs.Tab[]> {
   const session = automationSessions.get(workspace);
   if (!session) return [];
-  if (session.preferredTabId !== null) {
+  if (session.preferredTabId !== null && !session.owned) {
     try {
       return [await chrome.tabs.get(session.preferredTabId)];
     } catch {
@@ -527,6 +545,7 @@ async function handleNavigate(cmd: Command, workspace: string): Promise<Result> 
   const cmdTabId = await resolveCommandTabId(cmd);
   const resolved = await resolveTab(cmdTabId, workspace, cmd.url);
   const tabId = resolved.tabId;
+  rememberWorkspaceTab(workspace, tabId);
 
   const beforeTab = resolved.tab ?? await chrome.tabs.get(tabId);
   const beforeNormalized = normalizeUrlForComparison(beforeTab.url);
@@ -611,6 +630,14 @@ async function handleNavigate(cmd: Command, workspace: string): Promise<Result> 
     }
   }
 
+  if (executor.hasCaptureIntent(tabId)) {
+    try {
+      await executor.ensureAttached(tabId, true);
+    } catch (error) {
+      console.warn(`[opencli] failed to reattach after navigate: ${error}`);
+    }
+  }
+
   return pageScopedResult(cmd.id, tabId, { title: tab.title, url: tab.url, timedOut });
 }
 
@@ -632,6 +659,7 @@ async function handleTabs(cmd: Command, workspace: string): Promise<Result> {
       const windowId = await getAutomationWindow(workspace);
       const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: true });
       if (!tab.id) return { id: cmd.id, ok: false, error: 'Failed to create tab' };
+      rememberWorkspaceTab(workspace, tab.id);
       return pageScopedResult(cmd.id, tab.id, { url: tab.url });
     }
     case 'close': {
@@ -667,12 +695,15 @@ async function handleTabs(cmd: Command, workspace: string): Promise<Result> {
           return { id: cmd.id, ok: false, error: `Page is not in the automation window` };
         }
         await chrome.tabs.update(cmdTabId, { active: true });
+        rememberWorkspaceTab(workspace, cmdTabId);
         return pageScopedResult(cmd.id, cmdTabId, { selected: true });
       }
       const tabs = await listAutomationWebTabs(workspace);
       const target = tabs[cmd.index!];
       if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
       await chrome.tabs.update(target.id, { active: true });
+      rememberWorkspaceTab(workspace, target.id);
+      return pageScopedResult(cmd.id, target.id, { selected: true });
       return pageScopedResult(cmd.id, target.id, { selected: true });
     }
     default:
@@ -807,6 +838,7 @@ async function handleInsertText(cmd: Command, workspace: string): Promise<Result
 async function handleNetworkCaptureStart(cmd: Command, workspace: string): Promise<Result> {
   const cmdTabId = await resolveCommandTabId(cmd);
   const tabId = await resolveTabId(cmdTabId, workspace);
+  rememberWorkspaceTab(workspace, tabId);
   try {
     await executor.startNetworkCapture(tabId, cmd.pattern);
     return pageScopedResult(cmd.id, tabId, { started: true });
@@ -821,6 +853,28 @@ async function handleNetworkCaptureRead(cmd: Command, workspace: string): Promis
   try {
     const data = await executor.readNetworkCapture(tabId);
     return pageScopedResult(cmd.id, tabId, data);
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleConsoleRead(cmd: Command, workspace: string): Promise<Result> {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, workspace);
+  try {
+    const data = await executor.readConsoleCapture(tabId);
+    return pageScopedResult(cmd.id, tabId, data);
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleCaptureStop(cmd: Command, workspace: string): Promise<Result> {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, workspace);
+  try {
+    await executor.stopCapture(tabId);
+    return pageScopedResult(cmd.id, tabId, { stopped: true });
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -869,6 +923,7 @@ async function handleBindCurrent(cmd: Command, workspace: string): Promise<Resul
 }
 
 export const __test__ = {
+  handleCommand,
   handleNavigate,
   isTargetUrl,
   handleTabs,

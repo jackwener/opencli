@@ -186,6 +186,13 @@ export function buildInstallInstagramProtocolCaptureJs(captureVar = DEFAULT_CAPT
     })()
   `;
 }
+
+function hasNativeCaptureSupport(page) {
+    return typeof page?.hasNativeCaptureSupport === 'function'
+        ? page.hasNativeCaptureSupport()
+        : undefined;
+}
+
 export function buildReadInstagramProtocolCaptureJs(captureVar = DEFAULT_CAPTURE_VAR, captureErrorsVar = DEFAULT_CAPTURE_ERRORS_VAR) {
     return `
     (() => {
@@ -201,7 +208,9 @@ export async function installInstagramProtocolCapture(page) {
     if (typeof page.startNetworkCapture === 'function') {
         try {
             await page.startNetworkCapture(INSTAGRAM_PROTOCOL_CAPTURE_PATTERN);
-            return;
+            if (hasNativeCaptureSupport(page) !== false) {
+                return;
+            }
         }
         catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -216,10 +225,12 @@ export async function readInstagramProtocolCapture(page) {
     if (typeof page.readNetworkCapture === 'function') {
         try {
             const data = await page.readNetworkCapture();
-            return {
-                data: Array.isArray(data) ? data : [],
-                errors: [],
-            };
+            if (hasNativeCaptureSupport(page) !== false) {
+                return {
+                    data: Array.isArray(data) ? data : [],
+                    errors: [],
+                };
+            }
         }
         catch (error) {
             const message = error instanceof Error ? error.message : String(error);

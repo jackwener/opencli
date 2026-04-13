@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
+import type { IPage } from './types.js';
 import { findPackageRoot, getBuiltEntryCandidates } from './package-paths.js';
 import { type CliCommand, fullName, getRegistry, strategyLabel } from './registry.js';
 import { serializeCommand, formatArgSummary } from './serialization.js';
@@ -30,6 +31,92 @@ async function getBrowserPage(): Promise<import('./types.js').IPage> {
   const { BrowserBridge } = await import('./browser/index.js');
   const bridge = new BrowserBridge();
   return bridge.connect({ timeout: 30, workspace: 'browser:default' });
+}
+
+type CaptureAwarePage = IPage & {
+  hasNativeCaptureSupport?: () => boolean | undefined;
+};
+
+function hasNativeCaptureSupport(page: IPage): boolean | undefined {
+  return (page as CaptureAwarePage).hasNativeCaptureSupport?.();
+}
+
+type CapturedRequest = { url: string; method: string; status: number; size: number; ct: string; body: unknown };
+
+function isNetworkCaptureEntry(entry: unknown): entry is Record<string, unknown> {
+  return !!entry
+    && typeof entry === 'object'
+    && (
+      typeof (entry as Record<string, unknown>).url === 'string'
+      || typeof (entry as Record<string, unknown>).method === 'string'
+      || typeof (entry as Record<string, unknown>).responseStatus === 'number'
+      || typeof (entry as Record<string, unknown>).responseContentType === 'string'
+    );
+}
+
+function normalizeCapturedRequests(raw: unknown[]): CapturedRequest[] {
+  return (raw as Array<Record<string, unknown>>).map((entry) => {
+    if (!isNetworkCaptureEntry(entry)) {
+      const serialized = (() => {
+        try {
+          return JSON.stringify(entry);
+        } catch {
+          return String(entry);
+        }
+      })();
+      return {
+        url: '(interceptor payload)',
+        method: 'INTERCEPT',
+        status: 200,
+        size: serialized.length,
+        ct: 'application/json',
+        body: entry,
+      };
+    }
+    const preview = typeof entry.responsePreview === 'string' ? entry.responsePreview : null;
+    let body: unknown = entry.body ?? null;
+    if (preview) {
+      try { body = JSON.parse(preview); } catch { body = preview; }
+    }
+    return {
+      url: typeof entry.url === 'string' ? entry.url : '',
+      method: typeof entry.method === 'string' ? entry.method : 'GET',
+      status: typeof entry.responseStatus === 'number' ? entry.responseStatus : (typeof entry.status === 'number' ? entry.status : 0),
+      size: typeof entry.size === 'number' ? entry.size : (preview ? preview.length : 0),
+      ct: typeof entry.responseContentType === 'string' ? entry.responseContentType : (typeof entry.ct === 'string' ? entry.ct : ''),
+      body,
+    };
+  });
+}
+
+async function startOperateCapture(page: IPage): Promise<void> {
+  await page.startNetworkCapture?.();
+}
+
+async function resetOperateCapture(page: IPage): Promise<void> {
+  await page.stopCapture?.();
+}
+
+async function installOperateFallbackCapture(page: IPage): Promise<void> {
+  if (hasNativeCaptureSupport(page) !== false) return;
+  try {
+    await page.installInterceptor('');
+  } catch {
+    // The legacy interceptor is best-effort compatibility for stale extensions.
+  }
+}
+
+async function readOperateCapture(page: IPage): Promise<CapturedRequest[]> {
+  const raw = page.readNetworkCapture
+    ? await page.readNetworkCapture()
+    : await page.networkRequests(false);
+  if (hasNativeCaptureSupport(page) === false) {
+    const intercepted = await page.getInterceptedRequests();
+    if (intercepted.length > 0) return normalizeCapturedRequests(intercepted);
+    if (raw.length > 0) return normalizeCapturedRequests(raw);
+    return [];
+  }
+  return normalizeCapturedRequests(raw);
 }
 
 function applyVerbose(opts: { verbose?: boolean }): void {
@@ -314,19 +401,14 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   // ── Navigation ──
 
-  /** Network interceptor JS — injected on every open/navigate to capture fetch/XHR */
-  const NETWORK_INTERCEPTOR_JS = `(function(){if(window.__opencli_net)return;window.__opencli_net=[];var M=200,B=50000,F=window.fetch;window.fetch=async function(){var r=await F.apply(this,arguments);try{var ct=r.headers.get('content-type')||'';if(ct.includes('json')||ct.includes('text')){var c=r.clone(),t=await c.text();if(window.__opencli_net.length<M){var b=null;if(t.length<=B)try{b=JSON.parse(t)}catch(e){b=t}window.__opencli_net.push({url:r.url||(arguments[0]&&arguments[0].url)||String(arguments[0]),method:(arguments[1]&&arguments[1].method)||'GET',status:r.status,size:t.length,ct:ct,body:b})}}}catch(e){}return r};var X=XMLHttpRequest.prototype,O=X.open,S=X.send;X.open=function(m,u){this._om=m;this._ou=u;return O.apply(this,arguments)};X.send=function(){var x=this;x.addEventListener('load',function(){try{var ct=x.getResponseHeader('content-type')||'';if((ct.includes('json')||ct.includes('text'))&&window.__opencli_net.length<M){var t=x.responseText,b=null;if(t&&t.length<=B)try{b=JSON.parse(t)}catch(e){b=t}window.__opencli_net.push({url:x._ou,method:x._om||'GET',status:x.status,size:t?t.length:0,ct:ct,body:b})}}catch(e){}});return S.apply(this,arguments)}})()`;
-
   browser.command('open').argument('<url>').description('Open URL in automation window')
     .action(browserAction(async (page, url) => {
+      await resetOperateCapture(page);
       // Start session-level capture before navigation (catches initial requests)
-      const hasSessionCapture = await page.startNetworkCapture?.().then(() => true).catch(() => false);
+      await startOperateCapture(page);
+      await installOperateFallbackCapture(page);
       await page.goto(url);
       await page.wait(2);
-      // Fallback: inject JS interceptor when session capture is unavailable
-      if (!hasSessionCapture) {
-        try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
-      }
       console.log(`Navigated to: ${await page.getCurrentUrl?.() ?? url}`);
     }));
 
@@ -518,35 +600,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .option('--all', 'Show all requests including static resources')
     .description('Show captured network requests (auto-captured since last open)')
     .action(browserAction(async (page, opts) => {
-      let items: Array<{ url: string; method: string; status: number; size: number; ct: string; body: unknown }> = [];
-      if (page.readNetworkCapture) {
-        const raw = await page.readNetworkCapture();
-        // Normalize daemon/CDP capture entries to __opencli_net shape.
-        // Daemon returns: responseStatus, responseContentType, responsePreview
-        // CDP returns the same shape after PR A fix.
-        items = (raw as Array<Record<string, unknown>>).map(e => {
-          const preview = (e.responsePreview as string) ?? null;
-          let body: unknown = null;
-          if (preview) {
-            try { body = JSON.parse(preview); } catch { body = preview; }
-          }
-          return {
-            url: (e.url as string) || '',
-            method: (e.method as string) || 'GET',
-            status: (e.responseStatus as number) || 0,
-            size: preview ? preview.length : 0,
-            ct: (e.responseContentType as string) || '',
-            body,
-          };
-        });
-      } else {
-        // Fallback to JS interceptor data
-        const requests = await page.evaluate(`(function(){
-          var reqs = window.__opencli_net || [];
-          return JSON.stringify(reqs);
-        })()`) as string;
-        try { items = JSON.parse(requests); } catch { console.log('No network data captured. Run "browser open <url>" first.'); return; }
-      }
+      let items = await readOperateCapture(page);
 
       if (items.length === 0) { console.log('No requests captured.'); return; }
 

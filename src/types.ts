@@ -44,6 +44,13 @@ export interface BrowserSessionInfo {
   [key: string]: unknown;
 }
 
+export interface ConsoleMessage {
+  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+  text: string;
+  timestamp?: number;
+  source?: 'console-api' | 'exception';
+}
+
 export interface IPage {
   goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void>;
   evaluate(js: string): Promise<any>;
@@ -60,7 +67,7 @@ export interface IPage {
   newTab?(): Promise<void>;
   selectTab(index: number): Promise<void>;
   networkRequests(includeStatic?: boolean): Promise<any>;
-  consoleMessages(level?: string): Promise<any>;
+  consoleMessages(level?: string): Promise<ConsoleMessage[]>;
   scroll(direction?: string, amount?: number): Promise<void>;
   autoScroll(options?: { times?: number; delayMs?: number }): Promise<void>;
   installInterceptor(pattern: string): Promise<void>;
@@ -69,6 +76,7 @@ export interface IPage {
   screenshot(options?: ScreenshotOptions): Promise<string>;
   startNetworkCapture?(pattern?: string): Promise<void>;
   readNetworkCapture?(): Promise<unknown[]>;
+  stopCapture?(): Promise<void>;
   /**
    * Set local file paths on a file input element via CDP DOM.setFileInputFiles.
    * Chrome reads the files directly — no base64 encoding or payload size limits.
@@ -95,3 +103,5 @@ export interface IPage {
   /** Press a key via CDP Input.dispatchKeyEvent. */
   nativeKeyPress?(key: string, modifiers?: string[]): Promise<void>;
 }
+
+export type CaptureCapablePage = IPage & Required<Pick<IPage, 'startNetworkCapture' | 'readNetworkCapture' | 'stopCapture'>>;

@@ -142,19 +142,36 @@ export function autoScrollJs(times: number, delayMs: number): string {
   `;
 }
 
-/** Generate JS to read performance resource entries as network requests */
+/** Generate JS to read performance timing entries as fallback network requests */
 export function networkRequestsJs(includeStatic: boolean): string {
   return `
     (() => {
+      const navigationEntries = performance.getEntriesByType('navigation');
+      const navigation = navigationEntries[0];
+      const requests = [];
+      if (navigation?.name && /^https?:\\/\\//.test(navigation.name)) {
+        requests.push({
+          url: navigation.name,
+          method: 'GET',
+          type: 'navigation',
+          duration: Math.round(navigation.duration || 0),
+          size: navigation.transferSize || navigation.encodedBodySize || 0,
+          status: typeof navigation.responseStatus === 'number' ? navigation.responseStatus : 0,
+          responseStatus: typeof navigation.responseStatus === 'number' ? navigation.responseStatus : 0,
+          ct: typeof document.contentType === 'string' ? document.contentType : '',
+          responseContentType: typeof document.contentType === 'string' ? document.contentType : '',
+        });
+      }
       const entries = performance.getEntriesByType('resource');
-      return entries
+      return requests.concat(entries
         ${includeStatic ? '' : '.filter(e => !["img", "font", "css", "script"].some(t => e.initiatorType === t))'}
         .map(e => ({
           url: e.name,
+          method: 'GET',
           type: e.initiatorType,
           duration: Math.round(e.duration),
           size: e.transferSize || 0,
-        }));
+        })));
     })()
   `;
 }

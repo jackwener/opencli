@@ -9,7 +9,7 @@
  * getCookies, screenshot, tabs, etc.
  */
 
-import type { BrowserCookie, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
+import type { BrowserCookie, ConsoleMessage, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
 import { generateSnapshotJs, scrollToRefJs, getFormStateJs } from './dom-snapshot.js';
 import {
   clickJs,
@@ -97,9 +97,17 @@ export abstract class BasePage implements IPage {
     return Array.isArray(result) ? result : [];
   }
 
-  async consoleMessages(_level: string = 'info'): Promise<unknown[]> {
+  async consoleMessages(_level?: string): Promise<ConsoleMessage[]> {
     return [];
   }
+
+  async startNetworkCapture(_pattern?: string): Promise<void> {}
+
+  async readNetworkCapture(): Promise<unknown[]> {
+    return [];
+  }
+
+  async stopCapture(): Promise<void> {}
 
   async wait(options: number | WaitOptions): Promise<void> {
     if (typeof options === 'number') {
@@ -177,6 +185,14 @@ export abstract class BasePage implements IPage {
   async installInterceptor(pattern: string): Promise<void> {
     const { generateInterceptorJs } = await import('../interceptor.js');
     await this.evaluate(generateInterceptorJs(JSON.stringify(pattern), {
+      arrayName: '__opencli_xhr',
+      patchGuard: '__opencli_interceptor_patched',
+    }));
+  }
+
+  async uninstallInterceptor(): Promise<void> {
+    const { generateUninstallInterceptorJs } = await import('../interceptor.js');
+    await this.evaluate(generateUninstallInterceptorJs({
       arrayName: '__opencli_xhr',
       patchGuard: '__opencli_interceptor_patched',
     }));

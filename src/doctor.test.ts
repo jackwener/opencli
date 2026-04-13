@@ -129,6 +129,30 @@ describe('doctor report rendering', () => {
     ]));
   });
 
+  it('does not report extension patch-version mismatch within the same minor version', async () => {
+    const status = { extensionConnected: true, extensionVersion: '1.6.5' };
+    mockGetDaemonHealth.mockResolvedValueOnce({ state: 'ready', status });
+    mockGetDaemonHealth.mockResolvedValueOnce({ state: 'ready', status });
+
+    const report = await runBrowserDoctor({ live: false, cliVersion: '1.6.8' });
+
+    expect(report.issues).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('Extension version mismatch'),
+    ]));
+  });
+
+  it('reports extension version mismatch when the minor version differs', async () => {
+    const status = { extensionConnected: true, extensionVersion: '1.5.5' };
+    mockGetDaemonHealth.mockResolvedValueOnce({ state: 'ready', status });
+    mockGetDaemonHealth.mockResolvedValueOnce({ state: 'ready', status });
+
+    const report = await runBrowserDoctor({ live: false, cliVersion: '1.6.8' });
+
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.stringContaining('Extension version mismatch: extension v1.5.5 ≠ CLI v1.6.8'),
+    ]));
+  });
+
   it('reports flapping when live check succeeds but final status shows extension disconnected', async () => {
     // Live check succeeds
     mockConnect.mockResolvedValueOnce({

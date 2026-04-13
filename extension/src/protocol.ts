@@ -18,6 +18,8 @@ export type Action =
   | 'bind-current'
   | 'network-capture-start'
   | 'network-capture-read'
+  | 'console-read'
+  | 'capture-stop'
   | 'cdp';
 
 export interface Command {

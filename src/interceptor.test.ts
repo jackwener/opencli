@@ -43,6 +43,11 @@ describe('generateInterceptorJs', () => {
     expect(js).toContain('__origOpen');
     expect(js).toContain('__origSend');
   });
+
+  it('treats an empty pattern as match-all for compatibility fallbacks', () => {
+    const js = generateInterceptorJs('""');
+    expect(js).toContain("pattern === ''");
+  });
 });
 
 describe('generateReadInterceptedJs', () => {

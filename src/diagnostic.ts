@@ -252,30 +252,67 @@ function normalizeInterceptedRequests(interceptedRequests: unknown[]): unknown[]
   }));
 }
 
+function isNetworkCaptureEntry(entry: unknown): entry is Record<string, unknown> {
+  return !!entry
+    && typeof entry === 'object'
+    && (
+      typeof (entry as Record<string, unknown>).url === 'string'
+      || typeof (entry as Record<string, unknown>).method === 'string'
+      || typeof (entry as Record<string, unknown>).responseStatus === 'number'
+      || typeof (entry as Record<string, unknown>).responseContentType === 'string'
+    );
+}
+
+function redactConsoleEntry(entry: unknown): unknown {
+  if (typeof entry === 'string') {
+    return redactText(entry);
+  }
+  if (!entry || typeof entry !== 'object') {
+    return entry;
+  }
+  const consoleEntry = entry as Record<string, unknown>;
+  return {
+    ...consoleEntry,
+    ...(typeof consoleEntry.text === 'string' ? { text: redactText(consoleEntry.text) } : {}),
+  };
+}
+
+function hasNativeCaptureSupport(page: IPage): boolean | undefined {
+  return (page as IPage & { hasNativeCaptureSupport?: () => boolean | undefined }).hasNativeCaptureSupport?.();
+}
+
 /** Safely collect page diagnostic state with redaction, size caps, and timeout. */
 async function collectPageState(page: IPage): Promise<RepairContext['page'] | undefined> {
   const collect = async (): Promise<RepairContext['page'] | undefined> => {
     try {
-      const [url, snapshot, networkRequests, interceptedRequests, consoleErrors] = await Promise.all([
+      const [url, snapshot, capturedNetworkRequests, consoleErrors] = await Promise.all([
         page.getCurrentUrl?.().catch(() => null) ?? Promise.resolve(null),
         page.snapshot().catch(() => '(snapshot unavailable)'),
-        page.networkRequests().catch(() => []),
-        page.getInterceptedRequests().catch(() => []),
+        page.readNetworkCapture?.().catch(() => null) ?? Promise.resolve(null),
         page.consoleMessages('error').catch(() => []),
       ]);
+      const nativeCaptureUnsupported = hasNativeCaptureSupport(page) === false;
+      const capturedEntries = Array.isArray(capturedNetworkRequests) ? capturedNetworkRequests : [];
+      const capturedLooksLikeNetworkEntries = capturedEntries.some(isNetworkCaptureEntry);
+      const interceptedSource = nativeCaptureUnsupported && !capturedLooksLikeNetworkEntries
+        ? capturedEntries
+        : await page.getInterceptedRequests().catch(() => []);
+      const interceptedPayloads = normalizeInterceptedRequests(interceptedSource as unknown[]);
+      const networkRequests = nativeCaptureUnsupported && !capturedLooksLikeNetworkEntries
+        ? await page.networkRequests().catch(() => [])
+        : (capturedEntries.length > 0 ? capturedEntries : await page.networkRequests().catch(() => []));
 
       const rawUrl = url ?? 'unknown';
-      const capturedResponses = normalizeInterceptedRequests(interceptedRequests as unknown[]);
       return {
         url: redactUrl(rawUrl),
         snapshot: redactText(truncate(snapshot, MAX_SNAPSHOT_CHARS)),
         networkRequests: (networkRequests as unknown[])
           .slice(0, MAX_NETWORK_REQUESTS)
           .map(redactNetworkRequest),
-        capturedPayloads: capturedResponses,
+        capturedPayloads: interceptedPayloads,
         consoleErrors: (consoleErrors as unknown[])
           .slice(0, 50)
-          .map(e => typeof e === 'string' ? redactText(e) : e),
+          .map(redactConsoleEntry),
       };
     } catch {
       return undefined;

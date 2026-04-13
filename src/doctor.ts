@@ -114,11 +114,11 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
   }
   const extensionVersion = health.status?.extensionVersion;
   if (extensionVersion && opts.cliVersion) {
-    const extMajor = extensionVersion.split('.')[0];
-    const cliMajor = opts.cliVersion.split('.')[0];
-    if (extMajor !== cliMajor) {
+    const [extMajor, extMinor] = extensionVersion.split('.');
+    const [cliMajor, cliMinor] = opts.cliVersion.split('.');
+    if (extMajor !== cliMajor || extMinor !== cliMinor) {
       issues.push(
-        `Extension major version mismatch: extension v${extensionVersion} ≠ CLI v${opts.cliVersion}\n` +
+        `Extension version mismatch: extension v${extensionVersion} ≠ CLI v${opts.cliVersion}\n` +
         '  Download the latest extension from: https://github.com/jackwener/opencli/releases',
       );
     }
