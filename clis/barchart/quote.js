@@ -24,7 +24,7 @@ cli({
         await page.wait(4);
         const data = await page.evaluate(`
       (async () => {
-        const sym = '${symbol}';
+        const sym = ${JSON.stringify(symbol)};
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
         // Strategy 1: internal proxy API with CSRF token

@@ -165,9 +165,9 @@ export function registerCommand(cmd: CliCommand): void {
   const normalized = normalizeCommand(cmd);
   const canonicalKey = fullName(normalized);
   const existing = _registry.get(canonicalKey);
-  if (existing) {
-    for (const [key, value] of _registry.entries()) {
-      if (value === existing && key !== canonicalKey) _registry.delete(key);
+  if (existing?.aliases) {
+    for (const alias of existing.aliases) {
+      _registry.delete(`${existing.site}/${alias}`);
     }
   }
 

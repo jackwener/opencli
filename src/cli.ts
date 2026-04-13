@@ -424,9 +424,10 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       await page.wait(0.3);
       await page.typeText(index, text);
       // Detect autocomplete/combobox fields and wait for dropdown suggestions
+      const safeIndex = JSON.stringify(String(index));
       const isAutocomplete = await page.evaluate(`
         (() => {
-          const el = document.querySelector('[data-opencli-ref="${index}"]');
+          const el = document.querySelector('[data-opencli-ref=' + ${safeIndex} + ']');
           if (!el) return false;
           const role = el.getAttribute('role');
           const ac = el.getAttribute('aria-autocomplete');
@@ -445,9 +446,10 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
   browser.command('select').argument('<index>', 'Element index of <select>').argument('<option>', 'Option text')
     .description('Select dropdown option')
     .action(browserAction(async (page, index, option) => {
+      const safeIdx = JSON.stringify(String(index));
       const result = await page.evaluate(`
         (function() {
-          var sel = document.querySelector('[data-opencli-ref="${index}"]');
+          var sel = document.querySelector('[data-opencli-ref=' + ${safeIdx} + ']');
           if (!sel || sel.tagName !== 'SELECT') return { error: 'Not a <select>' };
           var match = Array.from(sel.options).find(o => o.text.trim() === ${JSON.stringify(option)} || o.value === ${JSON.stringify(option)});
           if (!match) return { error: 'Option not found', available: Array.from(sel.options).map(o => o.text.trim()) };

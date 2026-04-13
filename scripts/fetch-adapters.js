@@ -113,7 +113,14 @@ export function fetchAdapters() {
 
   const newOfficialFiles = new Set(walkFiles(BUILTIN_CLIS));
   const oldOfficialFiles = new Set(oldManifest?.files ?? []);
-  const oldHashes = oldManifest?.hashes ?? {};
+  const rawHashes = oldManifest?.hashes;
+  // Guard against corrupted manifest: if hashes is missing or wrong type,
+  // skip sync to avoid false-positive "changed" detection that deletes overrides.
+  if (oldManifest && (!rawHashes || typeof rawHashes !== 'object')) {
+    log('Warning: adapter-manifest.json has corrupted hashes — skipping sync. Will fix on next run.');
+    return;
+  }
+  const oldHashes = rawHashes ?? {};
   mkdirSync(USER_CLIS_DIR, { recursive: true });
 
   // 1. Compute new hashes and detect which sites have changes

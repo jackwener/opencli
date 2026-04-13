@@ -27,8 +27,8 @@ cli({
         await page.wait(4);
         const data = await page.evaluate(`
       (async () => {
-        const sym = '${symbol}';
-        const expDate = '${expiration}';
+        const sym = ${JSON.stringify(symbol)};
+        const expDate = ${JSON.stringify(expiration)};
         const limit = ${limit};
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const headers = { 'X-CSRF-TOKEN': csrf };

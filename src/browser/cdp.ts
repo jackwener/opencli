@@ -65,7 +65,10 @@ export class CDPBridge implements IBrowserFactory {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(wsUrl);
       const timeoutMs = (opts?.timeout ?? 10) * 1000;
-      const timeout = setTimeout(() => reject(new Error('CDP connect timeout')), timeoutMs);
+      const timeout = setTimeout(() => {
+        ws.close();
+        reject(new Error('CDP connect timeout'));
+      }, timeoutMs);
 
       ws.on('open', async () => {
         clearTimeout(timeout);
@@ -73,7 +76,11 @@ export class CDPBridge implements IBrowserFactory {
         try {
           await this.send('Page.enable');
           await this.send('Page.addScriptToEvaluateOnNewDocument', { source: generateStealthJs() });
-        } catch {}
+        } catch (err) {
+          ws.close();
+          reject(err instanceof Error ? err : new Error(String(err)));
+          return;
+        }
         resolve(new CDPPage(this));
       });
 

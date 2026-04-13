@@ -23,7 +23,7 @@ import { log } from './logger.js';
 import { isElectronApp } from './electron-apps.js';
 import { probeCDP, resolveElectronEndpoint } from './launcher.js';
 
-const _loadedModules = new Set<string>();
+const _loadedModules = new Map<string, Promise<void>>();
 
 export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): CommandArgs {
   const result: CommandArgs = { ...kwargs };
@@ -79,16 +79,19 @@ async function runCommand(
   if (internal._lazy && internal._modulePath) {
     const modulePath = internal._modulePath;
     if (!_loadedModules.has(modulePath)) {
-      try {
-        await import(pathToFileURL(modulePath).href);
-        _loadedModules.add(modulePath);
-      } catch (err) {
-        throw new AdapterLoadError(
-          `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
-          'Check that the adapter file exists and has no syntax errors.',
-        );
-      }
+      const loadPromise = import(pathToFileURL(modulePath).href).then(
+        () => {},
+        (err) => {
+          _loadedModules.delete(modulePath);
+          throw new AdapterLoadError(
+            `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
+            'Check that the adapter file exists and has no syntax errors.',
+          );
+        },
+      );
+      _loadedModules.set(modulePath, loadPromise);
     }
+    await _loadedModules.get(modulePath);
 
     const updated = getRegistry().get(fullName(cmd));
     if (updated?.func) {
@@ -186,7 +189,10 @@ export async function executeCommand(
           try {
             await page.goto(preNavUrl);
           } catch (err) {
-            log.warn(`Pre-navigation to ${preNavUrl} failed: ${err instanceof Error ? err.message : err}`);
+            throw new CommandExecutionError(
+              `Pre-navigation to ${preNavUrl} failed: ${err instanceof Error ? err.message : err}`,
+              'Check that the site is reachable and the browser extension is running.',
+            );
           }
         }
         try {
