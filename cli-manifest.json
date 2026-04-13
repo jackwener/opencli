@@ -2779,7 +2779,7 @@
     "sourceFile": "chaoxing/exams.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "ask",
     "description": "Send a prompt and wait for the AI response (send + wait + read)",
     "domain": "localhost",
@@ -2819,11 +2819,11 @@
       "Text"
     ],
     "type": "js",
-    "modulePath": "chatgpt/ask.js",
-    "sourceFile": "chatgpt/ask.js"
+    "modulePath": "chatgpt-app/ask.js",
+    "sourceFile": "chatgpt-app/ask.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "model",
     "description": "Switch ChatGPT Desktop model/mode (auto, instant, thinking, 5.2-instant, 5.2-thinking)",
     "domain": "localhost",
@@ -2850,11 +2850,11 @@
       "Model"
     ],
     "type": "js",
-    "modulePath": "chatgpt/model.js",
-    "sourceFile": "chatgpt/model.js"
+    "modulePath": "chatgpt-app/model.js",
+    "sourceFile": "chatgpt-app/model.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "new",
     "description": "Open a new chat in ChatGPT Desktop App",
     "domain": "localhost",
@@ -2865,11 +2865,11 @@
       "Status"
     ],
     "type": "js",
-    "modulePath": "chatgpt/new.js",
-    "sourceFile": "chatgpt/new.js"
+    "modulePath": "chatgpt-app/new.js",
+    "sourceFile": "chatgpt-app/new.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "read",
     "description": "Read the last visible message from the focused ChatGPT Desktop window",
     "domain": "localhost",
@@ -2881,11 +2881,11 @@
       "Text"
     ],
     "type": "js",
-    "modulePath": "chatgpt/read.js",
-    "sourceFile": "chatgpt/read.js"
+    "modulePath": "chatgpt-app/read.js",
+    "sourceFile": "chatgpt-app/read.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "send",
     "description": "Send a message to the active ChatGPT Desktop App window",
     "domain": "localhost",
@@ -2917,11 +2917,11 @@
       "Status"
     ],
     "type": "js",
-    "modulePath": "chatgpt/send.js",
-    "sourceFile": "chatgpt/send.js"
+    "modulePath": "chatgpt-app/send.js",
+    "sourceFile": "chatgpt-app/send.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "status",
     "description": "Check if ChatGPT Desktop App is running natively on macOS",
     "domain": "localhost",
@@ -2932,8 +2932,8 @@
       "Status"
     ],
     "type": "js",
-    "modulePath": "chatgpt/status.js",
-    "sourceFile": "chatgpt/status.js"
+    "modulePath": "chatgpt-app/status.js",
+    "sourceFile": "chatgpt-app/status.js"
   },
   {
     "site": "chatwise",
