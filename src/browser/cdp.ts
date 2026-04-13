@@ -66,6 +66,7 @@ export class CDPBridge implements IBrowserFactory {
       const ws = new WebSocket(wsUrl);
       const timeoutMs = (opts?.timeout ?? 10) * 1000;
       const timeout = setTimeout(() => {
+        this._ws = null;
         ws.close();
         reject(new Error('CDP connect timeout'));
       }, timeoutMs);

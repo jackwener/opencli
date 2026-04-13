@@ -427,7 +427,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       const safeIndex = JSON.stringify(String(index));
       const isAutocomplete = await page.evaluate(`
         (() => {
-          const el = document.querySelector('[data-opencli-ref=' + ${safeIndex} + ']');
+          const el = document.querySelector('[data-opencli-ref="' + ${safeIndex} + '"]');
           if (!el) return false;
           const role = el.getAttribute('role');
           const ac = el.getAttribute('aria-autocomplete');
@@ -449,7 +449,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       const safeIdx = JSON.stringify(String(index));
       const result = await page.evaluate(`
         (function() {
-          var sel = document.querySelector('[data-opencli-ref=' + ${safeIdx} + ']');
+          var sel = document.querySelector('[data-opencli-ref="' + ${safeIdx} + '"]');
           if (!sel || sel.tagName !== 'SELECT') return { error: 'Not a <select>' };
           var match = Array.from(sel.options).find(o => o.text.trim() === ${JSON.stringify(option)} || o.value === ${JSON.stringify(option)});
           if (!match) return { error: 'Option not found', available: Array.from(sel.options).map(o => o.text.trim()) };
