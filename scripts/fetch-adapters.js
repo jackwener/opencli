@@ -192,8 +192,8 @@ export function fetchAdapters() {
   let yamlCleaned = 0;
   for (const relPath of walkFiles(USER_CLIS_DIR)) {
     if (relPath.endsWith('.yaml') || relPath.endsWith('.yml')) {
-      const site = relPath.split('/')[0];
-      if (siteFiles.has(site)) {
+      const jsCounterpart = relPath.replace(/\.ya?ml$/, '.js');
+      if (newOfficialFiles.has(jsCounterpart)) {
         try {
           unlinkSync(join(USER_CLIS_DIR, relPath));
           pruneEmptyDirs(join(USER_CLIS_DIR, relPath), USER_CLIS_DIR);
