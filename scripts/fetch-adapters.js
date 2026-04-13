@@ -281,9 +281,6 @@ export function fetchAdapters() {
 function main() {
   // Skip in CI
   if (process.env.CI || process.env.CONTINUOUS_INTEGRATION) return;
-  // Allow opt-out
-  if (process.env.OPENCLI_SKIP_FETCH === '1') return;
-
   // Only run on global install, explicit trigger, or first-run fallback
   const isGlobal = process.env.npm_config_global === 'true';
   const isExplicit = process.env.OPENCLI_FETCH === '1';
