@@ -13,6 +13,8 @@
 import { type CliCommand, type InternalCliCommand, type Arg, type CommandArgs, getRegistry, fullName } from './registry.js';
 import type { IPage } from './types.js';
 import { pathToFileURL } from 'node:url';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import { executePipeline } from './pipeline/index.js';
 import { AdapterLoadError, ArgumentError, CommandExecutionError, getErrorMessage } from './errors.js';
 import { isDiagnosticEnabled, collectDiagnostic, emitDiagnostic } from './diagnostic.js';
@@ -24,6 +26,9 @@ import { isElectronApp } from './electron-apps.js';
 import { probeCDP, resolveElectronEndpoint } from './launcher.js';
 
 const _loadedModules = new Map<string, Promise<void>>();
+/** Track mtime of loaded user adapter files for hot-reload in daemon mode. */
+const _moduleMtimes = new Map<string, number>();
+const _userClisDir = `${os.homedir()}/.opencli/clis/`;
 
 export function coerceAndValidateArgs(cmdArgs: Arg[], kwargs: CommandArgs): CommandArgs {
   const result: CommandArgs = { ...kwargs };
@@ -78,9 +83,23 @@ async function runCommand(
   const internal = cmd as InternalCliCommand;
   if (internal._lazy && internal._modulePath) {
     const modulePath = internal._modulePath;
+    // Hot-reload: if a user adapter's file has changed on disk, invalidate cache
+    const isUserAdapter = modulePath.startsWith(_userClisDir);
+    if (isUserAdapter && _loadedModules.has(modulePath)) {
+      try {
+        const stat = fs.statSync(modulePath);
+        const prevMtime = _moduleMtimes.get(modulePath);
+        if (prevMtime !== undefined && stat.mtimeMs !== prevMtime) {
+          _loadedModules.delete(modulePath);
+          _moduleMtimes.delete(modulePath);
+        }
+      } catch { /* file may have been deleted; let import below handle it */ }
+    }
     if (!_loadedModules.has(modulePath)) {
-      const loadPromise = import(pathToFileURL(modulePath).href).then(
-        () => {},
+      const loadPromise = import(pathToFileURL(modulePath).href + `?t=${Date.now()}`).then(
+        () => {
+          try { _moduleMtimes.set(modulePath, fs.statSync(modulePath).mtimeMs); } catch {}
+        },
         (err) => {
           _loadedModules.delete(modulePath);
           throw new AdapterLoadError(

@@ -146,9 +146,14 @@ function emitAutoFixHint(envelope: string, cmdName: string): string {
 function renderError(err: unknown, cmdName: string, verbose: boolean): void {
   const envelope = toEnvelope(err);
 
-  // In verbose mode, include stack trace for debugging
-  if (verbose && err instanceof Error && err.stack) {
-    envelope.error.stack = err.stack;
+  // In verbose mode, include stack trace and cause chain for debugging
+  if (verbose && err instanceof Error) {
+    if (err.stack) envelope.error.stack = err.stack;
+    if (err.cause) {
+      envelope.error.cause = err.cause instanceof Error
+        ? `${err.cause.message}${err.cause.stack ? '\n' + err.cause.stack : ''}`
+        : String(err.cause);
+    }
   }
 
   let output = yaml.dump(envelope, { sortKeys: false, lineWidth: 120, noRefs: true });

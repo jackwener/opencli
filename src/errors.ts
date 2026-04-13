@@ -154,6 +154,7 @@ export interface ErrorEnvelope {
     help?: string;
     exitCode: number;
     stack?: string;
+    cause?: string;
   };
 }
 

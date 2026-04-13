@@ -33,6 +33,22 @@ export abstract class BasePage implements IPage {
 
   abstract goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void>;
   abstract evaluate(js: string): Promise<unknown>;
+
+  /**
+   * Safely evaluate JS with pre-serialized arguments.
+   * Each key in `args` becomes a `const` declaration with JSON-serialized value,
+   * prepended to the JS code. Prevents injection by design.
+   *
+   * Usage:
+   *   page.evaluateWithArgs(`(async () => { return sym; })()`, { sym: userInput })
+   */
+  async evaluateWithArgs(js: string, args: Record<string, unknown>): Promise<unknown> {
+    const declarations = Object.entries(args)
+      .map(([key, value]) => `const ${key} = ${JSON.stringify(value)};`)
+      .join('\n');
+    return this.evaluate(`${declarations}\n${js}`);
+  }
+
   abstract getCookies(opts?: { domain?: string; url?: string }): Promise<BrowserCookie[]>;
   abstract screenshot(options?: ScreenshotOptions): Promise<string>;
   abstract tabs(): Promise<unknown[]>;
