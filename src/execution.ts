@@ -226,13 +226,17 @@ export async function executeCommand(
           await page.closeWindow?.().catch(() => {});
           return result;
         } catch (err) {
-          // Collect diagnostic while page is still alive (before browserSession closes it).
+          // Collect diagnostic while page is still alive (before closing the window).
           if (isDiagnosticEnabled()) {
             const internal = cmd as InternalCliCommand;
             const ctx = await collectDiagnostic(err, internal, page);
             emitDiagnostic(ctx);
             diagnosticEmitted = true;
           }
+          // Close the automation window on failure too — without this, the window
+          // lingers until the extension's idle timer fires (unreliable on Windows
+          // where MV3 service workers may be suspended before setTimeout triggers).
+          await page.closeWindow?.().catch(() => {});
           throw err;
         }
       }, { workspace: `site:${cmd.site}`, cdpEndpoint });

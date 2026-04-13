@@ -4,6 +4,8 @@ import { executeCommand, prepareCommandArgs } from './execution.js';
 import { TimeoutError } from './errors.js';
 import { cli, Strategy } from './registry.js';
 import { withTimeoutMs } from './runtime.js';
+import * as runtime from './runtime.js';
+import * as capRouting from './capabilityRouting.js';
 
 describe('executeCommand — non-browser timeout', () => {
   it('applies timeoutSeconds to non-browser commands', async () => {
@@ -44,6 +46,33 @@ describe('executeCommand — non-browser timeout', () => {
     await expect(
       withTimeoutMs(executeCommand(cmd, {}), 50, 'sentinel timeout'),
     ).rejects.toThrow('sentinel timeout');
+  });
+
+  it('calls closeWindow on browser command failure', async () => {
+    const closeWindow = vi.fn().mockResolvedValue(undefined);
+    const mockPage = { closeWindow } as any;
+
+    // Mock shouldUseBrowserSession to return true
+    vi.spyOn(capRouting, 'shouldUseBrowserSession').mockReturnValue(true);
+
+    // Mock browserSession to invoke the callback with our mock page
+    vi.spyOn(runtime, 'browserSession').mockImplementation(async (_Factory, fn) => {
+      return fn(mockPage);
+    });
+
+    const cmd = cli({
+      site: 'test-execution',
+      name: 'browser-close-on-error',
+      description: 'test closeWindow on failure',
+      browser: true,
+      strategy: Strategy.PUBLIC,
+      func: async () => { throw new Error('adapter failure'); },
+    });
+
+    await expect(executeCommand(cmd, {})).rejects.toThrow('adapter failure');
+    expect(closeWindow).toHaveBeenCalledTimes(1);
+
+    vi.restoreAllMocks();
   });
 
   it('does not re-run custom validation when args are already prepared', async () => {
