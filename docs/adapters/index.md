@@ -64,6 +64,7 @@ Run `opencli list` for the live registry.
 | **[douyin](./browser/douyin.md)**           | `profile` `videos` `user-videos` `activities` `collections` `hashtag` `location` `stats` `publish` `draft` `drafts` `delete` `update`                                                                                                                            | 🔐 Browser                          |
 | **[xianyu](./browser/xianyu.md)**           | `search` `item` `chat`                                                                                                                                                                                                                                           | 🔐 Browser                          |
 | **[quark](./browser/quark.md)**             | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree`                                                                                                                                                                                                              | 🔐 Browser                          |
+| **[uiverse](./browser/uiverse.md)**         | `code` `preview`                                                                                                                                                                                                                                                  | 🔐 Browser                          |
 
 ## Public API Adapters
 

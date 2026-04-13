@@ -214,6 +214,7 @@ To load the source Browser Bridge extension:
 | **xianyu** | `search` `item` `chat` |
 | **xiaoe** | `courses` `detail` `catalog` `play-url` `content` |
 | **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` |
+| **uiverse** | `code` `preview` |
 
 87+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
 
