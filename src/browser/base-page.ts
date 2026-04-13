@@ -44,7 +44,12 @@ export abstract class BasePage implements IPage {
    */
   async evaluateWithArgs(js: string, args: Record<string, unknown>): Promise<unknown> {
     const declarations = Object.entries(args)
-      .map(([key, value]) => `const ${key} = ${JSON.stringify(value)};`)
+      .map(([key, value]) => {
+        if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
+          throw new Error(`evaluateWithArgs: invalid key "${key}"`);
+        }
+        return `const ${key} = ${JSON.stringify(value)};`;
+      })
       .join('\n');
     return this.evaluate(`${declarations}\n${js}`);
   }

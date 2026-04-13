@@ -96,7 +96,9 @@ async function runCommand(
       } catch { /* file may have been deleted; let import below handle it */ }
     }
     if (!_loadedModules.has(modulePath)) {
-      const loadPromise = import(pathToFileURL(modulePath).href + `?t=${Date.now()}`).then(
+      const url = pathToFileURL(modulePath).href;
+      const importUrl = _moduleMtimes.has(modulePath) ? `${url}?t=${Date.now()}` : url;
+      const loadPromise = import(importUrl).then(
         () => {
           try { _moduleMtimes.set(modulePath, fs.statSync(modulePath).mtimeMs); } catch {}
         },

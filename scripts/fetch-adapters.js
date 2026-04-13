@@ -82,10 +82,11 @@ function walkFiles(dir, prefix = '') {
  * Remove empty parent directories up to (but not including) stopAt.
  */
 function pruneEmptyDirs(filePath, stopAt) {
-  let dir = dirname(filePath);
-  while (dir !== stopAt) {
-    const rel = relative(stopAt, dir);
-    if (!rel || rel.startsWith('..') || resolve(dir) === resolve(stopAt)) break;
+  const boundary = resolve(stopAt);
+  let dir = resolve(dirname(filePath));
+  while (dir !== boundary) {
+    const rel = relative(boundary, dir);
+    if (!rel || rel.startsWith('..')) break;
     try {
       const entries = readdirSync(dir);
       if (entries.length > 0) break;
