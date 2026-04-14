@@ -22,6 +22,8 @@ type BubbleImage = {
   h: number;
 };
 
+type BubbleImageSet = BubbleImage[];
+
 type FetchResult = {
   ok: boolean;
   base64?: string;
@@ -104,45 +106,88 @@ async function sendPrompt(page: IPage, prompt: string): Promise<SendResult> {
   const promptJson = JSON.stringify(prompt);
   return page.evaluate(`(async () => {
     try {
+      const waitFor = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+      const composerSelector = '.ProseMirror[contenteditable="true"]';
+      const isVisibleEnabledSubmit = (node) => {
+        if (!(node instanceof HTMLButtonElement)) return false;
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        return !node.disabled
+          && rect.width > 0
+          && rect.height > 0
+          && style.visibility !== 'hidden'
+          && style.display !== 'none';
+      };
+
+      let pm = null;
+      let box = null;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const composer = document.querySelector(composerSelector);
+        if (composer instanceof HTMLElement) {
+          pm = composer;
+          break;
+        }
+
+        const textarea = document.querySelector('textarea');
+        if (textarea instanceof HTMLTextAreaElement) {
+          box = textarea;
+          break;
+        }
+
+        await waitFor(1000);
+      }
+
       // Prefer the ProseMirror composer when present (current grok.com UI).
-      const pm = document.querySelector('.ProseMirror[contenteditable="true"]');
       if (pm && pm.editor && pm.editor.commands) {
         try {
           if (pm.editor.commands.clearContent) pm.editor.commands.clearContent();
           pm.editor.commands.focus();
           pm.editor.commands.insertContent(${promptJson});
-          await new Promise(r => setTimeout(r, 800));
-          const sbtn = Array.from(document.querySelectorAll('button[aria-label="Submit"], button[aria-label="\\u63d0\\u4ea4"]'))
-            .find(b => !b.disabled);
-          if (sbtn) { sbtn.click(); return { ok: true, msg: 'pm-submit' }; }
+          for (let attempt = 0; attempt < 6; attempt += 1) {
+            const sbtn = Array.from(document.querySelectorAll('button[aria-label="Submit"], button[aria-label="\\u63d0\\u4ea4"]'))
+              .find(isVisibleEnabledSubmit);
+            if (sbtn) {
+              sbtn.click();
+              return { ok: true, msg: 'pm-submit' };
+            }
+            await waitFor(500);
+          }
         } catch (e) { /* fall through to textarea */ }
       }
 
       // Fallback: legacy textarea composer.
-      const box = document.querySelector('textarea');
       if (!box) return { ok: false, msg: 'no composer (neither ProseMirror nor textarea)' };
       box.focus(); box.value = '';
       document.execCommand('selectAll');
       document.execCommand('insertText', false, ${promptJson});
-      await new Promise(r => setTimeout(r, 1200));
-      const btn = document.querySelector('button[aria-label="\\u63d0\\u4ea4"], button[aria-label="Submit"]');
-      if (btn && !btn.disabled) { btn.click(); return { ok: true, msg: 'clicked' }; }
-      const sub = [...document.querySelectorAll('button[type="submit"]')].find(b => !b.disabled);
-      if (sub) { sub.click(); return { ok: true, msg: 'clicked-submit' }; }
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const btn = Array.from(document.querySelectorAll('button[aria-label="\\u63d0\\u4ea4"], button[aria-label="Submit"]'))
+          .find(isVisibleEnabledSubmit);
+        if (btn) {
+          btn.click();
+          return { ok: true, msg: 'clicked' };
+        }
+
+        const sub = Array.from(document.querySelectorAll('button[type="submit"]'))
+          .find(isVisibleEnabledSubmit);
+        if (sub) {
+          sub.click();
+          return { ok: true, msg: 'clicked-submit' };
+        }
+
+        await waitFor(500);
+      }
       box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
       return { ok: true, msg: 'enter' };
     } catch (e) { return { ok: false, msg: e && e.toString ? e.toString() : String(e) }; }
   })()`) as Promise<SendResult>;
 }
 
-/** Read <img> elements from the latest assistant message bubble. */
-async function readLastBubbleImages(page: IPage): Promise<BubbleImage[]> {
+/** Read <img> elements from all message bubbles so callers can filter by baseline. */
+async function getBubbleImageSets(page: IPage): Promise<BubbleImageSet[]> {
   const result = await page.evaluate(`(() => {
     const bubbles = document.querySelectorAll('div.message-bubble, [data-testid="message-bubble"]');
-    if (!bubbles.length) return [];
-    const last = bubbles[bubbles.length - 1];
-    const imgs = Array.from(last.querySelectorAll('img'));
-    return imgs
+    return Array.from(bubbles).map(bubble => Array.from(bubble.querySelectorAll('img'))
       .map(img => ({
         src: img.currentSrc || img.src || '',
         w: img.naturalWidth || img.width || 0,
@@ -150,11 +195,22 @@ async function readLastBubbleImages(page: IPage): Promise<BubbleImage[]> {
       }))
       .filter(i => i.src && /^https?:/.test(i.src))
       // Ignore tiny UI/avatar images that may live in the bubble chrome.
-      .filter(i => (i.w === 0 || i.w >= 128) && (i.h === 0 || i.h >= 128));
-  })()`) as BubbleImage[] | undefined;
+      .filter(i => (i.w === 0 || i.w >= 128) && (i.h === 0 || i.h >= 128)));
+  })()`) as BubbleImageSet[] | undefined;
 
   const raw = Array.isArray(result) ? result : [];
-  return dedupeBySrc(raw);
+  return raw.map(dedupeBySrc);
+}
+
+function pickLatestImageCandidate(
+  bubbleImageSets: BubbleImageSet[],
+  baselineCount: number,
+): BubbleImage[] {
+  const freshSets = bubbleImageSets.slice(Math.max(0, baselineCount));
+  for (let i = freshSets.length - 1; i >= 0; i -= 1) {
+    if (freshSets[i].length) return freshSets[i];
+  }
+  return [];
 }
 
 // Download through the browser's fetch so grok.com cookies and referer are
@@ -232,6 +288,7 @@ export const imageCommand = cli({
       await page.wait(3);
     }
 
+    const baselineBubbleCount = (await getBubbleImageSets(page)).length;
     const sendResult = await sendPrompt(page, prompt);
     if (!sendResult || !sendResult.ok) {
       return [{
@@ -249,7 +306,8 @@ export const imageCommand = cli({
 
     while (Date.now() - startTime < timeoutMs) {
       await page.wait(3);
-      const images = await readLastBubbleImages(page);
+      const bubbleImageSets = await getBubbleImageSets(page);
+      const images = pickLatestImageCandidate(bubbleImageSets, baselineBubbleCount);
 
       if (images.length >= minCount) {
         const signature = imagesSignature(images);
@@ -294,4 +352,5 @@ export const __test__ = {
   imagesSignature,
   extFromContentType,
   buildFilename,
+  pickLatestImageCandidate,
 };

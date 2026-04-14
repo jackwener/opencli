@@ -82,4 +82,26 @@ describe('grok image helpers', () => {
     expect(a1.endsWith('.jpg')).toBe(true);
     expect(b1.endsWith('.png')).toBe(true);
   });
+
+  it('only accepts image bubbles that appeared after the baseline', () => {
+    const candidate = __test__.pickLatestImageCandidate([
+      [{ src: 'https://a.example/stale.jpg', w: 512, h: 512 }],
+      [],
+      [{ src: 'https://a.example/fresh.jpg', w: 1024, h: 1024 }],
+    ], 1);
+
+    expect(candidate).toEqual([
+      { src: 'https://a.example/fresh.jpg', w: 1024, h: 1024 },
+    ]);
+  });
+
+  it('does not reuse stale images when no new image bubble appears after baseline', () => {
+    const candidate = __test__.pickLatestImageCandidate([
+      [{ src: 'https://a.example/stale.jpg', w: 512, h: 512 }],
+      [],
+      [],
+    ], 1);
+
+    expect(candidate).toEqual([]);
+  });
 });
