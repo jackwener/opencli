@@ -60,6 +60,7 @@ function extractBookmarkTweet(result, seen) {
         text: noteText || legacy.full_text || '',
         likes: legacy.favorite_count || 0,
         retweets: legacy.retweet_count || 0,
+        bookmarks: legacy.bookmark_count || 0,
         created_at: legacy.created_at || '',
         url: `https://x.com/${screenName}/status/${tw.rest_id}`,
     };
@@ -106,7 +107,7 @@ cli({
     args: [
         { name: 'limit', type: 'int', default: 20 },
     ],
-    columns: ['author', 'text', 'likes', 'url'],
+    columns: ['author', 'text', 'likes', 'retweets', 'bookmarks', 'url'],
     func: async (page, kwargs) => {
         const limit = kwargs.limit || 20;
         await page.goto('https://x.com');
