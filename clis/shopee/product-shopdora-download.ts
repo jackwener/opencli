@@ -20,7 +20,7 @@ const SECONDARY_FILTER_LABEL_SELECTOR =
 const SECONDARY_FILTER_INPUT_SELECTOR =
   'div:nth-of-type(1) > div:nth-of-type(2) > span:nth-of-type(2) > label > input.t-checkbox__former';
 const CONFIRM_EXPORT_BUTTON_SELECTOR =
-  'div > div:nth-of-type(5) > div:nth-of-type(2) > button:nth-of-type(2)';
+  '.review .button button:last-of-type';
 
 const SHOPEE_WORKSPACE = 'site:shopee';
 
@@ -194,8 +194,16 @@ async function applyCheckboxStep(
   inputSelector: string,
   checked: boolean,
   label: string,
-): Promise<void> {
-  await page.wait({ selector: inputSelector, timeout: 10 });
+  opts: { allowMissing?: boolean } = {},
+): Promise<boolean> {
+  try {
+    await page.wait({ selector: inputSelector, timeout: 10 });
+  } catch (error) {
+    if (opts.allowMissing) {
+      return false;
+    }
+    throw error;
+  }
   await simulateHumanBehavior(page, {
     selector: labelSelector,
     scrollRangePx: [30, 120],
@@ -203,9 +211,10 @@ async function applyCheckboxStep(
     postWaitRangeMs: [150, 450],
   });
   await clickSelector(page, labelSelector, `${label} label`);
-  await waitRandomDuration(page, [250, 650]);
+  await waitRandomDuration(page, [1500, 3500]);
   await ensureCheckboxState(page, inputSelector, checked, label);
-  await waitRandomDuration(page, [250, 700]);
+  await waitRandomDuration(page, [2000, 5000]);
+  return true;
 }
 
 cli({
@@ -249,23 +258,25 @@ cli({
       postWaitRangeMs: [300, 800],
       allowReverseScroll: false,
     });
-
+    await waitRandomDuration(page, [3000, 5000]);
     await clickSelector(page, EXPORT_REVIEW_BUTTON_SELECTOR, 'Export Review');
-    await waitRandomDuration(page, [900, 1600]);
+    await waitRandomDuration(page, [2000, 6000]);
 
-    await applyCheckboxStep(
-      page,
-      DETAIL_FILTER_LABEL_SELECTOR,
-      DETAIL_FILTER_INPUT_SELECTOR,
-      true,
-      'detail filter',
-    );
     await applyCheckboxStep(
       page,
       SECONDARY_FILTER_LABEL_SELECTOR,
       SECONDARY_FILTER_INPUT_SELECTOR,
       false,
       'secondary filter',
+    );
+
+    const appliedDetailFilter = await applyCheckboxStep(
+      page,
+      DETAIL_FILTER_LABEL_SELECTOR,
+      DETAIL_FILTER_INPUT_SELECTOR,
+      true,
+      'detail filter',
+      { allowMissing: true },
     );
 
     await page.wait({ selector: CONFIRM_EXPORT_BUTTON_SELECTOR, timeout: 10 });
@@ -290,7 +301,9 @@ cli({
 
     return [{
       status: 'success',
-      message: 'Downloaded Shopee product Shopdora export with the recorded good-detail filter.',
+      message: appliedDetailFilter
+        ? 'Downloaded Shopee product Shopdora export with the recorded good-detail filter.'
+        : 'Downloaded Shopee product Shopdora export after skipping the unavailable detail filter.',
       local_url: pathToFileURL(localPath).href,
       local_path: localPath,
       product_url: productUrl,
