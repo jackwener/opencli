@@ -13161,12 +13161,14 @@
         "help": ""
       }
     ],
-    "columns": [
-      "author",
-      "text",
-      "likes",
-      "url"
-    ],
+  "columns": [
+    "author",
+    "text",
+    "likes",
+    "retweets",
+    "bookmarks",
+    "url"
+  ],
     "type": "js",
     "modulePath": "twitter/bookmarks.js",
     "sourceFile": "twitter/bookmarks.js"
