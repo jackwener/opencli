@@ -418,9 +418,15 @@ export async function exploreUrl(
       const metadata = await readPageMetadata(page);
 
       // Step 4: Capture network traffic
-      const rawNetwork = page.readNetworkCapture
-        ? await page.readNetworkCapture()
-        : await page.networkRequests(false);
+      let rawNetwork: unknown[];
+      try {
+        rawNetwork = page.readNetworkCapture
+          ? await page.readNetworkCapture()
+          : await page.networkRequests(false);
+      } catch {
+        // Older extension versions don't support network-capture-read — fall back to JS-based capture
+        rawNetwork = await page.networkRequests(false);
+      }
       const networkEntries = parseNetworkRequests(rawNetwork);
 
       // Step 5: For JSON endpoints missing a body, carefully re-fetch in-browser via a pristine iframe

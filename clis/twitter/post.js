@@ -4,18 +4,18 @@ import { cli, Strategy } from '@jackwener/opencli/registry';
 import { CommandExecutionError } from '@jackwener/opencli/errors';
 const MAX_IMAGES = 4;
 const UPLOAD_POLL_MS = 500;
-const UPLOAD_TIMEOUT_MS = 30_000;
-const SUPPORTED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+const UPLOAD_TIMEOUT_MS = 120_000;
+const SUPPORTED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.mov']);
 function validateImagePaths(raw) {
     const paths = raw.split(',').map(s => s.trim()).filter(Boolean);
     if (paths.length > MAX_IMAGES) {
-        throw new CommandExecutionError(`Too many images: ${paths.length} (max ${MAX_IMAGES})`);
+        throw new CommandExecutionError(`Too many attachments: ${paths.length} (max ${MAX_IMAGES})`);
     }
     return paths.map(p => {
         const absPath = path.resolve(p);
         const ext = path.extname(absPath).toLowerCase();
         if (!SUPPORTED_EXTENSIONS.has(ext)) {
-            throw new CommandExecutionError(`Unsupported image format "${ext}". Supported: jpg, png, gif, webp`);
+            throw new CommandExecutionError(`Unsupported attachment format "${ext}". Supported: jpg, png, gif, webp, mp4, mov`);
         }
         const stat = fs.statSync(absPath, { throwIfNoEntry: false });
         if (!stat || !stat.isFile()) {
@@ -27,13 +27,13 @@ function validateImagePaths(raw) {
 cli({
     site: 'twitter',
     name: 'post',
-    description: 'Post a new tweet/thread',
+    description: 'Post a new tweet/thread with images or video',
     domain: 'x.com',
     strategy: Strategy.UI,
     browser: true,
     args: [
         { name: 'text', type: 'string', required: true, positional: true, help: 'The text content of the tweet' },
-        { name: 'images', type: 'string', required: false, help: 'Image paths, comma-separated, max 4 (jpg/png/gif/webp)' },
+        { name: 'images', type: 'string', required: false, help: 'Attachment paths (images or video), comma-separated, max 4' },
     ],
     columns: ['status', 'message', 'text'],
     func: async (page, kwargs) => {
