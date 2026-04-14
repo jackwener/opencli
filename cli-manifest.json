@@ -1267,11 +1267,17 @@
   {
     "site": "bilibili",
     "name": "favorite",
-    "description": "我的默认收藏夹",
+    "description": "我的收藏夹",
     "domain": "www.bilibili.com",
     "strategy": "cookie",
     "browser": true,
     "args": [
+      {
+        "name": "fid",
+        "type": "int",
+        "required": false,
+        "help": "Favorite folder ID (defaults to first folder)"
+      },
       {
         "name": "limit",
         "type": "int",
