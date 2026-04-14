@@ -1,6 +1,44 @@
+import { CommandExecutionError } from '@jackwener/opencli/errors';
+
 export const DOUBAO_DOMAIN = 'www.doubao.com';
 export const DOUBAO_CHAT_URL = 'https://www.doubao.com/chat';
 export const DOUBAO_NEW_CHAT_URL = 'https://www.doubao.com/chat/new-thread/create-by-msg';
+const DOUBAO_COMPOSER_SELECTORS = [
+    'textarea[data-testid="chat_input_input"]',
+    '[data-testid="chat_input"] textarea',
+    '.chat-input textarea',
+    '.chat-input [contenteditable="true"]',
+    '.chat-editor textarea',
+    '.chat-editor [contenteditable="true"]',
+    'textarea[placeholder*="发消息"]',
+    'textarea[placeholder*="Message"]',
+    '[contenteditable="true"][placeholder*="发消息"]',
+    '[contenteditable="true"][placeholder*="Message"]',
+    '[contenteditable="true"][aria-label*="发消息"]',
+    '[contenteditable="true"][aria-label*="Message"]',
+    'textarea',
+    '[contenteditable="true"]',
+];
+function buildDoubaoComposerLocatorScript() {
+    return `
+    const isVisible = (el) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+
+    const composerSelectors = ${JSON.stringify(DOUBAO_COMPOSER_SELECTORS)};
+    const findComposer = () => {
+      for (const selector of composerSelectors) {
+        const node = Array.from(document.querySelectorAll(selector)).find(isVisible);
+        if (node) return node;
+      }
+      return null;
+    };
+  `;
+}
 function getTranscriptLinesScript() {
     return `
     (() => {
@@ -205,41 +243,97 @@ function getTurnsScript() {
     })()
   `;
 }
+function prepareDoubaoComposerScript() {
+    return `
+    (() => {
+      ${buildDoubaoComposerLocatorScript()}
+      const composer = findComposer();
+
+      if (
+        !(composer instanceof HTMLTextAreaElement)
+        && !(composer instanceof HTMLInputElement)
+        && !(composer instanceof HTMLElement)
+      ) {
+        return { ok: false, reason: 'Could not find Doubao input element' };
+      }
+
+      try {
+        composer.focus();
+
+        if (composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement) {
+          const length = composer.value.length;
+          composer.setSelectionRange(0, length);
+        } else {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(composer);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+
+      return { ok: true };
+    })()
+  `;
+}
+function composerStateScript() {
+    return `
+    (() => {
+      ${buildDoubaoComposerLocatorScript()}
+      const composer = findComposer();
+
+      if (composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement) {
+        return { hasText: !!composer.value.trim(), text: composer.value };
+      }
+
+      if (composer instanceof HTMLElement) {
+        const text = (composer.innerText || '').trim() || (composer.textContent || '').trim();
+        return {
+          hasText: !!text,
+          text,
+        };
+      }
+
+      return { hasText: false, text: '' };
+    })()
+  `;
+}
+function syncComposerAfterNativeTypeScript() {
+    return `
+    (() => {
+      ${buildDoubaoComposerLocatorScript()}
+      const composer = findComposer();
+
+      if (composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement) {
+        const value = composer.value;
+        composer.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, data: value, inputType: 'insertText' }));
+        composer.dispatchEvent(new InputEvent('input', { bubbles: true, data: value, inputType: 'insertText' }));
+        composer.dispatchEvent(new Event('change', { bubbles: true }));
+        return { hasText: !!value.trim(), text: value };
+      }
+
+      if (composer instanceof HTMLElement) {
+        const text = (composer.innerText || '').trim() || (composer.textContent || '').trim();
+        composer.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, data: text, inputType: 'insertText' }));
+        composer.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+        composer.dispatchEvent(new Event('change', { bubbles: true }));
+        return { hasText: !!text, text };
+      }
+
+      return { hasText: false, text: '' };
+    })()
+  `;
+}
 function fillComposerScript(text) {
     return `
     ((inputText) => {
-      const isVisible = (el) => {
-        if (!(el instanceof HTMLElement)) return false;
-        const style = window.getComputedStyle(el);
-        if (style.display === 'none' || style.visibility === 'hidden') return false;
-        const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      };
-
-      const candidates = [
-        'textarea[data-testid="chat_input_input"]',
-        '.chat-input textarea',
-        '.chat-input [contenteditable="true"]',
-        '.chat-editor textarea',
-        '.chat-editor [contenteditable="true"]',
-        'textarea[placeholder*="发消息"]',
-        'textarea[placeholder*="Message"]',
-        '[contenteditable="true"][placeholder*="发消息"]',
-        '[contenteditable="true"][placeholder*="Message"]',
-        '[contenteditable="true"][aria-label*="发消息"]',
-        '[contenteditable="true"][aria-label*="Message"]',
-        'textarea',
-        '[contenteditable="true"]',
-      ];
-
-      let composer = null;
-      for (const selector of candidates) {
-        const node = Array.from(document.querySelectorAll(selector)).find(isVisible);
-        if (node) {
-          composer = node;
-          break;
-        }
-      }
+      ${buildDoubaoComposerLocatorScript()}
+      const composer = findComposer();
 
       if (!composer) throw new Error('Could not find Doubao input element');
 
@@ -251,9 +345,10 @@ function fillComposerScript(text) {
           : window.HTMLInputElement.prototype;
         const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
         setter?.call(composer, inputText);
-        composer.dispatchEvent(new Event('input', { bubbles: true }));
+        composer.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, data: inputText, inputType: 'insertText' }));
+        composer.dispatchEvent(new InputEvent('input', { bubbles: true, data: inputText, inputType: 'insertText' }));
         composer.dispatchEvent(new Event('change', { bubbles: true }));
-        return 'text-input';
+        return { hasText: !!composer.value.trim(), mode: 'text-input', text: composer.value };
       }
 
       if (composer instanceof HTMLElement) {
@@ -265,71 +360,21 @@ function fillComposerScript(text) {
         selection?.removeAllRanges();
         selection?.addRange(range);
         document.execCommand('insertText', false, inputText);
-        composer.dispatchEvent(new Event('input', { bubbles: true }));
+        composer.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, data: inputText, inputType: 'insertText' }));
+        composer.dispatchEvent(new InputEvent('input', { bubbles: true, data: inputText, inputType: 'insertText' }));
         composer.dispatchEvent(new Event('change', { bubbles: true }));
-        return 'contenteditable';
+        return {
+          hasText: !!((composer.innerText || '').trim() || (composer.textContent || '').trim()),
+          mode: 'contenteditable',
+          text: (composer.innerText || '').trim() || (composer.textContent || '').trim(),
+        };
       }
 
       throw new Error('Unsupported Doubao input element');
     })(${JSON.stringify(text)})
   `;
 }
-function fillAndSubmitComposerScript(text) {
-    return `
-    ((inputText) => {
-      const isVisible = (el) => {
-        if (!(el instanceof HTMLElement)) return false;
-        const style = window.getComputedStyle(el);
-        if (style.display === 'none' || style.visibility === 'hidden') return false;
-        const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      };
-
-      const candidates = [
-        'textarea[data-testid="chat_input_input"]',
-        '[data-testid="chat_input"] textarea',
-        '.chat-input textarea',
-        'textarea[placeholder*="发消息"]',
-        'textarea[placeholder*="Message"]',
-        'textarea',
-      ];
-
-      let composer = null;
-      for (const selector of candidates) {
-        const node = Array.from(document.querySelectorAll(selector)).find(isVisible);
-        if (node) {
-          composer = node;
-          break;
-        }
-      }
-
-      if (!(composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement)) {
-        throw new Error('Could not find Doubao textarea input element');
-      }
-
-      composer.focus();
-      const proto = composer instanceof HTMLTextAreaElement
-        ? window.HTMLTextAreaElement.prototype
-        : window.HTMLInputElement.prototype;
-      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-      setter?.call(composer, inputText);
-      composer.dispatchEvent(new Event('input', { bubbles: true }));
-      composer.dispatchEvent(new Event('change', { bubbles: true }));
-
-      const root = document.querySelector('[data-testid="chat_input"], .chat-input') || document.body;
-      const buttons = Array.from(root.querySelectorAll('button, [role="button"]')).filter(isVisible);
-      const target = buttons[buttons.length - 1];
-
-      if (target) {
-        target.click();
-        return 'button';
-      }
-
-      return 'enter';
-    })(${JSON.stringify(text)})
-  `;
-}
-function clickSendButtonScript() {
+function detectDoubaoVerificationScript() {
     return `
     (() => {
       const isVisible = (el) => {
@@ -340,64 +385,115 @@ function clickSendButtonScript() {
         return rect.width > 0 && rect.height > 0;
       };
 
-      const labels = ['发送', 'Send', '发消息...', 'Message...'];
-      const root = document.querySelector('[data-testid="chat_input"], .chat-input') || document;
-      const buttons = Array.from(root.querySelectorAll(
-        '.chat-input-button button, .chat-input-button [role="button"], .chat-input button, button[type="submit"], [role="button"]'
-      ));
+      const challengeSelectors = [
+        'iframe[src*="captcha"]',
+        'iframe[src*="verify"]',
+        'input[placeholder*="验证码"]',
+        'input[aria-label*="验证码"]',
+      ];
+      const selectorMatch = challengeSelectors.find((selector) => {
+        return Array.from(document.querySelectorAll(selector)).some((node) => isVisible(node));
+      });
+      if (selectorMatch) {
+        return { detected: true, reason: selectorMatch };
+      }
+
+      const phrasePattern = /人机验证|完成安全验证|异常访问|滑动验证|拖动滑块/i;
+      const candidateRoots = Array.from(
+        document.querySelectorAll('[role="dialog"], [aria-modal="true"], .semi-modal, .modal')
+      );
+      const match = candidateRoots.find((node) => {
+        if (!(node instanceof HTMLElement)) return false;
+        if (!isVisible(node)) return false;
+        const text = (node.innerText || node.textContent || '').trim();
+        if (!text || text.length > 400) return false;
+        return phrasePattern.test(text);
+      });
+
+      return {
+        detected: !!match,
+        reason: match ? ((match.innerText || match.textContent || '').trim().slice(0, 80) || 'challenge-ui') : '',
+      };
+    })()
+  `;
+}
+function clickSendButtonScript() {
+    return `
+    (() => {
+      ${buildDoubaoComposerLocatorScript()}
+      const composer = findComposer();
+      if (!(composer instanceof HTMLElement)) return false;
+
+      const composerRect = composer.getBoundingClientRect();
+      const rootCandidates = [
+        composer.closest('form'),
+        composer.closest('[role="form"]'),
+        composer.closest('[data-testid="chat_input"]'),
+        composer.closest('.chat-input'),
+        composer.parentElement,
+        composer.parentElement?.parentElement,
+      ].filter(Boolean);
+
+      const seen = new Set();
+      const buttons = [];
+      for (const root of rootCandidates) {
+        root.querySelectorAll('button, [role="button"]').forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
+          if (seen.has(node)) return;
+          seen.add(node);
+          buttons.push(node);
+        });
+      }
+
+      const submitPattern = /send|发送|提交|发消息/i;
+      const excludedPattern = /新对话|new chat|快速|视频生成|深入研究|图像生成|帮我写作|音乐生成|更多|上传|upload|麦克风|microphone|模式|mode|工具|tools|设置|settings|云盘|history|历史/i;
+      let bestButton = null;
+      let bestScore = -Infinity;
 
       for (const button of buttons) {
         if (!isVisible(button)) continue;
         const disabled = button.getAttribute('disabled') !== null
           || button.getAttribute('aria-disabled') === 'true';
         if (disabled) continue;
+
         const text = (button.innerText || button.textContent || '').trim();
         const aria = (button.getAttribute('aria-label') || '').trim();
         const title = (button.getAttribute('title') || '').trim();
-        const haystacks = [text, aria, title];
-        if (haystacks.some((value) => labels.some((label) => value.includes(label)))) {
-          button.click();
-          return true;
+        const className = String(button.className || '');
+        const haystack = [text, aria, title].join(' ').trim();
+        if (excludedPattern.test(haystack)) continue;
+
+        const rect = button.getBoundingClientRect();
+        const dx = rect.left - composerRect.right;
+        const dy = Math.abs((rect.top + rect.height / 2) - (composerRect.top + composerRect.height / 2));
+        const distancePenalty = Math.abs(dx) + dy;
+        const isSubmitLike = submitPattern.test(haystack)
+          || button.getAttribute('type') === 'submit'
+          || className.includes('bg-dbx-text-highlight')
+          || className.includes('bg-dbx-fill-highlight')
+          || className.includes('text-dbx-text-static-white-primary');
+        if (!isSubmitLike) continue;
+        if (dx < -80 || dx > 280) continue;
+        if (dy > 140) continue;
+
+        let score = -distancePenalty;
+        if (submitPattern.test(haystack)) score += 5000;
+        if (button.getAttribute('type') === 'submit') score += 1200;
+        if (button.closest('.chat-input-button')) score += 1200;
+        if (className.includes('bg-dbx-text-highlight')) score += 600;
+        if (className.includes('bg-dbx-fill-highlight')) score += 600;
+        if (className.includes('text-dbx-text-static-white-primary')) score += 400;
+        if (dx >= -40 && dx <= 240) score += 120;
+        if (rect.left >= composerRect.left - 40) score += 40;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestButton = button;
         }
       }
 
-      const styledCandidate = [...buttons].reverse().find((button) => {
-        if (!isVisible(button)) return false;
-        const disabled = button.getAttribute('disabled') !== null
-          || button.getAttribute('aria-disabled') === 'true';
-        if (disabled) return false;
-        const className = button.className || '';
-        return className.includes('bg-dbx-text-highlight')
-          || className.includes('bg-dbx-fill-highlight')
-          || className.includes('text-dbx-text-static-white-primary');
-      });
-
-      if (styledCandidate) {
-        styledCandidate.click();
-        return true;
-      }
-
-      const inputButton = [...buttons].reverse().find((button) => {
-        if (!isVisible(button)) return false;
-        const disabled = button.getAttribute('disabled') !== null
-          || button.getAttribute('aria-disabled') === 'true';
-        if (disabled) return false;
-        return !!button.closest('.chat-input-button');
-      });
-
-      if (inputButton) {
-        inputButton.click();
-        return true;
-      }
-
-      const lastEnabledButton = [...buttons].reverse().find((button) => {
-        if (!isVisible(button)) return false;
-        return button.getAttribute('disabled') === null
-          && button.getAttribute('aria-disabled') !== 'true';
-      });
-
-      if (lastEnabledButton) {
-        lastEnabledButton.click();
+      if (bestButton && bestScore >= 200) {
+        bestButton.click();
         return true;
       }
 
@@ -513,15 +609,56 @@ export async function getDoubaoTranscriptLines(page) {
 }
 export async function sendDoubaoMessage(page, text) {
     await ensureDoubaoChatPage(page);
-    const submittedBy = await page.evaluate(fillAndSubmitComposerScript(text));
-    if (submittedBy === 'enter') {
+    const normalizeComposerText = (value) => value.replace(/\r\n/g, '\n').trim();
+    const expectedText = normalizeComposerText(text);
+    const prepared = await page.evaluate(prepareDoubaoComposerScript());
+    if (!prepared?.ok) {
+        throw new CommandExecutionError(prepared?.reason || 'Could not find Doubao input element');
+    }
+    let hasText = false;
+    if (page.nativeType) {
+        try {
+            await page.nativeType(text);
+            await page.wait(0.2);
+            await page.evaluate(syncComposerAfterNativeTypeScript());
+            const nativeState = await page.evaluate(composerStateScript());
+            hasText = !!nativeState?.hasText && normalizeComposerText(nativeState?.text || '') === expectedText;
+        }
+        catch { }
+    }
+    if (!hasText) {
+        const fallbackState = await page.evaluate(fillComposerScript(text));
+        hasText = !!fallbackState?.hasText && normalizeComposerText(fallbackState?.text || '') === expectedText;
+    }
+    if (!hasText) {
+        throw new CommandExecutionError('Failed to insert text into Doubao composer');
+    }
+    let submittedBy = 'enter';
+    const clicked = await page.evaluate(clickSendButtonScript());
+    if (clicked) {
+        submittedBy = 'button';
+    }
+    else if (page.nativeKeyPress) {
+        try {
+            await page.nativeKeyPress('Enter');
+        }
+        catch {
+            await page.pressKey('Enter');
+        }
+    }
+    else {
         await page.pressKey('Enter');
     }
     await page.wait(0.8);
+    const verification = await page.evaluate(detectDoubaoVerificationScript());
+    if (verification?.detected) {
+        throw new CommandExecutionError('Doubao blocked the request with a verification challenge', verification.reason
+            ? `Detected challenge signal: ${verification.reason}`
+            : 'Please complete the challenge in the browser and try again.');
+    }
     return submittedBy;
 }
 export async function waitForDoubaoResponse(page, beforeLines, beforeTurns, promptText, timeoutSeconds) {
-    const beforeSet = new Set(beforeLines);
     const beforeTurnSet = new Set(beforeTurns
         .filter((turn) => turn.Role === 'Assistant')
         .map((turn) => `${turn.Role}::${turn.Text}`));
@@ -534,6 +671,12 @@ export async function waitForDoubaoResponse(page, beforeLines, beforeTurns, prom
         .replace(/window\\._SSR_DATA.*$/g, '')
         .trim();
     const getCandidate = async () => {
+        const verification = await page.evaluate(detectDoubaoVerificationScript());
+        if (verification?.detected) {
+            throw new CommandExecutionError('Doubao blocked the request with a verification challenge', verification.reason
+                ? `Detected challenge signal: ${verification.reason}`
+                : 'Please complete the challenge in the browser and try again.');
+        }
         const turns = await getDoubaoVisibleTurns(page);
         const assistantCandidate = [...turns]
             .reverse()
@@ -542,10 +685,9 @@ export async function waitForDoubaoResponse(page, beforeLines, beforeTurns, prom
         if (visibleCandidate)
             return visibleCandidate;
         const lines = await getDoubaoTranscriptLines(page);
-        const additions = lines
-            .filter((line) => !beforeSet.has(line))
-            .map((line) => sanitizeCandidate(line))
-            .filter((line) => line && line !== promptText);
+        const additions = collectDoubaoTranscriptAdditions(beforeLines, lines, promptText, sanitizeCandidate)
+            .split('\n')
+            .filter(Boolean);
         const shortCandidate = additions.find((line) => line.length <= 120);
         return shortCandidate || additions[additions.length - 1] || '';
     };
@@ -570,6 +712,48 @@ export async function waitForDoubaoResponse(page, beforeLines, beforeTurns, prom
         }
     }
     return lastCandidate;
+}
+export function isLikelyDoubaoUiNoise(value) {
+    const text = value.replace(/\s+/g, '');
+    if (!text)
+        return false;
+    const exactNoise = new Set([
+        '快速视频生成深入研究图像生成帮我写作音乐生成更多',
+    ]);
+    return exactNoise.has(text);
+}
+function isAlwaysTranscriptUiNoise(value) {
+    const text = value.replace(/\s+/g, '');
+    if (!text)
+        return false;
+    const exactNoise = new Set([
+        'AI创作云盘更多历史对话',
+    ]);
+    return exactNoise.has(text);
+}
+function isLikelyTranscriptUiNoise(rawValue, sanitizedValue, promptText) {
+    const normalizeWhitespace = (value) => value.replace(/\s+/g, ' ').trim();
+    const normalizedRaw = normalizeWhitespace(rawValue);
+    const normalizedPrompt = normalizeWhitespace(promptText);
+    if (!normalizedPrompt || !normalizedRaw.startsWith(normalizedPrompt))
+        return false;
+    const remainder = normalizedRaw.slice(normalizedPrompt.length).trim();
+    if (!remainder)
+        return true;
+    return isLikelyDoubaoUiNoise(remainder) || isLikelyDoubaoUiNoise(sanitizedValue);
+}
+export function collectDoubaoTranscriptAdditions(beforeLines, currentLines, promptText, sanitize = (value) => value.trim()) {
+    const normalizedBefore = new Set(beforeLines.map((line) => sanitize(line)).filter(Boolean));
+    return currentLines
+        .filter((line) => !beforeLines.includes(line))
+        .map((line) => ({ raw: line, sanitized: sanitize(line) }))
+        .filter(({ raw, sanitized }) => sanitized
+        && sanitized !== promptText
+        && !normalizedBefore.has(sanitized)
+        && !isAlwaysTranscriptUiNoise(sanitized)
+        && !isLikelyTranscriptUiNoise(raw, sanitized, promptText))
+        .map(({ sanitized }) => sanitized)
+        .join('\n');
 }
 function getConversationListScript() {
     return `
@@ -888,6 +1072,11 @@ export async function triggerTranscriptDownload(page) {
     const btnResult = await page.evaluate(clickTranscriptDownloadBtnScript());
     return !btnResult.error;
 }
+export const __test__ = {
+    clickSendButtonScript,
+    composerStateScript,
+    detectDoubaoVerificationScript,
+};
 export async function startNewDoubaoChat(page) {
     await ensureDoubaoChatPage(page);
     const clickedLabel = await page.evaluate(clickNewChatScript());

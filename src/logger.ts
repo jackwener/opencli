@@ -11,10 +11,6 @@ function isVerbose(): boolean {
   return !!process.env.OPENCLI_VERBOSE;
 }
 
-function isDebug(): boolean {
-  return !!process.env.DEBUG?.includes('opencli');
-}
-
 export const log = {
   /** Informational message (always shown) */
   info(msg: string): void {
@@ -41,18 +37,16 @@ export const log = {
     process.stderr.write(`${styleText('red', '✖')}  ${msg}\n`);
   },
 
-  /** Verbose output (only when OPENCLI_VERBOSE is set or -v flag) */
+  /** Verbose output (shown when -v flag or OPENCLI_VERBOSE is set) */
   verbose(msg: string): void {
     if (isVerbose()) {
       process.stderr.write(`${styleText('dim', '[verbose]')} ${msg}\n`);
     }
   },
 
-  /** Debug output (only when DEBUG includes 'opencli') */
+  /** Alias for verbose output. */
   debug(msg: string): void {
-    if (isDebug()) {
-      process.stderr.write(`${styleText('dim', '[debug]')} ${msg}\n`);
-    }
+    this.verbose(msg);
   },
 
   /** Step-style debug (for pipeline steps, etc.) */

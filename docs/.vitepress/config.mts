@@ -92,11 +92,13 @@ export default defineConfig({
                 { text: 'Instagram', link: '/adapters/browser/instagram' },
                 { text: 'JD.com', link: '/adapters/browser/jd' },
                 { text: 'Medium', link: '/adapters/browser/medium' },
+                { text: 'Mubu', link: '/adapters/browser/mubu' },
                 { text: 'TikTok', link: '/adapters/browser/tiktok' },
                 { text: 'Web (Generic)', link: '/adapters/browser/web' },
                 { text: 'Weixin', link: '/adapters/browser/weixin' },
                 { text: 'Xianyu', link: '/adapters/browser/xianyu' },
                 { text: 'Quark', link: '/adapters/browser/quark' },
+                { text: 'Uiverse', link: '/adapters/browser/uiverse' },
               ],
             },
             {
