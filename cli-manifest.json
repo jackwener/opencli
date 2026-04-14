@@ -13812,6 +13812,85 @@
     "sourceFile": "twitter/unfollow.js"
   },
   {
+    "site": "uiverse",
+    "name": "code",
+    "description": "Export Uiverse component code (HTML, CSS, React, or Vue)",
+    "domain": "uiverse.io",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "input",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Uiverse URL or author/slug identifier"
+      },
+      {
+        "name": "target",
+        "type": "str",
+        "required": true,
+        "help": "Code target to export",
+        "choices": [
+          "html",
+          "css",
+          "react",
+          "vue"
+        ]
+      }
+    ],
+    "columns": [
+      "target",
+      "username",
+      "slug",
+      "language",
+      "length"
+    ],
+    "type": "js",
+    "modulePath": "uiverse/code.js",
+    "sourceFile": "uiverse/code.js"
+  },
+  {
+    "site": "uiverse",
+    "name": "preview",
+    "description": "Capture a screenshot of the Uiverse preview element",
+    "domain": "uiverse.io",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "input",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Uiverse URL or author/slug identifier"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "required": false,
+        "help": "Output image path (defaults to a temp file)"
+      },
+      {
+        "name": "padding",
+        "type": "int",
+        "required": false,
+        "default": 8,
+        "help": "Extra padding around the captured preview in pixels"
+      }
+    ],
+    "columns": [
+      "username",
+      "slug",
+      "width",
+      "height",
+      "output"
+    ],
+    "type": "js",
+    "modulePath": "uiverse/preview.js",
+    "sourceFile": "uiverse/preview.js"
+  },
+  {
     "site": "v2ex",
     "name": "daily",
     "description": "V2EX 每日签到并领取铜币",
