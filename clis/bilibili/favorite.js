@@ -3,27 +3,32 @@ import { apiGet, payloadData, getSelfUid } from './utils.js';
 cli({
     site: 'bilibili',
     name: 'favorite',
-    description: '我的默认收藏夹',
+    description: '我的收藏夹',
     domain: 'www.bilibili.com',
     strategy: Strategy.COOKIE,
     args: [
+        { name: 'fid', type: 'int', required: false, help: 'Favorite folder ID (defaults to first folder)' },
         { name: 'limit', type: 'int', default: 20, help: 'Number of results' },
         { name: 'page', type: 'int', default: 1, help: 'Page number' },
     ],
     columns: ['rank', 'title', 'author', 'plays', 'url'],
     func: async (page, kwargs) => {
-        const { limit = 20, page: pageNum = 1 } = kwargs;
-        // Get current user's UID
-        const uid = await getSelfUid(page);
-        // Get default favorite folder ID
-        const foldersPayload = await apiGet(page, '/x/v3/fav/folder/created/list-all', {
-            params: { up_mid: uid },
-            signed: true,
-        });
-        const folders = payloadData(foldersPayload)?.list ?? [];
-        if (!folders.length)
-            return [];
-        const fid = folders[0].id;
+        const { fid: favoriteId, limit = 20, page: pageNum = 1 } = kwargs;
+        let fid;
+        if (favoriteId) {
+            fid = Number(favoriteId);
+        } else {
+            // Fall back to the default (first) favorite folder
+            const uid = await getSelfUid(page);
+            const foldersPayload = await apiGet(page, '/x/v3/fav/folder/created/list-all', {
+                params: { up_mid: uid },
+                signed: true,
+            });
+            const folders = payloadData(foldersPayload)?.list ?? [];
+            if (!folders.length)
+                return [];
+            fid = folders[0].id;
+        }
         // Fetch favorite items
         const payload = await apiGet(page, '/x/v3/fav/resource/list', {
             params: { media_id: fid, pn: pageNum, ps: Math.min(Number(limit), 40) },

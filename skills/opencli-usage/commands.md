@@ -79,7 +79,8 @@ opencli bbc news --limit 10             # BBC News RSS headlines
 opencli bilibili hot --limit 10          # B站热门视频
 opencli bilibili search "rust"            # 搜索视频 (query positional)
 opencli bilibili me                       # 我的信息
-opencli bilibili favorite                 # 我的收藏
+opencli bilibili favorite                 # 我的默认收藏夹
+opencli bilibili favorite --fid 123456789 # 指定收藏夹
 opencli bilibili history --limit 20       # 观看历史
 opencli bilibili feed --limit 10          # 动态时间线
 opencli bilibili user-videos --uid 12345  # 用户投稿
