@@ -143,7 +143,9 @@ async function sendCommandRaw(
     const id = generateId();
     const wf = process.env.OPENCLI_WINDOW_FOCUSED;
     const windowFocused = (wf === '1' || wf === 'true') ? true : undefined;
-    const command: DaemonCommand = { id, action, ...params, ...(windowFocused && { windowFocused }) };
+    const wit = process.env.OPENCLI_WINDOW_IDLE_TIMEOUT;
+    const idleTimeout = wit ? Math.max(parseInt(wit, 10), 5) : undefined;
+    const command: DaemonCommand = { id, action, ...params, ...(windowFocused && { windowFocused }), ...(idleTimeout && { idleTimeout }) };
     try {
       const res = await requestDaemon('/command', {
         method: 'POST',
