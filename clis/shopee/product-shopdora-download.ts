@@ -29,10 +29,6 @@ type BindCurrentTabFn = (
   opts?: { matchDomain?: string; matchPathPrefix?: string; matchUrl?: string },
 ) => Promise<unknown>;
 
-function logStep(message: string): void {
-  console.log(`[shopee/product-shopdora-download] ${message}`);
-}
-
 function normalizeShopeeReviewUrl(value: unknown): string {
   const raw = String(value ?? '').trim();
   if (!raw) {
@@ -200,12 +196,10 @@ async function applyCheckboxStep(
   label: string,
   opts: { allowMissing?: boolean } = {},
 ): Promise<boolean> {
-  logStep(`waiting for ${label}`);
   try {
     await page.wait({ selector: inputSelector, timeout: 10 });
   } catch (error) {
     if (opts.allowMissing) {
-      logStep(`skipping ${label}: selector not found`);
       return false;
     }
     throw error;
@@ -220,7 +214,6 @@ async function applyCheckboxStep(
   await waitRandomDuration(page, [1500, 3500]);
   await ensureCheckboxState(page, inputSelector, checked, label);
   await waitRandomDuration(page, [2000, 5000]);
-  logStep(`applied ${label}`);
   return true;
 }
 
@@ -257,7 +250,6 @@ cli({
     }
 
     await ensureShopeeProductPage(page, productUrl);
-    logStep('opened product page');
     await page.wait({ selector: EXPORT_REVIEW_BUTTON_SELECTOR, timeout: 15 });
     await simulateHumanBehavior(page, {
       selector: EXPORT_REVIEW_BUTTON_SELECTOR,
@@ -269,7 +261,6 @@ cli({
     await waitRandomDuration(page, [3000, 5000]);
     await clickSelector(page, EXPORT_REVIEW_BUTTON_SELECTOR, 'Export Review');
     await waitRandomDuration(page, [2000, 6000]);
-    logStep('opened export review dialog');
 
     await applyCheckboxStep(
       page,
@@ -288,7 +279,6 @@ cli({
       { allowMissing: true },
     );
 
-    logStep('waiting for export confirm button');
     await page.wait({ selector: CONFIRM_EXPORT_BUTTON_SELECTOR, timeout: 10 });
     await simulateHumanBehavior(page, {
       selector: CONFIRM_EXPORT_BUTTON_SELECTOR,
@@ -298,7 +288,6 @@ cli({
     });
     const downloadStartedAtMs = Date.now();
     await clickSelector(page, CONFIRM_EXPORT_BUTTON_SELECTOR, 'export confirm button');
-    logStep('confirmed export; waiting for download');
     await waitForExportReviewReady(page);
 
     const download = await page.waitForDownload({
@@ -309,7 +298,6 @@ cli({
     if (!localPath) {
       throw new CommandExecutionError('Shopee product-shopdora-download finished without a local filename');
     }
-    logStep(`download completed: ${localPath}`);
 
     return [{
       status: 'success',
