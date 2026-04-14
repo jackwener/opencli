@@ -279,14 +279,15 @@ cli({
       'secondary filter',
     );
 
-    const appliedDetailFilter = await applyCheckboxStep(
-      page,
-      DETAIL_FILTER_LABEL_SELECTOR,
-      DETAIL_FILTER_INPUT_SELECTOR,
-      true,
-      'detail filter',
-      { allowMissing: true },
-    );
+    // const appliedDetailFilter = await applyCheckboxStep(
+    //   page,
+    //   DETAIL_FILTER_LABEL_SELECTOR,
+    //   DETAIL_FILTER_INPUT_SELECTOR,
+    //   true,
+    //   'detail filter',
+    //   { allowMissing: true },
+    // );
+    const appliedDetailFilter = false
 
     logStep('waiting for export confirm button');
     await page.wait({ selector: CONFIRM_EXPORT_BUTTON_SELECTOR, timeout: 10 });
