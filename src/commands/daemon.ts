@@ -3,21 +3,21 @@
  *   opencli daemon stop — graceful shutdown
  */
 
-import chalk from 'chalk';
 import { fetchDaemonStatus, requestDaemonShutdown } from '../browser/daemon-client.js';
+import { log } from '../logger.js';
 
 export async function daemonStop(): Promise<void> {
   const status = await fetchDaemonStatus();
   if (!status) {
-    console.log(chalk.dim('Daemon is not running.'));
+    log.info('Daemon is not running.');
     return;
   }
 
   const ok = await requestDaemonShutdown();
   if (ok) {
-    console.log(chalk.green('Daemon stopped.'));
+    log.success('Daemon stopped.');
   } else {
-    console.error(chalk.red('Failed to stop daemon.'));
+    log.error('Failed to stop daemon.');
     process.exitCode = 1;
   }
 }

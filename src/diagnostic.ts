@@ -218,7 +218,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
  * 1. cmd.source (set for FS-scanned JS and manifest lazy-loaded JS)
  * 2. cmd._modulePath (set for manifest lazy-loaded JS)
  *
- * For legacy dist/ paths, attempt to map back to source clis/.
  * Skip manifest: prefixed pseudo-paths (YAML commands inlined in manifest).
  */
 export function resolveAdapterSourcePath(cmd: InternalCliCommand): string | undefined {
@@ -233,25 +232,10 @@ export function resolveAdapterSourcePath(cmd: InternalCliCommand): string | unde
   }
 
   for (const candidate of candidates) {
-    // Try to map dist/ path back to source clis/ (legacy compat)
-    const sourceJs = mapDistToSource(candidate);
-    if (sourceJs && fs.existsSync(sourceJs)) return sourceJs;
-
-    // Try the candidate directly (YAML files, user clis, etc.)
     if (fs.existsSync(candidate)) return candidate;
   }
 
   return candidates[0]; // Return best guess even if file doesn't exist
-}
-
-/** Map a dist/clis/xxx.js path back to clis/xxx.js source (legacy compat). */
-function mapDistToSource(filePath: string): string | null {
-  const normalized = filePath.replace(/\\/g, '/');
-  const distClisMatch = normalized.match(/^(.*)\/dist\/clis\/(.+)\.js$/);
-  if (distClisMatch) {
-    return path.join(distClisMatch[1], 'clis', distClisMatch[2] + '.js');
-  }
-  return null;
 }
 
 // ── Diagnostic collection ────────────────────────────────────────────────────

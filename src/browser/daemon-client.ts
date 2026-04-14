@@ -67,6 +67,7 @@ export interface DaemonStatus {
   uptime: number;
   extensionConnected: boolean;
   extensionVersion?: string;
+  extensionCompatRange?: string;
   pending: number;
   memoryMB: number;
   port: number;

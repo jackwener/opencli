@@ -5,6 +5,8 @@
  * dispatches them to Chrome APIs (debugger/tabs/cookies), returns results.
  */
 
+declare const __OPENCLI_COMPAT_RANGE__: string;
+
 import type { Command, Result } from './protocol';
 import { DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
 import * as executor from './cdp';
@@ -66,8 +68,12 @@ async function connect(): Promise<void> {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
-    // Send version so the daemon can report mismatches to the CLI
-    ws?.send(JSON.stringify({ type: 'hello', version: chrome.runtime.getManifest().version }));
+    // Send version + compatibility range so the daemon can report mismatches to the CLI
+    ws?.send(JSON.stringify({
+      type: 'hello',
+      version: chrome.runtime.getManifest().version,
+      compatRange: __OPENCLI_COMPAT_RANGE__,
+    }));
   };
 
   ws.onmessage = async (event) => {

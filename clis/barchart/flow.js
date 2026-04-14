@@ -26,7 +26,7 @@ cli({
         const data = await page.evaluate(`
       (async () => {
         const limit = ${limit};
-        const typeFilter = '${optionType}'.toLowerCase();
+        const typeFilter = ${JSON.stringify(optionType)}.toLowerCase();
 
         // Wait for CSRF token to appear (Angular may inject it after initial render)
         let csrf = '';

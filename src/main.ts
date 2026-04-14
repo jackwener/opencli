@@ -51,10 +51,11 @@ if (argv[0] === 'completion' && argv.length >= 2) {
 // Fast path: --get-completions — read from manifest, skip discovery
 const getCompIdx = process.argv.indexOf('--get-completions');
 if (getCompIdx !== -1) {
-  // Only require manifest for directories that actually exist.
-  // If user clis dir doesn't exist, there are no user adapters to miss.
+  // Only include manifests that actually exist on disk.
+  // With sparse override, the user clis dir may exist but have no manifest.
   const manifestPaths = [getCliManifestPath(BUILTIN_CLIS)];
-  try { fs.accessSync(USER_CLIS); manifestPaths.push(getCliManifestPath(USER_CLIS)); } catch { /* no user dir */ }
+  const userManifest = getCliManifestPath(USER_CLIS);
+  try { fs.accessSync(userManifest); manifestPaths.push(userManifest); } catch { /* no user manifest */ }
   if (hasAllManifests(manifestPaths)) {
     const rest = process.argv.slice(getCompIdx + 1);
     let cursor: number | undefined;
@@ -86,10 +87,20 @@ const { registerUpdateNoticeOnExit, checkForUpdateBackground } = await import('.
 
 installNodeNetwork();
 
-// Sequential: plugins must run after built-in discovery so they can override built-in commands.
-await ensureUserCliCompatShims();
-await ensureUserAdapters();
-await discoverClis(BUILTIN_CLIS, USER_CLIS);
+// Parallelise independent startup I/O:
+//  - Built-in adapter discovery has no dependency on user-dir setup.
+//  - ensureUserCliCompatShims and ensureUserAdapters operate on different paths
+//    (~/.opencli/node_modules/ vs ~/.opencli/clis/ + adapter-manifest.json).
+//  - registerCommand() overwrites on name collision (see registry.ts), so
+//    user-CLI discovery MUST run after built-in discovery to preserve the
+//    intended override order (user adapters override built-in ones).
+//  - discoverPlugins runs last: plugins may override both built-in and user CLIs.
+const [, ,] = await Promise.all([
+  ensureUserCliCompatShims(),
+  ensureUserAdapters(),
+  discoverClis(BUILTIN_CLIS),
+]);
+await discoverClis(USER_CLIS);
 await discoverPlugins();
 
 // Register exit hook: notice appears after command output (same as npm/gh/yarn)

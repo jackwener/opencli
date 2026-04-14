@@ -16,7 +16,7 @@ import { type InternalCliCommand, Strategy, registerCommand } from './registry.j
 import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
 import type { ManifestEntry } from './build-manifest.js';
-import { findPackageRoot, getCliManifestPath, getFetchAdaptersScriptPath } from './package-paths.js';
+import { findPackageRoot, getCliManifestPath } from './package-paths.js';
 
 /** User runtime directory: ~/.opencli */
 export const USER_OPENCLI_DIR = path.join(os.homedir(), '.opencli');
@@ -77,42 +77,15 @@ export async function ensureUserCliCompatShims(baseDir: string = USER_OPENCLI_DI
   }
 }
 
-const ADAPTER_MANIFEST_PATH = path.join(USER_OPENCLI_DIR, 'adapter-manifest.json');
-
 /**
- * First-run fallback: if postinstall was skipped (--ignore-scripts) or failed,
- * trigger adapter fetch on first CLI invocation when ~/.opencli/clis/ is empty.
+ * Ensure the user adapters directory exists.
+ *
+ * With smart sync, ~/.opencli/clis/ only holds files that differ from the
+ * package baseline (upstream-synced cache + autofix output + user overrides).
+ * Built-in adapters are loaded directly from the installed package.
  */
 export async function ensureUserAdapters(): Promise<void> {
-  // If adapter manifest already exists, adapters were fetched — nothing to do
-  try {
-    await fs.promises.access(ADAPTER_MANIFEST_PATH);
-    return;
-  } catch {
-    // No manifest — first run or postinstall was skipped
-  }
-
-  // Check if clis dir has any content (could be manually populated)
-  try {
-    const entries = await fs.promises.readdir(USER_CLIS_DIR);
-    if (entries.length > 0) return;
-  } catch {
-    // Dir doesn't exist — needs fetch
-  }
-
-  log.info('First run detected — copying adapters (one-time setup)...');
-  try {
-    const { execFileSync } = await import('node:child_process');
-    const scriptPath = getFetchAdaptersScriptPath(PACKAGE_ROOT);
-    execFileSync(process.execPath, [scriptPath], {
-      stdio: 'inherit',
-      env: { ...process.env, _OPENCLI_FIRST_RUN: '1' },
-      timeout: 120_000,
-    });
-  } catch (err) {
-    log.warn(`Could not fetch adapters on first run: ${getErrorMessage(err)}`);
-    log.warn('Built-in adapters from the package will be used.');
-  }
+  await fs.promises.mkdir(USER_CLIS_DIR, { recursive: true });
 }
 
 /**
@@ -144,7 +117,6 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
     const manifest = JSON.parse(raw) as ManifestEntry[];
     for (const entry of manifest) {
       if (!entry.modulePath) continue;
-      const strategy = parseStrategy(entry.strategy ?? 'cookie');
       const modulePath = path.resolve(clisDir, entry.modulePath);
       const cmd: InternalCliCommand = {
         site: entry.site,
@@ -152,8 +124,8 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         aliases: entry.aliases,
         description: entry.description ?? '',
         domain: entry.domain,
-        strategy,
-        browser: entry.browser ?? true,
+        strategy: parseStrategy(entry.strategy),
+        browser: entry.browser,
         args: entry.args ?? [],
         columns: entry.columns,
         pipeline: entry.pipeline,
@@ -165,6 +137,7 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         _lazy: true,
         _modulePath: modulePath,
       };
+      // normalizeCommand inside registerCommand handles strategy → browser/navigateBefore
       registerCommand(cmd);
     }
     return true;
@@ -191,6 +164,10 @@ async function discoverClisFromFs(dir: string): Promise<void> {
         const filePath = path.join(siteDir, file);
         if (file.endsWith('.yaml') || file.endsWith('.yml')) {
           log.warn(`Ignoring YAML adapter ${filePath} — YAML format is no longer supported. Convert to JavaScript using cli() from '@jackwener/opencli/registry'.`);
+          return;
+        }
+        if (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts')) {
+          log.warn(`Ignoring TypeScript adapter ${filePath} — .ts adapters are no longer loaded. Rename to .js or convert to JavaScript.`);
           return;
         }
         if (file.endsWith('.js') && !file.endsWith('.d.js') && !file.endsWith('.test.js')) {

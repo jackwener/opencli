@@ -18,7 +18,7 @@ cli({
         await page.goto(`https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/`);
         const data = await page.evaluate(`
       (async () => {
-        const sym = '${symbol}';
+        const sym = ${JSON.stringify(symbol)};
 
         // Strategy 1: v8 chart API
         try {

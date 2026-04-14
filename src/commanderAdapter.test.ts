@@ -8,9 +8,13 @@ const { mockExecuteCommand, mockRenderOutput } = vi.hoisted(() => ({
   mockRenderOutput: vi.fn(),
 }));
 
-vi.mock('./execution.js', () => ({
-  executeCommand: mockExecuteCommand,
-}));
+vi.mock('./execution.js', async () => {
+  const actual = await vi.importActual<typeof import('./execution.js')>('./execution.js');
+  return {
+    ...actual,
+    executeCommand: mockExecuteCommand,
+  };
+});
 
 vi.mock('./output.js', () => ({
   render: mockRenderOutput,
@@ -202,7 +206,43 @@ describe('commanderAdapter command aliases', () => {
 
     await program.parseAsync(['node', 'opencli', 'notebooklm', 'metadata']);
 
-    expect(mockExecuteCommand).toHaveBeenCalledWith(cmd, {}, false);
+    expect(mockExecuteCommand).toHaveBeenCalledWith(cmd, {}, false, { prepared: true });
+  });
+});
+
+describe('commanderAdapter validation preparation', () => {
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockExecuteCommand.mockResolvedValue([]);
+    mockRenderOutput.mockReset();
+    delete process.env.OPENCLI_VERBOSE;
+    process.exitCode = undefined;
+  });
+
+  it('prepares args once before dispatching to executeCommand', async () => {
+    const validateArgs = vi.fn();
+    const program = new Command();
+    const siteCmd = program.command('test');
+
+    registerCommandToProgram(siteCmd, {
+      site: 'test',
+      name: 'run',
+      description: 'Run test command',
+      browser: false,
+      args: [{ name: 'count', default: '1', help: 'Count' }],
+      validateArgs,
+      func: vi.fn(),
+    });
+
+    await program.parseAsync(['node', 'opencli', 'test', 'run']);
+
+    expect(validateArgs).toHaveBeenCalledTimes(1);
+    expect(mockExecuteCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ site: 'test', name: 'run' }),
+      { count: '1' },
+      false,
+      { prepared: true },
+    );
   });
 });
 

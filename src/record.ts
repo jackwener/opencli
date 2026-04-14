@@ -15,7 +15,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
-import chalk from 'chalk';
+import { styleText } from 'node:util';
 
 import { sendCommand } from './browser/daemon-client.js';
 import type { IPage } from './types.js';
@@ -566,10 +566,10 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
 
   const workspace = `record:${site}`;
 
-  console.log(chalk.bold.cyan('\n  opencli record'));
-  console.log(chalk.dim(`  Site: ${site}  URL: ${opts.url}`));
-  console.log(chalk.dim(`  Timeout: ${timeoutMs / 1000}s  Poll: ${pollMs}ms`));
-  console.log(chalk.dim('  Navigating…'));
+  console.log(styleText(['bold', 'cyan'], '\n  opencli record'));
+  console.log(styleText('dim', `  Site: ${site}  URL: ${opts.url}`));
+  console.log(styleText('dim', `  Timeout: ${timeoutMs / 1000}s  Poll: ${pollMs}ms`));
+  console.log(styleText('dim', '  Navigating…'));
 
   const factory = new opts.BrowserFactory();
   const page = await factory.connect({ timeout: 30, workspace });
@@ -584,8 +584,8 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
       if (tab.page) await injectIntoPage(workspace, tab.page, injectedPages);
     }
 
-    console.log(chalk.bold('\n  Recording. Use the page in the browser automation window.'));
-    console.log(chalk.dim(`  Will auto-stop after ${timeoutMs / 1000}s, or press Enter to stop now.\n`));
+    console.log(styleText('bold', '\n  Recording. Use the page in the browser automation window.'));
+    console.log(styleText('dim', `  Will auto-stop after ${timeoutMs / 1000}s, or press Enter to stop now.\n`));
 
     // Race: Enter key vs timeout
     let stopped = false;
@@ -613,7 +613,7 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
           const batch = await execOnPage(workspace, page, generateReadRecordedJs()) as RecordedRequest[] | null;
           if (Array.isArray(batch) && batch.length > 0) {
             for (const r of batch) allRequests.push(r);
-            console.log(chalk.dim(`  [page:${page.slice(0, 8)}] +${batch.length} captured — total: ${allRequests.length}`));
+            console.log(styleText('dim', `  [page:${page.slice(0, 8)}] +${batch.length} captured — total: ${allRequests.length}`));
           }
         }
       } catch {
@@ -635,7 +635,7 @@ export async function recordSession(opts: RecordOptions): Promise<RecordResult> 
       } catch {}
     }
 
-    console.log(chalk.dim(`\n  Stopped. Analyzing ${allRequests.length} captured requests…`));
+    console.log(styleText('dim', `\n  Stopped. Analyzing ${allRequests.length} captured requests…`));
 
     const result = analyzeAndWrite(site, opts.url, allRequests, opts.outDir);
     await factory.close().catch(() => {});
@@ -666,7 +666,7 @@ async function injectIntoPage(workspace: string, page: string, injectedPages: Se
     await execOnPage(workspace, page, generateFullCaptureInterceptorJs());
     if (!injectedPages.has(page)) {
       injectedPages.add(page);
-      console.log(chalk.green(`  ✓  Interceptor injected into page:${page.slice(0, 8)}`));
+      console.log(styleText('green', `  ✓  Interceptor injected into page:${page.slice(0, 8)}`));
     }
   } catch {
     // Page not debuggable (e.g. chrome:// pages) — skip silently
@@ -704,7 +704,7 @@ function analyzeAndWrite(
   fs.mkdirSync(targetDir, { recursive: true });
 
   if (requests.length === 0) {
-    console.log(chalk.yellow('  No API requests captured.'));
+    console.log(styleText('yellow', '  No API requests captured.'));
     return { site, url: pageUrl, requests: [], outDir: targetDir, candidateCount: 0, candidates: [] };
   }
 
@@ -722,20 +722,20 @@ function analyzeAndWrite(
   const candidates: RecordResult['candidates'] = [];
   const usedNames = new Set<string>();
 
-  console.log(chalk.bold('\n  Captured endpoints:\n'));
+  console.log(styleText('bold', '\n  Captured endpoints:\n'));
 
   for (const entry of analysis.candidates.sort((a, b) => (b.arrayResult?.items.length ?? 0) - (a.arrayResult?.items.length ?? 0)).slice(0, 8)) {
     const itemCount = entry.arrayResult?.items.length ?? 0;
     const strategy = entry.kind === 'write'
       ? 'cookie'
       : inferStrategy(detectAuthFromContent(entry.req.url, entry.req.responseBody));
-    const marker = entry.kind === 'write' ? chalk.magenta('✎') : itemCount > 5 ? chalk.green('★') : chalk.dim('·');
+    const marker = entry.kind === 'write' ? styleText('magenta', '✎') : itemCount > 5 ? styleText('green', '★') : styleText('dim', '·');
     console.log(
-      `  ${marker} ${chalk.white(urlToPattern(entry.req.url))}` +
-      chalk.dim(` [${strategy}]`) +
+      `  ${marker} ${styleText('white', urlToPattern(entry.req.url))}` +
+      styleText('dim', ` [${strategy}]`) +
       (entry.kind === 'write'
-        ? chalk.magenta(' ← write')
-        : itemCount ? chalk.cyan(` ← ${itemCount} items`) : ''),
+        ? styleText('magenta', ' ← write')
+        : itemCount ? styleText('cyan', ` ← ${itemCount} items`) : ''),
     );
   }
 
@@ -753,13 +753,13 @@ function analyzeAndWrite(
     fs.writeFileSync(filePath, JSON.stringify(entry.yaml, null, 2));
     candidates.push({ name: entry.name, path: filePath, strategy: entry.strategy });
 
-    console.log(chalk.green(`  ✓ Generated: ${chalk.bold(entry.name)}.json  [${entry.strategy}]`));
-    console.log(chalk.dim(`    → ${filePath}`));
+    console.log(styleText('green', `  ✓ Generated: ${styleText('bold', entry.name)}.json  [${entry.strategy}]`));
+    console.log(styleText('dim', `    → ${filePath}`));
   }
 
   if (candidates.length === 0) {
-    console.log(chalk.yellow('  No candidates found.'));
-    console.log(chalk.dim('  Tip: make sure you triggered JSON API calls (open lists, search, scroll).'));
+    console.log(styleText('yellow', '  No candidates found.'));
+    console.log(styleText('dim', '  Tip: make sure you triggered JSON API calls (open lists, search, scroll).'));
   }
 
   return {
@@ -774,7 +774,7 @@ function analyzeAndWrite(
 
 export function renderRecordSummary(result: RecordResult): string {
   const lines = [
-    `\n  opencli record: ${result.candidateCount > 0 ? chalk.green('OK') : chalk.yellow('no candidates')}`,
+    `\n  opencli record: ${result.candidateCount > 0 ? styleText('green', 'OK') : styleText('yellow', 'no candidates')}`,
     `  Site: ${result.site}`,
     `  Captured: ${result.requests.length} requests`,
     `  Candidates: ${result.candidateCount}`,
@@ -784,7 +784,7 @@ export function renderRecordSummary(result: RecordResult): string {
   }
   if (result.candidateCount > 0) {
     lines.push('');
-    lines.push(chalk.dim(`  Copy a candidate to clis/${result.site}/ and run: npm run build`));
+    lines.push(styleText('dim', `  Copy a candidate to clis/${result.site}/ and run: npm run build`));
   }
   return lines.join('\n');
 }

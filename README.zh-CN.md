@@ -10,20 +10,22 @@
 
 OpenCLI 可以用同一套 CLI 做三类事情：
 
-- **直接使用现成适配器**：B站、知乎、小红书、Twitter/X、Reddit、HackerNews 等 [79+ 站点](#内置命令) 开箱即用。
+- **直接使用现成适配器**：B站、知乎、小红书、Twitter/X、Reddit、HackerNews 等 [87+ 站点](#内置命令) 开箱即用。
 - **直接驱动浏览器**：用 `opencli browser` 让 AI Agent 实时点击、输入、提取、截图、检查页面状态。
 - **把新网站生成成 CLI**：通过 `explore`、`synthesize`、`generate`、`cascade` 从真实页面行为推导出新的适配器。
 
 除了网站能力，OpenCLI 还是一个 **CLI 枢纽**：你可以把 `gh`、`docker` 等本地工具统一注册到 `opencli` 下，也可以通过桌面端适配器控制 Cursor、Codex、Antigravity、ChatGPT、Notion 等 Electron 应用。
 
-## 为什么是 OpenCLI
+## 亮点
 
-- **同一个心智模型**：网站、浏览器自动化、Electron 应用、本地 CLI 都走同一个入口。
-- **复用真实会话**：浏览器命令直接使用你已经登录的 Chrome/Chromium，而不是重新造一套认证。
-- **输出稳定**：适配器命令返回固定结构，适合 shell、脚本、CI 和 AI Agent 工具调用。
-- **面向 AI Agent**：`browser` 负责实时操作，`explore` 负责探索接口，`synthesize` 负责生成适配器，`cascade` 负责探测认证路径。
-- **运行成本低**：已有命令运行时不消耗模型 token。
-- **天然可扩展**：既能用内置能力，也能注册本地 CLI，或直接往 `clis/` 丢 `.ts` 适配器。
+- **桌面应用控制** — 通过 CDP 直接在终端驱动 Electron 应用（Cursor、Codex、ChatGPT、Notion 等）。
+- **浏览器自动化** — `browser` 让 AI Agent 直接控制浏览器：点击、输入、提取、截图，完全可编程。
+- **网站 → CLI** — 把任何网站变成确定性 CLI：87+ 内置适配器，或用 `opencli generate` 生成新的。
+- **账号安全** — 复用 Chrome/Chromium 登录态，凭证永远不会离开浏览器。
+- **面向 AI Agent** — `explore` 发现 API，`synthesize` 生成适配器，`cascade` 探测认证策略，`browser` 直接控制浏览器。
+- **CLI 枢纽** — 统一发现、自动安装、纯透传任何外部 CLI（gh、docker、obsidian 等）。
+- **零 LLM 成本** — 运行时不消耗模型 token，跑 10,000 次也不花一分钱。
+- **确定性输出** — 相同命令，相同输出结构，每次一致。可管道、可脚本、CI 友好。
 
 ## 快速开始
 
@@ -37,7 +39,7 @@ npm install -g @jackwener/opencli
 
 OpenCLI 通过轻量 Browser Bridge 扩展和本地微型 daemon 与 Chrome/Chromium 通信。daemon 会按需自动启动。
 
-1. 到 GitHub [Releases 页面](https://github.com/jackwener/opencli/releases) 下载最新的 `opencli-extension.zip`。
+1. 到 GitHub [Releases 页面](https://github.com/jackwener/opencli/releases) 下载最新的 `opencli-extension-v{version}.zip`。
 2. 解压后打开 `chrome://extensions`，启用 **开发者模式**。
 3. 点击 **加载已解压的扩展程序**，选择解压后的目录。
 
@@ -124,7 +126,7 @@ OpenCLI 不只是网站 CLI，还可以：
 
 ## 前置要求
 
-- **Node.js**: >= 20.0.0
+- **Node.js**: >= 21.0.0
 - 浏览器型命令需要 Chrome 或 Chromium 处于运行中，并已登录目标网站
 
 > **重要**：浏览器型命令直接复用你的 Chrome/Chromium 登录态。如果拿到空数据或出现权限类失败，先确认目标站点已经在浏览器里打开并完成登录。
@@ -142,6 +144,7 @@ OpenCLI 不只是网站 CLI，还可以：
 | `OPENCLI_CDP_TARGET` | — | 按 URL 子串过滤 CDP target（如 `detail.1688.com`） |
 | `OPENCLI_VERBOSE` | `false` | 启用详细日志（`-v` 也可以） |
 | `OPENCLI_DIAGNOSTIC` | `false` | 设为 `1` 时在失败时输出结构化诊断上下文 |
+| `DEBUG_SNAPSHOT` | — | 设为 `1` 输出 DOM 快照调试信息 |
 
 ## 更新
 
@@ -184,7 +187,7 @@ npm link
 
 | 站点 | 命令 | 模式 |
 |------|------|------|
-| **twitter** | `trending` `bookmarks` `profile` `search` `timeline` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` `accept` `reply-dm` `block` `unblock` `hide-reply` | 浏览器 |
+| **twitter** | `trending` `search` `timeline` `lists` `bookmarks` `profile` `thread` `following` `followers` `notifications` `post` `reply` `delete` `like` `likes` `article` `follow` `unfollow` `bookmark` `unbookmark` `download` `accept` `reply-dm` `block` `unblock` `hide-reply` | 浏览器 |
 | **reddit** | `hot` `frontpage` `popular` `search` `subreddit` `read` `user` `user-posts` `user-comments` `upvote` `save` `comment` `subscribe` `saved` `upvoted` | 浏览器 |
 | **tieba** | `hot` `posts` `search` `read` | 浏览器 |
 | **hupu** | `hot` `search` `detail` `mentions` `reply` `like` `unlike` | 浏览器 |
@@ -199,7 +202,7 @@ npm link
 | **v2ex** | `hot` `latest` `topic` `node` `user` `member` `replies` `nodes` `daily` `me` `notifications` | 公开 / 浏览器 |
 | **xueqiu** | `feed` `hot-stock` `hot` `search` `stock` `comments` `watchlist` `earnings-date` `fund-holdings` `fund-snapshot` | 浏览器 |
 | **antigravity** | `status` `send` `read` `new` `dump` `extract-code` `model` `watch` | 桌面端 |
-| **chatgpt** | `status` `new` `send` `read` `ask` `model` | 桌面端 |
+| **chatgpt-app** | `status` `new` `send` `read` `ask` `model` | 桌面端 |
 | **xiaohongshu** | `search` `notifications` `feed` `user` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` | 浏览器 |
 | **xiaoe** | `courses` `detail` `catalog` `play-url` `content` | 浏览器 |
 | **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` | 浏览器 |
@@ -262,7 +265,7 @@ npm link
 | **douyin** | `videos` `publish` `drafts` `draft` `delete` `stats` `profile` `update` `hashtag` `location` `activities` `collections` | 浏览器 |
 | **yuanbao** | `new` `ask` | 浏览器 |
 
-79+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
+87+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
 
 ### 外部 CLI 枢纽
 
@@ -297,7 +300,7 @@ opencli register mycli
 | **Cursor** | 控制 Cursor IDE — Composer、对话、代码提取等 | [Doc](./docs/adapters/desktop/cursor.md) |
 | **Codex** | 在后台（无头）驱动 OpenAI Codex CLI Agent | [Doc](./docs/adapters/desktop/codex.md) |
 | **Antigravity** | 在终端直接控制 Antigravity Ultra | [Doc](./docs/adapters/desktop/antigravity.md) |
-| **ChatGPT** | 自动化操作 ChatGPT macOS 桌面客户端 | [Doc](./docs/adapters/desktop/chatgpt.md) |
+| **ChatGPT App** | 自动化操作 ChatGPT macOS 桌面客户端 | [Doc](./docs/adapters/desktop/chatgpt-app.md) |
 | **ChatWise** | 多 LLM 客户端（GPT-4、Claude、Gemini） | [Doc](./docs/adapters/desktop/chatwise.md) |
 | **Notion** | 搜索、读取、写入 Notion 页面 | [Doc](./docs/adapters/desktop/notion.md) |
 | **Discord** | Discord 桌面版 — 消息、频道、服务器 | [Doc](./docs/adapters/desktop/discord.md) |
@@ -407,7 +410,7 @@ esac
 
 ## 插件
 
-通过社区贡献的插件扩展 OpenCLI。插件使用与内置命令相同的 YAML/TS 格式，启动时自动发现。
+通过社区贡献的插件扩展 OpenCLI。插件使用与内置命令相同的 JS 格式，启动时自动发现。
 
 ```bash
 opencli plugin install github:user/opencli-plugin-my-tool  # 安装
@@ -421,9 +424,10 @@ opencli plugin uninstall my-tool                            # 卸载
 
 | 插件 | 类型 | 描述 |
 |------|------|------|
-| [opencli-plugin-github-trending](https://github.com/ByteYue/opencli-plugin-github-trending) | YAML | GitHub Trending 仓库 |
-| [opencli-plugin-hot-digest](https://github.com/ByteYue/opencli-plugin-hot-digest) | TS | 多平台热榜聚合 |
-| [opencli-plugin-juejin](https://github.com/Astro-Han/opencli-plugin-juejin) | YAML | 稀土掘金热门文章 |
+| [opencli-plugin-github-trending](https://github.com/ByteYue/opencli-plugin-github-trending) | JS | GitHub Trending 仓库 |
+| [opencli-plugin-hot-digest](https://github.com/ByteYue/opencli-plugin-hot-digest) | JS | 多平台热榜聚合 |
+| [opencli-plugin-juejin](https://github.com/Astro-Han/opencli-plugin-juejin) | JS | 稀土掘金热门文章 |
+| [opencli-plugin-vk](https://github.com/flobo3/opencli-plugin-vk) | JS | VK (VKontakte) 动态、信息流和搜索 |
 
 详见 [插件指南](./docs/zh/guide/plugins.md) 了解如何创建自己的插件。
 
@@ -460,7 +464,7 @@ opencli cascade https://api.example.com/data
 - **返回空数据，或者报错 "Unauthorized"**
   - Chrome/Chromium 里的登录态可能已经过期。请打开当前页面，在新标签页重新手工登录或刷新该页面。
 - **Node API 错误 (如 parseArgs, fs 等)**
-  - 确保 Node.js 版本 `>= 20`。
+  - 确保 Node.js 版本 `>= 21`（`node:util` 的 `styleText` 需要 Node 21+）。
 - **Daemon 问题**
   - 检查 daemon 状态：`curl localhost:19825/status`
   - 查看扩展日志：`curl localhost:19825/logs`

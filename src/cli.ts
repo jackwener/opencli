@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
-import chalk from 'chalk';
+import { styleText } from 'node:util';
 import { findPackageRoot, getBuiltEntryCandidates } from './package-paths.js';
 import { type CliCommand, fullName, getRegistry, strategyLabel } from './registry.js';
 import { serializeCommand, formatArgSummary } from './serialization.js';
@@ -20,7 +20,10 @@ import { printCompletionScript } from './completion.js';
 import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
 import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage } from './errors.js';
+import { TargetError } from './browser/target-errors.js';
+import { resolveTargetJs, getTextResolvedJs, getValueResolvedJs, getAttributesResolvedJs, selectResolvedJs, isAutocompleteResolvedJs } from './browser/target-resolver.js';
 import { daemonStop } from './commands/daemon.js';
+import { log } from './logger.js';
 
 const CLI_FILE = fileURLToPath(import.meta.url);
 
@@ -90,33 +93,33 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       }
 
       console.log();
-      console.log(chalk.bold('  opencli') + chalk.dim(' — available commands'));
+      console.log(styleText('bold', '  opencli') + styleText('dim', ' — available commands'));
       console.log();
       for (const [site, cmds] of sites) {
-        console.log(chalk.bold.cyan(`  ${site}`));
+        console.log(styleText(['bold', 'cyan'], `  ${site}`));
         for (const cmd of cmds) {
           const label = strategyLabel(cmd);
           const tag = label === 'public'
-            ? chalk.green('[public]')
-            : chalk.yellow(`[${label}]`);
-          const aliases = cmd.aliases?.length ? chalk.dim(` (aliases: ${cmd.aliases.join(', ')})`) : '';
-          console.log(`    ${cmd.name} ${tag}${aliases}${cmd.description ? chalk.dim(` — ${cmd.description}`) : ''}`);
+            ? styleText('green', '[public]')
+            : styleText('yellow', `[${label}]`);
+          const aliases = cmd.aliases?.length ? styleText('dim', ` (aliases: ${cmd.aliases.join(', ')})`) : '';
+          console.log(`    ${cmd.name} ${tag}${aliases}${cmd.description ? styleText('dim', ` — ${cmd.description}`) : ''}`);
         }
         console.log();
       }
 
       const externalClis = loadExternalClis();
       if (externalClis.length > 0) {
-        console.log(chalk.bold.cyan('  external CLIs'));
+        console.log(styleText(['bold', 'cyan'], '  external CLIs'));
         for (const ext of externalClis) {
           const isInstalled = isBinaryInstalled(ext.binary);
-          const tag = isInstalled ? chalk.green('[installed]') : chalk.yellow('[auto-install]');
-          console.log(`    ${ext.name} ${tag}${ext.description ? chalk.dim(` — ${ext.description}`) : ''}`);
+          const tag = isInstalled ? styleText('green', '[installed]') : styleText('yellow', '[auto-install]');
+          console.log(`    ${ext.name} ${tag}${ext.description ? styleText('dim', ` — ${ext.description}`) : ''}`);
         }
         console.log();
       }
 
-      console.log(chalk.dim(`  ${commands.length} built-in commands across ${sites.size} sites, ${externalClis.length} external CLIs`));
+      console.log(styleText('dim', `  ${commands.length} built-in commands across ${sites.size} sites, ${externalClis.length} external CLIs`));
       console.log();
     });
 
@@ -291,6 +294,16 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .command('browser')
     .description('Browser control — navigate, click, type, extract, wait (no LLM needed)');
 
+  /** Resolve a ref/CSS target via the unified resolver, throwing TargetError on failure. */
+  async function resolveRef(page: Awaited<ReturnType<typeof getBrowserPage>>, ref: string): Promise<void> {
+    const resolution = await page.evaluate(resolveTargetJs(ref)) as
+      | { ok: true }
+      | { ok: false; code: string; message: string; hint: string; candidates?: string[] };
+    if (!resolution.ok) {
+      throw new TargetError(resolution as { ok: false; code: 'not_found' | 'ambiguous' | 'stale_ref'; message: string; hint: string; candidates?: string[] });
+    }
+  }
+
   /** Wrap browser actions with error handling and optional --json output */
   function browserAction(fn: (page: Awaited<ReturnType<typeof getBrowserPage>>, ...args: any[]) => Promise<unknown>) {
     return async (...args: any[]) => {
@@ -300,11 +313,18 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       } catch (err) {
         const msg = getErrorMessage(err);
         if (msg.includes('Extension not connected') || msg.includes('Daemon')) {
-          console.error(`Browser not connected. Run 'opencli doctor' to diagnose.`);
+          log.error(`Browser not connected. Run 'opencli doctor' to diagnose.`);
         } else if (msg.includes('attach failed') || msg.includes('chrome-extension://')) {
-          console.error(`Browser attach failed — another extension may be interfering. Try disabling 1Password.`);
+          log.error(`Browser attach failed — another extension may be interfering. Try disabling 1Password.`);
+        } else if (err instanceof TargetError) {
+          log.error(`[${err.code}] ${err.message}`);
+          if (err.hint) log.error(`Hint: ${err.hint}`);
+          if (err.candidates?.length) {
+            log.error('Candidates:');
+            err.candidates.forEach((c, i) => log.error(`  ${i + 1}. ${c}`));
+          }
         } else {
-          console.error(`Error: ${msg}`);
+          log.error(msg);
         }
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
@@ -385,13 +405,15 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   get.command('text').argument('<index>', 'Element index').description('Element text content')
     .action(browserAction(async (page, index) => {
-      const text = await page.evaluate(`document.querySelector('[data-opencli-ref="${index}"]')?.textContent?.trim()`);
+      await resolveRef(page, String(index));
+      const text = await page.evaluate(getTextResolvedJs());
       console.log(text ?? '(empty)');
     }));
 
   get.command('value').argument('<index>', 'Element index').description('Input/textarea value')
     .action(browserAction(async (page, index) => {
-      const val = await page.evaluate(`document.querySelector('[data-opencli-ref="${index}"]')?.value`);
+      await resolveRef(page, String(index));
+      const val = await page.evaluate(getValueResolvedJs());
       console.log(val ?? '(empty)');
     }));
 
@@ -404,7 +426,8 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   get.command('attributes').argument('<index>', 'Element index').description('Element attributes')
     .action(browserAction(async (page, index) => {
-      const attrs = await page.evaluate(`JSON.stringify(Object.fromEntries([...document.querySelector('[data-opencli-ref="${index}"]')?.attributes].map(a=>[a.name,a.value])))`);
+      await resolveRef(page, String(index));
+      const attrs = await page.evaluate(getAttributesResolvedJs());
       console.log(attrs ?? '{}');
     }));
 
@@ -423,16 +446,8 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       await page.wait(0.3);
       await page.typeText(index, text);
       // Detect autocomplete/combobox fields and wait for dropdown suggestions
-      const isAutocomplete = await page.evaluate(`
-        (() => {
-          const el = document.querySelector('[data-opencli-ref="${index}"]');
-          if (!el) return false;
-          const role = el.getAttribute('role');
-          const ac = el.getAttribute('aria-autocomplete');
-          const list = el.getAttribute('list');
-          return role === 'combobox' || ac === 'list' || ac === 'both' || !!list;
-        })()
-      `);
+      // __resolved is already set by typeText's resolver call
+      const isAutocomplete = await page.evaluate(isAutocompleteResolvedJs());
       if (isAutocomplete) {
         await page.wait(0.4);
         console.log(`Typed "${text}" into autocomplete [${index}] — use state to see suggestions`);
@@ -444,19 +459,8 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
   browser.command('select').argument('<index>', 'Element index of <select>').argument('<option>', 'Option text')
     .description('Select dropdown option')
     .action(browserAction(async (page, index, option) => {
-      const result = await page.evaluate(`
-        (function() {
-          var sel = document.querySelector('[data-opencli-ref="${index}"]');
-          if (!sel || sel.tagName !== 'SELECT') return { error: 'Not a <select>' };
-          var match = Array.from(sel.options).find(o => o.text.trim() === ${JSON.stringify(option)} || o.value === ${JSON.stringify(option)});
-          if (!match) return { error: 'Option not found', available: Array.from(sel.options).map(o => o.text.trim()) };
-          var setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-          if (setter) setter.call(sel, match.value); else sel.value = match.value;
-          sel.dispatchEvent(new Event('input', {bubbles:true}));
-          sel.dispatchEvent(new Event('change', {bubbles:true}));
-          return { selected: match.text };
-        })()
-      `) as { error?: string; selected?: string; available?: string[] } | null;
+      await resolveRef(page, String(index));
+      const result = await page.evaluate(selectResolvedJs(option)) as { error?: string; selected?: string; available?: string[] } | null;
       if (result?.error) {
         console.error(`Error: ${result.error}${result.available ? ` — Available: ${result.available.join(', ')}` : ''}`);
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
@@ -755,15 +759,15 @@ cli({
         await discoverPlugins();
         if (Array.isArray(result)) {
           if (result.length === 0) {
-            console.log(chalk.yellow('No plugins were installed (all skipped or incompatible).'));
+            console.log(styleText('yellow', 'No plugins were installed (all skipped or incompatible).'));
           } else {
-            console.log(chalk.green(`\u2705 Installed ${result.length} plugin(s) from monorepo: ${result.join(', ')}`));
+            console.log(styleText('green', `\u2705 Installed ${result.length} plugin(s) from monorepo: ${result.join(', ')}`));
           }
         } else {
-          console.log(chalk.green(`\u2705 Plugin "${result}" installed successfully. Commands are ready to use.`));
+          console.log(styleText('green', `\u2705 Plugin "${result}" installed successfully. Commands are ready to use.`));
         }
       } catch (err) {
-        console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
+        console.error(styleText('red', `Error: ${getErrorMessage(err)}`));
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
     });
@@ -776,9 +780,9 @@ cli({
       const { uninstallPlugin } = await import('./plugin.js');
       try {
         uninstallPlugin(name);
-        console.log(chalk.green(`✅ Plugin "${name}" uninstalled.`));
+        console.log(styleText('green', `✅ Plugin "${name}" uninstalled.`));
       } catch (err) {
-        console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
+        console.error(styleText('red', `Error: ${getErrorMessage(err)}`));
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
     });
@@ -790,12 +794,12 @@ cli({
     .option('--all', 'Update all installed plugins')
     .action(async (name: string | undefined, opts: { all?: boolean }) => {
       if (!name && !opts.all) {
-        console.error(chalk.red('Error: Please specify a plugin name or use the --all flag.'));
+        console.error(styleText('red', 'Error: Please specify a plugin name or use the --all flag.'));
         process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
       if (name && opts.all) {
-        console.error(chalk.red('Error: Cannot specify both a plugin name and --all.'));
+        console.error(styleText('red', 'Error: Cannot specify both a plugin name and --all.'));
         process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
@@ -809,27 +813,27 @@ cli({
         }
 
         let hasErrors = false;
-        console.log(chalk.bold('  Update Results:'));
+        console.log(styleText('bold', '  Update Results:'));
         for (const result of results) {
           if (result.success) {
-            console.log(`  ${chalk.green('✓')} ${result.name}`);
+            console.log(`  ${styleText('green', '✓')} ${result.name}`);
             continue;
           }
           hasErrors = true;
-          console.log(`  ${chalk.red('✗')} ${result.name} — ${chalk.dim(result.error)}`);
+          console.log(`  ${styleText('red', '✗')} ${result.name} — ${styleText('dim', String(result.error))}`);
         }
 
         if (results.length === 0) {
-          console.log(chalk.dim('  No plugins installed.'));
+          console.log(styleText('dim', '  No plugins installed.'));
           return;
         }
 
         console.log();
         if (hasErrors) {
-          console.error(chalk.red('Completed with some errors.'));
+          console.error(styleText('red', 'Completed with some errors.'));
           process.exitCode = EXIT_CODES.GENERIC_ERROR;
         } else {
-          console.log(chalk.green('✅ All plugins updated successfully.'));
+          console.log(styleText('green', '✅ All plugins updated successfully.'));
         }
         return;
       }
@@ -837,9 +841,9 @@ cli({
       try {
         updatePlugin(name!);
         await discoverPlugins();
-        console.log(chalk.green(`✅ Plugin "${name}" updated successfully.`));
+        console.log(styleText('green', `✅ Plugin "${name}" updated successfully.`));
       } catch (err) {
-        console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
+        console.error(styleText('red', `Error: ${getErrorMessage(err)}`));
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
     });
@@ -853,8 +857,8 @@ cli({
       const { listPlugins } = await import('./plugin.js');
       const plugins = listPlugins();
       if (plugins.length === 0) {
-        console.log(chalk.dim('  No plugins installed.'));
-        console.log(chalk.dim(`  Install one with: opencli plugin install github:user/repo`));
+        console.log(styleText('dim', '  No plugins installed.'));
+        console.log(styleText('dim', '  Install one with: opencli plugin install github:user/repo'));
         return;
       }
       if (opts.format === 'json') {
@@ -867,7 +871,7 @@ cli({
         return;
       }
       console.log();
-      console.log(chalk.bold('  Installed plugins'));
+      console.log(styleText('bold', '  Installed plugins'));
       console.log();
 
       // Group by monorepo
@@ -881,26 +885,26 @@ cli({
       }
 
       for (const p of standalone) {
-        const version = p.version ? chalk.green(` @${p.version}`) : '';
-        const desc = p.description ? chalk.dim(` — ${p.description}`) : '';
-        const cmds = p.commands.length > 0 ? chalk.dim(` (${p.commands.join(', ')})`) : '';
-        const src = p.source ? chalk.dim(` ← ${p.source}`) : '';
-        console.log(`  ${chalk.cyan(p.name)}${version}${desc}${cmds}${src}`);
+        const version = p.version ? styleText('green', ` @${p.version}`) : '';
+        const desc = p.description ? styleText('dim', ` — ${p.description}`) : '';
+        const cmds = p.commands.length > 0 ? styleText('dim', ` (${p.commands.join(', ')})`) : '';
+        const src = p.source ? styleText('dim', ` ← ${p.source}`) : '';
+        console.log(`  ${styleText('cyan', p.name)}${version}${desc}${cmds}${src}`);
       }
 
       for (const [mono, group] of monoGroups) {
         console.log();
-        console.log(chalk.bold.magenta(`  📦 ${mono}`) + chalk.dim(' (monorepo)'));
+        console.log(styleText(['bold', 'magenta'], `  📦 ${mono}`) + styleText('dim', ' (monorepo)'));
         for (const p of group) {
-          const version = p.version ? chalk.green(` @${p.version}`) : '';
-          const desc = p.description ? chalk.dim(` — ${p.description}`) : '';
-          const cmds = p.commands.length > 0 ? chalk.dim(` (${p.commands.join(', ')})`) : '';
-          console.log(`    ${chalk.cyan(p.name)}${version}${desc}${cmds}`);
+          const version = p.version ? styleText('green', ` @${p.version}`) : '';
+          const desc = p.description ? styleText('dim', ` — ${p.description}`) : '';
+          const cmds = p.commands.length > 0 ? styleText('dim', ` (${p.commands.join(', ')})`) : '';
+          console.log(`    ${styleText('cyan', p.name)}${version}${desc}${cmds}`);
         }
       }
 
       console.log();
-      console.log(chalk.dim(`  ${plugins.length} plugin(s) installed`));
+      console.log(styleText('dim', `  ${plugins.length} plugin(s) installed`));
       console.log();
     });
 
@@ -917,21 +921,136 @@ cli({
           dir: opts.dir,
           description: opts.description,
         });
-        console.log(chalk.green(`✅ Plugin scaffold created at ${result.dir}`));
+        console.log(styleText('green', `✅ Plugin scaffold created at ${result.dir}`));
         console.log();
-        console.log(chalk.bold('  Files created:'));
+        console.log(styleText('bold', '  Files created:'));
         for (const f of result.files) {
-          console.log(`    ${chalk.cyan(f)}`);
+          console.log(`    ${styleText('cyan', f)}`);
         }
         console.log();
-        console.log(chalk.dim('  Next steps:'));
-        console.log(chalk.dim(`    cd ${result.dir}`));
-        console.log(chalk.dim(`    opencli plugin install file://${result.dir}`));
-        console.log(chalk.dim(`    opencli ${name} hello`));
+        console.log(styleText('dim', '  Next steps:'));
+        console.log(styleText('dim', `    cd ${result.dir}`));
+        console.log(styleText('dim', `    opencli plugin install file://${result.dir}`));
+        console.log(styleText('dim', `    opencli ${name} hello`));
       } catch (err) {
-        console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
+        console.error(styleText('red', `Error: ${getErrorMessage(err)}`));
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
+    });
+
+  // ── Built-in: adapter management ─────────────────────────────────────────
+  const adapterCmd = program.command('adapter').description('Manage CLI adapters');
+
+  adapterCmd
+    .command('status')
+    .description('Show which sites have local overrides vs using official baseline')
+    .action(async () => {
+      const os = await import('node:os');
+      const userClisDir = path.join(os.homedir(), '.opencli', 'clis');
+      const builtinClisDir = BUILTIN_CLIS;
+      try {
+        const userEntries = await fs.promises.readdir(userClisDir, { withFileTypes: true });
+        const userSites = userEntries.filter(e => e.isDirectory()).map(e => e.name).sort();
+        let builtinSites: string[] = [];
+        try {
+          const builtinEntries = await fs.promises.readdir(builtinClisDir, { withFileTypes: true });
+          builtinSites = builtinEntries.filter(e => e.isDirectory()).map(e => e.name).sort();
+        } catch { /* no builtin dir */ }
+
+        if (userSites.length === 0) {
+          console.log('No local adapter overrides. All sites use the official baseline.');
+          return;
+        }
+
+        console.log(`Local overrides in ~/.opencli/clis/ (${userSites.length} sites):\n`);
+        for (const site of userSites) {
+          const isOfficial = builtinSites.includes(site);
+          const label = isOfficial ? 'override' : 'custom';
+          console.log(`  ${site} [${label}]`);
+        }
+        console.log(`\nOfficial baseline: ${builtinSites.length} sites in package`);
+      } catch {
+        console.log('No local adapter overrides. All sites use the official baseline.');
+      }
+    });
+
+  adapterCmd
+    .command('eject')
+    .description('Copy an official adapter to ~/.opencli/clis/ for local editing')
+    .argument('<site>', 'Site name (e.g. twitter, bilibili)')
+    .action(async (site: string) => {
+      const os = await import('node:os');
+      const userClisDir = path.join(os.homedir(), '.opencli', 'clis');
+      const builtinSiteDir = path.join(BUILTIN_CLIS, site);
+      const userSiteDir = path.join(userClisDir, site);
+
+      try {
+        await fs.promises.access(builtinSiteDir);
+      } catch {
+        console.error(styleText('red', `Error: Site "${site}" not found in official adapters.`));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+
+      try {
+        await fs.promises.access(userSiteDir);
+        console.error(styleText('yellow', `Site "${site}" already exists in ~/.opencli/clis/. Use "opencli adapter reset ${site}" first to restore official version.`));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      } catch { /* good, doesn't exist yet */ }
+
+      fs.cpSync(builtinSiteDir, userSiteDir, { recursive: true });
+      console.log(styleText('green', `✅ Ejected "${site}" to ~/.opencli/clis/${site}/`));
+      console.log('You can now edit the adapter files. Changes take effect immediately.');
+      console.log(styleText('yellow', 'Note: Official updates to this adapter will overwrite your changes.'));
+    });
+
+  adapterCmd
+    .command('reset')
+    .description('Remove local override and restore official adapter version')
+    .argument('[site]', 'Site name (e.g. twitter, bilibili)')
+    .option('--all', 'Reset all local overrides')
+    .action(async (site: string | undefined, opts: { all?: boolean }) => {
+      const os = await import('node:os');
+      const userClisDir = path.join(os.homedir(), '.opencli', 'clis');
+
+      if (opts.all) {
+        try {
+          const userEntries = await fs.promises.readdir(userClisDir, { withFileTypes: true });
+          const dirs = userEntries.filter(e => e.isDirectory());
+          if (dirs.length === 0) {
+            console.log('No local sites to reset.');
+            return;
+          }
+          for (const dir of dirs) {
+            fs.rmSync(path.join(userClisDir, dir.name), { recursive: true, force: true });
+          }
+          console.log(styleText('green', `✅ Reset ${dirs.length} site(s). All adapters now use official baseline.`));
+        } catch {
+          console.log('No local sites to reset.');
+        }
+        return;
+      }
+
+      if (!site) {
+        console.error(styleText('red', 'Error: Please specify a site name or use --all.'));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+
+      const userSiteDir = path.join(userClisDir, site);
+      try {
+        await fs.promises.access(userSiteDir);
+      } catch {
+        console.error(styleText('yellow', `Site "${site}" has no local override.`));
+        return;
+      }
+
+      const isOfficial = fs.existsSync(path.join(BUILTIN_CLIS, site));
+      fs.rmSync(userSiteDir, { recursive: true, force: true });
+      console.log(styleText('green', isOfficial
+        ? `✅ Reset "${site}". Now using official baseline.`
+        : `✅ Removed custom site "${site}".`));
     });
 
   // ── Built-in: daemon ──────────────────────────────────────────────────────
@@ -952,7 +1071,7 @@ cli({
     .action((name: string) => {
       const ext = externalClis.find(e => e.name === name);
       if (!ext) {
-        console.error(chalk.red(`External CLI '${name}' not found in registry.`));
+        console.error(styleText('red', `External CLI '${name}' not found in registry.`));
         process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
@@ -978,7 +1097,7 @@ cli({
     try {
       executeExternalCli(name, args, externalClis);
     } catch (err) {
-      console.error(chalk.red(`Error: ${getErrorMessage(err)}`));
+      console.error(styleText('red', `Error: ${getErrorMessage(err)}`));
       process.exitCode = EXIT_CODES.GENERIC_ERROR;
     }
   }
@@ -1020,9 +1139,9 @@ cli({
 
   program.on('command:*', (operands: string[]) => {
     const binary = operands[0];
-    console.error(chalk.red(`error: unknown command '${binary}'`));
+    console.error(styleText('red', `error: unknown command '${binary}'`));
     if (isBinaryInstalled(binary)) {
-      console.error(chalk.dim(`  Tip: '${binary}' exists on your PATH. Use 'opencli register ${binary}' to add it as an external CLI.`));
+      console.error(styleText('dim', `  Tip: '${binary}' exists on your PATH. Use 'opencli register ${binary}' to add it as an external CLI.`));
     }
     program.outputHelp();
     process.exitCode = EXIT_CODES.USAGE_ERROR;

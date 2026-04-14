@@ -29,15 +29,15 @@ opencli codex model [model-name]         # 查看或切换当前 AI 模型
 opencli codex send "message"             # 发送文本/命令到 Codex
 ```
 
-## ChatGPT (desktop — macOS AppleScript/CDP)
+## ChatGPT App (desktop — macOS AppleScript/CDP)
 
 ```bash
-opencli chatgpt status                   # 检查应用状态
-opencli chatgpt ask "question"           # 一键提问并等回复 (send + wait + read)
-opencli chatgpt model <model>            # 切换模型/模式 (auto, instant, thinking 等)
-opencli chatgpt read                     # 读取最近一条可见消息
-opencli chatgpt new                      # 新建对话
-opencli chatgpt send "message"           # 发送消息
+opencli chatgpt-app status                   # 检查应用状态
+opencli chatgpt-app ask "question"           # 一键提问并等回复 (send + wait + read)
+opencli chatgpt-app model <model>            # 切换模型/模式 (auto, instant, thinking 等)
+opencli chatgpt-app read                     # 读取最近一条可见消息
+opencli chatgpt-app new                      # 新建对话
+opencli chatgpt-app send "message"           # 发送消息
 ```
 
 ## ChatWise (desktop — multi-LLM client)

@@ -5,6 +5,7 @@ cli({
     site: 'bilibili',
     name: 'following',
     description: '获取 Bilibili 用户的关注列表',
+    domain: 'www.bilibili.com',
     strategy: Strategy.COOKIE,
     args: [
         { name: 'uid', positional: true, required: false, help: '目标用户 ID（默认为当前登录用户）' },

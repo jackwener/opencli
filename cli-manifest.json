@@ -2779,7 +2779,7 @@
     "sourceFile": "chaoxing/exams.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "ask",
     "description": "Send a prompt and wait for the AI response (send + wait + read)",
     "domain": "localhost",
@@ -2819,11 +2819,11 @@
       "Text"
     ],
     "type": "js",
-    "modulePath": "chatgpt/ask.js",
-    "sourceFile": "chatgpt/ask.js"
+    "modulePath": "chatgpt-app/ask.js",
+    "sourceFile": "chatgpt-app/ask.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "model",
     "description": "Switch ChatGPT Desktop model/mode (auto, instant, thinking, 5.2-instant, 5.2-thinking)",
     "domain": "localhost",
@@ -2850,11 +2850,11 @@
       "Model"
     ],
     "type": "js",
-    "modulePath": "chatgpt/model.js",
-    "sourceFile": "chatgpt/model.js"
+    "modulePath": "chatgpt-app/model.js",
+    "sourceFile": "chatgpt-app/model.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "new",
     "description": "Open a new chat in ChatGPT Desktop App",
     "domain": "localhost",
@@ -2865,11 +2865,11 @@
       "Status"
     ],
     "type": "js",
-    "modulePath": "chatgpt/new.js",
-    "sourceFile": "chatgpt/new.js"
+    "modulePath": "chatgpt-app/new.js",
+    "sourceFile": "chatgpt-app/new.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "read",
     "description": "Read the last visible message from the focused ChatGPT Desktop window",
     "domain": "localhost",
@@ -2881,11 +2881,11 @@
       "Text"
     ],
     "type": "js",
-    "modulePath": "chatgpt/read.js",
-    "sourceFile": "chatgpt/read.js"
+    "modulePath": "chatgpt-app/read.js",
+    "sourceFile": "chatgpt-app/read.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "send",
     "description": "Send a message to the active ChatGPT Desktop App window",
     "domain": "localhost",
@@ -2917,11 +2917,11 @@
       "Status"
     ],
     "type": "js",
-    "modulePath": "chatgpt/send.js",
-    "sourceFile": "chatgpt/send.js"
+    "modulePath": "chatgpt-app/send.js",
+    "sourceFile": "chatgpt-app/send.js"
   },
   {
-    "site": "chatgpt",
+    "site": "chatgpt-app",
     "name": "status",
     "description": "Check if ChatGPT Desktop App is running natively on macOS",
     "domain": "localhost",
@@ -2932,8 +2932,8 @@
       "Status"
     ],
     "type": "js",
-    "modulePath": "chatgpt/status.js",
-    "sourceFile": "chatgpt/status.js"
+    "modulePath": "chatgpt-app/status.js",
+    "sourceFile": "chatgpt-app/status.js"
   },
   {
     "site": "chatwise",
@@ -7826,6 +7826,202 @@
     "sourceFile": "jimeng/workspaces.js"
   },
   {
+    "site": "ke",
+    "name": "chengjiao",
+    "description": "贝壳找房成交记录",
+    "domain": "ke.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "city",
+        "type": "str",
+        "default": "bj",
+        "required": false,
+        "help": "城市代码，如 bj(北京), sh(上海), gz(广州), sz(深圳), zs(中山)"
+      },
+      {
+        "name": "district",
+        "type": "str",
+        "required": false,
+        "help": "区域拼音，如 chaoyang, haidian"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量"
+      }
+    ],
+    "columns": [
+      "title",
+      "community",
+      "layout",
+      "area",
+      "deal_price",
+      "unit_price",
+      "deal_date"
+    ],
+    "type": "js",
+    "modulePath": "ke/chengjiao.js",
+    "sourceFile": "ke/chengjiao.js"
+  },
+  {
+    "site": "ke",
+    "name": "ershoufang",
+    "description": "贝壳找房二手房列表",
+    "domain": "ke.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "city",
+        "type": "str",
+        "default": "bj",
+        "required": false,
+        "help": "城市代码，如 bj(北京), sh(上海), gz(广州), sz(深圳), zs(中山)"
+      },
+      {
+        "name": "district",
+        "type": "str",
+        "required": false,
+        "help": "区域拼音，如 chaoyang, haidian, tianhe"
+      },
+      {
+        "name": "min-price",
+        "type": "int",
+        "required": false,
+        "help": "最低总价（万元）"
+      },
+      {
+        "name": "max-price",
+        "type": "int",
+        "required": false,
+        "help": "最高总价（万元）"
+      },
+      {
+        "name": "rooms",
+        "type": "int",
+        "required": false,
+        "help": "几居室 (1-5)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量"
+      }
+    ],
+    "columns": [
+      "title",
+      "community",
+      "layout",
+      "area",
+      "direction",
+      "total_price",
+      "unit_price",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "ke/ershoufang.js",
+    "sourceFile": "ke/ershoufang.js"
+  },
+  {
+    "site": "ke",
+    "name": "xiaoqu",
+    "description": "贝壳找房小区列表",
+    "domain": "ke.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "city",
+        "type": "str",
+        "default": "bj",
+        "required": false,
+        "help": "城市代码，如 bj(北京), sh(上海), gz(广州), sz(深圳), zs(中山)"
+      },
+      {
+        "name": "district",
+        "type": "str",
+        "required": false,
+        "help": "区域拼音，如 chaoyang, haidian"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量"
+      }
+    ],
+    "columns": [
+      "name",
+      "district",
+      "avg_price",
+      "year",
+      "on_sale"
+    ],
+    "type": "js",
+    "modulePath": "ke/xiaoqu.js",
+    "sourceFile": "ke/xiaoqu.js"
+  },
+  {
+    "site": "ke",
+    "name": "zufang",
+    "description": "贝壳找房租房列表",
+    "domain": "ke.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "city",
+        "type": "str",
+        "default": "bj",
+        "required": false,
+        "help": "城市代码，如 bj(北京), sh(上海), gz(广州), sz(深圳), zs(中山)"
+      },
+      {
+        "name": "district",
+        "type": "str",
+        "required": false,
+        "help": "区域拼音，如 chaoyang, haidian"
+      },
+      {
+        "name": "min-price",
+        "type": "int",
+        "required": false,
+        "help": "最低月租（元）"
+      },
+      {
+        "name": "max-price",
+        "type": "int",
+        "required": false,
+        "help": "最高月租（元）"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量"
+      }
+    ],
+    "columns": [
+      "title",
+      "community",
+      "area",
+      "layout",
+      "price",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "ke/zufang.js",
+    "sourceFile": "ke/zufang.js"
+  },
+  {
     "site": "lesswrong",
     "name": "comments",
     "description": "Top comments on a post",
@@ -9028,6 +9224,203 @@
     "type": "js",
     "modulePath": "medium/user.js",
     "sourceFile": "medium/user.js"
+  },
+  {
+    "site": "mubu",
+    "name": "doc",
+    "description": "读取幕布文档内容（默认输出 Markdown，可用 --output text 输出纯文本）",
+    "domain": "mubu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "文档 ID"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "md",
+        "required": false,
+        "help": "输出格式：md（默认，缩进列表 Markdown，适合导入 Obsidian）或 text（纯文本，适合终端阅读）"
+      }
+    ],
+    "columns": [
+      "content"
+    ],
+    "type": "js",
+    "modulePath": "mubu/doc.js",
+    "sourceFile": "mubu/doc.js",
+    "navigateBefore": "https://mubu.com"
+  },
+  {
+    "site": "mubu",
+    "name": "docs",
+    "description": "列出幕布文档（默认根目录，--starred 查看快速访问列表）",
+    "domain": "mubu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "folder",
+        "type": "str",
+        "default": "0",
+        "required": false,
+        "help": "文件夹 ID（默认根目录 0）"
+      },
+      {
+        "name": "starred",
+        "type": "bool",
+        "default": false,
+        "required": false,
+        "help": "只显示快速访问的文档和文件夹"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 50,
+        "required": false,
+        "help": "最多显示条数"
+      }
+    ],
+    "columns": [
+      "type",
+      "id",
+      "name",
+      "updated",
+      "stared"
+    ],
+    "type": "js",
+    "modulePath": "mubu/docs.js",
+    "sourceFile": "mubu/docs.js",
+    "navigateBefore": "https://mubu.com"
+  },
+  {
+    "site": "mubu",
+    "name": "notes",
+    "description": "读取幕布速记（默认今天）。支持 --date/--month/--year/--from/--to 指定时间范围，--list 为概览模式（日期+条数）。",
+    "domain": "mubu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "list",
+        "type": "bool",
+        "default": false,
+        "required": false,
+        "help": "概览模式：只输出日期和条数，不含速记内容。可与任意时间范围参数组合。"
+      },
+      {
+        "name": "date",
+        "type": "str",
+        "required": false,
+        "help": "单日，格式 YYYY-MM-DD。不指定时间范围则默认今天（系统本地时间）。"
+      },
+      {
+        "name": "month",
+        "type": "str",
+        "required": false,
+        "help": "整月，格式 YYYY-MM。"
+      },
+      {
+        "name": "year",
+        "type": "int",
+        "required": false,
+        "help": "整年，格式 YYYY（整数）。"
+      },
+      {
+        "name": "from",
+        "type": "str",
+        "required": false,
+        "help": "范围起始日，格式 YYYY-MM-DD。须与 --to 同时使用。"
+      },
+      {
+        "name": "to",
+        "type": "str",
+        "required": false,
+        "help": "范围截止日，格式 YYYY-MM-DD。须与 --from 同时使用。"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "md",
+        "required": false,
+        "help": "输出格式：md（默认，Markdown）或 text（纯文本）"
+      }
+    ],
+    "columns": [
+      "date",
+      "content"
+    ],
+    "type": "js",
+    "modulePath": "mubu/notes.js",
+    "sourceFile": "mubu/notes.js",
+    "navigateBefore": "https://mubu.com"
+  },
+  {
+    "site": "mubu",
+    "name": "recent",
+    "description": "最近编辑的幕布文档",
+    "domain": "mubu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "最多显示条数"
+      }
+    ],
+    "columns": [
+      "id",
+      "name",
+      "updated"
+    ],
+    "type": "js",
+    "modulePath": "mubu/recent.js",
+    "sourceFile": "mubu/recent.js",
+    "navigateBefore": "https://mubu.com"
+  },
+  {
+    "site": "mubu",
+    "name": "search",
+    "description": "全局搜索幕布文档和文件夹（标题+内容，服务端全量匹配）。结果含 type/id/name/path/hits/snippet 字段。",
+    "domain": "mubu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "搜索关键词"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 100,
+        "required": false,
+        "help": "最多显示条数（默认 100，结果被截断时用 --limit N 调大）"
+      }
+    ],
+    "columns": [
+      "type",
+      "id",
+      "name",
+      "path",
+      "hits",
+      "snippet"
+    ],
+    "type": "js",
+    "modulePath": "mubu/search.js",
+    "sourceFile": "mubu/search.js",
+    "navigateBefore": "https://mubu.com"
   },
   {
     "site": "notebooklm",
@@ -12768,12 +13161,14 @@
         "help": ""
       }
     ],
-    "columns": [
-      "author",
-      "text",
-      "likes",
-      "url"
-    ],
+  "columns": [
+    "author",
+    "text",
+    "likes",
+    "retweets",
+    "bookmarks",
+    "url"
+  ],
     "type": "js",
     "modulePath": "twitter/bookmarks.js",
     "sourceFile": "twitter/bookmarks.js"
@@ -13019,6 +13414,39 @@
     "type": "js",
     "modulePath": "twitter/likes.js",
     "sourceFile": "twitter/likes.js"
+  },
+  {
+    "site": "twitter",
+    "name": "lists",
+    "description": "Get Twitter/X lists for a user",
+    "domain": "x.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "user",
+        "type": "string",
+        "required": false,
+        "positional": true,
+        "help": ""
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 50,
+        "required": false,
+        "help": ""
+      }
+    ],
+    "columns": [
+      "name",
+      "members",
+      "followers",
+      "mode"
+    ],
+    "type": "js",
+    "modulePath": "twitter/lists.js",
+    "sourceFile": "twitter/lists.js"
   },
   {
     "site": "twitter",
@@ -14619,7 +15047,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/comments.js",
-    "sourceFile": "xiaohongshu/comments.js"
+    "sourceFile": "xiaohongshu/comments.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14645,7 +15074,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/creator-note-detail.js",
-    "sourceFile": "xiaohongshu/creator-note-detail.js"
+    "sourceFile": "xiaohongshu/creator-note-detail.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14676,7 +15106,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/creator-notes-summary.js",
-    "sourceFile": "xiaohongshu/creator-notes-summary.js"
+    "sourceFile": "xiaohongshu/creator-notes-summary.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14712,7 +15143,8 @@
     "timeout": 180,
     "type": "js",
     "modulePath": "xiaohongshu/creator-notes-summary.js",
-    "sourceFile": "xiaohongshu/creator-notes-summary.js"
+    "sourceFile": "xiaohongshu/creator-notes-summary.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14728,7 +15160,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/creator-profile.js",
-    "sourceFile": "xiaohongshu/creator-profile.js"
+    "sourceFile": "xiaohongshu/creator-profile.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14757,7 +15190,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/creator-stats.js",
-    "sourceFile": "xiaohongshu/creator-stats.js"
+    "sourceFile": "xiaohongshu/creator-stats.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14790,7 +15224,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/download.js",
-    "sourceFile": "xiaohongshu/download.js"
+    "sourceFile": "xiaohongshu/download.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14841,7 +15276,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/note.js",
-    "sourceFile": "xiaohongshu/note.js"
+    "sourceFile": "xiaohongshu/note.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14925,7 +15361,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/publish.js",
-    "sourceFile": "xiaohongshu/publish.js"
+    "sourceFile": "xiaohongshu/publish.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14960,7 +15397,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/search.js",
-    "sourceFile": "xiaohongshu/search.js"
+    "sourceFile": "xiaohongshu/search.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaohongshu",
@@ -14994,7 +15432,8 @@
     ],
     "type": "js",
     "modulePath": "xiaohongshu/user.js",
-    "sourceFile": "xiaohongshu/user.js"
+    "sourceFile": "xiaohongshu/user.js",
+    "navigateBefore": false
   },
   {
     "site": "xiaoyuzhou",

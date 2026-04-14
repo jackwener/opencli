@@ -72,7 +72,7 @@ opencli browser click 7            # all three together
 4. **Wait** (if needed): `opencli browser wait selector ".loaded"` or `wait text "Success"`
 5. **Verify**: `opencli browser state` or `opencli browser get value <N>`
 6. **Repeat**: browser stays open between commands
-7. **Save**: write a TS adapter to `~/.opencli/clis/<site>/<command>.ts`
+7. **Save**: write a JS adapter to `~/.opencli/clis/<site>/<command>.js`
 
 ## Commands
 
@@ -159,7 +159,7 @@ opencli browser network --all            # Include static resources
 ### Sedimentation (Save as CLI)
 
 ```bash
-opencli browser init hn/top              # Generate adapter scaffold at ~/.opencli/clis/hn/top.ts
+opencli browser init hn/top              # Generate adapter scaffold at ~/.opencli/clis/hn/top.js
 opencli browser verify hn/top            # Test the adapter (adds --limit 3 only if `limit` arg is defined)
 ```
 
@@ -207,7 +207,7 @@ opencli browser network                        # See captured API requests
 opencli browser network --detail 0             # Inspect response body
 
 # 3. Generate scaffold
-opencli browser init hn/top                    # Creates ~/.opencli/clis/hn/top.ts
+opencli browser init hn/top                    # Creates ~/.opencli/clis/hn/top.js
 
 # 4. Edit the adapter (fill in func logic)
 # - If API found: use fetch() directly (Strategy.PUBLIC or COOKIE)
@@ -224,7 +224,7 @@ opencli browser close
 ### Example adapter:
 
 ```typescript
-// ~/.opencli/clis/hn/top.ts
+// ~/.opencli/clis/hn/top.js
 import { cli, Strategy } from '@jackwener/opencli/registry';
 
 cli({
@@ -250,7 +250,7 @@ cli({
 });
 ```
 
-Save to `~/.opencli/clis/<site>/<command>.ts` → immediately available as `opencli <site> <command>`.
+Save to `~/.opencli/clis/<site>/<command>.js` → immediately available as `opencli <site> <command>`.
 
 ### Strategy Guide
 

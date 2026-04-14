@@ -21,7 +21,7 @@ cli({
       (async () => {
         const count = ${count};
         const apiQuery = JSON.stringify({
-          keyword: '${kwargs.query.replace(/'/g, "\\'")}',
+          keyword: ${JSON.stringify(kwargs.query)},
           offset: 0, orderby: 'display_date:desc', size: count, website: 'reuters'
         });
         const apiUrl = 'https://www.reuters.com/pf/api/v3/content/fetch/articles-by-search-v2?query=' + encodeURIComponent(apiQuery);

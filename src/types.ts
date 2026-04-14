@@ -47,6 +47,8 @@ export interface BrowserSessionInfo {
 export interface IPage {
   goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void>;
   evaluate(js: string): Promise<any>;
+  /** Safely evaluate JS with pre-serialized arguments — prevents injection. */
+  evaluateWithArgs?(js: string, args: Record<string, unknown>): Promise<any>;
   getCookies(opts?: { domain?: string; url?: string }): Promise<BrowserCookie[]>;
   snapshot(opts?: SnapshotOptions): Promise<any>;
   click(ref: string): Promise<void>;

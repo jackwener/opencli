@@ -1,21 +1,19 @@
 import { getRegistry } from '@jackwener/opencli/registry';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { executePipeline } from '../../pipeline/index.js';
+import { executePipeline } from '@jackwener/opencli/pipeline';
 
 // Import all binance adapters to register them
 import './top.js';
 import './gainers.js';
 import './pairs.js';
 
-type BinanceRow = Record<string, unknown>;
-
-function loadPipeline(name: string): any[] {
+function loadPipeline(name) {
   const cmd = getRegistry().get(`binance/${name}`);
   if (!cmd?.pipeline) throw new Error(`Command binance/${name} not found or has no pipeline`);
   return cmd.pipeline;
 }
 
-function mockJsonOnce(payload: unknown) {
+function mockJsonOnce(payload) {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
@@ -37,10 +35,10 @@ describe('binance adapters', () => {
       { symbol: 'MID', lastPrice: '3', priceChangePercent: '3.4', highPrice: '3', lowPrice: '3', quoteVolume: '11.0' },
     ]);
 
-    const result = await executePipeline(null, loadPipeline('top'), { args: { limit: 3 } }) as BinanceRow[];
+    const result = await executePipeline(null, loadPipeline('top'), { args: { limit: 3 } });
 
-    expect(result.map((item: any) => item.symbol)).toEqual(['LARGE', 'MID', 'SMALL']);
-    expect(result.map((item: any) => item.rank)).toEqual([1, 2, 3]);
+    expect(result.map((item) => item.symbol)).toEqual(['LARGE', 'MID', 'SMALL']);
+    expect(result.map((item) => item.rank)).toEqual([1, 2, 3]);
   });
 
   it('sorts gainers by numeric percent change', async () => {
@@ -50,9 +48,9 @@ describe('binance adapters', () => {
       { symbol: 'HUNDRED', lastPrice: '1', priceChangePercent: '100.0', quoteVolume: '100' },
     ]);
 
-    const result = await executePipeline(null, loadPipeline('gainers'), { args: { limit: 3 } }) as BinanceRow[];
+    const result = await executePipeline(null, loadPipeline('gainers'), { args: { limit: 3 } });
 
-    expect(result.map((item: any) => item.symbol)).toEqual(['HUNDRED', 'TEN', 'NINE']);
+    expect(result.map((item) => item.symbol)).toEqual(['HUNDRED', 'TEN', 'NINE']);
   });
 
   it('keeps only TRADING pairs', async () => {
@@ -63,7 +61,7 @@ describe('binance adapters', () => {
       ],
     });
 
-    const result = await executePipeline(null, loadPipeline('pairs'), { args: { limit: 10 } }) as BinanceRow[];
+    const result = await executePipeline(null, loadPipeline('pairs'), { args: { limit: 10 } });
 
     expect(result).toEqual([
       { symbol: 'BTCUSDT', base: 'BTC', quote: 'USDT', status: 'TRADING' },

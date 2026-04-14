@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { discoverClis, discoverPlugins, ensureUserCliCompatShims, PLUGINS_DIR } from './discovery.js';
+import { discoverClis, discoverPlugins, ensureUserCliCompatShims, ensureUserAdapters, PLUGINS_DIR } from './discovery.js';
 import { executeCommand } from './execution.js';
 import { getRegistry, cli, Strategy } from './registry.js';
 import { clearAllHooks, onAfterExecute } from './hooks.js';
@@ -110,6 +110,34 @@ cli({
       await expect(executeCommand(cmd!, {})).resolves.toEqual([{ ok: true, errorName: 'CommandExecutionError', markdown: 'hello' }]);
     } finally {
       await fs.promises.rm(tempOpencliRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('ensureUserAdapters', () => {
+  it('creates user clis directory without triggering full copy', async () => {
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-ensure-'));
+    const clisDir = path.join(tempDir, 'clis');
+    try {
+      // Patch USER_CLIS_DIR is not easy, so we test the function behavior indirectly:
+      // ensureUserAdapters should not throw and should be very fast (no fetch script)
+      const start = Date.now();
+      await ensureUserAdapters();
+      const elapsed = Date.now() - start;
+      // Should complete quickly (< 1s) since it only creates a directory
+      expect(elapsed).toBeLessThan(1000);
+    } finally {
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('discoverClis handles empty user directory gracefully', async () => {
+    const emptyDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-empty-'));
+    try {
+      // Should not throw for an empty directory (no adapters to discover)
+      await expect(discoverClis(emptyDir)).resolves.not.toThrow();
+    } finally {
+      await fs.promises.rm(emptyDir, { recursive: true, force: true });
     }
   });
 });

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- **Node.js**: >= 20.0.0
+- **Node.js**: >= 21.0.0
 - **Chrome** running and logged into the target site (for browser commands)
 
 ## Install via npm (Recommended)

@@ -23,6 +23,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { DEFAULT_DAEMON_PORT } from './constants.js';
 import { EXIT_CODES } from './errors.js';
+import { log } from './logger.js';
 
 const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 
@@ -30,6 +31,7 @@ const PORT = parseInt(process.env.OPENCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_P
 
 let extensionWs: WebSocket | null = null;
 let extensionVersion: string | null = null;
+let extensionCompatRange: string | null = null;
 const pending = new Map<string, {
   resolve: (data: unknown) => void;
   reject: (error: Error) => void;
@@ -123,6 +125,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       uptime,
       extensionConnected: extensionWs?.readyState === WebSocket.OPEN,
       extensionVersion,
+      extensionCompatRange,
       pending: pending.size,
       memoryMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
       port: PORT,
@@ -207,9 +210,10 @@ const wss = new WebSocketServer({
 });
 
 wss.on('connection', (ws: WebSocket) => {
-  console.error('[daemon] Extension connected');
+  log.info('[daemon] Extension connected');
   extensionWs = ws;
   extensionVersion = null; // cleared until hello message arrives
+  extensionCompatRange = null;
 
   // ── Heartbeat: ping every 15s, close if 2 pongs missed ──
   let missedPongs = 0;
@@ -219,7 +223,7 @@ wss.on('connection', (ws: WebSocket) => {
       return;
     }
     if (missedPongs >= 2) {
-      console.error('[daemon] Extension heartbeat lost, closing connection');
+      log.warn('[daemon] Extension heartbeat lost, closing connection');
       clearInterval(heartbeatInterval);
       ws.terminate();
       return;
@@ -239,13 +243,15 @@ wss.on('connection', (ws: WebSocket) => {
       // Handle hello message from extension (version handshake)
       if (msg.type === 'hello') {
         extensionVersion = typeof msg.version === 'string' ? msg.version : null;
+        extensionCompatRange = typeof msg.compatRange === 'string' ? msg.compatRange : null;
         return;
       }
 
       // Handle log messages from extension
       if (msg.type === 'log') {
-        const prefix = msg.level === 'error' ? '❌' : msg.level === 'warn' ? '⚠️' : '📋';
-        console.error(`${prefix} [ext] ${msg.msg}`);
+        if (msg.level === 'error') log.error(`[ext] ${msg.msg}`);
+        else if (msg.level === 'warn') log.warn(`[ext] ${msg.msg}`);
+        else log.info(`[ext] ${msg.msg}`);
         pushLog({ level: msg.level, msg: msg.msg, ts: msg.ts ?? Date.now() });
         return;
       }
@@ -263,11 +269,12 @@ wss.on('connection', (ws: WebSocket) => {
   });
 
   ws.on('close', () => {
-    console.error('[daemon] Extension disconnected');
+    log.info('[daemon] Extension disconnected');
     clearInterval(heartbeatInterval);
     if (extensionWs === ws) {
       extensionWs = null;
       extensionVersion = null;
+      extensionCompatRange = null;
       // Reject all pending requests since the extension is gone
       for (const [id, p] of pending) {
         clearTimeout(p.timer);
@@ -295,15 +302,15 @@ wss.on('connection', (ws: WebSocket) => {
 // ─── Start ───────────────────────────────────────────────────────────
 
 httpServer.listen(PORT, '127.0.0.1', () => {
-  console.error(`[daemon] Listening on http://127.0.0.1:${PORT}`);
+  log.info(`[daemon] Listening on http://127.0.0.1:${PORT}`);
 });
 
 httpServer.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`[daemon] Port ${PORT} already in use — another daemon is likely running. Exiting.`);
+    log.error(`[daemon] Port ${PORT} already in use — another daemon is likely running. Exiting.`);
     process.exit(EXIT_CODES.SERVICE_UNAVAIL);
   }
-  console.error('[daemon] Server error:', err.message);
+  log.error(`[daemon] Server error: ${err.message}`);
   process.exit(EXIT_CODES.GENERIC_ERROR);
 });
 

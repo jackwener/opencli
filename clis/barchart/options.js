@@ -26,8 +26,8 @@ cli({
         await page.wait(4);
         const data = await page.evaluate(`
       (async () => {
-        const sym = '${symbol}';
-        const type = '${optType}';
+        const sym = ${JSON.stringify(symbol)};
+        const type = ${JSON.stringify(optType)};
         const limit = ${limit};
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const headers = { 'X-CSRF-TOKEN': csrf };
