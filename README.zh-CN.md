@@ -16,14 +16,16 @@ OpenCLI 可以用同一套 CLI 做三类事情：
 
 除了网站能力，OpenCLI 还是一个 **CLI 枢纽**：你可以把 `gh`、`docker` 等本地工具统一注册到 `opencli` 下，也可以通过桌面端适配器控制 Cursor、Codex、Antigravity、ChatGPT、Notion 等 Electron 应用。
 
-## 为什么是 OpenCLI
+## 亮点
 
-- **同一个心智模型**：网站、浏览器自动化、Electron 应用、本地 CLI 都走同一个入口。
-- **复用真实会话**：浏览器命令直接使用你已经登录的 Chrome/Chromium，而不是重新造一套认证。
-- **输出稳定**：适配器命令返回固定结构，适合 shell、脚本、CI 和 AI Agent 工具调用。
-- **面向 AI Agent**：`browser` 负责实时操作，`explore` 负责探索接口，`synthesize` 负责生成适配器，`cascade` 负责探测认证路径。
-- **运行成本低**：已有命令运行时不消耗模型 token。
-- **天然可扩展**：既能用内置能力，也能注册本地 CLI，或直接往 `clis/` 丢 `.js` 适配器。
+- **桌面应用控制** — 通过 CDP 直接在终端驱动 Electron 应用（Cursor、Codex、ChatGPT、Notion 等）。
+- **浏览器自动化** — `browser` 让 AI Agent 直接控制浏览器：点击、输入、提取、截图，完全可编程。
+- **网站 → CLI** — 把任何网站变成确定性 CLI：87+ 内置适配器，或用 `opencli generate` 生成新的。
+- **账号安全** — 复用 Chrome/Chromium 登录态，凭证永远不会离开浏览器。
+- **面向 AI Agent** — `explore` 发现 API，`synthesize` 生成适配器，`cascade` 探测认证策略，`browser` 直接控制浏览器。
+- **CLI 枢纽** — 统一发现、自动安装、纯透传任何外部 CLI（gh、docker、obsidian 等）。
+- **零 LLM 成本** — 运行时不消耗模型 token，跑 10,000 次也不花一分钱。
+- **确定性输出** — 相同命令，相同输出结构，每次一致。可管道、可脚本、CI 友好。
 
 ## 快速开始
 
