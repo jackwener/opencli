@@ -68,8 +68,8 @@ export function resolveTargetJs(ref: string): string {
           if (fp.role) { checks++; if (fp.role !== role) mismatches++; }
           if (fp.text) {
             checks++;
-            // Text: allow prefix match (page text can grow)
-            if (!text.startsWith(fp.text) && !fp.text.startsWith(text)) mismatches++;
+            // Text: allow prefix match (page text can grow), but empty current text never matches
+            if (!text || (!text.startsWith(fp.text) && !fp.text.startsWith(text))) mismatches++;
           }
 
           // Stale if tag changed, or if any uniquely identifying field (id/testId) changed,
@@ -226,6 +226,82 @@ export function scrollResolvedJs(): string {
       if (!el) throw new Error('No resolved element');
       el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
       return { scrolled: true, tag: el.tagName.toLowerCase(), text: (el.textContent || '').trim().slice(0, 80) };
+    })()
+  `;
+}
+
+/**
+ * Generate JS to get text content of resolved element.
+ */
+export function getTextResolvedJs(): string {
+  return `
+    (() => {
+      const el = window.__resolved;
+      if (!el) throw new Error('No resolved element');
+      return el.textContent?.trim() ?? null;
+    })()
+  `;
+}
+
+/**
+ * Generate JS to get value of resolved input/textarea element.
+ */
+export function getValueResolvedJs(): string {
+  return `
+    (() => {
+      const el = window.__resolved;
+      if (!el) throw new Error('No resolved element');
+      return el.value ?? null;
+    })()
+  `;
+}
+
+/**
+ * Generate JS to get all attributes of resolved element.
+ */
+export function getAttributesResolvedJs(): string {
+  return `
+    (() => {
+      const el = window.__resolved;
+      if (!el) throw new Error('No resolved element');
+      return JSON.stringify(Object.fromEntries([...el.attributes].map(a => [a.name, a.value])));
+    })()
+  `;
+}
+
+/**
+ * Generate JS to select an option on a resolved <select> element.
+ */
+export function selectResolvedJs(option: string): string {
+  const safeOption = JSON.stringify(option);
+  return `
+    (() => {
+      const el = window.__resolved;
+      if (!el) throw new Error('No resolved element');
+      if (el.tagName !== 'SELECT') return { error: 'Not a <select>' };
+      const match = Array.from(el.options).find(o => o.text.trim() === ${safeOption} || o.value === ${safeOption});
+      if (!match) return { error: 'Option not found', available: Array.from(el.options).map(o => o.text.trim()) };
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+      if (setter) setter.call(el, match.value); else el.value = match.value;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { selected: match.text };
+    })()
+  `;
+}
+
+/**
+ * Generate JS to check if resolved element is an autocomplete/combobox field.
+ */
+export function isAutocompleteResolvedJs(): string {
+  return `
+    (() => {
+      const el = window.__resolved;
+      if (!el) return false;
+      const role = el.getAttribute('role');
+      const ac = el.getAttribute('aria-autocomplete');
+      const list = el.getAttribute('list');
+      return role === 'combobox' || ac === 'list' || ac === 'both' || !!list;
     })()
   `;
 }

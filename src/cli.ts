@@ -21,6 +21,7 @@ import { loadExternalClis, executeExternalCli, installExternalCli, registerExter
 import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage } from './errors.js';
 import { TargetError } from './browser/target-errors.js';
+import { resolveTargetJs, getTextResolvedJs, getValueResolvedJs, getAttributesResolvedJs, selectResolvedJs, isAutocompleteResolvedJs } from './browser/target-resolver.js';
 import { daemonStop } from './commands/daemon.js';
 import { log } from './logger.js';
 
@@ -293,6 +294,16 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .command('browser')
     .description('Browser control — navigate, click, type, extract, wait (no LLM needed)');
 
+  /** Resolve a ref/CSS target via the unified resolver, throwing TargetError on failure. */
+  async function resolveRef(page: Awaited<ReturnType<typeof getBrowserPage>>, ref: string): Promise<void> {
+    const resolution = await page.evaluate(resolveTargetJs(ref)) as
+      | { ok: true }
+      | { ok: false; code: string; message: string; hint: string; candidates?: string[] };
+    if (!resolution.ok) {
+      throw new TargetError(resolution as { ok: false; code: 'not_found' | 'ambiguous' | 'stale_ref'; message: string; hint: string; candidates?: string[] });
+    }
+  }
+
   /** Wrap browser actions with error handling and optional --json output */
   function browserAction(fn: (page: Awaited<ReturnType<typeof getBrowserPage>>, ...args: any[]) => Promise<unknown>) {
     return async (...args: any[]) => {
@@ -394,13 +405,15 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   get.command('text').argument('<index>', 'Element index').description('Element text content')
     .action(browserAction(async (page, index) => {
-      const text = await page.evaluate(`((idx) => document.querySelector('[data-opencli-ref="' + idx + '"]')?.textContent?.trim())(${JSON.stringify(String(index))})`);
+      await resolveRef(page, String(index));
+      const text = await page.evaluate(getTextResolvedJs());
       console.log(text ?? '(empty)');
     }));
 
   get.command('value').argument('<index>', 'Element index').description('Input/textarea value')
     .action(browserAction(async (page, index) => {
-      const val = await page.evaluate(`((idx) => document.querySelector('[data-opencli-ref="' + idx + '"]')?.value)(${JSON.stringify(String(index))})`);
+      await resolveRef(page, String(index));
+      const val = await page.evaluate(getValueResolvedJs());
       console.log(val ?? '(empty)');
     }));
 
@@ -413,7 +426,8 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   get.command('attributes').argument('<index>', 'Element index').description('Element attributes')
     .action(browserAction(async (page, index) => {
-      const attrs = await page.evaluate(`((idx) => JSON.stringify(Object.fromEntries([...document.querySelector('[data-opencli-ref="' + idx + '"]')?.attributes].map(a=>[a.name,a.value]))))(${JSON.stringify(String(index))})`);
+      await resolveRef(page, String(index));
+      const attrs = await page.evaluate(getAttributesResolvedJs());
       console.log(attrs ?? '{}');
     }));
 
@@ -432,17 +446,8 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       await page.wait(0.3);
       await page.typeText(index, text);
       // Detect autocomplete/combobox fields and wait for dropdown suggestions
-      const safeIndex = JSON.stringify(String(index));
-      const isAutocomplete = await page.evaluate(`
-        (() => {
-          const el = document.querySelector('[data-opencli-ref="' + ${safeIndex} + '"]');
-          if (!el) return false;
-          const role = el.getAttribute('role');
-          const ac = el.getAttribute('aria-autocomplete');
-          const list = el.getAttribute('list');
-          return role === 'combobox' || ac === 'list' || ac === 'both' || !!list;
-        })()
-      `);
+      // __resolved is already set by typeText's resolver call
+      const isAutocomplete = await page.evaluate(isAutocompleteResolvedJs());
       if (isAutocomplete) {
         await page.wait(0.4);
         console.log(`Typed "${text}" into autocomplete [${index}] — use state to see suggestions`);
@@ -454,20 +459,8 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
   browser.command('select').argument('<index>', 'Element index of <select>').argument('<option>', 'Option text')
     .description('Select dropdown option')
     .action(browserAction(async (page, index, option) => {
-      const safeIdx = JSON.stringify(String(index));
-      const result = await page.evaluate(`
-        (function() {
-          var sel = document.querySelector('[data-opencli-ref="' + ${safeIdx} + '"]');
-          if (!sel || sel.tagName !== 'SELECT') return { error: 'Not a <select>' };
-          var match = Array.from(sel.options).find(o => o.text.trim() === ${JSON.stringify(option)} || o.value === ${JSON.stringify(option)});
-          if (!match) return { error: 'Option not found', available: Array.from(sel.options).map(o => o.text.trim()) };
-          var setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-          if (setter) setter.call(sel, match.value); else sel.value = match.value;
-          sel.dispatchEvent(new Event('input', {bubbles:true}));
-          sel.dispatchEvent(new Event('change', {bubbles:true}));
-          return { selected: match.text };
-        })()
-      `) as { error?: string; selected?: string; available?: string[] } | null;
+      await resolveRef(page, String(index));
+      const result = await page.evaluate(selectResolvedJs(option)) as { error?: string; selected?: string; available?: string[] } | null;
       if (result?.error) {
         console.error(`Error: ${result.error}${result.available ? ` — Available: ${result.available.join(', ')}` : ''}`);
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
