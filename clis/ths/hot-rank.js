@@ -12,7 +12,7 @@ cli({
   args: [
     { name: 'limit', type: 'int', default: 20, help: '返回数量' },
   ],
-  columns: ['rank', 'symbol', 'name', 'changePercent', 'heat', 'tags', 'url'],
+  columns: ['rank', 'name', 'changePercent', 'heat', 'tags'],
   func: async (page, kwargs) => {
     await page.goto(THS_HOT_URL);
     await page.wait({ timeout: 15000 });
@@ -34,12 +34,10 @@ cli({
           const rankEl = row.querySelector('div.THSMF-M.bold');
           results.push({
             rank: cleanText(rankEl) || String(idx + 1),
-            symbol: '',
             name,
             changePercent: cleanText(row.querySelector('div.range')),
             heat: cleanText(row.querySelector('div.col4 > span')),
             tags,
-            url: '',
           });
         });
         return results;

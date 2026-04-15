@@ -13,6 +13,7 @@ describe('ths hot-rank command', () => {
       domain: 'eq.10jqka.com.cn',
       navigateBefore: true,
     });
+    expect(command.columns).toEqual(['rank', 'name', 'changePercent', 'heat', 'tags']);
   });
 
   it('includes tags column', () => {
@@ -23,7 +24,7 @@ describe('ths hot-rank command', () => {
   it('returns hot stock data with tags field', async () => {
     const command = getRegistry().get('ths/hot-rank');
     const mockData = [
-      { rank: 1, symbol: '002580', name: '圣阳股份', price: '15.20', changePercent: '+10.00%', heat: '28.5万', tags: '动力电池回收,钠离子电池', url: 'https://stockpage.10jqka.com.cn/002580/' },
+      { rank: 1, name: '圣阳股份', changePercent: '+10.00%', heat: '28.5万', tags: '动力电池回收,钠离子电池' },
     ];
     const page = {
       goto: vi.fn().mockResolvedValue(undefined),
@@ -33,13 +34,13 @@ describe('ths hot-rank command', () => {
     const result = await command.func(page, { limit: 20 });
     expect(result).toHaveLength(1);
     expect(result[0].tags).toBe('动力电池回收,钠离子电池');
-    expect(result[0].symbol).toBe('002580');
+    expect(result[0].name).toBe('圣阳股份');
   });
 
   it('respects the limit parameter', async () => {
     const command = getRegistry().get('ths/hot-rank');
     const mockData = Array.from({ length: 30 }, (_, i) => ({
-      rank: i + 1, symbol: `${i}`, name: `stock${i}`, price: '0', changePercent: '0%', heat: '0', tags: '', url: '',
+      rank: i + 1, name: `stock${i}`, changePercent: '0%', heat: '0', tags: '',
     }));
     const page = {
       goto: vi.fn().mockResolvedValue(undefined),

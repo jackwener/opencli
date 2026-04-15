@@ -13,13 +13,14 @@ describe('tdx hot-rank command', () => {
       domain: 'pul.tdx.com.cn',
       navigateBefore: true,
     });
+    expect(command.columns).toEqual(['rank', 'symbol', 'name', 'changePercent', 'heat', 'tags']);
   });
 
   it('returns hot stock data from the page', async () => {
     const command = getRegistry().get('tdx/hot-rank');
     const mockData = [
-      { rank: 1, symbol: '600519', name: '贵州茅台', price: '1680.00', changePercent: '+2.35%', heat: '1285', url: '' },
-      { rank: 2, symbol: '000001', name: '平安银行', price: '12.50', changePercent: '-0.80%', heat: '856', url: '' },
+      { rank: 1, symbol: '600519', name: '贵州茅台', changePercent: '+2.35%', heat: '1285', tags: '白酒', },
+      { rank: 2, symbol: '000001', name: '平安银行', changePercent: '-0.80%', heat: '856', tags: '银行', },
     ];
     const page = {
       goto: vi.fn().mockResolvedValue(undefined),
@@ -34,7 +35,7 @@ describe('tdx hot-rank command', () => {
   it('respects the limit parameter', async () => {
     const command = getRegistry().get('tdx/hot-rank');
     const mockData = Array.from({ length: 30 }, (_, i) => ({
-      rank: i + 1, symbol: `${i}`, name: `stock${i}`, price: '0', changePercent: '0%', heat: '0', url: '',
+      rank: i + 1, symbol: `${i}`, name: `stock${i}`, changePercent: '0%', heat: '0', tags: '',
     }));
     const page = {
       goto: vi.fn().mockResolvedValue(undefined),

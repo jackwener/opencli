@@ -12,7 +12,7 @@ cli({
   args: [
     { name: 'limit', type: 'int', default: 20, help: '返回数量' },
   ],
-  columns: ['rank', 'symbol', 'name', 'price', 'changePercent', 'heat', 'tags', 'url'],
+  columns: ['rank', 'symbol', 'name', 'changePercent', 'heat', 'tags'],
   func: async (page, kwargs) => {
     await page.goto(TDX_HOT_URL);
     await page.wait({ timeout: 15000 });
@@ -33,11 +33,9 @@ cli({
             rank: idx + 1,
             symbol,
             name,
-            price: '',
             changePercent: cleanText(cell.querySelector('div.top-zf')),
             heat: cleanText(cell.querySelector('div.hotN')),
             tags,
-            url: '',
           });
         });
         return results;
