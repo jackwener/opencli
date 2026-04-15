@@ -205,6 +205,7 @@ To load the source Browser Bridge extension:
 | **xiaoe** | `courses` `detail` `catalog` `play-url` `content` |
 | **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` |
 | **uiverse** | `code` `preview` |
+| **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` |
 
 87+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
 

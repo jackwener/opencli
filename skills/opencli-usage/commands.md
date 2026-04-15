@@ -757,6 +757,27 @@ opencli xiaoyuzhou podcast-episodes 12345 # 播客剧集列表 (id positional)
 opencli xiaoyuzhou episode 12345          # 单集详情 (id positional)
 ```
 
+## Nowcoder (牛客网) ✅🌐
+
+```bash
+opencli nowcoder hot --limit 10                # 热搜榜（公开）
+opencli nowcoder trending --limit 10           # 热门帖子（公开）
+opencli nowcoder topics --limit 10             # 热门话题（公开）
+opencli nowcoder recommend --limit 15          # 推荐内容流（公开）
+opencli nowcoder creators --limit 10           # 创作者榜单（公开）
+opencli nowcoder companies --job 11002         # 热门面经公司（公开）
+opencli nowcoder jobs                          # 岗位分类（公开）
+opencli nowcoder search "java" --type post     # 全文搜索（需登录）
+opencli nowcoder suggest "java"                # 搜索联想（需登录）
+opencli nowcoder experience --limit 10         # 面经帖子（需登录）
+opencli nowcoder referral --limit 10           # 内推帖子（需登录）
+opencli nowcoder salary --limit 10             # 薪资爆料（需登录）
+opencli nowcoder papers --job 11002 --company 239  # 题库（需登录）
+opencli nowcoder practice --job 11226 --limit 10   # 练习题（需登录）
+opencli nowcoder notifications                 # 未读消息摘要（需登录）
+opencli nowcoder detail 2b6b64d4adb34ea3838e832ae4447ab1  # 帖子详情（需登录）
+```
+
 ## Xueqiu (雪球) 🌐
 
 ```bash

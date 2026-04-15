@@ -208,6 +208,7 @@ npm link
 | **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` | 浏览器 |
 | **uiverse** | `code` `preview` | 浏览器 |
 | **apple-podcasts** | `search` `episodes` `top` | 公开 |
+| **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` | 公开 / 浏览器 |
 | **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` | 公开 |
 | **zhihu** | `hot` `search` `question` `download` `follow` `like` `favorite` `comment` `answer` | 浏览器 |
 | **weixin** | `download` | 浏览器 |

@@ -9932,6 +9932,499 @@
     "sourceFile": "notion/write.js"
   },
   {
+    "site": "nowcoder",
+    "name": "companies",
+    "description": "Hot companies for interview prep",
+    "domain": "www.nowcoder.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "job",
+        "type": "str",
+        "default": "11002",
+        "required": false,
+        "help": "Job ID (11002=Java, 11003=C++, 11200=Backend, 11203=QA, 11201=Frontend)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "company",
+      "companyId"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/companies.js",
+    "sourceFile": "nowcoder/companies.js"
+  },
+  {
+    "site": "nowcoder",
+    "name": "creators",
+    "description": "Top content creators leaderboard",
+    "domain": "www.nowcoder.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "nickname",
+      "school",
+      "level",
+      "heat",
+      "tag"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/creators.js",
+    "sourceFile": "nowcoder/creators.js"
+  },
+  {
+    "site": "nowcoder",
+    "name": "detail",
+    "description": "Post detail view (supports ID / UUID / URL)",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Post ID, UUID, or URL"
+      }
+    ],
+    "columns": [
+      "title",
+      "author",
+      "school",
+      "content",
+      "likes",
+      "comments",
+      "views",
+      "time",
+      "location"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/detail.js",
+    "sourceFile": "nowcoder/detail.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "experience",
+    "description": "Interview experience posts",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Page number"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 15,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "author",
+      "school",
+      "likes",
+      "comments",
+      "views",
+      "id"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/experience.js",
+    "sourceFile": "nowcoder/experience.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "hot",
+    "description": "Hot search ranking",
+    "domain": "www.nowcoder.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "heat"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/hot.js",
+    "sourceFile": "nowcoder/hot.js"
+  },
+  {
+    "site": "nowcoder",
+    "name": "jobs",
+    "description": "Career category listing",
+    "domain": "www.nowcoder.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [],
+    "columns": [
+      "id",
+      "career",
+      "learners"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/jobs.js",
+    "sourceFile": "nowcoder/jobs.js"
+  },
+  {
+    "site": "nowcoder",
+    "name": "notifications",
+    "description": "Unread message summary",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [],
+    "columns": [
+      "type",
+      "unread"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/notifications.js",
+    "sourceFile": "nowcoder/notifications.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "papers",
+    "description": "Interview question bank by company and job",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "job",
+        "type": "str",
+        "default": "11002",
+        "required": false,
+        "help": "Job ID (11002=Java, 11003=C++, 11200=Backend, 11203=QA, 11201=Frontend)"
+      },
+      {
+        "name": "company",
+        "type": "str",
+        "default": "",
+        "required": false,
+        "help": "Company ID (e.g. 139=Baidu, 138=Tencent, 239=Huawei)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "company",
+      "practitioners"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/papers.js",
+    "sourceFile": "nowcoder/papers.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "practice",
+    "description": "Categorized practice questions with progress",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "job",
+        "type": "str",
+        "default": "11226",
+        "required": false,
+        "help": "Career ID (11226=Software, 11227=Hardware, 11229=Product, 11230=Finance)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "category",
+      "subject",
+      "total",
+      "done",
+      "remaining"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/practice.js",
+    "sourceFile": "nowcoder/practice.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "recommend",
+    "description": "Recommended feed",
+    "domain": "www.nowcoder.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Page number"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 15,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "author",
+      "likes",
+      "comments",
+      "views",
+      "id"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/recommend.js",
+    "sourceFile": "nowcoder/recommend.js"
+  },
+  {
+    "site": "nowcoder",
+    "name": "referral",
+    "description": "Internal referral posts",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Page number"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 15,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "author",
+      "school",
+      "likes",
+      "comments",
+      "views",
+      "id"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/referral.js",
+    "sourceFile": "nowcoder/referral.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "salary",
+    "description": "Salary disclosure posts",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Page number"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 15,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "author",
+      "school",
+      "likes",
+      "comments",
+      "views",
+      "id"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/salary.js",
+    "sourceFile": "nowcoder/salary.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "search",
+    "description": "Full-text search",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search keyword"
+      },
+      {
+        "name": "type",
+        "type": "str",
+        "default": "all",
+        "required": false,
+        "help": "Search type (all/post/question/user/job)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "author",
+      "school",
+      "content",
+      "id"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/search.js",
+    "sourceFile": "nowcoder/search.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "suggest",
+    "description": "Search suggestions",
+    "domain": "www.nowcoder.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search keyword"
+      }
+    ],
+    "columns": [
+      "rank",
+      "suggestion",
+      "type"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/suggest.js",
+    "sourceFile": "nowcoder/suggest.js",
+    "navigateBefore": "https://www.nowcoder.com"
+  },
+  {
+    "site": "nowcoder",
+    "name": "topics",
+    "description": "Hot discussion topics",
+    "domain": "www.nowcoder.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "topic",
+      "views",
+      "posts",
+      "heat",
+      "id"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/topics.js",
+    "sourceFile": "nowcoder/topics.js"
+  },
+  {
+    "site": "nowcoder",
+    "name": "trending",
+    "description": "Trending posts",
+    "domain": "www.nowcoder.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of items"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "heat",
+      "id"
+    ],
+    "type": "js",
+    "modulePath": "nowcoder/trending.js",
+    "sourceFile": "nowcoder/trending.js"
+  },
+  {
     "site": "ones",
     "name": "login",
     "description": "ONES Project API — login via Chrome Bridge (POST auth/login); stderr prints export hints for ONES_USER_ID / TOKEN",
