@@ -5140,6 +5140,36 @@
     "sourceFile": "douyin/videos.js"
   },
   {
+    "site": "eastmoney",
+    "name": "hot-rank",
+    "description": "东方财富热股榜",
+    "domain": "guba.eastmoney.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量"
+      }
+    ],
+    "columns": [
+      "rank",
+      "symbol",
+      "name",
+      "price",
+      "changePercent",
+      "heat",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/hot-rank.js",
+    "sourceFile": "eastmoney/hot-rank.js",
+    "navigateBefore": true
+  },
+  {
     "site": "facebook",
     "name": "add-friend",
     "description": "Send a friend request on Facebook",
@@ -12497,6 +12527,63 @@
     "modulePath": "taobao/search.js",
     "sourceFile": "taobao/search.js",
     "navigateBefore": false
+  },
+  {
+    "site": "tdx",
+    "name": "hot-rank",
+    "description": "通达信热搜榜",
+    "domain": "pul.tdx.com.cn",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量"
+      }
+    ],
+    "columns": [
+      "rank",
+      "symbol",
+      "name",
+      "changePercent",
+      "heat",
+      "tags"
+    ],
+    "type": "js",
+    "modulePath": "tdx/hot-rank.js",
+    "sourceFile": "tdx/hot-rank.js",
+    "navigateBefore": true
+  },
+  {
+    "site": "ths",
+    "name": "hot-rank",
+    "description": "同花顺热股榜",
+    "domain": "eq.10jqka.com.cn",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量"
+      }
+    ],
+    "columns": [
+      "rank",
+      "name",
+      "changePercent",
+      "heat",
+      "tags"
+    ],
+    "type": "js",
+    "modulePath": "ths/hot-rank.js",
+    "sourceFile": "ths/hot-rank.js",
+    "navigateBefore": true
   },
   {
     "site": "tieba",
