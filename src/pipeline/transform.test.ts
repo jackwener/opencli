@@ -72,14 +72,14 @@ describe('stepMap', () => {
     ]);
   });
 
-  it('keeps original root data available when inline select narrows items', async () => {
+  it('keeps data bound to the selected source and exposes root separately', async () => {
     const result = await stepMap(null, {
       select: 'bids',
-      bid_price: '${{ item[0] }}',
-      ask_price: '${{ data.asks[index][0] }}',
+      bid_price: '${{ data[index][0] }}',
+      ask_price: '${{ root.asks[index][0] }}',
     }, {
       bids: [['100', '2'], ['99', '3']],
-      asks: [['101', '4'], ['102', '5']],
+      asks: [['101', '1'], ['102', '4']],
     }, {});
 
     expect(result).toEqual([
