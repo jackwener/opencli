@@ -19,7 +19,7 @@ import { PKG_VERSION } from './version.js';
 import { printCompletionScript } from './completion.js';
 import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
 import { registerAllCommands } from './commanderAdapter.js';
-import { EXIT_CODES, getErrorMessage } from './errors.js';
+import { EXIT_CODES, getErrorMessage, BrowserConnectError } from './errors.js';
 import { TargetError } from './browser/target-errors.js';
 import { resolveTargetJs, getTextResolvedJs, getValueResolvedJs, getAttributesResolvedJs, selectResolvedJs, isAutocompleteResolvedJs } from './browser/target-resolver.js';
 import { daemonStop } from './commands/daemon.js';
@@ -311,11 +311,9 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         const page = await getBrowserPage();
         await fn(page, ...args);
       } catch (err) {
-        const msg = getErrorMessage(err);
-        if (msg.includes('Extension not connected') || msg.includes('Daemon')) {
-          log.error(`Browser not connected. Try: opencli daemon stop && opencli doctor`);
-        } else if (msg.includes('attach failed') || msg.includes('chrome-extension://')) {
-          log.error(`Browser attach failed — another extension may be interfering. Try disabling 1Password.`);
+        if (err instanceof BrowserConnectError) {
+          log.error(err.message);
+          if (err.hint) log.error(`Hint: ${err.hint}`);
         } else if (err instanceof TargetError) {
           log.error(`[${err.code}] ${err.message}`);
           if (err.hint) log.error(`Hint: ${err.hint}`);
@@ -324,7 +322,12 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
             err.candidates.forEach((c, i) => log.error(`  ${i + 1}. ${c}`));
           }
         } else {
-          log.error(msg);
+          const msg = getErrorMessage(err);
+          if (msg.includes('attach failed') || msg.includes('chrome-extension://')) {
+            log.error(`Browser attach failed — another extension may be interfering. Try disabling 1Password.`);
+          } else {
+            log.error(msg);
+          }
         }
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
