@@ -22,7 +22,7 @@ import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage, BrowserConnectError } from './errors.js';
 import { TargetError } from './browser/target-errors.js';
 import { resolveTargetJs, getTextResolvedJs, getValueResolvedJs, getAttributesResolvedJs, selectResolvedJs, isAutocompleteResolvedJs } from './browser/target-resolver.js';
-import { daemonStop } from './commands/daemon.js';
+import { daemonStatus, daemonStop } from './commands/daemon.js';
 import { log } from './logger.js';
 
 const CLI_FILE = fileURLToPath(import.meta.url);
@@ -1058,6 +1058,10 @@ cli({
 
   // ── Built-in: daemon ──────────────────────────────────────────────────────
   const daemonCmd = program.command('daemon').description('Manage the opencli daemon');
+  daemonCmd
+    .command('status')
+    .description('Show daemon status')
+    .action(async () => { await daemonStatus(); });
   daemonCmd
     .command('stop')
     .description('Stop the daemon')
