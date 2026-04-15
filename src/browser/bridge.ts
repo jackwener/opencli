@@ -12,6 +12,7 @@ import { Page } from './page.js';
 import { getDaemonHealth, requestDaemonShutdown } from './daemon-client.js';
 import { DEFAULT_DAEMON_PORT } from '../constants.js';
 import { BrowserConnectError } from '../errors.js';
+import { PKG_VERSION } from '../version.js';
 
 const DAEMON_SPAWN_TIMEOUT = 10000; // 10s to wait for daemon + extension
 
@@ -66,22 +67,37 @@ export class BrowserBridge implements IBrowserFactory {
     // Fast path: everything ready
     if (health.state === 'ready') return;
 
-    // Daemon running but no extension — wait, then auto-restart daemon if still disconnected
+    // Daemon running but no extension
     if (health.state === 'no-extension') {
-      if (process.env.OPENCLI_VERBOSE || process.stderr.isTTY) {
-        process.stderr.write('⏳ Waiting for Chrome/Chromium extension to connect...\n');
-        process.stderr.write('   Make sure Chrome or Chromium is open and the OpenCLI extension is enabled.\n');
-      }
-      if (await this._pollUntilReady(timeoutMs)) return;
+      // Check if daemon is stale (version mismatch = started by older CLI)
+      const daemonVersion = health.status?.daemonVersion;
+      const isStale = daemonVersion && daemonVersion !== PKG_VERSION;
 
-      // Extension still not connected — restart the daemon to give the extension
-      // a fresh WebSocket endpoint (fixes stale daemon that missed extension registration)
-      if (process.env.OPENCLI_VERBOSE || process.stderr.isTTY) {
-        process.stderr.write('⚠️  Extension not responding. Restarting daemon...\n');
+      if (isStale) {
+        // Stale daemon — restart it so extension gets a fresh WebSocket endpoint
+        if (process.env.OPENCLI_VERBOSE || process.stderr.isTTY) {
+          process.stderr.write(`⚠️  Stale daemon detected (v${daemonVersion} ≠ v${PKG_VERSION}). Restarting...\n`);
+        }
+        await requestDaemonShutdown();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Fall through to the "No daemon — spawn one" path below
+      } else {
+        // Same version — wait for extension to connect
+        if (process.env.OPENCLI_VERBOSE || process.stderr.isTTY) {
+          process.stderr.write('⏳ Waiting for Chrome/Chromium extension to connect...\n');
+          process.stderr.write('   Make sure Chrome or Chromium is open and the OpenCLI extension is enabled.\n');
+        }
+        if (await this._pollUntilReady(timeoutMs)) return;
+        throw new BrowserConnectError(
+          'Browser Bridge extension not connected',
+          'Make sure Chrome/Chromium is open and the extension is enabled.\n' +
+          'If the extension is installed, try: opencli daemon stop && opencli doctor\n' +
+          'If not installed:\n' +
+          '  1. Download: https://github.com/jackwener/opencli/releases\n' +
+          '  2. Open chrome://extensions → Developer Mode → Load unpacked',
+          'extension-not-connected',
+        );
       }
-      await requestDaemonShutdown();
-      await new Promise(resolve => setTimeout(resolve, 500));
-      // Fall through to the "No daemon — spawn one" path below
     }
 
     // No daemon — spawn one

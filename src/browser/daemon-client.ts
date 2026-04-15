@@ -65,6 +65,7 @@ export interface DaemonStatus {
   ok: boolean;
   pid: number;
   uptime: number;
+  daemonVersion?: string;
   extensionConnected: boolean;
   extensionVersion?: string;
   extensionCompatRange?: string;
