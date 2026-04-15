@@ -15582,6 +15582,55 @@
   },
   {
     "site": "xiaoyuzhou",
+    "name": "transcript",
+    "description": "Download Xiaoyuzhou transcript as JSON and text (requires local credentials)",
+    "domain": "www.xiaoyuzhoufm.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Episode ID (eid from podcast-episodes output)"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "./xiaoyuzhou-transcripts",
+        "required": false,
+        "help": "Output directory"
+      },
+      {
+        "name": "json",
+        "type": "boolean",
+        "default": true,
+        "required": false,
+        "help": "Save transcript JSON file"
+      },
+      {
+        "name": "text",
+        "type": "boolean",
+        "default": true,
+        "required": false,
+        "help": "Save extracted transcript text file"
+      }
+    ],
+    "columns": [
+      "title",
+      "podcast",
+      "status",
+      "segments",
+      "json_file",
+      "text_file"
+    ],
+    "type": "js",
+    "modulePath": "xiaoyuzhou/transcript.js",
+    "sourceFile": "xiaoyuzhou/transcript.js"
+  },
+  {
+    "site": "xiaoyuzhou",
     "name": "episode",
     "description": "View details of a Xiaoyuzhou podcast episode",
     "domain": "www.xiaoyuzhoufm.com",

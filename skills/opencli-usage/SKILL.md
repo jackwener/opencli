@@ -126,7 +126,7 @@ Type legend: 🌐 = Browser (needs Chrome login) · ✅ = Public API (no browser
 | **xianyu** | 🌐 | `search` `item` `chat` |
 | **xiaoe** | 🌐 | `courses` `catalog` `content` `detail` `play-url` |
 | **xiaohongshu** | 🌐 | `search` `notifications` `feed` `user` `note` `comments` `download` `publish` `creator-notes` `creator-note-detail` `creator-notes-summary` `creator-profile` `creator-stats` |
-| **xiaoyuzhou** | ✅ | `podcast` `podcast-episodes` `episode` `download` |
+| **xiaoyuzhou** | ✅ | `podcast` `podcast-episodes` `episode` `download` `transcript*` |
 | **xueqiu** | 🌐 | `hot-stock` `stock` `watchlist` `feed` `hot` `search` `comments` `earnings-date` `fund-holdings` `fund-snapshot` |
 | **yahoo-finance** | 🌐 | `quote` |
 | **yollomi** | 🌐 | `models` `generate` `video` `upload` `remove-bg` `edit` `background` `face-swap` `object-remover` `restore` `try-on` `upscale` |
@@ -134,6 +134,8 @@ Type legend: 🌐 = Browser (needs Chrome login) · ✅ = Public API (no browser
 | **yuanbao** | 🌐 | `new` `ask` |
 | **zhihu** | 🌐 | `hot` `search` `question` |
 | **zsxq** | 🌐 | `groups` `dynamics` `topics` `topic` `search` |
+
+`*` `opencli xiaoyuzhou transcript` requires local Xiaoyuzhou credentials in `~/.opencli/xiaoyuzhou.json`, or `XY_ACCESS_TOKEN` / `XY_REFRESH_TOKEN`.
 
 ### Desktop Apps (CDP/Electron)
 

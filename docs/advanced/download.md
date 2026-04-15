@@ -10,7 +10,7 @@ OpenCLI supports downloading images, videos, and articles from supported platfor
 | **bilibili** | Videos | Requires `yt-dlp` installed |
 | **twitter** | Images, Videos | Downloads from user media tab or single tweet |
 | **douban** | Images | Downloads poster / still image lists from movie subjects |
-| **xiaoyuzhou** | Audio | Downloads episode audio from public episode payloads |
+| **xiaoyuzhou** | Audio, Transcript | Downloads episode audio from public pages and transcript JSON/text with local credentials |
 | **zhihu** | Articles (Markdown) | Exports articles with optional image download |
 | **weixin** | Articles (Markdown) | Exports WeChat Official Account articles |
 
@@ -48,6 +48,9 @@ opencli douban download 30382501 --output ./douban
 # Download Xiaoyuzhou episode audio
 opencli xiaoyuzhou download 69b3b675772ac2295bfc01d0 --output ./xiaoyuzhou
 
+# Download Xiaoyuzhou transcript JSON + text
+opencli xiaoyuzhou transcript 69dd0c98e2c8be31551f6a33 --output ./xiaoyuzhou-transcripts
+
 # Export Zhihu article to Markdown
 opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --output ./zhihu
 
@@ -57,6 +60,8 @@ opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --download-images
 # Export WeChat article to Markdown
 opencli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output ./weixin
 ```
+
+`opencli xiaoyuzhou transcript` requires local Xiaoyuzhou credentials in `~/.opencli/xiaoyuzhou.json`, or `XY_ACCESS_TOKEN` / `XY_REFRESH_TOKEN`.
 
 ## Pipeline Step
 
