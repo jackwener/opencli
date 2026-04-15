@@ -211,7 +211,7 @@ npm link
 | **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` | 公开 |
 | **zhihu** | `hot` `search` `question` `download` `follow` `like` `favorite` `comment` `answer` | 浏览器 |
 | **weixin** | `download` | 浏览器 |
-| **youtube** | `search` `video` `transcript` | 浏览器 |
+| **youtube** | `search` `video` `transcript` `comments` `channel` `playlist` `feed` `history` `watch-later` `subscriptions` `like` `unlike` `subscribe` `unsubscribe` | 浏览器 |
 | **boss** | `search` `detail` `recommend` `joblist` `greet` `batchgreet` `send` `chatlist` `chatmsg` `invite` `mark` `exchange` `resume` `stats` | 浏览器 |
 | **coupang** | `search` `add-to-cart` | 浏览器 |
 | **bbc** | `news` | 公共 API |
