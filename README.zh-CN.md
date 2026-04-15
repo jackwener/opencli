@@ -268,7 +268,7 @@ npm link
 
 87+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
 
-`*` `opencli xiaoyuzhou transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`，或 `XY_ACCESS_TOKEN` / `XY_REFRESH_TOKEN`。
+`*` `opencli xiaoyuzhou transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`。
 
 ### 外部 CLI 枢纽
 
@@ -377,7 +377,7 @@ opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --download-images
 opencli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output ./weixin
 ```
 
-`opencli xiaoyuzhou transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`，或 `XY_ACCESS_TOKEN` / `XY_REFRESH_TOKEN`。
+`opencli xiaoyuzhou transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`。
 
 
 

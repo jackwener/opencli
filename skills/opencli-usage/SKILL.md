@@ -135,7 +135,7 @@ Type legend: 🌐 = Browser (needs Chrome login) · ✅ = Public API (no browser
 | **zhihu** | 🌐 | `hot` `search` `question` |
 | **zsxq** | 🌐 | `groups` `dynamics` `topics` `topic` `search` |
 
-`*` `opencli xiaoyuzhou transcript` requires local Xiaoyuzhou credentials in `~/.opencli/xiaoyuzhou.json`, or `XY_ACCESS_TOKEN` / `XY_REFRESH_TOKEN`.
+`*` `opencli xiaoyuzhou transcript` requires local Xiaoyuzhou credentials in `~/.opencli/xiaoyuzhou.json`.
 
 ### Desktop Apps (CDP/Electron)
 

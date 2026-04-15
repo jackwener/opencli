@@ -40,7 +40,7 @@ opencli xiaoyuzhou transcript 69dd0c98e2c8be31551f6a33 -v
 ## Prerequisites
 
 - No browser required — uses public episode pages
-- `transcript` requires local Xiaoyuzhou app credentials in `~/.opencli/xiaoyuzhou.json`, or `XY_ACCESS_TOKEN` / `XY_REFRESH_TOKEN` env vars for bootstrap
+- `transcript` requires local Xiaoyuzhou app credentials in `~/.opencli/xiaoyuzhou.json`
 
 Example credential file:
 

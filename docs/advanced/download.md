@@ -61,7 +61,7 @@ opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --download-images
 opencli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output ./weixin
 ```
 
-`opencli xiaoyuzhou transcript` requires local Xiaoyuzhou credentials in `~/.opencli/xiaoyuzhou.json`, or `XY_ACCESS_TOKEN` / `XY_REFRESH_TOKEN`.
+`opencli xiaoyuzhou transcript` requires local Xiaoyuzhou credentials in `~/.opencli/xiaoyuzhou.json`.
 
 ## Pipeline Step
 

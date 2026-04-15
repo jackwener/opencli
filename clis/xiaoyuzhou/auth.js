@@ -19,7 +19,7 @@ export function getXiaoyuzhouCredentialFile() {
 }
 
 function createXiaoyuzhouAuthError(message) {
-    return new CliError('AUTH_REQUIRED', message, `Update ${getXiaoyuzhouCredentialFile()} with fresh Xiaoyuzhou credentials, or export XY_ACCESS_TOKEN and XY_REFRESH_TOKEN before retrying.`, EXIT_CODES.NOPERM);
+    return new CliError('AUTH_REQUIRED', message, `Update ${getXiaoyuzhouCredentialFile()} with fresh Xiaoyuzhou credentials before retrying.`, EXIT_CODES.NOPERM);
 }
 
 function coerceNumber(value) {
@@ -68,7 +68,7 @@ export function loadXiaoyuzhouCredentials(env = process.env) {
             const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
             const credentials = normalizeXiaoyuzhouCredentials(parsed);
             if (!credentials.access_token || !credentials.refresh_token) {
-                throw new ConfigError(`Xiaoyuzhou credential file is missing access_token or refresh_token: ${filePath}`, 'Recreate the file with valid credentials, or remove it and use XY_ACCESS_TOKEN / XY_REFRESH_TOKEN env vars.');
+                throw new ConfigError(`Xiaoyuzhou credential file is missing access_token or refresh_token: ${filePath}`, 'Recreate the file with valid credentials.');
             }
             return credentials;
         }
@@ -83,7 +83,7 @@ export function loadXiaoyuzhouCredentials(env = process.env) {
     if (fromEnv) {
         return fromEnv;
     }
-    throw new ConfigError(`Missing Xiaoyuzhou credentials. Expected ${filePath}`, `Create ${filePath} with access_token and refresh_token, or export XY_ACCESS_TOKEN and XY_REFRESH_TOKEN.`);
+    throw new ConfigError(`Missing Xiaoyuzhou credentials. Expected ${filePath}`, `Create ${filePath} with access_token and refresh_token.`);
 }
 
 export function saveXiaoyuzhouCredentials(credentials) {
