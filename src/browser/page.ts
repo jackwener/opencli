@@ -145,6 +145,8 @@ export class Page extends BasePage {
     } finally {
       this._page = undefined;
       this._lastUrl = null;
+      this._networkCaptureUnsupported = false;
+      this._networkCaptureWarned = false;
     }
   }
 
