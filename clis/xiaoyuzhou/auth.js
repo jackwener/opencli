@@ -44,24 +44,7 @@ export function normalizeXiaoyuzhouCredentials(raw = {}) {
         device_properties: String(raw.device_properties ?? raw.deviceProperties ?? XIAOYUZHOU_DEFAULT_DEVICE_PROPERTIES),
     };
 }
-
-export function loadXiaoyuzhouCredentialsFromEnv(env = process.env) {
-    const accessToken = String(env.XY_ACCESS_TOKEN ?? '').trim();
-    const refreshToken = String(env.XY_REFRESH_TOKEN ?? '').trim();
-    if (!accessToken || !refreshToken) {
-        return null;
-    }
-    return normalizeXiaoyuzhouCredentials({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: env.XY_EXPIRES_AT ?? 0,
-        last_updated_ts: env.XY_LAST_UPDATED_TS ?? 0,
-        device_id: env.XY_DEVICE_ID ?? XIAOYUZHOU_DEFAULT_DEVICE_ID,
-        device_properties: env.XY_DEVICE_PROPERTIES ?? XIAOYUZHOU_DEFAULT_DEVICE_PROPERTIES,
-    });
-}
-
-export function loadXiaoyuzhouCredentials(env = process.env) {
+export function loadXiaoyuzhouCredentials() {
     const filePath = getXiaoyuzhouCredentialFile();
     if (fs.existsSync(filePath)) {
         try {
@@ -78,10 +61,6 @@ export function loadXiaoyuzhouCredentials(env = process.env) {
             }
             throw new ConfigError(`Failed to parse Xiaoyuzhou credential file: ${filePath}`, `Ensure ${filePath} contains valid JSON. (${getErrorMessage(error)})`);
         }
-    }
-    const fromEnv = loadXiaoyuzhouCredentialsFromEnv(env);
-    if (fromEnv) {
-        return fromEnv;
     }
     throw new ConfigError(`Missing Xiaoyuzhou credentials. Expected ${filePath}`, `Create ${filePath} with access_token and refresh_token.`);
 }

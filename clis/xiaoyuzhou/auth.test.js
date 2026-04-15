@@ -19,7 +19,7 @@ vi.mock('node:os', () => ({
     homedir: mockHomedir,
 }));
 
-const { extractTranscriptText, getXiaoyuzhouCredentialFile, loadXiaoyuzhouCredentials, loadXiaoyuzhouCredentialsFromEnv, normalizeXiaoyuzhouCredentials, refreshXiaoyuzhouCredentials, requestXiaoyuzhouJson, shouldRefreshXiaoyuzhouCredentials, XIAOYUZHOU_TOKEN_TTL_MS } = await import('./auth.js');
+const { extractTranscriptText, getXiaoyuzhouCredentialFile, loadXiaoyuzhouCredentials, normalizeXiaoyuzhouCredentials, refreshXiaoyuzhouCredentials, requestXiaoyuzhouJson, shouldRefreshXiaoyuzhouCredentials, XIAOYUZHOU_TOKEN_TTL_MS } = await import('./auth.js');
 
 function createJsonResponse(status, payload) {
     return {
@@ -38,34 +38,14 @@ describe('xiaoyuzhou auth helpers', () => {
         vi.useRealTimers();
     });
 
-    it('loads bootstrap credentials from env and derives expiry from XY_LAST_UPDATED_TS', () => {
-        const credentials = loadXiaoyuzhouCredentialsFromEnv({
-            XY_ACCESS_TOKEN: 'access',
-            XY_REFRESH_TOKEN: 'refresh',
-            XY_LAST_UPDATED_TS: '1710000000',
-            XY_DEVICE_ID: 'device-1',
-            XY_DEVICE_PROPERTIES: 'props',
-        });
-        expect(credentials).toEqual({
-            access_token: 'access',
-            refresh_token: 'refresh',
-            expires_at: 1710000000 * 1000 + XIAOYUZHOU_TOKEN_TTL_MS,
-            device_id: 'device-1',
-            device_properties: 'props',
-        });
-    });
-
-    it('loads credential file before env fallback', () => {
+    it('loads credentials from the local credential file', () => {
         mockExistsSync.mockReturnValue(true);
         mockReadFileSync.mockReturnValue(JSON.stringify({
             access_token: 'file-access',
             refresh_token: 'file-refresh',
             expires_at: 123,
         }));
-        const credentials = loadXiaoyuzhouCredentials({
-            XY_ACCESS_TOKEN: 'env-access',
-            XY_REFRESH_TOKEN: 'env-refresh',
-        });
+        const credentials = loadXiaoyuzhouCredentials();
         expect(mockReadFileSync).toHaveBeenCalledWith(getXiaoyuzhouCredentialFile(), 'utf-8');
         expect(credentials.access_token).toBe('file-access');
         expect(credentials.refresh_token).toBe('file-refresh');
