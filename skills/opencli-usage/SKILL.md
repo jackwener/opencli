@@ -130,7 +130,7 @@ Type legend: 🌐 = Browser (needs Chrome login) · ✅ = Public API (no browser
 | **xueqiu** | 🌐 | `hot-stock` `stock` `watchlist` `feed` `hot` `search` `comments` `earnings-date` `fund-holdings` `fund-snapshot` |
 | **yahoo-finance** | 🌐 | `quote` |
 | **yollomi** | 🌐 | `models` `generate` `video` `upload` `remove-bg` `edit` `background` `face-swap` `object-remover` `restore` `try-on` `upscale` |
-| **youtube** | 🌐 | `search` `video` `transcript` |
+| **youtube** | 🌐 | `search` `video` `transcript` `comments` `channel` `playlist` `feed` `history` `watch-later` `subscriptions` `like` `unlike` `subscribe` `unsubscribe` |
 | **yuanbao** | 🌐 | `new` `ask` |
 | **zhihu** | 🌐 | `hot` `search` `question` |
 | **zsxq** | 🌐 | `groups` `dynamics` `topics` `topic` `search` |

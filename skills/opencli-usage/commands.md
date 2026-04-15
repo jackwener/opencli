@@ -797,10 +797,18 @@ opencli yollomi upscale <image-url>      # AI 超分辨率 (1 credit, 支持 --s
 ## YouTube 🌐
 
 ```bash
+opencli youtube feed --limit 10          # 首页推荐
+opencli youtube history --limit 20       # 观看历史
+opencli youtube watch-later --limit 50   # 稍后再看
+opencli youtube subscriptions --limit 30 # 订阅频道列表
 opencli youtube search "rust"            # 搜索视频 (query positional)
 opencli youtube video "https://www.youtube.com/watch?v=xxx"  # 视频元数据
 opencli youtube transcript "https://www.youtube.com/watch?v=xxx"  # 获取视频字幕/转录
 opencli youtube transcript "xxx" --lang zh-Hans --mode raw  # 指定语言 + 原始时间戳模式
+opencli youtube like "https://www.youtube.com/watch?v=xxx"  # 点赞视频
+opencli youtube unlike "xxx"             # 取消点赞
+opencli youtube subscribe "@OpenAI"      # 订阅频道
+opencli youtube unsubscribe "UCxxxxxxxxxxxxxx"  # 取消订阅
 ```
 
 ## Yuanbao (腾讯元宝) 🌐
