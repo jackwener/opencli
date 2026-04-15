@@ -33,7 +33,7 @@ const CONFIRM_EXPORT_BUTTON_SELECTOR =
   '.review .button button:last-of-type';
 
 const SHOPEE_WORKSPACE = 'site:shopee';
-const EXPORT_DOWNLOAD_TIMEOUT_SECONDS = 300;
+const EXPORT_DOWNLOAD_TIMEOUT_SECONDS = 600;
 const EXPORT_DOWNLOAD_TIMEOUT_MS = EXPORT_DOWNLOAD_TIMEOUT_SECONDS * 1000;
 
 type BindCurrentTabFn = (

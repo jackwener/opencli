@@ -10,10 +10,12 @@ import { readShopdoraLoginState, simulateHumanBehavior } from './shared.js';
 type ShopeeField = {
   name: string;
   selector: string;
-  type?: 'text' | 'attribute' | 'list';
+  type?: 'text' | 'attribute' | 'list' | 'labeled_text';
   attribute?: string;
   fields?: ShopeeField[];
-  transform?: 'absolute_url' | 'selected_class' | 'image_src';
+  transform?: 'absolute_url' | 'selected_class' | 'image_src' | 'remove_buttons';
+  lookupLabel?: string;
+  valueSelector?: string;
 };
 
 type ShopeeImageAttributeKey =
@@ -67,15 +69,14 @@ function pickImageUrlFromAttributes(
 }
 
 const PRODUCT_FIELDS: ShopeeField[] = [
-  { name: 'title', selector: 'h1.vR6K3w > span' },
+  { name: 'title', selector: 'h1.vR6K3w > span, h1.vR6K3w', transform: 'remove_buttons' },
   { name: 'rating_score', selector: 'div.F9RHbS.dQEiAI' },
-  { name: 'rating_count_text', selector: 'button.flex.e2p50f:nth-of-type(2) > .F9RHbS' },
-  { name: 'sold_count_text', selector: '.aleSBU > .AcmPRb' },
-  { name: 'current_price_range', selector: '.shopdoraPirceList span' },
-  { name: 'shopee_price', selector: '.jRlVo0 .IZPeQz.B67UQ0' },
-  { name: 'shopdora_price', selector: '.shopdoraPirceList span' },
-  { name: 'original_price', selector: '.ZA5sW5' },
-  { name: 'discount_percentage', selector: '.vms4_3' },
+  { name: 'rating_count', selector: 'button.flex.e2p50f:nth-of-type(2) > .F9RHbS' },
+  { name: 'sold_count', selector: '.aleSBU > .AcmPRb' },
+  { name: 'shopdora_price_range', selector: '.shopdoraPirceList span' },
+  { name: 'shopee_current_price', selector: '.jRlVo0 .IZPeQz.B67UQ0' },
+  { name: 'shopee_original_price', selector: '.ZA5sW5' },
+  { name: 'shopee_discount_percentage', selector: '.vms4_3' },
   {
     name: 'main_image_url',
     selector: '.xxW0BG .HJ5l1F .center.Oj2Oo7 > img.rWN4DK, .xxW0BG .HJ5l1F .center.Oj2Oo7 > img, .UdI7e2 picture img.fMm3P2, .UdI7e2 picture img',
@@ -84,12 +85,12 @@ const PRODUCT_FIELDS: ShopeeField[] = [
     transform: 'image_src',
   },
   {
-    name: 'video_url',
+    name: 'video_urls',
     selector: '.xxW0BG .HJ5l1F .center.Oj2Oo7 video source[src], .xxW0BG .HJ5l1F .center.Oj2Oo7 video[src], .UdI7e2 video source[src], .UdI7e2 video[src], .airUhU .UBG7wZ .YM40Nc video source[src], .airUhU .UBG7wZ .YM40Nc video[src]',
     type: 'list',
     fields: [
       {
-        name: 'video_url',
+        name: 'video_urls',
         selector: '',
         type: 'attribute',
         attribute: 'src',
@@ -98,12 +99,12 @@ const PRODUCT_FIELDS: ShopeeField[] = [
     ],
   },
   {
-    name: 'thumbnail_url',
+    name: 'thumbnail_urls',
     selector: '.airUhU .UBG7wZ .YM40Nc picture img.raRnQV, .airUhU .UBG7wZ .YM40Nc picture img',
     type: 'list',
     fields: [
       {
-        name: 'thumbnail_url',
+        name: 'thumbnail_urls',
         selector: '',
         type: 'attribute',
         attribute: 'src',
@@ -111,23 +112,22 @@ const PRODUCT_FIELDS: ShopeeField[] = [
       },
     ],
   },
-  { name: 'first_variant_name', selector: '.j7HL5Q button:first-of-type span.ZivAAW' },
+  { name: 'first_variant_option_name', selector: '.j7HL5Q button:first-of-type span.ZivAAW' },
   {
-    name: 'first_variant_image_url',
+    name: 'first_variant_option_image_url',
     selector: '.j7HL5Q button:first-of-type picture, .j7HL5Q button:first-of-type img',
     type: 'attribute',
     attribute: 'src',
     transform: 'image_src',
   },
   {
-    name: 'attr_options',
+    name: 'image_variant_options',
     selector: '.j7HL5Q button:has(img)',
     type: 'list',
     fields: [
-      { name: 'name', selector: '.ZivAAW', type: 'text' },
-      { name: 'title', selector: '.ZivAAW', type: 'text' },
-      { name: 'label', selector: '', type: 'attribute', attribute: 'aria-label' },
-      { name: 'image_url', selector: 'picture, img', type: 'attribute', attribute: 'src', transform: 'image_src' },
+      { name: 'option_name', selector: '.ZivAAW', type: 'text' },
+      { name: 'option_aria_label', selector: '', type: 'attribute', attribute: 'aria-label' },
+      { name: 'option_image_url', selector: 'picture, img', type: 'attribute', attribute: 'src', transform: 'image_src' },
       { name: 'is_disabled', selector: '', type: 'attribute', attribute: 'aria-disabled' },
       {
         name: 'is_selected',
@@ -139,13 +139,12 @@ const PRODUCT_FIELDS: ShopeeField[] = [
     ],
   },
   {
-    name: 'spec_options',
+    name: 'text_variant_options',
     selector: '.j7HL5Q button:not(:has(img))',
     type: 'list',
     fields: [
-      { name: 'name', selector: '.ZivAAW', type: 'text' },
-      { name: 'title', selector: '.ZivAAW', type: 'text' },
-      { name: 'label', selector: '', type: 'attribute', attribute: 'aria-label' },
+      { name: 'option_name', selector: '.ZivAAW', type: 'text' },
+      { name: 'option_aria_label', selector: '', type: 'attribute', attribute: 'aria-label' },
       { name: 'is_disabled', selector: '', type: 'attribute', attribute: 'aria-disabled' },
       {
         name: 'is_selected',
@@ -156,31 +155,106 @@ const PRODUCT_FIELDS: ShopeeField[] = [
       },
     ],
   },
-  { name: 'first_sku_price', selector: '.t-table__body tr:first-child td:nth-child(2) p' },
+  { name: 'first_sku_display_price', selector: '.t-table__body tr:first-child td:nth-child(2) p' },
   {
-    name: 'product_title',
-    selector: '.detail-info > .detail-info-list:nth-child(1) > .detail-info-item:nth-child(2) .detail-info-item-main, .detail-info > .detail-info-list:nth-child(1) > .detail-info-item:nth-child(2) .item-main.cursor, .detail-info > .detail-info-list:nth-child(1) > .detail-info-item:nth-child(2) .item-main',
+    name: 'shopee_item_id',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Product ID',
+    valueSelector: '.item-main',
   },
-
-  { name: 'product_id', selector: '.detail-info-list:nth-of-type(1) .detail-info-item:nth-of-type(1) .item-main' },
-  { name: 'seller_name', selector: '.detail-info-list:nth-of-type(1) .detail-info-item:nth-of-type(2) .item-main' },
-  { name: 'seller_source', selector: '.detail-info-list:nth-of-type(1) .detail-info-item:nth-of-type(2) .sellerSourceTips' },
-  { name: 'brand_name', selector: '.detail-info-list:nth-of-type(1) .detail-info-item:nth-of-type(3) .item-main' },
-  { name: 'category', selector: '.detail-info-list:nth-of-type(2) .detail-info-item:nth-of-type(1) .item-main' },
-  { name: 'category_sales_rank', selector: '.detail-info-list:nth-of-type(2) .detail-info-item:nth-of-type(1) .tem-main' },
-
-  { name: 'listing_date', selector: '.detail-info-list:nth-of-type(2) .detail-info-item:nth-of-type(2) .item-main' },
+  {
+    name: 'detail_seller_name',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Seller',
+    valueSelector: '.item-main',
+  },
+  {
+    name: 'detail_seller_source',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Seller',
+    valueSelector: '.sellerSourceTips',
+  },
+  {
+    name: 'brand_name',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Brand',
+    valueSelector: '.item-main',
+  },
+  {
+    name: 'category_name',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Category',
+    valueSelector: '.item-main',
+  },
+  {
+    name: 'category_sales_rank',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Category',
+    valueSelector: '.tem-main',
+  },
+  {
+    name: 'listing_date',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Listing Date',
+    valueSelector: '.item-main',
+  },
   {
     name: 'sales_1d_7d',
-    selector: '.detail-info > .detail-info-list:nth-child(4) > .detail-info-item:nth-child(1) .detail-info-item-main, .detail-info > .detail-info-list:nth-child(4) > .detail-info-item:nth-child(1) .item-main',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Last 1d/7d Sales',
+    valueSelector: '.item-main',
   },
-  { name: 'sales_growth_30d', selector: '.detail-info-list:nth-of-type(3) .detail-info-item:nth-of-type(2) .item-main' },
-  { name: 'sales_30d', selector: '.detail-info-list:nth-of-type(4) .detail-info-item:nth-of-type(1) .item-main' },
-  { name: 'gmv_30d', selector: '.detail-info-list:nth-of-type(4) .detail-info-item:nth-of-type(2) .item-main' },
-  { name: 'total_sales', selector: '.detail-info-list:nth-of-type(5) .detail-info-item:nth-of-type(1) .item-main' },
-  { name: 'total_gmv', selector: '.detail-info-list:nth-of-type(5) .detail-info-item:nth-of-type(2) .item-main' },
-  { name: 'stock', selector: '.detail-info-list:nth-of-type(6) .item-main' },
-  { name: 'shop_name', selector: '#sll2-pdp-product-shop .fV3TIn' },
+  {
+    name: 'sales_growth_30d',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: '30-Day Sales Growth',
+    valueSelector: '.item-main',
+  },
+  {
+    name: 'sales_30d',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: '30-Day Sales',
+    valueSelector: '.item-main',
+  },
+  {
+    name: 'gmv_30d',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: '30-Day GMV',
+    valueSelector: '.item-main',
+  },
+  {
+    name: 'total_sales',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Total Sales',
+    valueSelector: '.item-main',
+  },
+  {
+    name: 'total_gmv',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'GMV',
+    valueSelector: '.item-main',
+  },
+  {
+    name: 'stock',
+    selector: '.detail-info',
+    type: 'labeled_text',
+    lookupLabel: 'Stock',
+    valueSelector: '.item-main',
+  },
+  { name: 'shop_display_name', selector: '#sll2-pdp-product-shop .fV3TIn' },
   {
     name: 'shop_url',
     selector: '#sll2-pdp-product-shop a.lG5Xxv',
@@ -198,8 +272,8 @@ const PRODUCT_FIELDS: ShopeeField[] = [
   { name: 'shop_last_active', selector: '#sll2-pdp-product-shop .mMlpiZ .Fsv0YO' },
   { name: 'shop_rating_count', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(1) .Cs6w3G' },
   { name: 'shop_chat_response_rate', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(2) .Cs6w3G' },
-  { name: 'shop_joined_time', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(3) .Cs6w3G' },
-  { name: 'shop_product_count', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(4) .Cs6w3G' },
+  { name: 'shop_joined_duration', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(3) .Cs6w3G' },
+  { name: 'shop_listing_count', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(4) .Cs6w3G' },
   {
     name: 'shop_product_list_url',
     selector: '#sll2-pdp-product-shop .NGzCXN a.aArpoe',
@@ -207,7 +281,7 @@ const PRODUCT_FIELDS: ShopeeField[] = [
     attribute: 'href',
     transform: 'absolute_url',
   },
-  { name: 'shop_response_speed', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(5) .Cs6w3G' },
+  { name: 'shop_chat_response_speed', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(5) .Cs6w3G' },
   { name: 'shop_follower_count', selector: '#sll2-pdp-product-shop .NGzCXN > :nth-child(6) .Cs6w3G' },
 ];
 
@@ -274,6 +348,7 @@ async function extractProductDetails(page: IPage, productUrl: string): Promise<R
       const fields = ${JSON.stringify(PRODUCT_FIELDS)};
       const baseOrigin = ${JSON.stringify(baseOrigin)};
       const normalizeText = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim();
+      const normalizeLabel = (value) => normalizeText(value).replace(/[:：]/g, '');
       const toScalar = (value) => {
         if (value === null || value === undefined) return '';
         return typeof value === 'string' ? value.trim() : String(value);
@@ -288,6 +363,13 @@ async function extractProductDetails(page: IPage, productUrl: string): Promise<R
         }
         if (field.transform === 'selected_class') {
           return /selection-box-selected/.test(toScalar(value)) ? 'true' : 'false';
+        }
+        if (field.transform === 'remove_buttons' && value instanceof Element) {
+          const clone = value.cloneNode(true);
+          if (clone instanceof Element) {
+            clone.querySelectorAll('button').forEach((node) => node.remove());
+            return normalizeText(clone.textContent || '');
+          }
         }
         return value;
       };
@@ -329,8 +411,40 @@ async function extractProductDetails(page: IPage, productUrl: string): Promise<R
         }
         return toScalar(value) !== '';
       };
+      const pickTargets = (scope, selector) => {
+        if (!selector) return [scope];
+        try {
+          const targets = Array.from(scope.querySelectorAll(selector));
+          return targets.length ? targets : [];
+        } catch {
+          return [];
+        }
+      };
       const extractFieldValue = (scope, field) => {
         const selector = typeof field.selector === 'string' ? field.selector.trim() : '';
+
+        if (field.type === 'labeled_text') {
+          const root = selector ? scope.querySelector(selector) : scope;
+          if (!(root instanceof Element || root instanceof Document)) return '';
+
+          const label = normalizeLabel(field.lookupLabel || '');
+          if (!label) return '';
+
+          const candidates = Array.from(root.querySelectorAll('.detail-info-item'));
+          for (const item of candidates) {
+            const titleNode = item.querySelector('.detail-info-item-title');
+            if (!titleNode) continue;
+            if (normalizeLabel(titleNode.textContent || '') !== label) continue;
+
+            const valueTarget = field.valueSelector
+              ? item.querySelector(field.valueSelector)
+              : item.querySelector('.detail-info-item-main');
+            const value = normalizeText(valueTarget?.textContent || '');
+            if (value) return value;
+          }
+
+          return '';
+        }
 
         if (field.type === 'list') {
           if (!selector) return '';
@@ -352,22 +466,37 @@ async function extractProductDetails(page: IPage, productUrl: string): Promise<R
           return JSON.stringify(items);
         }
 
-        const target = selector ? scope.querySelector(selector) : scope;
-        if (!target) return '';
-
         if (field.type === 'attribute') {
-          if (field.transform === 'image_src') {
-            return extractImageUrl(target);
+          const targets = pickTargets(scope, selector);
+          for (const target of targets) {
+            if (!(target instanceof Element)) continue;
+            if (field.transform === 'image_src') {
+              const value = extractImageUrl(target);
+              if (value) return value;
+              continue;
+            }
+            const attrName = typeof field.attribute === 'string' && field.attribute.trim()
+              ? field.attribute.trim()
+              : target instanceof HTMLAnchorElement
+                ? 'href'
+                : 'src';
+            const value = toScalar(applyTransform(target.getAttribute(attrName) || '', field));
+            if (value) return value;
           }
-          const attrName = typeof field.attribute === 'string' && field.attribute.trim()
-            ? field.attribute.trim()
-            : target instanceof HTMLAnchorElement
-              ? 'href'
-              : 'src';
-          return toScalar(applyTransform(target.getAttribute(attrName) || '', field));
+          return '';
         }
 
-        return normalizeText(applyTransform(target.textContent || '', field));
+        const targets = pickTargets(scope, selector);
+        for (const target of targets) {
+          if (!(target instanceof Element || target instanceof Document)) continue;
+          const rawValue = field.transform === 'remove_buttons'
+            ? applyTransform(target, field)
+            : applyTransform(target.textContent || '', field);
+          const value = normalizeText(rawValue);
+          if (value) return value;
+        }
+
+        return '';
       };
       const row = {};
 
