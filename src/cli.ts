@@ -342,7 +342,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
   browser.command('open').argument('<url>').description('Open URL in automation window')
     .action(browserAction(async (page, url) => {
       // Start session-level capture before navigation (catches initial requests)
-      const hasSessionCapture = await page.startNetworkCapture?.().then(() => true).catch(() => false);
+      const hasSessionCapture = await page.startNetworkCapture?.() ?? false;
       await page.goto(url);
       await page.wait(2);
       // Fallback: inject JS interceptor when session capture is unavailable

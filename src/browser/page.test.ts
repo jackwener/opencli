@@ -83,8 +83,8 @@ describe('Page network capture compatibility', () => {
 
     const page = new Page('site:notebooklm');
 
-    await expect(page.startNetworkCapture()).resolves.toBeUndefined();
-    await expect(page.startNetworkCapture()).resolves.toBeUndefined();
+    await expect(page.startNetworkCapture()).resolves.toBe(false);
+    await expect(page.startNetworkCapture()).resolves.toBe(false);
 
     expect(sendCommandMock).toHaveBeenCalledTimes(1);
     expect(warnMock).toHaveBeenCalledTimes(1);
@@ -126,7 +126,7 @@ describe('Page network capture compatibility', () => {
 
     const page = new Page('site:notebooklm');
 
-    await expect(page.startNetworkCapture()).resolves.toBeUndefined();
+    await expect(page.startNetworkCapture()).resolves.toBe(false);
     await expect(page.readNetworkCapture()).resolves.toEqual([]);
 
     expect(warnMock).toHaveBeenCalledTimes(1);

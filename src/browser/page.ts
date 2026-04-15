@@ -178,16 +178,18 @@ export class Page extends BasePage {
     return base64;
   }
 
-  async startNetworkCapture(pattern: string = ''): Promise<void> {
-    if (this._networkCaptureUnsupported) return;
+  async startNetworkCapture(pattern: string = ''): Promise<boolean> {
+    if (this._networkCaptureUnsupported) return false;
     try {
       await sendCommand('network-capture-start', {
         pattern,
         ...this._cmdOpts(),
       });
+      return true;
     } catch (err) {
       if (!isUnsupportedNetworkCaptureError(err)) throw err;
       this._markUnsupportedNetworkCapture();
+      return false;
     }
   }
 
