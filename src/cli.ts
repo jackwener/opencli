@@ -313,7 +313,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       } catch (err) {
         const msg = getErrorMessage(err);
         if (msg.includes('Extension not connected') || msg.includes('Daemon')) {
-          log.error(`Browser not connected. Run 'opencli doctor' to diagnose.`);
+          log.error(`Browser not connected. Try: opencli daemon stop && opencli doctor`);
         } else if (msg.includes('attach failed') || msg.includes('chrome-extension://')) {
           log.error(`Browser attach failed — another extension may be interfering. Try disabling 1Password.`);
         } else if (err instanceof TargetError) {

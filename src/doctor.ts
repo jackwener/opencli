@@ -133,7 +133,9 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
   } else if (daemonRunning && !extensionConnected) {
     issues.push(
       'Daemon is running but the Chrome/Chromium extension is not connected.\n' +
-      'Please install the opencli Browser Bridge extension:\n' +
+      'If the extension is already installed, the daemon may be stale (started before the extension).\n' +
+      '  Quick fix: opencli daemon stop && opencli doctor\n' +
+      'If the extension is not installed:\n' +
       '  1. Download from https://github.com/jackwener/opencli/releases\n' +
       '  2. Open chrome://extensions/ → Enable Developer Mode\n' +
       '  3. Click "Load unpacked" → select the extension folder',

@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import type { IPage } from '../types.js';
 import type { IBrowserFactory } from '../runtime.js';
 import { Page } from './page.js';
-import { getDaemonHealth } from './daemon-client.js';
+import { getDaemonHealth, requestDaemonShutdown } from './daemon-client.js';
 import { DEFAULT_DAEMON_PORT } from '../constants.js';
 import { BrowserConnectError } from '../errors.js';
 
@@ -66,21 +66,22 @@ export class BrowserBridge implements IBrowserFactory {
     // Fast path: everything ready
     if (health.state === 'ready') return;
 
-    // Daemon running but no extension — wait for extension with progress
+    // Daemon running but no extension — wait, then auto-restart daemon if still disconnected
     if (health.state === 'no-extension') {
       if (process.env.OPENCLI_VERBOSE || process.stderr.isTTY) {
         process.stderr.write('⏳ Waiting for Chrome/Chromium extension to connect...\n');
         process.stderr.write('   Make sure Chrome or Chromium is open and the OpenCLI extension is enabled.\n');
       }
       if (await this._pollUntilReady(timeoutMs)) return;
-      throw new BrowserConnectError(
-        'Browser Bridge extension not connected',
-        'Install the Browser Bridge:\n' +
-        '  1. Download: https://github.com/jackwener/opencli/releases\n' +
-        '  2. In Chrome or Chromium, open chrome://extensions → Developer Mode → Load unpacked\n' +
-        '  Then run: opencli doctor',
-        'extension-not-connected',
-      );
+
+      // Extension still not connected — restart the daemon to give the extension
+      // a fresh WebSocket endpoint (fixes stale daemon that missed extension registration)
+      if (process.env.OPENCLI_VERBOSE || process.stderr.isTTY) {
+        process.stderr.write('⚠️  Extension not responding. Restarting daemon...\n');
+      }
+      await requestDaemonShutdown();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // Fall through to the "No daemon — spawn one" path below
     }
 
     // No daemon — spawn one
@@ -113,10 +114,11 @@ export class BrowserBridge implements IBrowserFactory {
     if (finalHealth.state === 'no-extension') {
       throw new BrowserConnectError(
         'Browser Bridge extension not connected',
-        'Install the Browser Bridge:\n' +
+        'Make sure Chrome/Chromium is open and the extension is enabled.\n' +
+        'If the extension is installed, try: opencli daemon stop && opencli doctor\n' +
+        'If not installed:\n' +
         '  1. Download: https://github.com/jackwener/opencli/releases\n' +
-        '  2. In Chrome or Chromium, open chrome://extensions → Developer Mode → Load unpacked\n' +
-        '  Then run: opencli doctor',
+        '  2. Open chrome://extensions → Developer Mode → Load unpacked',
         'extension-not-connected',
       );
     }
