@@ -65,6 +65,7 @@ Run `opencli list` for the live registry.
 | **[xianyu](./browser/xianyu.md)**           | `search` `item` `chat`                                                                                                                                                                                                                                           | 🔐 Browser                          |
 | **[quark](./browser/quark.md)**             | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree`                                                                                                                                                                                                              | 🔐 Browser                          |
 | **[uiverse](./browser/uiverse.md)**         | `code` `preview`                                                                                                                                                                                                                                                  | 🔐 Browser                          |
+| **[nowcoder](./browser/nowcoder.md)**       | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail`                                                                                              | 🌐 / 🔐                             |
 
 ## Public API Adapters
 
