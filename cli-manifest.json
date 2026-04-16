@@ -5790,5 +5790,369 @@
     ],
     "type": "yaml",
     "sourceFile": "zhihu/search.yaml"
+  },
+  {
+    "site": "maybeai-image-app",
+    "name": "apps",
+    "description": "List normalized MaybeAI image apps and their unified CLI fields",
+    "strategy": "public",
+    "browser": false,
+    "args": [],
+    "columns": [
+      "group",
+      "app",
+      "kind",
+      "title",
+      "inputs",
+      "output"
+    ],
+    "type": "ts",
+    "modulePath": "maybeai-image-app/apps.js",
+    "sourceFile": "maybeai-image-app/apps.ts"
+  },
+  {
+    "site": "maybeai-image-app",
+    "name": "generate",
+    "description": "Generate images by running MaybeAI workflows; prompt generation is handled internally",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "app",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "MaybeAI app id, e.g. gen-main"
+      },
+      {
+        "name": "json",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Inline JSON payload using normalized CLI keys"
+      },
+      {
+        "name": "file",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Path to a JSON payload file"
+      },
+      {
+        "name": "platform",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Target platform, e.g. Amazon, Shopee, XiaoHongShu"
+      },
+      {
+        "name": "image-kind",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Image kind for platform ratio adaptation",
+        "choices": [
+          "main",
+          "scene",
+          "detail",
+          "multi-angle",
+          "model",
+          "social",
+          "story",
+          "edit"
+        ]
+      },
+      {
+        "name": "market",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Target country/region"
+      },
+      {
+        "name": "category",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Product category"
+      },
+      {
+        "name": "ratio",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Override aspect ratio"
+      },
+      {
+        "name": "resolution",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Override resolution"
+      },
+      {
+        "name": "engine",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Override Shell image model"
+      },
+      {
+        "name": "prompt",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Extra generation requirements"
+      },
+      {
+        "name": "task-id",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Optional workflow task id for tracing"
+      }
+    ],
+    "type": "ts",
+    "modulePath": "maybeai-image-app/generate.js",
+    "sourceFile": "maybeai-image-app/generate.ts"
+  },
+  {
+    "site": "maybeai-image-app",
+    "name": "models",
+    "description": "Show MaybeAI image model priority and official supported aspect ratios",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "model",
+        "type": "str",
+        "required": false,
+        "positional": true,
+        "help": "Image model to inspect",
+        "choices": [
+          "google/gemini-3.1-flash-image-preview",
+          "fal-ai/nano-banana-2/edit",
+          "google/gemini-3-pro-image-preview",
+          "fal-ai/nano-banana-pro/edit",
+          "fal-ai/gpt-image-1.5/edit",
+          "fal-ai/qwen-image-edit-2511"
+        ]
+      }
+    ],
+    "type": "ts",
+    "modulePath": "maybeai-image-app/models.js",
+    "sourceFile": "maybeai-image-app/models.ts"
+  },
+  {
+    "site": "maybeai-image-app",
+    "name": "options",
+    "description": "List supported MaybeAI platforms, countries/regions, categories, angles, ratios, resolutions, models, and image kinds",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "kind",
+        "type": "str",
+        "required": false,
+        "positional": true,
+        "help": "Option kind to list",
+        "choices": [
+          "platform",
+          "country",
+          "angle",
+          "category",
+          "ratio",
+          "resolution",
+          "model",
+          "image-kind"
+        ]
+      }
+    ],
+    "type": "ts",
+    "modulePath": "maybeai-image-app/options.js",
+    "sourceFile": "maybeai-image-app/options.ts"
+  },
+  {
+    "site": "maybeai-image-app",
+    "name": "payload",
+    "description": "Build workflow variables from normalized MaybeAI image app CLI input",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "app",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "MaybeAI app id, e.g. gen-main"
+      },
+      {
+        "name": "json",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Inline JSON payload using normalized CLI keys"
+      },
+      {
+        "name": "file",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Path to a JSON payload file"
+      }
+    ],
+    "type": "ts",
+    "modulePath": "maybeai-image-app/payload.js",
+    "sourceFile": "maybeai-image-app/payload.ts"
+  },
+  {
+    "site": "maybeai-image-app",
+    "name": "resolve",
+    "description": "Resolve a MaybeAI image app payload with platform-aware defaults before workflow execution",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "app",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "MaybeAI app id, e.g. gen-main"
+      },
+      {
+        "name": "json",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Inline JSON payload using normalized CLI keys"
+      },
+      {
+        "name": "file",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Path to a JSON payload file"
+      },
+      {
+        "name": "platform",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Target platform, e.g. Amazon, Shopee, XiaoHongShu"
+      },
+      {
+        "name": "image-kind",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Image kind for platform ratio adaptation",
+        "choices": [
+          "main",
+          "scene",
+          "detail",
+          "multi-angle",
+          "model",
+          "social",
+          "story",
+          "edit"
+        ]
+      },
+      {
+        "name": "market",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Target country/region"
+      },
+      {
+        "name": "category",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Product category"
+      },
+      {
+        "name": "ratio",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Override aspect ratio"
+      },
+      {
+        "name": "resolution",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Override resolution"
+      },
+      {
+        "name": "engine",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Override Shell image model"
+      },
+      {
+        "name": "prompt",
+        "type": "str",
+        "required": false,
+        "positional": false,
+        "help": "Extra generation requirements"
+      }
+    ],
+    "type": "ts",
+    "modulePath": "maybeai-image-app/resolve.js",
+    "sourceFile": "maybeai-image-app/resolve.ts"
+  },
+  {
+    "site": "maybeai-image-app",
+    "name": "rules",
+    "description": "Show MaybeAI platform-aware image ratio, resolution, angle, and source rules",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "platform",
+        "type": "str",
+        "required": false,
+        "positional": true,
+        "help": "Platform to inspect",
+        "choices": [
+          "Amazon",
+          "Temu",
+          "TikTokShop",
+          "Shopee",
+          "Lazada",
+          "Hacoo",
+          "XiaoHongShu",
+          "Instagram",
+          "Etsy",
+          "Taobao",
+          "Pinduoduo"
+        ]
+      }
+    ],
+    "type": "ts",
+    "modulePath": "maybeai-image-app/rules.js",
+    "sourceFile": "maybeai-image-app/rules.ts"
+  },
+  {
+    "site": "maybeai-image-app",
+    "name": "schema",
+    "description": "Show unified CLI schema and backend variable mapping for a MaybeAI image app",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "app",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "MaybeAI app id, e.g. change-model"
+      }
+    ],
+    "type": "ts",
+    "modulePath": "maybeai-image-app/schema.js",
+    "sourceFile": "maybeai-image-app/schema.ts"
   }
 ]
