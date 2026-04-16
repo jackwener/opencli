@@ -6,6 +6,7 @@ import type { IPage } from './types.js';
 
 export enum Strategy {
   PUBLIC = 'public',
+  LOCAL = 'local',
   COOKIE = 'cookie',
   HEADER = 'header',
   INTERCEPT = 'intercept',
@@ -144,13 +145,13 @@ export function strategyLabel(cmd: CliCommand): string {
  */
 function normalizeCommand(cmd: CliCommand): CliCommand {
   const strategy = cmd.strategy ?? (cmd.browser === false ? Strategy.PUBLIC : Strategy.COOKIE);
-  const browser = cmd.browser ?? (strategy !== Strategy.PUBLIC);
+  const browser = cmd.browser ?? (strategy !== Strategy.PUBLIC && strategy !== Strategy.LOCAL);
 
   let navigateBefore = cmd.navigateBefore;
   if (navigateBefore === undefined) {
     if ((strategy === Strategy.COOKIE || strategy === Strategy.HEADER) && cmd.domain) {
       navigateBefore = `https://${cmd.domain}`;
-    } else if (strategy !== Strategy.PUBLIC) {
+    } else if (strategy !== Strategy.PUBLIC && strategy !== Strategy.LOCAL) {
       // Non-PUBLIC without domain: needs authenticated browser context
       // but no specific pre-navigation URL. `true` signals this to
       // shouldUseBrowserSession without triggering resolvePreNav.

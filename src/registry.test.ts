@@ -173,6 +173,17 @@ describe('normalizeCommand (via registerCommand)', () => {
     expect(cmd.navigateBefore).toBeUndefined();
   });
 
+  it('LOCAL → browser false, navigateBefore undefined', () => {
+    registerCommand({
+      site: 'test-norm', name: 'local', description: '', args: [],
+      strategy: Strategy.LOCAL,
+    });
+    const cmd = getRegistry().get('test-norm/local')!;
+    expect(cmd.browser).toBe(false);
+    expect(cmd.navigateBefore).toBeUndefined();
+    expect(strategyLabel(cmd)).toBe('local');
+  });
+
   it('explicit navigateBefore: false overrides COOKIE + domain', () => {
     registerCommand({
       site: 'test-norm', name: 'cookie-override', description: '', args: [],

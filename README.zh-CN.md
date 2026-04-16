@@ -209,8 +209,7 @@ npm link
 | **uiverse** | `code` `preview` | 浏览器 |
 | **apple-podcasts** | `search` `episodes` `top` | 公开 |
 | **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` | 公开 / 浏览器 |
-| **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` | 公开 |
-| **xiaoyuzhou** | `podcast` `podcast-episodes` `episode` `download` `transcript*` | 公开 |
+| **xiaoyuzhou** | `podcast*` `podcast-episodes*` `episode*` `download*` `transcript*` | 本地凭证 |
 | **zhihu** | `hot` `search` `question` `download` `follow` `like` `favorite` `comment` `answer` | 浏览器 |
 | **weixin** | `download` | 浏览器 |
 | **youtube** | `search` `video` `transcript` `comments` `channel` `playlist` `feed` `history` `watch-later` `subscriptions` `like` `unlike` `subscribe` `unsubscribe` | 浏览器 |
@@ -270,7 +269,7 @@ npm link
 
 87+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
 
-`*` `opencli xiaoyuzhou transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`。
+`*` `opencli xiaoyuzhou podcast` / `podcast-episodes` / `episode` / `download` / `transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`。
 
 ### 外部 CLI 枢纽
 
@@ -379,7 +378,7 @@ opencli zhihu download "https://zhuanlan.zhihu.com/p/xxx" --download-images
 opencli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output ./weixin
 ```
 
-`opencli xiaoyuzhou transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`。
+`opencli xiaoyuzhou podcast` / `podcast-episodes` / `episode` / `download` / `transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`。
 
 
 

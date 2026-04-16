@@ -1,15 +1,15 @@
 # Xiaoyuzhou (小宇宙)
 
-**Mode**: 🌐 Public · **Domain**: `xiaoyuzhou.fm`
+**Mode**: 🔑 Local credentials · **Domain**: `xiaoyuzhou.fm`
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `opencli xiaoyuzhou podcast` | |
-| `opencli xiaoyuzhou podcast-episodes` | |
-| `opencli xiaoyuzhou episode` | |
-| `opencli xiaoyuzhou download` | Download episode audio |
+| `opencli xiaoyuzhou podcast` | View a podcast profile (requires local credentials) |
+| `opencli xiaoyuzhou podcast-episodes` | List podcast episodes (requires local credentials) |
+| `opencli xiaoyuzhou episode` | View episode details (requires local credentials) |
+| `opencli xiaoyuzhou download` | Download episode audio (requires local credentials) |
 | `opencli xiaoyuzhou transcript` | Download transcript JSON and extracted text (requires local credentials) |
 
 ## Usage Examples
@@ -39,8 +39,8 @@ opencli xiaoyuzhou transcript 69dd0c98e2c8be31551f6a33 -v
 
 ## Prerequisites
 
-- No browser required — uses public episode pages
-- `transcript` requires local Xiaoyuzhou app credentials in `~/.opencli/xiaoyuzhou.json`
+- No browser required
+- All commands require local Xiaoyuzhou app credentials in `~/.opencli/xiaoyuzhou.json`
 
 Example credential file:
 
