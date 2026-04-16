@@ -621,17 +621,17 @@ cli({
         // ── Step 8: Verify success ─────────────────────────────────────────────────
         await page.wait({ time: 4 });
         const finalUrl = await page.evaluate('() => location.href');
+        const successMarkers = isDraft
+            ? ['草稿已保存', '暂存成功', '保存成功', '上传成功']
+            : ['发布成功', '上传成功'];
         const successMsg = await page.evaluate(`
-      () => {
+      (markers => {
         for (const el of document.querySelectorAll('*')) {
           const text = (el.innerText || '').trim();
-          if (
-            el.children.length === 0 &&
-            (text.includes('发布成功') || text.includes('草稿已保存') || text.includes('暂存成功') || text.includes('上传成功'))
-          ) return text;
+          if (el.children.length === 0 && markers.some(marker => text.includes(marker))) return text;
         }
         return '';
-      }
+      })(${JSON.stringify(successMarkers)})
     `);
         const navigatedAway = !finalUrl.includes('/publish/publish');
         const isSuccess = successMsg.length > 0 || navigatedAway;
