@@ -754,6 +754,13 @@ async function captureScysPageCache(page) {
       const uniq = (list) => Array.from(new Set(list.filter(Boolean)));
       const shouldParseStorageValue = (value) =>
         typeof value === 'string' && /(topicId|entityId|showTitle|articleContent|topicDTO|articleDetail|scys_url)/.test(value);
+      const getStorage = (name) => {
+        try {
+          return window[name];
+        } catch {
+          return null;
+        }
+      };
       const collectStorageRoots = (storage) => {
         const out = [];
         if (!storage) return out;
@@ -777,8 +784,8 @@ async function captureScysPageCache(page) {
         window.$nuxt && window.$nuxt.$store && window.$nuxt.$store.state,
         window.$nuxt && window.$nuxt.context && window.$nuxt.context.store && window.$nuxt.context.store.state,
         window.__PINIA__ && window.__PINIA__.state && window.__PINIA__.state.value,
-        ...collectStorageRoots(window.localStorage),
-        ...collectStorageRoots(window.sessionStorage),
+        ...collectStorageRoots(getStorage('localStorage')),
+        ...collectStorageRoots(getStorage('sessionStorage')),
       ].filter(Boolean);
       const seen = new WeakSet();
       const out = [];
