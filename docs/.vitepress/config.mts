@@ -100,6 +100,9 @@ export default defineConfig({
                 { text: 'Quark', link: '/adapters/browser/quark' },
                 { text: 'Uiverse', link: '/adapters/browser/uiverse' },
                 { text: 'Nowcoder', link: '/adapters/browser/nowcoder' },
+                { text: 'Eastmoney', link: '/adapters/browser/eastmoney' },
+                { text: 'TDX', link: '/adapters/browser/tdx' },
+                { text: 'THS', link: '/adapters/browser/ths' },
               ],
             },
             {
