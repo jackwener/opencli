@@ -10,6 +10,18 @@ type HumanBehaviorOptions = {
 };
 
 const RANDOM_DELAY_MULTIPLIER = 1;
+export const SHOPDORA_NOT_LOGGED_IN_MESSAGE = 'Shopdora 未登录';
+
+type RawShopdoraLoginState = {
+  hasShopdoraLoginPage?: boolean;
+  hasPageDetailLoginTitle?: boolean;
+};
+
+export type ShopdoraLoginState = {
+  hasShopdoraLoginPage: boolean;
+  hasPageDetailLoginTitle: boolean;
+  loginMessage: string;
+};
 
 function normalizeRange(range: readonly [number, number]): [number, number] {
   const [rawMin, rawMax] = range;
@@ -110,6 +122,34 @@ export function buildHumanPointerScript(selector: string): string {
   `;
 }
 
+export function buildReadShopdoraLoginStateScript(): string {
+  return `
+    (() => ({
+      hasShopdoraLoginPage: Boolean(document.querySelector('.shopdoraLoginPage')),
+      hasPageDetailLoginTitle: Boolean(document.querySelector('.pageDetailLoginTitle')),
+    }))()
+  `;
+}
+
+export async function readShopdoraLoginState(page: IPage): Promise<ShopdoraLoginState> {
+  const result = await page.evaluate(buildReadShopdoraLoginStateScript());
+  const raw = (result && typeof result === 'object' ? result : {}) as RawShopdoraLoginState;
+  const hasShopdoraLoginPage = raw.hasShopdoraLoginPage === true;
+  const hasPageDetailLoginTitle = raw.hasPageDetailLoginTitle === true;
+  return {
+    hasShopdoraLoginPage,
+    hasPageDetailLoginTitle,
+    loginMessage: hasShopdoraLoginPage || hasPageDetailLoginTitle ? SHOPDORA_NOT_LOGGED_IN_MESSAGE : '',
+  };
+}
+
+export function appendShopdoraLoginMessage(message: string, loginMessage: string): string {
+  const base = String(message ?? '').trim();
+  const extra = String(loginMessage ?? '').trim();
+  if (!extra) return base;
+  return base ? `${base} ${extra}。` : extra;
+}
+
 async function safeScroll(page: IPage, direction: 'up' | 'down', range: readonly [number, number]): Promise<void> {
   try {
     await page.scroll(direction, Math.round(randomInRange(range)));
@@ -160,10 +200,14 @@ export async function clearLocalStorageForUrlHost(page: IPage, targetUrl: string
 
 export const __test__ = {
   RANDOM_DELAY_MULTIPLIER,
+  SHOPDORA_NOT_LOGGED_IN_MESSAGE,
+  appendShopdoraLoginMessage,
   buildClearLocalStorageScript,
   buildHumanPointerScript,
+  buildReadShopdoraLoginStateScript,
   clearLocalStorageForUrlHost,
   randomInRange,
+  readShopdoraLoginState,
   waitRandomDuration,
   simulateHumanBehavior,
 };

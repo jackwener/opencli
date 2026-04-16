@@ -21,6 +21,12 @@ describe('shopee shared humanization helpers', () => {
     expect(script).toContain('host_mismatch');
   });
 
+  it('builds a Shopdora login-state reader for both hard and soft login markers', () => {
+    const script = __test__.buildReadShopdoraLoginStateScript();
+    expect(script).toContain('.shopdoraLoginPage');
+    expect(script).toContain('.pageDetailLoginTitle');
+  });
+
   it('waits for a randomized duration within the provided range', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const wait = vi.fn<NonNullable<IPage['wait']>>().mockResolvedValue(undefined);
@@ -28,8 +34,8 @@ describe('shopee shared humanization helpers', () => {
 
     const seconds = await __test__.waitRandomDuration(page, [200, 600]);
 
-    expect(seconds).toBe(0.8);
-    expect(wait).toHaveBeenCalledWith(0.8);
+    expect(seconds).toBe(0.4);
+    expect(wait).toHaveBeenCalledWith({ time: 0.4 });
   });
 
   it('simulates lightweight human behavior around a selector', async () => {
@@ -54,8 +60,8 @@ describe('shopee shared humanization helpers', () => {
     });
 
     expect(page.wait).toHaveBeenCalledTimes(2);
-    expect(page.wait).toHaveBeenNthCalledWith(1, 0.8);
-    expect(page.wait).toHaveBeenNthCalledWith(2, 0.4);
+    expect(page.wait).toHaveBeenNthCalledWith(1, { time: 0.4 });
+    expect(page.wait).toHaveBeenNthCalledWith(2, { time: 0.2 });
     expect(page.scroll).toHaveBeenCalledWith('down', 180);
     expect(page.scroll).toHaveBeenCalledWith('up', 58);
     expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('.target-button'));
@@ -71,5 +77,26 @@ describe('shopee shared humanization helpers', () => {
     expect(goto).toHaveBeenCalledWith('https://shopee.sg', { waitUntil: 'load' });
     expect(evaluate).toHaveBeenCalledWith(expect.stringContaining('localStorage.clear()'));
     expect(evaluate).toHaveBeenCalledWith(expect.stringContaining('shopee.sg'));
+  });
+
+  it('reads Shopdora login markers and maps them to a user-facing message', async () => {
+    const evaluate = vi.fn<NonNullable<IPage['evaluate']>>().mockResolvedValue({
+      hasShopdoraLoginPage: false,
+      hasPageDetailLoginTitle: true,
+    });
+    const page = { evaluate } as unknown as IPage;
+
+    await expect(__test__.readShopdoraLoginState(page)).resolves.toEqual({
+      hasShopdoraLoginPage: false,
+      hasPageDetailLoginTitle: true,
+      loginMessage: 'Shopdora 未登录',
+    });
+  });
+
+  it('appends the Shopdora login message when present', () => {
+    expect(__test__.appendShopdoraLoginMessage('Downloaded successfully.', 'Shopdora 未登录'))
+      .toBe('Downloaded successfully. Shopdora 未登录。');
+    expect(__test__.appendShopdoraLoginMessage('Downloaded successfully.', ''))
+      .toBe('Downloaded successfully.');
   });
 });

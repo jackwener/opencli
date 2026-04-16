@@ -38,18 +38,18 @@ describe('shopee product adapter', () => {
     expect(PRODUCT_COLUMNS).toEqual(
       expect.arrayContaining([
         'product_url',
+        'shopdora_login_message',
         'title',
         'rating_score',
-        'current_price_range',
-        'shopee_price',
-        'shopdora_price',
+        'shopdora_price_range',
+        'shopee_current_price',
         'main_image_url',
-        'video_url',
-        'thumbnail_url',
-        'attr_options',
-        'spec_options',
-        'seller_name',
-        'shop_name',
+        'video_urls',
+        'thumbnail_urls',
+        'image_variant_options',
+        'text_variant_options',
+        'detail_seller_name',
+        'shop_display_name',
         'shop_url',
         'shop_product_list_url',
         'stock',
@@ -59,35 +59,50 @@ describe('shopee product adapter', () => {
   });
 
   it('marks structured template fields with list metadata', () => {
-    const videoField = PRODUCT_FIELDS.find((field) => field.name === 'video_url');
-    const thumbnailField = PRODUCT_FIELDS.find((field) => field.name === 'thumbnail_url');
-    const attrOptionsField = PRODUCT_FIELDS.find((field) => field.name === 'attr_options');
-    const specOptionsField = PRODUCT_FIELDS.find((field) => field.name === 'spec_options');
+    const titleField = PRODUCT_FIELDS.find((field) => field.name === 'title');
+    const videoField = PRODUCT_FIELDS.find((field) => field.name === 'video_urls');
+    const thumbnailField = PRODUCT_FIELDS.find((field) => field.name === 'thumbnail_urls');
+    const attrOptionsField = PRODUCT_FIELDS.find((field) => field.name === 'image_variant_options');
+    const specOptionsField = PRODUCT_FIELDS.find((field) => field.name === 'text_variant_options');
+    const sales30dField = PRODUCT_FIELDS.find((field) => field.name === 'sales_30d');
+    const totalGmvField = PRODUCT_FIELDS.find((field) => field.name === 'total_gmv');
+
+    expect(titleField).toMatchObject({ transform: 'remove_buttons' });
 
     expect(videoField).toMatchObject({
       type: 'list',
       fields: [
-        { name: 'video_url', type: 'attribute', attribute: 'src', transform: 'absolute_url' },
+        { name: 'video_urls', type: 'attribute', attribute: 'src', transform: 'absolute_url' },
       ],
     });
     expect(thumbnailField).toMatchObject({
       type: 'list',
-      fields: [{ name: 'thumbnail_url', type: 'attribute', attribute: 'src', transform: 'image_src' }],
+      fields: [{ name: 'thumbnail_urls', type: 'attribute', attribute: 'src', transform: 'image_src' }],
     });
     expect(attrOptionsField).toMatchObject({
       type: 'list',
       fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'title', type: 'text' }),
-        expect.objectContaining({ name: 'image_url', type: 'attribute', attribute: 'src', transform: 'image_src' }),
+        expect.objectContaining({ name: 'option_name', type: 'text' }),
+        expect.objectContaining({ name: 'option_image_url', type: 'attribute', attribute: 'src', transform: 'image_src' }),
         expect.objectContaining({ name: 'is_selected', transform: 'selected_class' }),
       ]),
     });
     expect(specOptionsField).toMatchObject({
       type: 'list',
       fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'title', type: 'text' }),
+        expect.objectContaining({ name: 'option_name', type: 'text' }),
         expect.objectContaining({ name: 'is_selected', transform: 'selected_class' }),
       ]),
+    });
+    expect(sales30dField).toMatchObject({
+      type: 'labeled_text',
+      lookupLabel: '30-Day Sales',
+      valueSelector: '.item-main',
+    });
+    expect(totalGmvField).toMatchObject({
+      type: 'labeled_text',
+      lookupLabel: 'GMV',
+      valueSelector: '.item-main',
     });
   });
 });
@@ -116,12 +131,12 @@ describe('mergeProductDetails', () => {
   it('fills only missing fields from a later extraction pass', () => {
     expect(
       mergeProductDetails(
-        { title: 'Product A', seller_name: '', stock: '' },
-        { title: 'Product B', seller_name: 'Shop 1', stock: '99' },
+        { title: 'Product A', detail_seller_name: '', stock: '' },
+        { title: 'Product B', detail_seller_name: 'Shop 1', stock: '99' },
       ),
     ).toEqual({
       title: 'Product A',
-      seller_name: 'Shop 1',
+      detail_seller_name: 'Shop 1',
       stock: '99',
     });
   });
@@ -129,11 +144,37 @@ describe('mergeProductDetails', () => {
 
 describe('hasMeaningfulProductData', () => {
   it('returns false for empty extraction rows', () => {
-    expect(hasMeaningfulProductData({ title: '', seller_name: '' })).toBe(false);
+    expect(hasMeaningfulProductData({ title: '', detail_seller_name: '' })).toBe(false);
   });
 
   it('returns true once any mapped product field has content', () => {
     expect(hasMeaningfulProductData({ title: 'Wireless Earbuds' })).toBe(true);
+  });
+});
+
+describe('product command Shopdora login annotations', () => {
+  it('returns product data and includes a Shopdora login message when the soft login title is present', async () => {
+    const command = getRegistry().get('shopee/product');
+    const url = 'https://shopee.sg/Jeep-EW121-True-Wireless-Bluetooth-5.4-Earbuds-i.1058254930.25483790400';
+    const goto = vi.fn(async () => {});
+    const wait = vi.fn(async () => {});
+    const scroll = vi.fn(async () => {});
+    const evaluate = vi.fn(async (script: string) => {
+      if (script.includes('.shopdoraLoginPage') && script.includes('.pageDetailLoginTitle')) {
+        return { hasShopdoraLoginPage: false, hasPageDetailLoginTitle: true };
+      }
+      if (script.includes('const fields =') && script.includes('"title"')) {
+        return { title: 'Wireless Earbuds' };
+      }
+      return { ok: true };
+    });
+    const page = { goto, wait, scroll, evaluate } as unknown as import('@jackwener/opencli/types').IPage;
+
+    await expect(command!.func!(page, { url })).resolves.toEqual([{
+      product_url: url,
+      title: 'Wireless Earbuds',
+      shopdora_login_message: 'Shopdora 未登录',
+    }]);
   });
 });
 
@@ -165,7 +206,7 @@ describe('bindShopeeProductTab', () => {
 });
 
 describe('ensureShopeeProductPage', () => {
-  it('reuses the matched tab, clears localStorage, and reloads the product page', async () => {
+  it('reuses the matched tab and reloads the product page', async () => {
     const page = {
       goto: vi.fn(async () => {}),
       evaluate: vi.fn(async () => ({ ok: true, host: 'shopee.sg' })),
@@ -176,12 +217,11 @@ describe('ensureShopeeProductPage', () => {
       ensureShopeeProductPage(page, 'https://shopee.sg/product-i.1.2', bindFn),
     ).resolves.toBe(true);
 
-    expect(page.goto).toHaveBeenNthCalledWith(1, 'https://shopee.sg', { waitUntil: 'load' });
-    expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('localStorage.clear()'));
-    expect(page.goto).toHaveBeenNthCalledWith(2, 'https://shopee.sg/product-i.1.2', { waitUntil: 'load' });
+    expect(page.goto).toHaveBeenCalledTimes(1);
+    expect(page.goto).toHaveBeenNthCalledWith(1, 'https://shopee.sg/product-i.1.2', { waitUntil: 'load' });
   });
 
-  it('falls back to clearing the target host and opening the product url when no existing tab is found', async () => {
+  it('falls back to opening the product url when no existing tab is found', async () => {
     const page = {
       goto: vi.fn(async () => {}),
       evaluate: vi.fn(async () => ({ ok: true, host: 'shopee.sg' })),
@@ -194,8 +234,7 @@ describe('ensureShopeeProductPage', () => {
       ensureShopeeProductPage(page, 'https://shopee.sg/product-i.1.2', bindFn),
     ).resolves.toBe(false);
 
-    expect(page.goto).toHaveBeenNthCalledWith(1, 'https://shopee.sg', { waitUntil: 'load' });
-    expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('localStorage.clear()'));
-    expect(page.goto).toHaveBeenNthCalledWith(2, 'https://shopee.sg/product-i.1.2', { waitUntil: 'load' });
+    expect(page.goto).toHaveBeenCalledTimes(1);
+    expect(page.goto).toHaveBeenNthCalledWith(1, 'https://shopee.sg/product-i.1.2', { waitUntil: 'load' });
   });
 });
