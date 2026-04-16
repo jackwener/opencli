@@ -33,7 +33,214 @@ function createPageMock(evaluateResults, overrides = {}) {
         ...overrides,
     };
 }
+function createConditionalPageMock(evaluateImpl, overrides = {}) {
+    const page = createPageMock([], overrides);
+    page.evaluate.mockImplementation(async (js) => evaluateImpl(String(js)));
+    return page;
+}
 describe('xiaohongshu publish', () => {
+    it('uses native insertText for contenteditable title fields when available', async () => {
+        const cmd = getRegistry().get('xiaohongshu/publish');
+        expect(cmd?.func).toBeTypeOf('function');
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-xhs-publish-'));
+        const imagePath = path.join(tempDir, 'demo.jpg');
+        fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+        const insertText = vi.fn().mockResolvedValue(undefined);
+        const page = createConditionalPageMock((code) => {
+            if (code.includes('location.href'))
+                return 'https://creator.xiaohongshu.com/publish/publish?from=menu_left';
+            if (code.includes("const targets = ['上传图文', '图文', '图片']"))
+                return { ok: true, target: '上传图文', text: '上传图文' };
+            if (code.includes('hasTitleInput') && code.includes('hasVideoSurface'))
+                return { state: 'editor_ready', hasTitleInput: true, hasImageInput: true, hasVideoSurface: false };
+            if (code.includes('const images =') && code.includes('dt.items.add(new File'))
+                return { ok: true, count: 1 };
+            if (code.includes('[class*="upload"][class*="progress"]'))
+                return false;
+            if (code.includes('const sels =') && code.includes('for (const sel of sels)'))
+                return true;
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"locate"')) {
+                return code.includes('[contenteditable="true"][placeholder*="标题"]')
+                    ? { ok: true, sel: '[contenteditable="true"][placeholder*="标题"]', kind: 'contenteditable' }
+                    : { ok: true, sel: '[contenteditable="true"][class*="content"]', kind: 'contenteditable' };
+            }
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"prepare"'))
+                return { ok: true };
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"verify"')) {
+                return code.includes('[contenteditable="true"][placeholder*="标题"]')
+                    ? { ok: true, actual: '标题走原生输入' }
+                    : { ok: true, actual: '正文也走原生输入' };
+            }
+            if (code.includes('(function(selectors, text)')) {
+                return code.includes('[contenteditable="true"][placeholder*="标题"]')
+                    ? { ok: true, sel: '[contenteditable="true"][placeholder*="标题"]', kind: 'contenteditable', actual: '标题走原生输入' }
+                    : { ok: true, sel: '[contenteditable="true"][class*="content"]', kind: 'contenteditable', actual: '正文也走原生输入' };
+            }
+            if (code.includes('labels.some'))
+                return true;
+            if (code.includes('for (const el of document.querySelectorAll'))
+                return '发布成功';
+            throw new Error(`Unhandled evaluate call: ${code.slice(0, 120)}`);
+        }, {
+            insertText,
+        });
+        const result = await cmd.func(page, {
+            title: '标题走原生输入',
+            content: '正文也走原生输入',
+            images: imagePath,
+            topics: '',
+            draft: false,
+        });
+        expect(insertText).toHaveBeenNthCalledWith(1, '标题走原生输入');
+        expect(insertText).toHaveBeenNthCalledWith(2, '正文也走原生输入');
+        expect(result).toEqual([
+            {
+                status: '✅ 发布成功',
+                detail: '"标题走原生输入" · 1张图片 · 发布成功',
+            },
+        ]);
+    });
+    it('aborts when the title does not stick after filling', async () => {
+        const cmd = getRegistry().get('xiaohongshu/publish');
+        expect(cmd?.func).toBeTypeOf('function');
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-xhs-publish-'));
+        const imagePath = path.join(tempDir, 'demo.jpg');
+        fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+        const insertText = vi.fn().mockResolvedValue(undefined);
+        const page = createConditionalPageMock((code) => {
+            if (code.includes('location.href'))
+                return 'https://creator.xiaohongshu.com/publish/publish?from=menu_left';
+            if (code.includes("const targets = ['上传图文', '图文', '图片']"))
+                return { ok: true, target: '上传图文', text: '上传图文' };
+            if (code.includes('hasTitleInput') && code.includes('hasVideoSurface'))
+                return { state: 'editor_ready', hasTitleInput: true, hasImageInput: true, hasVideoSurface: false };
+            if (code.includes('const images =') && code.includes('dt.items.add(new File'))
+                return { ok: true, count: 1 };
+            if (code.includes('[class*="upload"][class*="progress"]'))
+                return false;
+            if (code.includes('const sels =') && code.includes('for (const sel of sels)'))
+                return true;
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"locate"'))
+                return { ok: true, sel: '[contenteditable="true"][placeholder*="标题"]', kind: 'contenteditable' };
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"prepare"'))
+                return { ok: true };
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"verify"'))
+                return { ok: false, actual: '' };
+            if (code.includes('(function(selectors, text)'))
+                return { ok: true, sel: '[contenteditable="true"][placeholder*="标题"]', kind: 'contenteditable', actual: '' };
+            if (code.includes('labels.some'))
+                return true;
+            if (code.includes('for (const el of document.querySelectorAll'))
+                return '发布成功';
+            throw new Error(`Unhandled evaluate call: ${code.slice(0, 120)}`);
+        }, {
+            insertText,
+        });
+        await expect(cmd.func(page, {
+            title: '标题没写进去',
+            content: '正文',
+            images: imagePath,
+            topics: '',
+            draft: false,
+        })).rejects.toThrow('Failed to set title');
+        expect(insertText).toHaveBeenCalledWith('标题没写进去');
+    });
+    it('falls back to in-page insertion when contenteditable native insertText fails', async () => {
+        const cmd = getRegistry().get('xiaohongshu/publish');
+        expect(cmd?.func).toBeTypeOf('function');
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-xhs-publish-'));
+        const imagePath = path.join(tempDir, 'demo.jpg');
+        fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+        const insertText = vi.fn().mockRejectedValue(new Error('insertText returned no inserted flag'));
+        const page = createConditionalPageMock((code) => {
+            if (code.includes('location.href'))
+                return 'https://creator.xiaohongshu.com/publish/publish?from=menu_left';
+            if (code.includes("const targets = ['上传图文', '图文', '图片']"))
+                return { ok: true, target: '上传图文', text: '上传图文' };
+            if (code.includes('hasTitleInput') && code.includes('hasVideoSurface'))
+                return { state: 'editor_ready', hasTitleInput: true, hasImageInput: true, hasVideoSurface: false };
+            if (code.includes('const images =') && code.includes('dt.items.add(new File'))
+                return { ok: true, count: 1 };
+            if (code.includes('[class*="upload"][class*="progress"]'))
+                return false;
+            if (code.includes('const sels =') && code.includes('for (const sel of sels)'))
+                return true;
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"locate"')) {
+                return code.includes('[contenteditable="true"][placeholder*="标题"]')
+                    ? { ok: true, sel: '[contenteditable="true"][placeholder*="标题"]', kind: 'contenteditable' }
+                    : { ok: true, sel: '[contenteditable="true"][class*="content"]', kind: 'contenteditable' };
+            }
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"prepare"'))
+                return { ok: true };
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"apply"')) {
+                return code.includes('[contenteditable="true"][placeholder*="标题"]')
+                    ? { ok: true, actual: '原生失败后回退' }
+                    : { ok: true, actual: '正文也回退' };
+            }
+            if (code.includes('labels.some'))
+                return true;
+            if (code.includes('for (const el of document.querySelectorAll'))
+                return '发布成功';
+            throw new Error(`Unhandled evaluate call: ${code.slice(0, 120)}`);
+        }, {
+            insertText,
+        });
+        const result = await cmd.func(page, {
+            title: '原生失败后回退',
+            content: '正文也回退',
+            images: imagePath,
+            topics: '',
+            draft: false,
+        });
+        expect(insertText).toHaveBeenCalledWith('原生失败后回退');
+        expect(result).toEqual([
+            {
+                status: '✅ 发布成功',
+                detail: '"原生失败后回退" · 1张图片 · 发布成功',
+            },
+        ]);
+    });
+    it('aborts when an input title does not stick after filling', async () => {
+        const cmd = getRegistry().get('xiaohongshu/publish');
+        expect(cmd?.func).toBeTypeOf('function');
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-xhs-publish-'));
+        const imagePath = path.join(tempDir, 'demo.jpg');
+        fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+        const page = createConditionalPageMock((code) => {
+            if (code.includes('location.href'))
+                return 'https://creator.xiaohongshu.com/publish/publish?from=menu_left';
+            if (code.includes("const targets = ['上传图文', '图文', '图片']"))
+                return { ok: true, target: '上传图文', text: '上传图文' };
+            if (code.includes('hasTitleInput') && code.includes('hasVideoSurface'))
+                return { state: 'editor_ready', hasTitleInput: true, hasImageInput: true, hasVideoSurface: false };
+            if (code.includes('const images =') && code.includes('dt.items.add(new File'))
+                return { ok: true, count: 1 };
+            if (code.includes('[class*="upload"][class*="progress"]'))
+                return false;
+            if (code.includes('const sels =') && code.includes('for (const sel of sels)'))
+                return true;
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"locate"'))
+                return code.includes('input[maxlength')
+                    ? { ok: true, sel: 'input[maxlength="20"]', kind: 'input' }
+                    : { ok: true, sel: '[contenteditable="true"][class*="content"]', kind: 'contenteditable' };
+            if (code.includes('__opencli_xhs_fill_phase') && code.includes('"apply"'))
+                return code.includes('input[maxlength')
+                    ? { ok: false, actual: '' }
+                    : { ok: true, actual: '正文' };
+            if (code.includes('labels.some'))
+                return true;
+            if (code.includes('for (const el of document.querySelectorAll'))
+                return '发布成功';
+            throw new Error(`Unhandled evaluate call: ${code.slice(0, 120)}`);
+        });
+        await expect(cmd.func(page, {
+            title: '输入框标题没写进去',
+            content: '正文',
+            images: imagePath,
+            topics: '',
+            draft: false,
+        })).rejects.toThrow('Failed to set title');
+    });
     it('prefers CDP setFileInput upload when the page supports it', async () => {
         const cmd = getRegistry().get('xiaohongshu/publish');
         expect(cmd?.func).toBeTypeOf('function');
@@ -48,8 +255,10 @@ describe('xiaohongshu publish', () => {
             'input[type="file"][accept*="image"],input[type="file"][accept*=".jpg"],input[type="file"][accept*=".jpeg"],input[type="file"][accept*=".png"],input[type="file"][accept*=".gif"],input[type="file"][accept*=".webp"]',
             false,
             true,
-            { ok: true, sel: 'input[maxlength="20"]' },
-            { ok: true, sel: '[contenteditable="true"][class*="content"]' },
+            { ok: true, sel: 'input[maxlength="20"]', kind: 'input' },
+            { ok: true, actual: 'CDP上传优先' },
+            { ok: true, sel: '[contenteditable="true"][class*="content"]', kind: 'contenteditable' },
+            { ok: true, actual: '优先走 setFileInput 主路径' },
             true,
             'https://creator.xiaohongshu.com/publish/success',
             '发布成功',
@@ -111,8 +320,10 @@ describe('xiaohongshu publish', () => {
             { ok: true, count: 1 },
             false,
             true, // waitForEditForm: editor appeared
-            { ok: true, sel: 'input[maxlength="20"]' },
-            { ok: true, sel: '[contenteditable="true"][class*="content"]' },
+            { ok: true, sel: 'input[maxlength="20"]', kind: 'input' },
+            { ok: true, actual: 'DeepSeek别乱问' },
+            { ok: true, sel: '[contenteditable="true"][class*="content"]', kind: 'contenteditable' },
+            { ok: true, actual: '一篇真实一点的小红书正文' },
             true,
             'https://creator.xiaohongshu.com/publish/success',
             '发布成功',
@@ -171,8 +382,10 @@ describe('xiaohongshu publish', () => {
             { ok: true, count: 1 }, // injectImages
             false, // waitForUploads: no progress indicator
             true, // waitForEditForm: editor appeared
-            { ok: true, sel: 'input[maxlength="20"]' },
-            { ok: true, sel: '[contenteditable="true"][class*="content"]' },
+            { ok: true, sel: 'input[maxlength="20"]', kind: 'input' },
+            { ok: true, actual: '延迟切换也能过' },
+            { ok: true, sel: '[contenteditable="true"][class*="content"]', kind: 'contenteditable' },
+            { ok: true, actual: '图文页切换慢一点也继续等' },
             true,
             'https://creator.xiaohongshu.com/publish/success',
             '发布成功',
