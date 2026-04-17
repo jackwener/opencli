@@ -879,6 +879,7 @@ async function handleBindCurrent(cmd: Command, workspace: string): Promise<Resul
 }
 
 export const __test__ = {
+  handleExec,
   handleNavigate,
   isTargetUrl,
   handleTabs,

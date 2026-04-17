@@ -243,6 +243,7 @@ describe('resolveBrowserVerifyInvocation', () => {
 describe('browser network snapshot caching', () => {
   const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
   beforeEach(() => {
     process.exitCode = undefined;
@@ -250,6 +251,7 @@ describe('browser network snapshot caching', () => {
     process.env.OPENCLI_CACHE_DIR = tempCacheDir;
     consoleLogSpy.mockClear();
     consoleErrorSpy.mockClear();
+    stderrSpy.mockClear();
   });
 
   it('reuses the last listed snapshot for --detail without consuming a new capture batch', async () => {
@@ -297,6 +299,212 @@ describe('browser network snapshot caching', () => {
     expect(readNetworkCapture).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBeDefined();
     expect(consoleErrorSpy.mock.calls.flat().join('\n')).toContain('not found in the last "browser network" result');
+  });
+
+  it('uses the resolved default target when loading cached network details', async () => {
+    let activePage: string | undefined;
+    const readNetworkCapture = vi.fn()
+      .mockResolvedValueOnce([
+        {
+          url: 'https://api.example.com/default',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'application/json',
+          responsePreview: JSON.stringify({ title: 'default-cache' }),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          url: 'https://api.example.com/selected',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'application/json',
+          responsePreview: JSON.stringify({ title: 'selected-cache' }),
+        },
+      ]);
+    browserState.page = {
+      setActivePage: vi.fn((page?: string) => { activePage = page; }),
+      getActivePage: vi.fn(() => activePage),
+      tabs: vi.fn().mockResolvedValue([
+        { index: 0, page: 'tab-1', url: 'https://one.example', title: 'one', active: true },
+        { index: 1, page: 'tab-2', url: 'https://two.example', title: 'two', active: false },
+      ]),
+      selectTab: vi.fn(async (target: number | string) => {
+        activePage = typeof target === 'string' ? target : undefined;
+      }),
+      evaluate: vi.fn(),
+      readNetworkCapture,
+    } as unknown as IPage;
+
+    await createProgram('', '').parseAsync(['node', 'opencli', 'browser', 'network']);
+    await createProgram('', '').parseAsync(['node', 'opencli', 'browser', 'tab', 'select', 'tab-2']);
+    await createProgram('', '').parseAsync(['node', 'opencli', 'browser', 'network']);
+    consoleLogSpy.mockClear();
+
+    await createProgram('', '').parseAsync(['node', 'opencli', 'browser', 'network', '--detail', '0']);
+
+    expect(readNetworkCapture).toHaveBeenCalledTimes(2);
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('selected-cache');
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).not.toContain('default-cache');
+  });
+});
+
+describe('browser tab targeting commands', () => {
+  const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+  function getBrowserStateFile(cacheDir: string): string {
+    return path.join(cacheDir, 'browser-state', 'browser_default.json');
+  }
+
+  beforeEach(() => {
+    process.exitCode = undefined;
+    process.env.OPENCLI_CACHE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-browser-tab-state-'));
+    consoleLogSpy.mockClear();
+    stderrSpy.mockClear();
+    mockBrowserConnect.mockClear();
+    mockBrowserClose.mockReset().mockResolvedValue(undefined);
+
+    browserState.page = {
+      setActivePage: vi.fn(),
+      evaluate: vi.fn().mockResolvedValue({ ok: true }),
+      tabs: vi.fn().mockResolvedValue([
+        { index: 0, page: 'tab-1', url: 'https://one.example', title: 'one', active: true },
+        { index: 1, page: 'tab-2', url: 'https://two.example', title: 'two', active: false },
+      ]),
+      selectTab: vi.fn().mockResolvedValue(undefined),
+      newTab: vi.fn().mockResolvedValue('tab-3'),
+      closeTab: vi.fn().mockResolvedValue(undefined),
+      readNetworkCapture: vi.fn().mockResolvedValue([]),
+    } as unknown as IPage;
+  });
+
+  it('binds browser commands to an explicit target tab via --tab', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'eval', '--tab', 'tab-2', 'document.title']);
+
+    expect(browserState.page?.setActivePage).toHaveBeenCalledWith('tab-2');
+    expect(browserState.page?.evaluate).toHaveBeenCalledWith('document.title');
+  });
+
+  it('rejects an explicit --tab target that is no longer in the current session', async () => {
+    browserState.page = {
+      setActivePage: vi.fn(),
+      getActivePage: vi.fn(),
+      tabs: vi.fn().mockResolvedValue([]),
+      evaluate: vi.fn(),
+    } as unknown as IPage;
+
+    const program = createProgram('', '');
+    await program.parseAsync(['node', 'opencli', 'browser', 'eval', '--tab', 'tab-stale', 'document.title']);
+
+    expect(process.exitCode).toBeDefined();
+    expect(browserState.page?.setActivePage).not.toHaveBeenCalled();
+    expect(browserState.page?.evaluate).not.toHaveBeenCalled();
+    expect(stderrSpy.mock.calls.flat().join('\n')).toContain('Target tab tab-stale is not part of the current browser session');
+  });
+
+  it('lists tabs with target IDs via browser tab list', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'list']);
+
+    expect(browserState.page?.tabs).toHaveBeenCalledTimes(1);
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('"page": "tab-1"');
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('"page": "tab-2"');
+  });
+
+  it('creates a new tab and prints its target ID', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'new', 'https://three.example']);
+
+    expect(browserState.page?.newTab).toHaveBeenCalledWith('https://three.example');
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('"page": "tab-3"');
+  });
+
+  it('does not promote a newly created tab to the persisted default target', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'new', 'https://three.example']);
+    await program.parseAsync(['node', 'opencli', 'browser', 'eval', 'document.title']);
+
+    expect(browserState.page?.newTab).toHaveBeenCalledWith('https://three.example');
+    expect(browserState.page?.setActivePage).not.toHaveBeenCalled();
+    expect(browserState.page?.evaluate).toHaveBeenCalledWith('document.title');
+  });
+
+  it('persists an explicitly selected tab as the default target for later untargeted commands', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'select', 'tab-2']);
+    await program.parseAsync(['node', 'opencli', 'browser', 'eval', 'document.title']);
+
+    expect(browserState.page?.selectTab).toHaveBeenCalledWith('tab-2');
+    expect(browserState.page?.setActivePage).toHaveBeenCalledWith('tab-2');
+    expect(browserState.page?.evaluate).toHaveBeenCalledWith('document.title');
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('"selected": "tab-2"');
+  });
+
+  it('clears a saved default target when it is no longer present in the current session', async () => {
+    const cacheDir = String(process.env.OPENCLI_CACHE_DIR);
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'select', 'tab-2']);
+    expect(fs.existsSync(getBrowserStateFile(cacheDir))).toBe(true);
+
+    browserState.page = {
+      setActivePage: vi.fn(),
+      getActivePage: vi.fn(),
+      tabs: vi.fn().mockResolvedValue([]),
+      evaluate: vi.fn().mockResolvedValue({ ok: true }),
+      readNetworkCapture: vi.fn().mockResolvedValue([]),
+    } as unknown as IPage;
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'eval', 'document.title']);
+
+    expect(browserState.page?.setActivePage).not.toHaveBeenCalled();
+    expect(browserState.page?.evaluate).toHaveBeenCalledWith('document.title');
+    expect(fs.existsSync(getBrowserStateFile(cacheDir))).toBe(false);
+  });
+
+  it('clears the persisted default target when that tab is closed', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'select', 'tab-2']);
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'close', 'tab-2']);
+    vi.mocked(browserState.page?.setActivePage as any).mockClear();
+    vi.mocked(browserState.page?.evaluate as any).mockClear();
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'eval', 'document.title']);
+
+    expect(browserState.page?.closeTab).toHaveBeenCalledWith('tab-2');
+    expect(browserState.page?.setActivePage).not.toHaveBeenCalled();
+    expect(browserState.page?.evaluate).toHaveBeenCalledWith('document.title');
+  });
+
+  it('closes a tab by target ID', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'close', 'tab-2']);
+
+    expect(browserState.page?.closeTab).toHaveBeenCalledWith('tab-2');
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('"closed": "tab-2"');
+  });
+
+  it('rejects closing a stale tab target ID that is no longer in the current session', async () => {
+    browserState.page = {
+      tabs: vi.fn().mockResolvedValue([]),
+      closeTab: vi.fn(),
+    } as unknown as IPage;
+
+    const program = createProgram('', '');
+    await program.parseAsync(['node', 'opencli', 'browser', 'tab', 'close', 'tab-stale']);
+
+    expect(process.exitCode).toBeDefined();
+    expect(browserState.page?.closeTab).not.toHaveBeenCalled();
+    expect(stderrSpy.mock.calls.flat().join('\n')).toContain('Target tab tab-stale is not part of the current browser session');
   });
 });
 

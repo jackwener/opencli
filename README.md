@@ -95,7 +95,9 @@ In practice:
 - start with `opencli-explorer` when the agent needs a reusable command for a site (it covers both automated and manual flows)
 - use `opencli-browser` when the agent needs to inspect or steer the page directly
 
-Available browser commands include `open`, `state`, `click`, `type`, `select`, `keys`, `wait`, `get`, `screenshot`, `scroll`, `back`, `eval`, `network`, `init`, `verify`, and `close`.
+Available browser commands include `open`, `state`, `click`, `type`, `select`, `keys`, `wait`, `get`, `screenshot`, `scroll`, `back`, `eval`, `network`, `tab list`, `tab new`, `tab select`, `tab close`, `init`, `verify`, and `close`.
+
+Use `opencli browser tab list` to inspect tab target IDs, then pass `--tab <targetId>` to route a command to a specific tab. `tab new` creates a new tab without changing the default browser target; only `tab select <targetId>` promotes that tab to the default target for later untargeted `opencli browser ...` commands.
 
 ## Core Concepts
 
