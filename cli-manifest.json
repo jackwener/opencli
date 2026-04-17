@@ -821,6 +821,43 @@
     "sourceFile": "arxiv/search.js"
   },
   {
+    "site": "baidu-scholar",
+    "name": "search",
+    "description": "百度学术搜索",
+    "domain": "xueshu.baidu.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "搜索关键词"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回结果数量 (max 20)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "authors",
+      "journal",
+      "year",
+      "cited",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "baidu-scholar/search.js",
+    "sourceFile": "baidu-scholar/search.js",
+    "navigateBefore": false
+  },
+  {
     "site": "band",
     "name": "bands",
     "description": "List all Bands you belong to",
@@ -1678,340 +1715,6 @@
     "modulePath": "bilibili/user-videos.js",
     "sourceFile": "bilibili/user-videos.js",
     "navigateBefore": "https://www.bilibili.com"
-  },
-  {
-    "site": "binance",
-    "name": "asks",
-    "description": "Order book ask prices for a trading pair",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "symbol",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Trading pair symbol (e.g. BTCUSDT, ETHUSDT)"
-      },
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 10,
-        "required": false,
-        "help": "Number of price levels (5, 10, 20, 50, 100)"
-      }
-    ],
-    "columns": [
-      "rank",
-      "ask_price",
-      "ask_qty"
-    ],
-    "type": "js",
-    "modulePath": "binance/asks.js",
-    "sourceFile": "binance/asks.js"
-  },
-  {
-    "site": "binance",
-    "name": "depth",
-    "description": "Order book bid prices for a trading pair",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "symbol",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Trading pair symbol (e.g. BTCUSDT, ETHUSDT)"
-      },
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 10,
-        "required": false,
-        "help": "Number of price levels (5, 10, 20, 50, 100)"
-      }
-    ],
-    "columns": [
-      "rank",
-      "bid_price",
-      "bid_qty"
-    ],
-    "type": "js",
-    "modulePath": "binance/depth.js",
-    "sourceFile": "binance/depth.js"
-  },
-  {
-    "site": "binance",
-    "name": "gainers",
-    "description": "Top gaining trading pairs by 24h price change",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 10,
-        "required": false,
-        "help": "Number of trading pairs"
-      }
-    ],
-    "columns": [
-      "rank",
-      "symbol",
-      "price",
-      "change_24h",
-      "volume"
-    ],
-    "type": "js",
-    "modulePath": "binance/gainers.js",
-    "sourceFile": "binance/gainers.js"
-  },
-  {
-    "site": "binance",
-    "name": "klines",
-    "description": "Candlestick/kline data for a trading pair",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "symbol",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Trading pair symbol (e.g. BTCUSDT, ETHUSDT)"
-      },
-      {
-        "name": "interval",
-        "type": "str",
-        "default": "1d",
-        "required": false,
-        "help": "Kline interval (1m, 5m, 15m, 1h, 4h, 1d, 1w, 1M)"
-      },
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 10,
-        "required": false,
-        "help": "Number of klines (max 1000)"
-      }
-    ],
-    "columns": [
-      "open",
-      "high",
-      "low",
-      "close",
-      "volume"
-    ],
-    "type": "js",
-    "modulePath": "binance/klines.js",
-    "sourceFile": "binance/klines.js"
-  },
-  {
-    "site": "binance",
-    "name": "losers",
-    "description": "Top losing trading pairs by 24h price change",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 10,
-        "required": false,
-        "help": "Number of trading pairs"
-      }
-    ],
-    "columns": [
-      "rank",
-      "symbol",
-      "price",
-      "change_24h",
-      "volume"
-    ],
-    "type": "js",
-    "modulePath": "binance/losers.js",
-    "sourceFile": "binance/losers.js"
-  },
-  {
-    "site": "binance",
-    "name": "pairs",
-    "description": "List active trading pairs on Binance",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 20,
-        "required": false,
-        "help": "Number of trading pairs"
-      }
-    ],
-    "columns": [
-      "symbol",
-      "base",
-      "quote",
-      "status"
-    ],
-    "type": "js",
-    "modulePath": "binance/pairs.js",
-    "sourceFile": "binance/pairs.js"
-  },
-  {
-    "site": "binance",
-    "name": "price",
-    "description": "Quick price check for a trading pair",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "symbol",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Trading pair symbol (e.g. BTCUSDT, ETHUSDT)"
-      }
-    ],
-    "columns": [
-      "symbol",
-      "price",
-      "change",
-      "change_pct",
-      "high",
-      "low",
-      "volume",
-      "quote_volume",
-      "trades"
-    ],
-    "type": "js",
-    "modulePath": "binance/price.js",
-    "sourceFile": "binance/price.js"
-  },
-  {
-    "site": "binance",
-    "name": "prices",
-    "description": "Latest prices for all trading pairs",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 20,
-        "required": false,
-        "help": "Number of prices"
-      }
-    ],
-    "columns": [
-      "rank",
-      "symbol",
-      "price"
-    ],
-    "type": "js",
-    "modulePath": "binance/prices.js",
-    "sourceFile": "binance/prices.js"
-  },
-  {
-    "site": "binance",
-    "name": "ticker",
-    "description": "24h ticker statistics for top trading pairs by volume",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 20,
-        "required": false,
-        "help": "Number of tickers"
-      }
-    ],
-    "columns": [
-      "symbol",
-      "price",
-      "change_pct",
-      "high",
-      "low",
-      "volume",
-      "quote_vol",
-      "trades"
-    ],
-    "type": "js",
-    "modulePath": "binance/ticker.js",
-    "sourceFile": "binance/ticker.js"
-  },
-  {
-    "site": "binance",
-    "name": "top",
-    "description": "Top trading pairs by 24h volume on Binance",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 20,
-        "required": false,
-        "help": "Number of trading pairs"
-      }
-    ],
-    "columns": [
-      "rank",
-      "symbol",
-      "price",
-      "change_24h",
-      "high",
-      "low",
-      "volume"
-    ],
-    "type": "js",
-    "modulePath": "binance/top.js",
-    "sourceFile": "binance/top.js"
-  },
-  {
-    "site": "binance",
-    "name": "trades",
-    "description": "Recent trades for a trading pair",
-    "domain": "data-api.binance.vision",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "symbol",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Trading pair symbol (e.g. BTCUSDT, ETHUSDT)"
-      },
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 20,
-        "required": false,
-        "help": "Number of trades (max 1000)"
-      }
-    ],
-    "columns": [
-      "id",
-      "price",
-      "qty",
-      "quote_qty",
-      "buyer_maker"
-    ],
-    "type": "js",
-    "modulePath": "binance/trades.js",
-    "sourceFile": "binance/trades.js"
   },
   {
     "site": "binance",
@@ -3547,7 +3250,7 @@
       {
         "name": "op",
         "type": "str",
-        "default": "/Users/hao/Pictures/chatgpt",
+        "default": "/Users/jakevin/Pictures/chatgpt",
         "required": false,
         "help": "Output directory"
       },
@@ -6466,7 +6169,7 @@
       {
         "name": "op",
         "type": "str",
-        "default": "/Users/hao/tmp/gemini-images",
+        "default": "/Users/jakevin/tmp/gemini-images",
         "required": false,
         "help": "Output directory shorthand"
       },
@@ -6736,6 +6439,171 @@
     "type": "js",
     "modulePath": "google/trends.js",
     "sourceFile": "google/trends.js"
+  },
+  {
+    "site": "google-scholar",
+    "name": "search",
+    "description": "Google Scholar 学术搜索",
+    "domain": "scholar.google.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "搜索关键词"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回结果数量 (max 20)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "authors",
+      "source",
+      "year",
+      "cited",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "google-scholar/search.js",
+    "sourceFile": "google-scholar/search.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "gov-law",
+    "name": "recent",
+    "description": "最新法律法规",
+    "domain": "flk.npc.gov.cn",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回结果数量 (max 20)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "status",
+      "publish_date",
+      "type",
+      "department"
+    ],
+    "type": "js",
+    "modulePath": "gov-law/recent.js",
+    "sourceFile": "gov-law/recent.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "gov-law",
+    "name": "search",
+    "description": "国家法律法规数据库搜索",
+    "domain": "flk.npc.gov.cn",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "搜索关键词"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回结果数量 (max 20)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "status",
+      "publish_date",
+      "type",
+      "department"
+    ],
+    "type": "js",
+    "modulePath": "gov-law/search.js",
+    "sourceFile": "gov-law/search.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "gov-policy",
+    "name": "recent",
+    "description": "国务院最新政策文件",
+    "domain": "www.gov.cn",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回结果数量 (max 20)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "date",
+      "source",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "gov-policy/recent.js",
+    "sourceFile": "gov-policy/recent.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "gov-policy",
+    "name": "search",
+    "description": "中国政府网政策文件搜索",
+    "domain": "sousuo.www.gov.cn",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "搜索关键词"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回结果数量 (max 20)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "description",
+      "date",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "gov-policy/search.js",
+    "sourceFile": "gov-policy/search.js",
+    "navigateBefore": false
   },
   {
     "site": "grok",
@@ -7582,7 +7450,7 @@
       {
         "name": "path",
         "type": "str",
-        "default": "/Users/hao/Downloads/Instagram",
+        "default": "/Users/jakevin/Downloads/Instagram",
         "required": false,
         "help": "Download directory"
       }
@@ -15254,38 +15122,6 @@
   },
   {
     "site": "twitter",
-    "name": "post-media",
-    "description": "Post a tweet with an attached video or image",
-    "domain": "x.com",
-    "strategy": "ui",
-    "browser": true,
-    "args": [
-      {
-        "name": "text",
-        "type": "string",
-        "required": true,
-        "positional": true,
-        "help": "Tweet text"
-      },
-      {
-        "name": "media",
-        "type": "string",
-        "required": true,
-        "help": "Path to a local video or image file"
-      }
-    ],
-    "columns": [
-      "status",
-      "tweet_id",
-      "message"
-    ],
-    "type": "js",
-    "modulePath": "twitter/post-media.js",
-    "sourceFile": "twitter/post-media.js",
-    "navigateBefore": true
-  },
-  {
-    "site": "twitter",
     "name": "profile",
     "description": "Fetch a Twitter user profile (bio, stats, etc.)",
     "domain": "x.com",
@@ -16015,6 +15851,44 @@
     "type": "js",
     "modulePath": "v2ex/user.js",
     "sourceFile": "v2ex/user.js"
+  },
+  {
+    "site": "wanfang",
+    "name": "search",
+    "description": "万方数据论文搜索",
+    "domain": "s.wanfangdata.com.cn",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "搜索关键词"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回结果数量 (max 20)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "authors",
+      "source",
+      "year",
+      "type",
+      "cited",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "wanfang/search.js",
+    "sourceFile": "wanfang/search.js",
+    "navigateBefore": false
   },
   {
     "site": "web",
@@ -17372,55 +17246,6 @@
   },
   {
     "site": "xiaoyuzhou",
-    "name": "transcript",
-    "description": "Download Xiaoyuzhou transcript as JSON and text (requires local credentials)",
-    "domain": "www.xiaoyuzhoufm.com",
-    "strategy": "public",
-    "browser": false,
-    "args": [
-      {
-        "name": "id",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Episode ID (eid from podcast-episodes output)"
-      },
-      {
-        "name": "output",
-        "type": "str",
-        "default": "./xiaoyuzhou-transcripts",
-        "required": false,
-        "help": "Output directory"
-      },
-      {
-        "name": "json",
-        "type": "boolean",
-        "default": true,
-        "required": false,
-        "help": "Save transcript JSON file"
-      },
-      {
-        "name": "text",
-        "type": "boolean",
-        "default": true,
-        "required": false,
-        "help": "Save extracted transcript text file"
-      }
-    ],
-    "columns": [
-      "title",
-      "podcast",
-      "status",
-      "segments",
-      "json_file",
-      "text_file"
-    ],
-    "type": "js",
-    "modulePath": "xiaoyuzhou/transcript.js",
-    "sourceFile": "xiaoyuzhou/transcript.js"
-  },
-  {
-    "site": "xiaoyuzhou",
     "name": "episode",
     "description": "View details of a Xiaoyuzhou podcast episode",
     "domain": "www.xiaoyuzhoufm.com",
@@ -17509,6 +17334,55 @@
     "type": "js",
     "modulePath": "xiaoyuzhou/podcast-episodes.js",
     "sourceFile": "xiaoyuzhou/podcast-episodes.js"
+  },
+  {
+    "site": "xiaoyuzhou",
+    "name": "transcript",
+    "description": "Download Xiaoyuzhou transcript as JSON and text (requires local credentials)",
+    "domain": "www.xiaoyuzhoufm.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Episode ID (eid from podcast-episodes output)"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "./xiaoyuzhou-transcripts",
+        "required": false,
+        "help": "Output directory"
+      },
+      {
+        "name": "json",
+        "type": "boolean",
+        "default": true,
+        "required": false,
+        "help": "Save transcript JSON file"
+      },
+      {
+        "name": "text",
+        "type": "boolean",
+        "default": true,
+        "required": false,
+        "help": "Save extracted transcript text file"
+      }
+    ],
+    "columns": [
+      "title",
+      "podcast",
+      "status",
+      "segments",
+      "json_file",
+      "text_file"
+    ],
+    "type": "js",
+    "modulePath": "xiaoyuzhou/transcript.js",
+    "sourceFile": "xiaoyuzhou/transcript.js"
   },
   {
     "site": "xueqiu",

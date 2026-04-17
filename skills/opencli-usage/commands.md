@@ -58,6 +58,12 @@ opencli band post <post-key>              # 帖子详情
 opencli band mentions                     # 提到我的消息
 ```
 
+## Baidu Scholar 🌐
+
+```bash
+opencli baidu-scholar search "大语言模型"   # 搜索百度学术论文
+```
+
 ## Barchart 🌐
 
 ```bash
@@ -255,6 +261,26 @@ opencli google news --limit 10            # 新闻
 opencli google search "AI"                # 搜索 (query positional)
 opencli google suggest "AI"               # 搜索建议 (query positional)
 opencli google trends                     # 趋势
+```
+
+## Google Scholar 🌐
+
+```bash
+opencli google-scholar search "transformer" # 搜索 Google Scholar 论文
+```
+
+## Gov Law 🌐
+
+```bash
+opencli gov-law search "人工智能"           # 搜索国家法律法规数据库
+opencli gov-law recent --limit 10          # 最新法律法规
+```
+
+## Gov Policy 🌐
+
+```bash
+opencli gov-policy search "科技创新"        # 搜索中国政府网政策文件
+opencli gov-policy recent --limit 10       # 国务院最新政策文件
 ```
 
 ## Grok 🌐
@@ -672,6 +698,12 @@ opencli v2ex notifications --limit 10    # 通知
 
 ```bash
 opencli web read --url "https://..."     # 抓取任意网页并导出为 Markdown
+```
+
+## Wanfang 🌐
+
+```bash
+opencli wanfang search "知识图谱"           # 搜索万方论文
 ```
 
 ## Weibo (微博) 🌐

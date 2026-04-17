@@ -69,6 +69,7 @@ Type legend: 🌐 = Browser (needs Chrome login) · ✅ = Public API (no browser
 | **band** | 🌐 | `bands` `posts` `post` `mentions` |
 | **barchart** | 🌐 | `quote` `options` `greeks` `flow` |
 | **bbc** | ✅ | `news` |
+| **baidu-scholar** | 🌐 | `search` |
 | **bilibili** | 🌐 | `hot` `search` `me` `favorite` `history` `feed` `user-videos` `subtitle` `dynamic` `ranking` `following` |
 | **bloomberg** | ✅🌐 | RSS: `main` `markets` `tech` `politics` `economics` `opinions` `industries` `businessweek` `feeds` · Browser: `news` (full article) |
 | **bluesky** | 🌐 | `search` `profile` `user` `feeds` `followers` `following` `thread` `trending` `starter-packs` |
@@ -84,6 +85,9 @@ Type legend: 🌐 = Browser (needs Chrome login) · ✅ = Public API (no browser
 | **facebook** | 🌐 | `feed` `profile` `search` `friends` `groups` `events` `notifications` `memories` `add-friend` `join-group` |
 | **gemini** | 🌐 | `ask` `new` `image` `deep-research` `deep-research-result` |
 | **google** | ✅ | `news` `search` `suggest` `trends` |
+| **google-scholar** | 🌐 | `search` |
+| **gov-law** | 🌐 | `search` `recent` |
+| **gov-policy** | 🌐 | `search` `recent` |
 | **grok** | 🌐 | `ask` `image` |
 | **hackernews** | ✅ | `top` `new` `best` `ask` `show` `jobs` `search` `user` |
 | **hf** | ✅ | `top` |
@@ -121,6 +125,7 @@ Type legend: 🌐 = Browser (needs Chrome login) · ✅ = Public API (no browser
 | **web** | 🌐 | `read` — any URL to Markdown |
 | **weibo** | 🌐 | `hot` `search` `feed` `user` `me` `post` `comments` |
 | **weixin** | 🌐 | `download` — 公众号 article to Markdown |
+| **wanfang** | 🌐 | `search` |
 | **weread** | 🌐 | `shelf` `search` `book` `highlights` `notes` `notebooks` `ranking` |
 | **wikipedia** | ✅ | `search` `summary` `random` `trending` |
 | **xianyu** | 🌐 | `search` `item` `chat` |
