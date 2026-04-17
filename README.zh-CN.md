@@ -10,7 +10,7 @@
 
 OpenCLI 可以用同一套 CLI 做三类事情：
 
-- **直接使用现成适配器**：B站、知乎、小红书、Twitter/X、Reddit、HackerNews 等 [87+ 站点](#内置命令) 开箱即用。
+- **直接使用现成适配器**：B站、知乎、小红书、Twitter/X、Reddit、HackerNews 等 [90+ 站点](#内置命令) 开箱即用。
 - **直接驱动浏览器**：用 `opencli browser` 让 AI Agent 实时点击、输入、提取、截图、检查页面状态。
 - **把新网站生成成 CLI**：通过 `explore`、`synthesize`、`generate`、`cascade` 从真实页面行为推导出新的适配器。
 
@@ -20,7 +20,7 @@ OpenCLI 可以用同一套 CLI 做三类事情：
 
 - **桌面应用控制** — 通过 CDP 直接在终端驱动 Electron 应用（Cursor、Codex、ChatGPT、Notion 等）。
 - **浏览器自动化** — `browser` 让 AI Agent 直接控制浏览器：点击、输入、提取、截图，完全可编程。
-- **网站 → CLI** — 把任何网站变成确定性 CLI：87+ 内置适配器，或用 `opencli generate` 生成新的。
+- **网站 → CLI** — 把任何网站变成确定性 CLI：90+ 内置适配器，或用 `opencli generate` 生成新的。
 - **账号安全** — 复用 Chrome/Chromium 登录态，凭证永远不会离开浏览器。
 - **面向 AI Agent** — `explore` 发现 API，`synthesize` 生成适配器，`cascade` 探测认证策略，`browser` 直接控制浏览器。
 - **CLI 枢纽** — 统一发现、自动安装、纯透传任何外部 CLI（gh、docker、obsidian 等）。
@@ -208,7 +208,12 @@ npm link
 | **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` | 浏览器 |
 | **uiverse** | `code` `preview` | 浏览器 |
 | **apple-podcasts** | `search` `episodes` `top` | 公开 |
+| **baidu-scholar** | `search` | 公开 |
+| **google-scholar** | `search` | 公开 |
+| **gov-law** | `search` `recent` | 公开 |
+| **gov-policy** | `search` `recent` | 公开 |
 | **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` | 公开 / 浏览器 |
+| **wanfang** | `search` | 公开 |
 | **xiaoyuzhou** | `podcast*` `podcast-episodes*` `episode*` `download*` `transcript*` | 本地凭证 |
 | **zhihu** | `hot` `search` `question` `download` `follow` `like` `favorite` `comment` `answer` | 浏览器 |
 | **weixin** | `download` | 浏览器 |
@@ -267,7 +272,7 @@ npm link
 | **douyin** | `videos` `publish` `drafts` `draft` `delete` `stats` `profile` `update` `hashtag` `location` `activities` `collections` | 浏览器 |
 | **yuanbao** | `new` `ask` | 浏览器 |
 
-87+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
+90+ 适配器 — **[→ 查看完整命令列表](./docs/adapters/index.md)**
 
 `*` `opencli xiaoyuzhou podcast`、`podcast-episodes`、`episode`、`download`、`transcript` 需要本地小宇宙凭证：`~/.opencli/xiaoyuzhou.json`。
 

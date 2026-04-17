@@ -20,7 +20,7 @@ It also works as a **CLI hub** for local tools such as `gh`, `docker`, and other
 
 - **Desktop App Control** — Drive Electron apps (Cursor, Codex, ChatGPT, Notion, etc.) directly from the terminal via CDP.
 - **Browser Automation** — `browser` gives AI agents direct browser control: click, type, extract, screenshot — fully scriptable.
-- **Website → CLI** — Turn any website into a deterministic CLI: 87+ pre-built adapters, or generate your own with `opencli generate`.
+- **Website → CLI** — Turn any website into a deterministic CLI: 90+ pre-built adapters, or generate your own with `opencli generate`.
 - **Account-safe** — Reuses Chrome/Chromium logged-in state; your credentials never leave the browser.
 - **AI Agent ready** — `explore` discovers APIs, `synthesize` generates adapters, `cascade` finds auth strategies, `browser` controls the browser directly.
 - **CLI Hub** — Discover, auto-install, and passthrough commands to any external CLI (gh, docker, obsidian, etc).
@@ -205,10 +205,15 @@ To load the source Browser Bridge extension:
 | **xiaoe** | `courses` `detail` `catalog` `play-url` `content` |
 | **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` |
 | **uiverse** | `code` `preview` |
+| **baidu-scholar** | `search` |
+| **google-scholar** | `search` |
+| **gov-law** | `search` `recent` |
+| **gov-policy** | `search` `recent` |
 | **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` |
+| **wanfang** | `search` |
 | **xiaoyuzhou** | `podcast*` `podcast-episodes*` `episode*` `download*` `transcript*` |
 
-87+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
+90+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**
 
 `*` `opencli xiaoyuzhou podcast`, `podcast-episodes`, `episode`, `download`, and `transcript` require local Xiaoyuzhou credentials in `~/.opencli/xiaoyuzhou.json`.
 
