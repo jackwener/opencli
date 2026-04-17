@@ -34,6 +34,16 @@ async function getBrowserPage(): Promise<import('./types.js').IPage> {
   return bridge.connect({ timeout: 30, workspace: 'browser:default' });
 }
 
+function parsePositiveIntOption(val: string | undefined, label: string, fallback: number): number {
+  if (val === undefined) return fallback;
+  const parsed = parseInt(val, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    console.error(`[cli] Invalid ${label}="${val}", using default ${fallback}`);
+    return fallback;
+  }
+  return parsed;
+}
+
 function applyVerbose(opts: { verbose?: boolean }): void {
   if (opts.verbose) process.env.OPENCLI_VERBOSE = '1';
 }
@@ -1132,10 +1142,9 @@ cli({
     .action(async (opts) => {
       // @ts-expect-error JS adapter — no type declarations
       const { startServe } = await import('../clis/antigravity/serve.js');
-      const { parseTimeoutValue } = await import('./runtime.js');
       await startServe({
         port: parseInt(opts.port, 10),
-        timeout: opts.timeout ? parseTimeoutValue(opts.timeout, '--timeout', 120) : undefined,
+        timeout: opts.timeout ? parsePositiveIntOption(opts.timeout, '--timeout', 120) : undefined,
       });
     });
 

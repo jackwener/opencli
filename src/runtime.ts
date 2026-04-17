@@ -13,21 +13,15 @@ export function getBrowserFactory(site?: string): new () => IBrowserFactory {
   return BrowserBridge;
 }
 
-/**
- * Validates and parses a timeout value (seconds).
- */
-export function parseTimeoutValue(val: string | number | undefined, label: string, fallback: number): number {
-  if (val === undefined) return fallback;
-  const parsed = typeof val === 'number' ? val : parseInt(String(val), 10);
+function parseEnvTimeout(envVar: string, fallback: number): number {
+  const raw = process.env[envVar];
+  if (raw === undefined) return fallback;
+  const parsed = parseInt(raw, 10);
   if (Number.isNaN(parsed) || parsed <= 0) {
-    console.error(`[runtime] Invalid ${label}="${val}", using default ${fallback}s`);
+    log.warn(`[runtime] Invalid ${envVar}="${raw}", using default ${fallback}s`);
     return fallback;
   }
   return parsed;
-}
-
-export function parseEnvTimeout(envVar: string, fallback: number): number {
-  return parseTimeoutValue(process.env[envVar], envVar, fallback);
 }
 
 export const DEFAULT_BROWSER_CONNECT_TIMEOUT = parseEnvTimeout('OPENCLI_BROWSER_CONNECT_TIMEOUT', 30);
