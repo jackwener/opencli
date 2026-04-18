@@ -4,26 +4,30 @@
 // scripts, and consults the structured exemption registry at
 // .audit/exemptions/exemptions.json.
 //
-// Two enforcement tiers:
+// Three enforcement tiers:
 //   - DIRECT deps (declared in package.json): violations fail the audit
 //   - TRANSITIVE deps (everything else in the lockfile): reported as
 //     warnings; renovate.json's minimumReleaseAge covers ongoing updates
-// Pass --strict-transitive to escalate transitive violations to failure.
+//   - NEW TRANSITIVE deps (in current lockfile but absent in base ref):
+//     these are the supply-chain attack vector — pass --strict-new-transitive
+//     to fail on any new <90d transitive dep introduced since base
+// Pass --strict-transitive to escalate ALL transitive violations to failure.
 //
 // Always fail-closed on registry/parse errors. The previous direct-only
 // fail-open implementation hid <90d transitive deps and silently passed
 // when npm view returned errors.
 //
 // Usage:
-//   node scripts/audit/check-dep-age.mjs                          # root
-//   node scripts/audit/check-dep-age.mjs extension                # extension
-//   node scripts/audit/check-dep-age.mjs --strict-transitive
-//   node scripts/audit/check-dep-age.mjs extension --strict-transitive
+//   node scripts/audit/check-dep-age.mjs                                  # root, warn on transitive
+//   node scripts/audit/check-dep-age.mjs extension
+//   node scripts/audit/check-dep-age.mjs --strict-transitive              # ALL transitive must be >=90d
+//   node scripts/audit/check-dep-age.mjs --strict-new-transitive          # only NEW <90d transitive blocks
+//   node scripts/audit/check-dep-age.mjs --strict-new-transitive --base-ref origin/dev
 //
 // Exit codes:
-//   0  OK (or only transitive warnings without --strict-transitive)
-//   1  one or more direct-dep violations, errors, or (with --strict-transitive) transitive violations
-//   2  invalid input (missing files, malformed exemptions)
+//   0  OK (or only grandfathered transitive warnings)
+//   1  any direct-dep violation, registry error, or (with --strict-*) qualifying transitive violation
+//   2  invalid input (missing files, malformed exemptions, unreachable base ref)
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
@@ -31,7 +35,10 @@ import { resolve } from 'node:path';
 
 const args = process.argv.slice(2);
 const strictTransitive = args.includes('--strict-transitive');
-const subdir = args.find(a => !a.startsWith('--')) || '.';
+const strictNewTransitive = args.includes('--strict-new-transitive');
+const baseRefIdx = args.indexOf('--base-ref');
+const baseRef = baseRefIdx >= 0 && args[baseRefIdx + 1] ? args[baseRefIdx + 1] : 'origin/main';
+const subdir = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--base-ref') || '.';
 
 const pkgPath = resolve(subdir, 'package.json');
 const lockPath = resolve(subdir, 'package-lock.json');
@@ -111,31 +118,69 @@ const directNames = new Set([
   ...Object.keys(pkg.peerDependencies || {}),
 ]);
 
-const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
-const deps = new Map();
-const installScripts = [];
-
-for (const [path, info] of Object.entries(lock.packages || {})) {
-  if (path === '') continue;
-  if (info.link) continue;
-  if (!info.version) continue;
-  let name = info.name;
-  if (!name) {
-    const m = path.match(/node_modules\/((?:@[^/]+\/)?[^/]+)$/);
-    name = m ? m[1] : null;
+function collectDeps(lockJson) {
+  const out = new Map();
+  for (const [path, info] of Object.entries(lockJson.packages || {})) {
+    if (path === '') continue;
+    if (info.link) continue;
+    if (!info.version) continue;
+    let name = info.name;
+    if (!name) {
+      const m = path.match(/node_modules\/((?:@[^/]+\/)?[^/]+)$/);
+      name = m ? m[1] : null;
+    }
+    if (!name) continue;
+    const key = `${name}@${info.version}`;
+    if (!out.has(key)) out.set(key, { name, version: info.version, paths: [] });
+    out.get(key).paths.push(path);
   }
-  if (!name) continue;
-  const key = `${name}@${info.version}`;
-  if (!deps.has(key)) deps.set(key, { name, version: info.version, paths: [] });
-  deps.get(key).paths.push(path);
+  return out;
+}
+
+const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
+const deps = collectDeps(lock);
+const installScripts = [];
+for (const [path, info] of Object.entries(lock.packages || {})) {
   if (info.hasInstallScript) {
-    installScripts.push({ name, version: info.version, path });
+    installScripts.push({ name: info.name || path.match(/node_modules\/((?:@[^/]+\/)?[^/]+)$/)?.[1], version: info.version, path });
+  }
+}
+
+// Build baseline (name@version) set for new-transitive detection. If the
+// base ref doesn't have the lockfile (first introduction) the script
+// downgrades to "no baseline" and skips the new-transitive escalation
+// rather than treating every entry as new.
+let baselineKeys = null;
+let baselineUnavailableReason = null;
+if (strictNewTransitive) {
+  const lockRelative = subdir === '.' ? 'package-lock.json' : `${subdir.replace(/\/$/, '')}/package-lock.json`;
+  try {
+    const baseLockText = execFileSync('git', ['show', `${baseRef}:${lockRelative}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const baseLock = JSON.parse(baseLockText);
+    baselineKeys = new Set(collectDeps(baseLock).keys());
+  } catch (e) {
+    baselineUnavailableReason = e.message.split('\n')[0];
   }
 }
 
 console.log(`Scanning ${deps.size} unique packages from ${lockPath}...`);
 console.log(`Direct deps (from ${pkgPath}): ${directNames.size}`);
-console.log(`Mode: ${strictTransitive ? 'STRICT (transitive violations fail)' : 'standard (transitive violations warn)'}`);
+let modeLabel;
+if (strictTransitive) {
+  modeLabel = 'STRICT-ALL-TRANSITIVE (every transitive <90d fails)';
+} else if (strictNewTransitive) {
+  if (baselineKeys) {
+    modeLabel = `STRICT-NEW-TRANSITIVE (only transitive entries absent in ${baseRef} fail; baseline has ${baselineKeys.size} entries)`;
+  } else {
+    modeLabel = `STRICT-NEW-TRANSITIVE requested but baseline ${baseRef} unavailable (${baselineUnavailableReason}) — falling back to standard warn`;
+  }
+} else {
+  modeLabel = 'standard (transitive violations warn)';
+}
+console.log(`Mode: ${modeLabel}`);
 if (exemptions.size > 0) {
   console.log(`Active exemptions: ${[...exemptions.keys()].join(', ')}`);
 }
@@ -192,6 +237,7 @@ let okCount = 0;
 let exemptCount = 0;
 const directViolations = [];
 const transitiveViolations = [];
+const newTransitiveViolations = [];
 const errors = [];
 
 for (const { name, version } of deps.values()) {
@@ -218,7 +264,16 @@ for (const { name, version } of deps.values()) {
       console.log(`  EXEMPT  ${(isDirect ? '[direct]    ' : '[transitive]')} ${key.padEnd(38)} age=${String(ageDays).padStart(4)}d  ${exemptions.get(key).reason}`);
       continue;
     }
-    (isDirect ? directViolations : transitiveViolations).push({ name, version, ageDays, pubStr });
+    if (isDirect) {
+      directViolations.push({ name, version, ageDays, pubStr });
+    } else {
+      const isNew = baselineKeys && !baselineKeys.has(key);
+      if (isNew) {
+        newTransitiveViolations.push({ name, version, ageDays, pubStr });
+      } else {
+        transitiveViolations.push({ name, version, ageDays, pubStr, grandfathered: !!baselineKeys });
+      }
+    }
   } catch (e) {
     errors.push({ name, version, reason: e.message, isDirect });
   }
@@ -249,13 +304,14 @@ if (installScripts.length > 0) {
 }
 
 console.log('\n=== Summary ===');
-console.log(`  OK (>=90d):                       ${okCount}`);
-console.log(`  Exempt (active registration):     ${exemptCount}`);
-console.log(`  Direct violations (fail):         ${directViolations.length}`);
-console.log(`  Transitive violations (${strictTransitive ? 'fail' : 'warn'}): ${transitiveViolations.length}`);
-console.log(`  Errors (fail):                    ${errors.length}`);
-console.log(`  Lifecycle scripts:                ${installScripts.length}`);
-console.log(`  Expired exemptions:               ${expiredExemptions.length}`);
+console.log(`  OK (>=90d):                                ${okCount}`);
+console.log(`  Exempt (active registration):              ${exemptCount}`);
+console.log(`  Direct violations (fail):                  ${directViolations.length}`);
+console.log(`  New transitive violations (${strictNewTransitive && baselineKeys ? 'fail' : 'warn'}, since ${baseRef}): ${newTransitiveViolations.length}`);
+console.log(`  Grandfathered transitive violations (${strictTransitive ? 'fail' : 'warn'}): ${transitiveViolations.length}`);
+console.log(`  Errors (fail):                             ${errors.length}`);
+console.log(`  Lifecycle scripts:                         ${installScripts.length}`);
+console.log(`  Expired exemptions:                        ${expiredExemptions.length}`);
 
 if (directViolations.length > 0) {
   console.log('\n=== Direct violations (<90d, no exemption) — BLOCKING ===');
@@ -264,9 +320,19 @@ if (directViolations.length > 0) {
   }
 }
 
+if (newTransitiveViolations.length > 0) {
+  const blocks = strictNewTransitive && baselineKeys;
+  const tag = blocks ? '❌' : '⚠️ ';
+  console.log(`\n=== New transitive violations (<90d, absent in ${baseRef}) — ${blocks ? 'BLOCKING (--strict-new-transitive)' : 'WARNING (enable --strict-new-transitive to block)'} ===`);
+  for (const v of newTransitiveViolations) {
+    console.log(`  ${tag} ${v.name}@${v.version}  age=${v.ageDays}d  published=${v.pubStr}`);
+  }
+}
+
 if (transitiveViolations.length > 0) {
   const tag = strictTransitive ? '❌' : '⚠️ ';
-  console.log(`\n=== Transitive violations (<90d, no exemption) — ${strictTransitive ? 'BLOCKING (--strict-transitive)' : 'WARNING (renovate enforces 90d on updates)'} ===`);
+  const label = baselineKeys ? `Grandfathered transitive violations (already in ${baseRef})` : 'Transitive violations (<90d, no exemption)';
+  console.log(`\n=== ${label} — ${strictTransitive ? 'BLOCKING (--strict-transitive)' : 'WARNING (renovate enforces 90d on updates)'} ===`);
   for (const v of transitiveViolations) {
     console.log(`  ${tag} ${v.name}@${v.version}  age=${v.ageDays}d  published=${v.pubStr}`);
   }
@@ -283,14 +349,17 @@ if (expiredExemptions.length > 0 && (directViolations.length > 0 || errors.lengt
   console.log('\n💡 Hint: an expired exemption may be the cause — extend or rotate it in .audit/exemptions/exemptions.json');
 }
 
-const blocking = directViolations.length + errors.length + (strictTransitive ? transitiveViolations.length : 0);
+let blocking = directViolations.length + errors.length;
+if (strictTransitive) blocking += transitiveViolations.length + newTransitiveViolations.length;
+else if (strictNewTransitive && baselineKeys) blocking += newTransitiveViolations.length;
 
 if (blocking > 0) {
   console.log('\n❌ FAIL: §4.2 not satisfied — see blocking items above.');
   process.exit(1);
 }
 
-if (transitiveViolations.length > 0) {
+const totalWarn = transitiveViolations.length + newTransitiveViolations.length;
+if (totalWarn > 0) {
   console.log('\n✅ PASS (with warnings): direct deps and active exemptions OK; transitive <90d items will be rotated by Renovate.');
 } else {
   console.log('\n✅ PASS: all packages meet §4.2 (or have valid active exemption).');

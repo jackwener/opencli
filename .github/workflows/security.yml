@@ -56,3 +56,24 @@ jobs:
 
       - name: 90-day rule — extension (direct strict, transitive warn)
         run: node scripts/audit/check-dep-age.mjs extension
+
+      # Block any NEW <90d transitive dep introduced vs the PR base. Only
+      # runs on pull_request because push events don't have a meaningful
+      # base to diff against. The bootstrap PR that introduced this audit
+      # established the lockfile baseline; from the next PR onwards every
+      # NEW transitive entry under 90d will fail the build.
+      - name: 90-day rule — root (block new <90d transitive vs base)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE"
+          node scripts/audit/check-dep-age.mjs --strict-new-transitive --base-ref "origin/$BASE"
+        env:
+          BASE: ${{ github.base_ref }}
+
+      - name: 90-day rule — extension (block new <90d transitive vs base)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE"
+          node scripts/audit/check-dep-age.mjs extension --strict-new-transitive --base-ref "origin/$BASE"
+        env:
+          BASE: ${{ github.base_ref }}
