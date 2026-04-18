@@ -186,7 +186,8 @@ export function getTopicAuthor(topic) {
         '');
 }
 export function getTopicText(topic) {
-    return (topic.title || '').replace(/\s+/g, ' ').trim();
+    const title = (topic.title || '').replace(/\s+/g, ' ').trim();
+    return title || getTopicContent(topic);
 }
 export function getTopicContent(topic) {
     const primary = [
