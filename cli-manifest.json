@@ -15028,6 +15028,76 @@
   },
   {
     "site": "twitter",
+    "name": "list-add",
+    "description": "Add a user to a Twitter/X list you own (no-op if already a member)",
+    "domain": "x.com",
+    "strategy": "ui",
+    "browser": true,
+    "args": [
+      {
+        "name": "listId",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": ""
+      },
+      {
+        "name": "username",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": ""
+      }
+    ],
+    "columns": [
+      "listId",
+      "username",
+      "userId",
+      "status",
+      "message"
+    ],
+    "type": "js",
+    "modulePath": "twitter/list-add.js",
+    "sourceFile": "twitter/list-add.js",
+    "navigateBefore": true
+  },
+  {
+    "site": "twitter",
+    "name": "list-remove",
+    "description": "Remove a user from a Twitter/X list you own (toggles via UI; no-op if not currently a member)",
+    "domain": "x.com",
+    "strategy": "ui",
+    "browser": true,
+    "args": [
+      {
+        "name": "listId",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": ""
+      },
+      {
+        "name": "username",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": ""
+      }
+    ],
+    "columns": [
+      "listId",
+      "username",
+      "userId",
+      "status",
+      "message"
+    ],
+    "type": "js",
+    "modulePath": "twitter/list-remove.js",
+    "sourceFile": "twitter/list-remove.js",
+    "navigateBefore": true
+  },
+  {
+    "site": "twitter",
     "name": "list-tweets",
     "description": "Fetch tweets from a Twitter/X list timeline",
     "domain": "x.com",
@@ -15088,8 +15158,8 @@
       "mode"
     ],
     "type": "js",
-    "modulePath": "twitter/lists.js",
-    "sourceFile": "twitter/lists.js",
+    "modulePath": "twitter/list-add.js",
+    "sourceFile": "twitter/list-add.js",
     "navigateBefore": "https://x.com"
   },
   {
