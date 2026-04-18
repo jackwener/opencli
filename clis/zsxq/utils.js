@@ -186,8 +186,10 @@ export function getTopicAuthor(topic) {
         '');
 }
 export function getTopicText(topic) {
+    return (topic.title || '').replace(/\s+/g, ' ').trim();
+}
+export function getTopicContent(topic) {
     const primary = [
-        topic.title,
         topic.talk?.text,
         topic.question?.text,
         topic.answer?.text,
@@ -218,8 +220,8 @@ export function toTopicRow(topic) {
         type: topic.type || '',
         group: topic.group?.name || '',
         author: getTopicAuthor(topic),
-        title: getTopicText(topic).slice(0, 120),
-        content: getTopicText(topic),
+        title: getTopicText(topic),
+        content: getTopicContent(topic),
         comments: topic.comments_count ?? comments.length ?? 0,
         likes: topic.likes_count ?? 0,
         readers: topic.readers_count ?? topic.reading_count ?? 0,
