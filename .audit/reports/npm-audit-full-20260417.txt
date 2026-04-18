@@ -1,0 +1,15 @@
+# npm audit report
+
+vite  <=6.4.1
+Severity: moderate
+Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling - https://github.com/advisories/GHSA-4w7w-66w2-5vf9
+No fix available
+node_modules/vite
+  vitepress  <=1.6.4
+  Depends on vulnerable versions of vite
+  node_modules/vitepress
+
+2 moderate severity vulnerabilities
+
+Some issues need review, and may require choosing
+a different dependency.
