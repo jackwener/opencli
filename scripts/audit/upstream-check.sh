@@ -2,7 +2,7 @@
 # Report upstream (jackwener/opencli) changes since .audit-baseline.
 # Read-only; no merges, no modifications.
 # Reference: .audit/specs/2026-04-17-opencli-safe-usage-design.md §7.2
-set -e
+set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -11,11 +11,16 @@ if [ ! -f .audit-baseline ]; then
   exit 1
 fi
 
-git fetch upstream --tags --quiet 2>/dev/null || {
-  echo "❌ Cannot fetch upstream (is 'upstream' remote configured?)"
+if ! git remote get-url upstream >/dev/null 2>&1; then
+  echo "❌ 'upstream' remote not configured"
   echo "   Fix: git remote add upstream git@github.com:jackwener/opencli.git"
   exit 1
-}
+fi
+
+if ! git fetch upstream --tags --quiet 2>/dev/null; then
+  echo "❌ Cannot fetch upstream (network/auth issue?)"
+  exit 1
+fi
 
 CURRENT=$(cat .audit-baseline)
 NEW=$(git rev-parse upstream/main)
@@ -30,30 +35,51 @@ echo "⚠️  $COMMITS new commits (baseline → upstream/main)"
 echo "   baseline: $CURRENT"
 echo "   upstream: $NEW"
 
-echo ""
-echo "=== 🔴 High-risk directories (diff stat) ==="
-git diff --stat "$CURRENT..$NEW" -- \
-  extension/ src/browser/ src/daemon.ts src/daemon-client.ts \
-  scripts/ package.json package-lock.json \
-  .github/workflows/ 2>/dev/null | tail -20
+# Run a query and report failure explicitly. With pipefail enabled, any
+# component of `cmd | filter` that exits non-zero would abort the script,
+# so each section is wrapped to keep the report flowing while making
+# failures visible.
+run_section() {
+  local title="$1"
+  shift
+  echo ""
+  echo "=== ${title} ==="
+  if ! "$@"; then
+    echo "⚠️  section failed (exit $?)"
+  fi
+}
 
-echo ""
-echo "=== 🟢 Adapter changes (grouped by site) ==="
-git log --name-only --format="" "$CURRENT..$NEW" -- clis/ 2>/dev/null \
-  | awk -F/ '/^clis\//{print $2}' | sort -u | head -30
+high_risk_diff() {
+  git diff --stat "$CURRENT..$NEW" -- \
+    extension/ src/browser/ src/daemon.ts src/daemon-client.ts \
+    scripts/ package.json package-lock.json \
+    .github/workflows/ | tail -20
+}
 
-echo ""
-echo "=== Tags / Releases ==="
-git tag --contains "$CURRENT" | head -5
-command -v gh >/dev/null && gh release list --repo jackwener/opencli --limit 3 2>/dev/null
+adapter_changes() {
+  git log --name-only --format="" "$CURRENT..$NEW" -- clis/ \
+    | awk -F/ '/^clis\//{print $2}' | sort -u | head -30
+}
 
-echo ""
-echo "=== Security advisories ==="
-if command -v gh >/dev/null 2>&1; then
-  gh api repos/jackwener/opencli/security-advisories 2>/dev/null | head || echo "(none or API unavailable)"
-else
-  echo "(gh CLI not installed; check manually at https://github.com/jackwener/opencli/security/advisories)"
-fi
+tag_releases() {
+  git tag --contains "$CURRENT" | head -5
+  if command -v gh >/dev/null 2>&1; then
+    gh release list --repo jackwener/opencli --limit 3 || echo "(gh release list failed)"
+  fi
+}
+
+security_advisories() {
+  if command -v gh >/dev/null 2>&1; then
+    gh api repos/jackwener/opencli/security-advisories | head || echo "(none or API unavailable)"
+  else
+    echo "(gh CLI not installed; check manually at https://github.com/jackwener/opencli/security/advisories)"
+  fi
+}
+
+run_section "🔴 High-risk directories (diff stat)" high_risk_diff
+run_section "🟢 Adapter changes (grouped by site)" adapter_changes
+run_section "Tags / Releases" tag_releases
+run_section "Security advisories" security_advisories
 
 echo ""
 echo "--- Next steps (see spec §7.3 decision tree) ---"
