@@ -31,3 +31,28 @@ jobs:
 
       - name: npm audit (production)
         run: npm audit --omit=dev --audit-level=high
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Verify lockfiles exist
+        run: |
+          test -f package-lock.json || { echo "missing root package-lock.json"; exit 1; }
+          test -f extension/package-lock.json || { echo "missing extension/package-lock.json"; exit 1; }
+          echo "both lockfiles present"
+
+      - name: Verify direct deps use exact pins (no ^ or ~)
+        run: node scripts/audit/check-exact-pins.mjs
+
+      - name: 90-day rule — root (direct strict, transitive warn)
+        run: node scripts/audit/check-dep-age.mjs
+
+      - name: 90-day rule — extension (direct strict, transitive warn)
+        run: node scripts/audit/check-dep-age.mjs extension
