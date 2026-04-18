@@ -68,17 +68,17 @@
 
 ---
 
-## 2. `vite`（通过 vitepress 引入）— 剩余 CVE 容忍（TOLERATE，非豁免）
+## 2. `vite`（通过 vitepress / vitest 引入）— 剩余 CVE 容忍（TOLERATE，非豁免）
 
 ### 基本事实
 
 | 项目 | 值 |
 |------|---|
-| 类型 | **开发依赖传递**（vitepress 1.6.4 → vite ≤6.4.1） |
+| 类型 | **开发依赖传递**（vitepress 1.6.4 → vite，vitest 4.0.17 → vite） |
 | 相关 CVE | GHSA-4w7w-66w2-5vf9（Path Traversal in Optimized Deps `.map` Handling，MODERATE） |
-| 受影响版本范围 | vite `<=6.4.1`（以及 7.0.0-7.3.1、8.0.0-8.0.4） |
-| 修复版本 | `vite@6.4.2`（2026-04-06，10 天） |
-| **当前锁定版本** | `vite@6.4.1`（通过 vitepress 1.6.4 的 peer dep 约束，受限） |
+| 受影响版本范围 | vite `<=6.4.1`，**以及 7.0.0–7.3.1、8.0.0–8.0.4** |
+| 修复版本 | `vite@6.4.2` / `vite@7.3.2` / `vite@8.0.5`（均 < 90d，不合规） |
+| **当前 root 锁定版本** | `vite@5.4.21`（顶层，vitepress 1.6.4 的 dependency `vite: ^5.4.14`，见 `package-lock.json` `node_modules/vite`） + `vite@7.3.2`（嵌套，vitest 4.0.17 的 dependency `vite: ^5.0.0 \|\| ^6.0.0 \|\| ^7.0.0`，见 `node_modules/vitest/node_modules/vite`） |
 | **是否豁免** | ❌ **否** — 不调整版本 |
 
 ### 容忍依据（不是豁免）
@@ -88,18 +88,20 @@
 触发条件：**运行 `vite dev` / `vitepress dev` 开发服务器时**，恶意客户端构造 `.map` URL 读取服务器文件系统。
 
 本项目用例：
-- `vitepress` 在 `package.json` 的 `devDependencies` 中，不进 npm tarball（`files` 字段只含 `dist/`, `clis/`, `cli-manifest.json`, `scripts/`, `README.md`, `LICENSE`）
+- `vitepress` / `vitest` 都只在 `devDependencies`，不进 npm tarball（`files` 字段只含 `dist/`, `clis/`, `cli-manifest.json`, `scripts/`, `README.md`, `LICENSE`）
 - 项目使用的是 `npm run docs:build`（vitepress build）和 `docs:preview`（static serve），**不跑 `docs:dev`**
-- `vitepress build` 不启 dev server，CVE 的触发路径**在本项目的使用模式下不可达**
+- `vitest run` 用的是 vite 的 module runner，不会监听网络端口（不启 HTTP/WebSocket server），即使嵌套的 vite@7.3.2 在受影响范围（7.0.0–7.3.1）边界，也无 dev-server 触发面
+- 实际 lockfile 状况：root 顶层 `vite@5.4.21` 由 vitepress 1.6.4 拉入；嵌套 `vite@7.3.2` 由 vitest 4.0.17 拉入；**两者都未启动 dev server**，CVE 的触发路径在本项目的使用模式下不可达
 
 ### 决策理由
 
 - **不豁免 §4.2**：避免不必要的豁免门扩大（undici 豁免已足够）
-- **不升 vite**：
-  - vite 6.4.2 是 10 天前发布，同样违反 §4.2
-  - vitepress 1.6.4 的 peer dep 约束 vite ≤6.4.1，强制 override 会冒兼容风险
-  - 继续保留 vite 6.4.1 不触发 CVE 且稳定
-- **不删 vitepress**：保留 docs:build 能力
+- **不升 vite / 不强制 override**：
+  - 修复版（vite 6.4.2 / 7.3.2 / 8.0.5）均 < 90 天，同样违反 §4.2
+  - vitepress 1.6.4 的 dependency 约束是 `^5.4.14`，正常会解析到 vite 5.x；vitest 4.0.17 解析到嵌套 vite 7.3.2
+  - 强制 `overrides` 把所有 vite 顶层化到任一新版本，会造成 vitepress 跑出预期范围、vitest 解析失败的兼容风险
+  - 既然两条路径都不启 dev server，保持现状即可
+- **不删 vitepress / vitest**：保留 docs:build 与单元测试能力
 
 ### 验证范围限定
 
