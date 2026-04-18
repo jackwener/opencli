@@ -49,6 +49,16 @@ if (!existsSync(lockPath)) {
 const today = new Date();
 const ninetyDaysAgo = new Date(today.getTime() - 90 * 86400000);
 
+// §4.4 exemption policy:
+//   - every exemption MUST declare name, version, reason, documentRef,
+//     addedOn, expiresOn (no implicit defaults — reviewers should always
+//     see the audit trail)
+//   - expiresOn must be within MAX_EXEMPTION_DAYS of addedOn so a single
+//     waiver cannot become a permanent whitelist (matches the §4.2 90d
+//     review cycle plus a one-cycle grace window)
+const MAX_EXEMPTION_DAYS = 180;
+const REQUIRED_FIELDS = ['name', 'version', 'reason', 'documentRef', 'addedOn', 'expiresOn'];
+
 const exemptions = new Map();
 const expiredExemptions = [];
 if (existsSync(exemptionsPath)) {
@@ -60,13 +70,28 @@ if (existsSync(exemptionsPath)) {
     process.exit(2);
   }
   for (const e of data.exemptions || []) {
-    if (!e.name || !e.version || !e.expiresOn || !e.reason) {
-      console.error(`❌ Malformed exemption (need name, version, reason, expiresOn): ${JSON.stringify(e)}`);
+    const missing = REQUIRED_FIELDS.filter(f => !e[f]);
+    if (missing.length > 0) {
+      console.error(`❌ Malformed exemption (missing ${missing.join(', ')}): ${JSON.stringify(e)}`);
       process.exit(2);
     }
+    const added = new Date(e.addedOn);
     const expiry = new Date(e.expiresOn);
+    if (Number.isNaN(added.getTime())) {
+      console.error(`❌ Invalid addedOn date in exemption ${e.name}@${e.version}: ${e.addedOn}`);
+      process.exit(2);
+    }
     if (Number.isNaN(expiry.getTime())) {
       console.error(`❌ Invalid expiresOn date in exemption ${e.name}@${e.version}: ${e.expiresOn}`);
+      process.exit(2);
+    }
+    if (expiry <= added) {
+      console.error(`❌ Exemption ${e.name}@${e.version}: expiresOn (${e.expiresOn}) must be after addedOn (${e.addedOn})`);
+      process.exit(2);
+    }
+    const ttlDays = Math.floor((expiry.getTime() - added.getTime()) / 86400000);
+    if (ttlDays > MAX_EXEMPTION_DAYS) {
+      console.error(`❌ Exemption ${e.name}@${e.version}: TTL ${ttlDays}d exceeds the ${MAX_EXEMPTION_DAYS}-day cap (raise the cap explicitly with a code change if you really mean it)`);
       process.exit(2);
     }
     const key = `${e.name}@${e.version}`;
