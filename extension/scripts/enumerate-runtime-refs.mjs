@@ -48,10 +48,15 @@ if (Array.isArray(manifest.web_accessible_resources)) {
   }
 }
 
-// Walk allowlisted HTML pages for src/href references. Iterates the
+// Walk allowlisted HTML pages for resource references. Iterates the
 // queue (HTML files queued by push()) and registers any local resource
-// they pull in — popup.html -> popup.js is the canonical case.
-const REF_PATTERN = /\b(?:src|href)\s*=\s*["']([^"'#]+)["']/g;
+// they pull in. Covers the three HTML attributes that can introduce a
+// new executable surface inside the extension:
+//   - src   (script, embed, iframe, frame, img, source, audio, video, track)
+//   - href  (link, a)
+//   - data  (object — important: <object data> loads HTML which itself
+//            can load scripts, bypassing a src/href-only walker)
+const REF_PATTERN = /\b(?:src|href|data)\s*=\s*["']([^"'#]+)["']/g;
 const SKIP_PROTOCOL = /^(?:https?:|data:|mailto:|chrome-extension:|chrome:)/i;
 
 while (queue.length > 0) {
