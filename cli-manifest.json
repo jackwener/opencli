@@ -3250,7 +3250,7 @@
       {
         "name": "op",
         "type": "str",
-        "default": "/Users/jakevin/Pictures/chatgpt",
+        "default": "/Users/hahaxixi2017/Pictures/chatgpt",
         "required": false,
         "help": "Output directory"
       },
@@ -6169,7 +6169,7 @@
       {
         "name": "op",
         "type": "str",
-        "default": "/Users/jakevin/tmp/gemini-images",
+        "default": "/Users/hahaxixi2017/tmp/gemini-images",
         "required": false,
         "help": "Output directory shorthand"
       },
@@ -7450,7 +7450,7 @@
       {
         "name": "path",
         "type": "str",
-        "default": "/Users/jakevin/Downloads/Instagram",
+        "default": "/Users/hahaxixi2017/Downloads/Instagram",
         "required": false,
         "help": "Download directory"
       }
@@ -15028,16 +15028,16 @@
   },
   {
     "site": "twitter",
-    "name": "lists",
-    "description": "Get Twitter/X lists for a user",
+    "name": "list-tweets",
+    "description": "Fetch tweets from a Twitter/X list timeline",
     "domain": "x.com",
     "strategy": "cookie",
     "browser": true,
     "args": [
       {
-        "name": "user",
+        "name": "listId",
         "type": "string",
-        "required": false,
+        "required": true,
         "positional": true,
         "help": ""
       },
@@ -15050,6 +15050,38 @@
       }
     ],
     "columns": [
+      "id",
+      "author",
+      "text",
+      "likes",
+      "retweets",
+      "replies",
+      "created_at",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "twitter/list-tweets.js",
+    "sourceFile": "twitter/list-tweets.js",
+    "navigateBefore": "https://x.com"
+  },
+  {
+    "site": "twitter",
+    "name": "lists",
+    "description": "Get Twitter/X lists for the logged-in user (owned + subscribed)",
+    "domain": "x.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 50,
+        "required": false,
+        "help": ""
+      }
+    ],
+    "columns": [
+      "id",
       "name",
       "members",
       "followers",
@@ -17215,7 +17247,7 @@
     "name": "download",
     "description": "Download Xiaoyuzhou episode audio",
     "domain": "www.xiaoyuzhoufm.com",
-    "strategy": "local",
+    "strategy": "public",
     "browser": false,
     "args": [
       {
@@ -17249,7 +17281,7 @@
     "name": "episode",
     "description": "View details of a Xiaoyuzhou podcast episode",
     "domain": "www.xiaoyuzhoufm.com",
-    "strategy": "local",
+    "strategy": "public",
     "browser": false,
     "args": [
       {
@@ -17278,7 +17310,7 @@
     "name": "podcast",
     "description": "View a Xiaoyuzhou podcast profile",
     "domain": "www.xiaoyuzhoufm.com",
-    "strategy": "local",
+    "strategy": "public",
     "browser": false,
     "args": [
       {
@@ -17306,7 +17338,7 @@
     "name": "podcast-episodes",
     "description": "List episodes of a Xiaoyuzhou podcast",
     "domain": "www.xiaoyuzhoufm.com",
-    "strategy": "local",
+    "strategy": "public",
     "browser": false,
     "args": [
       {
