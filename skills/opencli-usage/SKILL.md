@@ -36,6 +36,37 @@ Browser commands require:
 
 Public API commands (`hackernews`, `v2ex`) need no browser.
 
+## Multi-tab Targeting
+
+`opencli browser` now has an explicit tab-targeting contract for AI agents:
+
+- `opencli browser open <url>` returns structured JSON `{ url, page }`; the `page` field is the target ID for the tab it navigates
+- `opencli browser tab new [url]` creates a new tab and returns its target ID
+- `opencli browser tab list` shows the current tab/page identities for tabs that already exist
+- `opencli browser tab select <targetId>` updates the default tab for later untargeted browser commands
+- `opencli browser tab close <targetId>` closes a tab by target ID
+- `--tab <targetId>` overrides the default and routes a single command to a specific tab
+
+Use this when an agent needs to keep multiple pages alive without losing track of which tab a command should hit. The normal flow is:
+1. `browser open` or `browser tab new` returns a target ID
+2. the agent keeps that `page` value
+3. later commands use `--tab <targetId>` to route to that specific tab
+4. `browser tab list` is available when the agent needs to inspect tabs that already exist
+
+```bash
+opencli browser open https://github.com
+# -> { "url": "https://github.com/", "page": "7C3A8F21BCDE..." }
+
+opencli browser tab new https://notion.so
+# -> { "url": "https://notion.so", "page": "91F4D22A7C10..." }
+
+opencli browser click 3 --tab 7C3A8F21BCDE...
+opencli browser tab select 91F4D22A7C10...
+opencli browser state
+opencli browser tab list
+opencli browser tab close 91F4D22A7C10...
+```
+
 ## Quick Lookup by Capability
 
 | Capability | Platforms (partial list) |

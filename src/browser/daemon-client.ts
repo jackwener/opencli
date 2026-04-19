@@ -16,12 +16,12 @@ const OPENCLI_HEADERS = { 'X-OpenCLI': '1' };
 let _idCounter = 0;
 
 function generateId(): string {
-  return `cmd_${Date.now()}_${++_idCounter}`;
+  return `cmd_${process.pid}_${Date.now()}_${++_idCounter}`;
 }
 
 export interface DaemonCommand {
   id: string;
-  action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'insert-text' | 'bind-current' | 'network-capture-start' | 'network-capture-read' | 'cdp';
+  action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'sessions' | 'set-file-input' | 'insert-text' | 'bind-current' | 'network-capture-start' | 'network-capture-read' | 'cdp' | 'frames';
   /** Target page identity (targetId). Cross-layer contract with the extension. */
   page?: string;
   code?: string;
@@ -50,6 +50,8 @@ export interface DaemonCommand {
   windowFocused?: boolean;
   /** Custom idle timeout in seconds for this workspace session. Overrides the default. */
   idleTimeout?: number;
+  /** Frame index for cross-frame operations (0-based, from 'frames' action) */
+  frameIndex?: number;
 }
 
 export interface DaemonResult {
@@ -155,6 +157,11 @@ async function sendCommandRaw(
       const result = (await res.json()) as DaemonResult;
 
       if (!result.ok) {
+        const isDuplicateCommandId = res.status === 409
+          || (result.error ?? '').includes('Duplicate command id');
+        if (isDuplicateCommandId && attempt < maxRetries) {
+          continue;
+        }
         const advice = classifyBrowserError(new Error(result.error ?? ''));
         if (advice.retryable && attempt < maxRetries) {
           await sleep(advice.delayMs);

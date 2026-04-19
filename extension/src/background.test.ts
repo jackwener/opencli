@@ -154,6 +154,109 @@ describe('background tab isolation', () => {
     ]);
   });
 
+  it('lists cross-origin frames in the same order exposed by snapshot [F#] markers', async () => {
+    const { chrome } = createChromeMock();
+    chrome.debugger.sendCommand = vi.fn(async (_target: unknown, method: string) => {
+      if (method === 'Runtime.enable') return {};
+      if (method === 'Runtime.evaluate') return { result: { value: 1 } };
+      if (method === 'Page.getFrameTree') {
+        return {
+          frameTree: {
+            frame: { id: 'root', url: 'https://main.example/' },
+            childFrames: [
+              {
+                frame: { id: 'same-origin-parent', url: 'https://main.example/embed' },
+                childFrames: [
+                  {
+                    frame: { id: 'cross-origin-nested', url: 'https://x.example/widget', name: 'nested-x' },
+                    childFrames: [
+                      {
+                        frame: { id: 'hidden-descendant', url: 'https://x.example/inner' },
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                frame: { id: 'cross-origin-sibling', url: 'https://y.example/iframe', name: 'sibling-y' },
+              },
+            ],
+          },
+        };
+      }
+      return {};
+    });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+
+    const result = await mod.__test__.handleCommand({ id: 'frames', action: 'frames', workspace: 'site:twitter' });
+
+    expect(result.ok).toBe(true);
+    expect(result.data).toEqual([
+      { index: 0, frameId: 'cross-origin-nested', url: 'https://x.example/widget', name: 'nested-x' },
+      { index: 1, frameId: 'cross-origin-sibling', url: 'https://y.example/iframe', name: 'sibling-y' },
+    ]);
+  });
+
+  it('routes exec frameIndex through the same cross-origin frame ordering as handleFrames', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const evaluateInFrame = vi.fn(async () => 'frame-result');
+    vi.doMock('./cdp', () => ({
+      registerListeners: vi.fn(),
+      registerFrameTracking: vi.fn(),
+      hasActiveNetworkCapture: vi.fn(() => false),
+      detach: vi.fn(async () => {}),
+      evaluateAsync: vi.fn(async () => 'main-result'),
+      evaluateInFrame,
+      getFrameTree: vi.fn(async () => ({
+        frameTree: {
+          frame: { id: 'root', url: 'https://main.example/' },
+          childFrames: [
+            {
+              frame: { id: 'same-origin-parent', url: 'https://main.example/embed' },
+              childFrames: [
+                { frame: { id: 'cross-origin-nested', url: 'https://x.example/widget', name: 'nested-x' } },
+              ],
+            },
+            {
+              frame: { id: 'cross-origin-sibling', url: 'https://y.example/iframe', name: 'sibling-y' },
+            },
+          ],
+        },
+      })),
+      screenshot: vi.fn(),
+      setFileInputFiles: vi.fn(),
+      insertText: vi.fn(),
+      startNetworkCapture: vi.fn(),
+      readNetworkCapture: vi.fn(async () => []),
+      ensureAttached: vi.fn(),
+    }));
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+
+    const listResult = await mod.__test__.handleCommand({ id: 'frames', action: 'frames', workspace: 'site:twitter' });
+    const execResult = await mod.__test__.handleCommand({
+      id: 'exec-in-frame',
+      action: 'exec',
+      code: 'document.title',
+      frameIndex: 0,
+      workspace: 'site:twitter',
+    });
+
+    expect(listResult.ok).toBe(true);
+    expect(listResult.data).toEqual([
+      { index: 0, frameId: 'cross-origin-nested', url: 'https://x.example/widget', name: 'nested-x' },
+      { index: 1, frameId: 'cross-origin-sibling', url: 'https://y.example/iframe', name: 'sibling-y' },
+    ]);
+    expect(execResult.ok).toBe(true);
+    expect(evaluateInFrame).toHaveBeenCalledWith(1, 'document.title', 'cross-origin-nested', false);
+  });
+
   it('creates new tabs inside the automation window', async () => {
     const { chrome, create } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
@@ -165,6 +268,26 @@ describe('background tab isolation', () => {
 
     expect(result.ok).toBe(true);
     expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'https://new.example', active: true });
+  });
+
+  it('closes a tab by page identity', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+
+    const result = await mod.__test__.handleTabs(
+      { id: 'close-by-page', action: 'tabs', op: 'close', workspace: 'site:twitter', page: 'target-1' },
+      'site:twitter',
+    );
+
+    expect(result).toEqual({
+      id: 'close-by-page',
+      ok: true,
+      data: { closed: 'target-1' },
+    });
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(1);
   });
 
   it('treats normalized same-url navigate as already complete', async () => {
@@ -260,6 +383,91 @@ describe('background tab isolation', () => {
       expect.objectContaining({ workspace: 'site:twitter', windowId: 1 }),
       expect.objectContaining({ workspace: 'site:zhihu', windowId: 2 }),
     ]));
+  });
+
+  it('can execute concurrently on two pages in the same workspace', async () => {
+    const { chrome, tabs } = createChromeMock();
+    tabs.push({
+      id: 4,
+      windowId: 1,
+      url: 'https://automation-2.example',
+      title: 'automation-2',
+      active: false,
+      status: 'complete',
+    });
+    vi.stubGlobal('chrome', chrome);
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    vi.doMock('./cdp', () => ({
+      registerListeners: vi.fn(),
+      evaluateAsync: vi.fn(async (tabId: number, code: string) => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise(resolve => setTimeout(resolve, 30));
+        inFlight--;
+        return { tabId, code };
+      }),
+    }));
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:parallel', 1);
+
+    const [first, second] = await Promise.all([
+      mod.__test__.handleExec({ id: 'p1', action: 'exec', workspace: 'site:parallel', page: 'target-1', code: 'window.__task = 1' }, 'site:parallel'),
+      mod.__test__.handleExec({ id: 'p2', action: 'exec', workspace: 'site:parallel', page: 'target-4', code: 'window.__task = 2' }, 'site:parallel'),
+    ]);
+
+    expect(first).toEqual(expect.objectContaining({
+      ok: true,
+      page: 'target-1',
+      data: { tabId: 1, code: 'window.__task = 1' },
+    }));
+    expect(second).toEqual(expect.objectContaining({
+      ok: true,
+      page: 'target-4',
+      data: { tabId: 4, code: 'window.__task = 2' },
+    }));
+    expect(maxInFlight).toBe(2);
+  });
+
+  it('can execute concurrently across two workspaces/windows', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    vi.doMock('./cdp', () => ({
+      registerListeners: vi.fn(),
+      evaluateAsync: vi.fn(async (tabId: number, code: string) => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise(resolve => setTimeout(resolve, 30));
+        inFlight--;
+        return { tabId, code };
+      }),
+    }));
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+    mod.__test__.setAutomationWindowId('site:zhihu', 2);
+
+    const [first, second] = await Promise.all([
+      mod.__test__.handleExec({ id: 'w1', action: 'exec', workspace: 'site:twitter', code: 'window.__window = 1' }, 'site:twitter'),
+      mod.__test__.handleExec({ id: 'w2', action: 'exec', workspace: 'site:zhihu', code: 'window.__window = 2' }, 'site:zhihu'),
+    ]);
+
+    expect(first).toEqual(expect.objectContaining({
+      ok: true,
+      page: 'target-1',
+      data: { tabId: 1, code: 'window.__window = 1' },
+    }));
+    expect(second).toEqual(expect.objectContaining({
+      ok: true,
+      page: 'target-2',
+      data: { tabId: 2, code: 'window.__window = 2' },
+    }));
+    expect(maxInFlight).toBe(2);
   });
 
   it('keeps site:notebooklm inside its owned automation window instead of rebinding to a user tab', async () => {

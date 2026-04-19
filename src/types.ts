@@ -58,9 +58,9 @@ export interface IPage {
   getFormState(): Promise<any>;
   wait(options: number | WaitOptions): Promise<void>;
   tabs(): Promise<any>;
-  closeTab?(index?: number): Promise<void>;
-  newTab?(): Promise<void>;
-  selectTab(index: number): Promise<void>;
+  closeTab?(target?: number | string): Promise<void>;
+  newTab?(url?: string): Promise<string | undefined>;
+  selectTab(target: number | string): Promise<void>;
   networkRequests(includeStatic?: boolean): Promise<any>;
   consoleMessages(level?: string): Promise<any>;
   scroll(direction?: string, amount?: number): Promise<void>;
@@ -86,8 +86,14 @@ export interface IPage {
   getCurrentUrl?(): Promise<string | null>;
   /** Returns the active page identity (targetId), or undefined if not yet resolved. */
   getActivePage?(): string | undefined;
+  /** Bind the page object to a specific page identity (targetId). */
+  setActivePage?(page?: string): void;
   /** Send a raw CDP command via chrome.debugger passthrough. */
   cdp?(method: string, params?: Record<string, unknown>): Promise<unknown>;
+  /** List cross-origin iframe targets in snapshot order. */
+  frames?(): Promise<Array<{ index: number; frameId: string; url: string; name: string }>>;
+  /** Evaluate JavaScript inside a cross-origin iframe identified by its frame index. */
+  evaluateInFrame?(js: string, frameIndex: number): Promise<unknown>;
   /** Click at native coordinates via CDP Input.dispatchMouseEvent. */
   nativeClick?(x: number, y: number): Promise<void>;
   /** Type text via CDP Input.insertText. */

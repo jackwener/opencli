@@ -25,6 +25,29 @@ That's it! The daemon auto-starts when you run any browser command. No tokens, n
 opencli doctor            # Check extension + daemon connectivity
 ```
 
+## Tab Targeting
+
+Browser commands run inside the shared `browser:default` workspace unless you explicitly choose another tab target.
+
+```bash
+opencli browser open https://www.baidu.com/
+opencli browser tab list
+opencli browser tab new https://www.baidu.com/
+opencli browser eval --tab <targetId> 'document.title'
+opencli browser tab select <targetId>
+opencli browser get title
+opencli browser tab close <targetId>
+```
+
+Key rules:
+
+- `opencli browser open <url>` and `opencli browser tab new [url]` return a `targetId`.
+- `opencli browser tab list` prints the `targetId` values of tabs that already exist.
+- `--tab <targetId>` routes a single browser command to that specific tab.
+- `tab new` creates a new tab but does not change the default browser target.
+- `tab select <targetId>` makes that tab the default target for later untargeted `opencli browser ...` commands.
+- `tab close <targetId>` removes the tab; if it was the current default target, the stored default is cleared.
+
 ## How It Works
 
 ```

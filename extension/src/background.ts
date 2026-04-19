@@ -267,6 +267,7 @@ function initialize(): void {
   initialized = true;
   chrome.alarms.create('keepalive', { periodInMinutes: 0.4 }); // ~24 seconds
   executor.registerListeners();
+  executor.registerFrameTracking();
   void connect();
   console.log('[opencli] OpenCLI extension initialized');
 }
@@ -334,6 +335,8 @@ async function handleCommand(cmd: Command): Promise<Result> {
         return await handleNetworkCaptureStart(cmd, workspace);
       case 'network-capture-read':
         return await handleNetworkCaptureRead(cmd, workspace);
+      case 'frames':
+        return await handleFrames(cmd, workspace);
       default:
         return { id: cmd.id, ok: false, error: `Unknown action: ${cmd.action}` };
     }
@@ -403,6 +406,47 @@ function matchesBindCriteria(tab: chrome.tabs.Tab, cmd: Command): boolean {
     }
   }
   return true;
+}
+
+function getUrlOrigin(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+function enumerateCrossOriginFrames(tree: any): Array<{ index: number; frameId: string; url: string; name: string }> {
+  const frames: Array<{ index: number; frameId: string; url: string; name: string }> = [];
+
+  function collect(node: any, accessibleOrigin: string | null) {
+    for (const child of (node.childFrames || [])) {
+      const frame = child.frame;
+      const frameUrl = frame.url || frame.unreachableUrl || '';
+      const frameOrigin = getUrlOrigin(frameUrl);
+
+      // Mirror dom-snapshot's [F#] rules:
+      // - same-origin frames expand inline and do not get an [F#] slot
+      // - cross-origin / blocked frames get one slot and stop recursion there
+      if (accessibleOrigin && frameOrigin && frameOrigin === accessibleOrigin) {
+        collect(child, frameOrigin);
+        continue;
+      }
+
+      frames.push({
+        index: frames.length,
+        frameId: frame.id,
+        url: frameUrl,
+        name: frame.name || '',
+      });
+    }
+  }
+
+  const rootFrame = tree?.frameTree?.frame;
+  const rootUrl = rootFrame?.url || rootFrame?.unreachableUrl || '';
+  collect(tree.frameTree, getUrlOrigin(rootUrl));
+  return frames;
 }
 
 function setWorkspaceSession(workspace: string, session: Omit<AutomationSession, 'idleTimer' | 'idleDeadlineAt'>): void {
@@ -541,8 +585,28 @@ async function handleExec(cmd: Command, workspace: string): Promise<Result> {
   const tabId = await resolveTabId(cmdTabId, workspace);
   try {
     const aggressive = workspace.startsWith('browser:') || workspace.startsWith('operate:');
+    if (cmd.frameIndex != null) {
+      const tree = await executor.getFrameTree(tabId);
+      const frames = enumerateCrossOriginFrames(tree);
+      if (cmd.frameIndex < 0 || cmd.frameIndex >= frames.length) {
+        return { id: cmd.id, ok: false, error: `Frame index ${cmd.frameIndex} out of range (${frames.length} cross-origin frames available)` };
+      }
+      const data = await executor.evaluateInFrame(tabId, cmd.code, frames[cmd.frameIndex].frameId, aggressive);
+      return pageScopedResult(cmd.id, tabId, data);
+    }
     const data = await executor.evaluateAsync(tabId, cmd.code, aggressive);
     return pageScopedResult(cmd.id, tabId, data);
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleFrames(cmd: Command, workspace: string): Promise<Result> {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, workspace);
+  try {
+    const tree = await executor.getFrameTree(tabId);
+    return { id: cmd.id, ok: true, data: enumerateCrossOriginFrames(tree) };
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -766,6 +830,7 @@ const CDP_ALLOWLIST = new Set([
   // Page metrics & screenshots
   'Page.getLayoutMetrics',
   'Page.captureScreenshot',
+  'Page.getFrameTree',
   // Runtime.enable needed for CDP attach setup (Runtime.evaluate goes through 'exec' action)
   'Runtime.enable',
   // Emulation (used by screenshot full-page)
@@ -904,6 +969,7 @@ async function handleBindCurrent(cmd: Command, workspace: string): Promise<Resul
 }
 
 export const __test__ = {
+  handleExec,
   handleNavigate,
   isTargetUrl,
   handleTabs,
