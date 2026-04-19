@@ -88,8 +88,6 @@ export interface IPage {
   getActivePage?(): string | undefined;
   /** Bind the page object to a specific page identity (targetId). */
   setActivePage?(page?: string): void;
-  /** @deprecated Use getActivePage() instead */
-  getActiveTabId?(): number | undefined;
   /** Send a raw CDP command via chrome.debugger passthrough. */
   cdp?(method: string, params?: Record<string, unknown>): Promise<unknown>;
   /** Click at native coordinates via CDP Input.dispatchMouseEvent. */

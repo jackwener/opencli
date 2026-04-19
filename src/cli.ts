@@ -560,7 +560,10 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       if (!hasSessionCapture) {
         try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
       }
-      console.log(`Navigated to: ${await page.getCurrentUrl?.() ?? url}`);
+      console.log(JSON.stringify({
+        url: await page.getCurrentUrl?.() ?? url,
+        ...(page.getActivePage?.() ? { page: page.getActivePage?.() } : {}),
+      }, null, 2));
     }));
 
   addBrowserTabOption(browser.command('back').description('Go back in browser history'))

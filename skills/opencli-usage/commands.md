@@ -4,6 +4,18 @@ Detailed usage examples for all website adapters, sorted alphabetically by site.
 
 Type legend: 🌐 = Browser (needs Chrome login) · ✅ = Public API (no browser)
 
+## Browser Tab Targeting 🌐
+
+```bash
+opencli browser tab list                     # 列出当前 tab 和 targetId
+opencli browser tab new https://notion.so   # 新建 tab，并返回 targetId
+opencli browser tab select tab-2            # 把 tab-2 设为后续命令的默认目标
+opencli browser state                       # 作用在当前 default tab
+opencli browser click 3 --tab tab-1         # 临时把单条命令路由到 tab-1
+opencli browser tab close tab-2             # 关闭指定 tab
+opencli browser open https://example.com    # 导航并输出当前 targetId
+```
+
 ## 1688 🌐
 
 ```bash

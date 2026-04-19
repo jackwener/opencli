@@ -257,7 +257,12 @@ describe('browser tab targeting commands', () => {
     mockBrowserClose.mockReset().mockResolvedValue(undefined);
 
     browserState.page = {
+      goto: vi.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
       setActivePage: vi.fn(),
+      getActivePage: vi.fn().mockReturnValue('tab-1'),
+      getCurrentUrl: vi.fn().mockResolvedValue('https://one.example'),
+      startNetworkCapture: vi.fn().mockResolvedValue(true),
       evaluate: vi.fn().mockResolvedValue({ ok: true }),
       tabs: vi.fn().mockResolvedValue([
         { index: 0, page: 'tab-1', url: 'https://one.example', title: 'one', active: true },
@@ -313,6 +318,16 @@ describe('browser tab targeting commands', () => {
 
     expect(browserState.page?.newTab).toHaveBeenCalledWith('https://three.example');
     expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('"page": "tab-3"');
+  });
+
+  it('prints the resolved target ID when browser open creates or navigates a tab', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'open', 'https://example.com']);
+
+    expect(browserState.page?.goto).toHaveBeenCalledWith('https://example.com');
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('"url": "https://one.example"');
+    expect(consoleLogSpy.mock.calls.flat().join('\n')).toContain('"page": "tab-1"');
   });
 
   it('does not promote a newly created tab to the persisted default target', async () => {
