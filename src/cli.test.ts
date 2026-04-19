@@ -136,6 +136,38 @@ describe('built-in browser commands verbose wiring', () => {
     );
   });
 
+  it('renders generate output as yaml by default', async () => {
+    const program = createProgram('', '');
+
+    mockGenerateVerifiedFromUrl.mockResolvedValueOnce({
+      status: 'success',
+      adapter: { command: 'demo/top' },
+      stats: { endpoint_count: 1, api_endpoint_count: 1, candidate_count: 1, verified: true, repair_attempted: false, explore_dir: '/tmp/demo' },
+    });
+
+    await program.parseAsync(['node', 'opencli', 'generate', 'https://example.com']);
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('status: success'));
+    expect(mockRenderGenerateVerifiedSummary).not.toHaveBeenCalled();
+  });
+
+  it('renders generate output as json when requested', async () => {
+    const program = createProgram('', '');
+
+    mockGenerateVerifiedFromUrl.mockResolvedValueOnce({
+      status: 'blocked',
+      reason: 'no-viable-api-surface',
+      stage: 'explore',
+      confidence: 'high',
+      stats: { endpoint_count: 0, api_endpoint_count: 0, candidate_count: 0, verified: false, repair_attempted: false, explore_dir: '/tmp/demo' },
+    });
+
+    await program.parseAsync(['node', 'opencli', 'generate', 'https://example.com', '--format', 'json']);
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('"status": "blocked"'));
+    expect(mockRenderGenerateVerifiedSummary).not.toHaveBeenCalled();
+  });
+
   it('enables OPENCLI_VERBOSE for record via the real CLI command', async () => {
     const program = createProgram('', '');
 

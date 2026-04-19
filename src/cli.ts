@@ -288,7 +288,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .argument('<url>')
     .option('--goal <text>')
     .option('--site <name>')
-    .option('--format <fmt>', 'Output format: table, json', 'table')
+    .option('--format <fmt>', 'Output format: yaml, json', 'yaml')
     .option('--no-register', 'Verify the generated adapter without registering it')
     .option('-v, --verbose', 'Debug output')
     .action(async (url: string, opts: {
@@ -299,7 +299,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       verbose?: boolean;
     }) => {
       applyVerbose(opts);
-      const { generateVerifiedFromUrl, renderGenerateVerifiedSummary } = await import('./generate-verified.js');
+      const { generateVerifiedFromUrl } = await import('./generate-verified.js');
       const workspace = `generate:${inferHost(url, opts.site)}`;
       const r = await generateVerifiedFromUrl({
         url,
@@ -309,8 +309,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         workspace,
         noRegister: opts.register === false,
       });
-      if (opts.format === 'json') console.log(JSON.stringify(r, null, 2));
-      else console.log(renderGenerateVerifiedSummary(r));
+      renderOutput(r, { fmt: opts.format });
       process.exitCode = r.status === 'success' ? EXIT_CODES.SUCCESS : EXIT_CODES.GENERIC_ERROR;
     });
 

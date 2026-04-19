@@ -24,36 +24,13 @@ describe('management commands E2E', () => {
     expect(data[0]).toHaveProperty('browser');
   });
 
-  it('list default table format renders sites', async () => {
+  it('list defaults to yaml', async () => {
     const { stdout, code } = await runCli(['list']);
-    expect(code).toBe(0);
-    // Should contain site names
-    expect(stdout).toContain('hackernews');
-    expect(stdout).toContain('bilibili');
-    expect(stdout).toContain('twitter');
-    expect(stdout).toContain('commands across');
-  });
-
-  it('list -f yaml produces valid yaml', async () => {
-    const { stdout, code } = await runCli(['list', '-f', 'yaml']);
     expect(code).toBe(0);
     expect(stdout).toContain('command:');
     expect(stdout).toContain('site:');
-  });
-
-  it('list -f csv produces valid csv', async () => {
-    const { stdout, code } = await runCli(['list', '-f', 'csv']);
-    expect(code).toBe(0);
-    const lines = stdout.trim().split('\n');
-    expect(lines.length).toBeGreaterThan(50);
-  });
-
-  it('list -f md produces markdown table', async () => {
-    const { stdout, code } = await runCli(['list', '-f', 'md']);
-    expect(code).toBe(0);
-    expect(stdout).toContain('|');
-    expect(stdout).toContain('command');
-  });
+    expect(stdout).toContain('hackernews');
+    });
 
   // ── validate ──
   it('validate passes for all built-in adapters', async () => {

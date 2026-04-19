@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { runCli, parseJsonOutput } from './helpers.js';
 
-const FORMATS = ['json', 'yaml', 'csv', 'md'] as const;
+const FORMATS = ['json', 'yaml'] as const;
 
 describe('output formats E2E', () => {
   for (const fmt of FORMATS) {
@@ -27,17 +27,6 @@ describe('output formats E2E', () => {
       if (fmt === 'yaml') {
         expect(stdout).toContain('command:');
         expect(stdout).toContain('site:');
-      }
-
-      if (fmt === 'csv') {
-        // CSV should have a header row + data rows
-        const lines = stdout.trim().split('\n');
-        expect(lines.length).toBeGreaterThanOrEqual(2);
-      }
-
-      if (fmt === 'md') {
-        // Markdown table should have pipe characters
-        expect(stdout).toContain('| command |');
       }
     }, 30_000);
   }
