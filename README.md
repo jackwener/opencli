@@ -211,6 +211,7 @@ To load the source Browser Bridge extension:
 | **gov-policy** | `search` `recent` |
 | **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` |
 | **wanfang** | `search` |
+| **99csw** | `list-chapters` `content` `full` |
 | **xiaoyuzhou** | `podcast*` `podcast-episodes*` `episode*` `download*` `transcript*` |
 
 90+ adapters in total — **[→ see all supported sites & commands](./docs/adapters/index.md)**

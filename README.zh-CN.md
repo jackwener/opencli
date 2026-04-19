@@ -214,6 +214,7 @@ npm link
 | **gov-policy** | `search` `recent` | 公开 |
 | **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` | 公开 / 浏览器 |
 | **wanfang** | `search` | 公开 |
+| **99csw** | `list-chapters` `content` `full` | 浏览器 |
 | **xiaoyuzhou** | `podcast*` `podcast-episodes*` `episode*` `download*` `transcript*` | 本地凭证 |
 | **zhihu** | `hot` `search` `question` `download` `follow` `like` `favorite` `comment` `answer` | 浏览器 |
 | **weixin** | `download` | 浏览器 |

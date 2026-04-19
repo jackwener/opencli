@@ -306,7 +306,7 @@
   {
     "site": "99csw",
     "name": "full",
-    "description": "Download complete book content from 99csw.com (with configurable chapter limits)",
+    "description": "Download complete book content from 99csw.com (resume-capable; serial queue across parallel agents)",
     "domain": "www.99csw.com",
     "strategy": "cookie",
     "browser": true,
@@ -331,6 +331,27 @@
         "default": 0,
         "required": false,
         "help": "Number of chapters to skip from the beginning"
+      },
+      {
+        "name": "output",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "Path to save book content (enables resume via sidecar .ckpt file). Example: ~/Desktop/book.txt"
+      },
+      {
+        "name": "lock_timeout",
+        "type": "int",
+        "default": 3600,
+        "required": false,
+        "help": "Max seconds to wait for another 99csw download to finish (default: 3600 = 1h)"
+      },
+      {
+        "name": "no_lock",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Skip the cross-process queue lock (expert; risks collisions with parallel runs)"
       }
     ],
     "columns": [
