@@ -28,6 +28,7 @@ opencli doctor            # 检查扩展 + 守护进程连接
 浏览器命令默认运行在共享的 `browser:default` workspace 中；如果需要操作指定 tab，可以显式传目标 target。
 
 ```bash
+opencli browser open https://www.baidu.com/
 opencli browser tab list
 opencli browser tab new https://www.baidu.com/
 opencli browser eval --tab <targetId> 'document.title'
@@ -38,7 +39,8 @@ opencli browser tab close <targetId>
 
 规则如下：
 
-- `opencli browser tab list` 会打印当前 tab 的 `targetId`。
+- `opencli browser open <url>` 和 `opencli browser tab new [url]` 都会返回 `targetId`。
+- `opencli browser tab list` 会打印当前已存在 tab 的 `targetId`。
 - `--tab <targetId>` 会把单条 browser 命令路由到对应 tab。
 - `tab new` 只会新建 tab，不会改变默认浏览器目标。
 - `tab select <targetId>` 会把该 tab 设为后续未显式指定 target 的 `opencli browser ...` 命令默认目标。

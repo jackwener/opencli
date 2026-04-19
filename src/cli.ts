@@ -28,7 +28,7 @@ import { log } from './logger.js';
 
 const CLI_FILE = fileURLToPath(import.meta.url);
 const DEFAULT_BROWSER_WORKSPACE = 'browser:default';
-const BROWSER_TAB_OPTION_DESCRIPTION = 'Target tab/page identity from "browser tab list"';
+const BROWSER_TAB_OPTION_DESCRIPTION = 'Target tab/page identity returned by "browser open", "browser tab new", or "browser tab list"';
 
 type BrowserNetworkItem = {
   url: string;
@@ -508,7 +508,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     }));
 
   addBrowserTabOption(browserTab.command('select')
-    .argument('[targetId]', 'Target tab/page identity from "browser tab list"')
+    .argument('[targetId]', 'Target tab/page identity returned by "browser open", "browser tab new", or "browser tab list"')
     .description('Select a tab by target ID and make it the default browser tab'))
     .action(browserAction(async (page, targetId?: string, opts?: { tab?: string }) => {
       const resolvedTarget = resolveBrowserTabTarget(targetId, opts);
@@ -521,7 +521,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     }));
 
   addBrowserTabOption(browserTab.command('close')
-    .argument('[targetId]', 'Target tab/page identity from "browser tab list"')
+    .argument('[targetId]', 'Target tab/page identity returned by "browser open", "browser tab new", or "browser tab list"')
     .description('Close a tab by target ID'))
     .action(browserAction(async (page, targetId?: string, opts?: { tab?: string }) => {
       const resolvedTarget = resolveBrowserTabTarget(targetId, opts);
