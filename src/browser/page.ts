@@ -26,6 +26,13 @@ function isUnsupportedNetworkCaptureError(err: unknown): boolean {
     || (normalized.includes('network capture') && normalized.includes('not supported'));
 }
 
+function isStalePageIdentityError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  const normalized = message.toLowerCase();
+  return normalized.includes('page not found:')
+    || normalized.includes('stale page identity');
+}
+
 /**
  * Page — implements IPage by talking to the daemon via HTTP.
  */
@@ -41,6 +48,17 @@ export class Page extends BasePage {
   private _page: string | undefined;
   private _networkCaptureUnsupported = false;
   private _networkCaptureWarned = false;
+
+  private async _retryExecWithFreshPageIdentity(code: string): Promise<unknown> {
+    const previousPage = this._page;
+    this._page = undefined;
+    try {
+      return await sendCommand('exec', { code, ...this._cmdOpts() });
+    } catch (err) {
+      this._page = previousPage;
+      throw err;
+    }
+  }
 
   /** Helper: spread workspace into command params */
   private _wsOpt(): { workspace: string; idleTimeout?: number } {
@@ -78,6 +96,10 @@ export class Page extends BasePage {
       try {
         await sendCommand('exec', combinedOpts);
       } catch (err) {
+        if (isStalePageIdentityError(err)) {
+          await this._retryExecWithFreshPageIdentity(combinedCode);
+          return;
+        }
         const advice = classifyBrowserError(err);
         // Only settle-retry on target navigation (SPA client-side redirects).
         // Extension/daemon errors are already retried by sendCommandRaw —
@@ -97,7 +119,11 @@ export class Page extends BasePage {
           code: generateStealthJs(),
           ...this._cmdOpts(),
         });
-      } catch {
+      } catch (err) {
+        if (isStalePageIdentityError(err)) {
+          await this._retryExecWithFreshPageIdentity(generateStealthJs()).catch(() => {});
+          return;
+        }
         // Non-fatal: stealth is best-effort
       }
     }
@@ -123,6 +149,9 @@ export class Page extends BasePage {
     try {
       return await sendCommand('exec', { code, ...this._cmdOpts() });
     } catch (err) {
+      if (isStalePageIdentityError(err)) {
+        return this._retryExecWithFreshPageIdentity(code);
+      }
       const advice = classifyBrowserError(err);
       if (advice.kind !== 'target-navigation') throw err;
       await new Promise((resolve) => setTimeout(resolve, advice.delayMs));

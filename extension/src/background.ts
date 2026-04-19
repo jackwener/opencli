@@ -464,7 +464,11 @@ async function resolveTab(tabId: number | undefined, workspace: string, initialU
   const existingSession = automationSessions.get(workspace);
   if (existingSession?.preferredTabId !== null) {
     try {
-      const preferredTab = await chrome.tabs.get(existingSession.preferredTabId);
+      const preferredTabId = existingSession?.preferredTabId;
+      if (preferredTabId === null || preferredTabId === undefined) {
+        throw new Error('Preferred tab is unavailable');
+      }
+      const preferredTab = await chrome.tabs.get(preferredTabId);
       if (isDebuggableUrl(preferredTab.url)) return { tabId: preferredTab.id!, tab: preferredTab };
     } catch {
       automationSessions.delete(workspace);
@@ -933,3 +937,8 @@ export const __test__ = {
     setWorkspaceSession(workspace, session);
   },
 };
+
+// MV3 service workers can be spun up outside install/startup events.
+// Initialize eagerly on module load so a freshly loaded unpacked extension
+// still connects to the daemon and registers listeners immediately.
+initialize();

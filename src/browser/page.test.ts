@@ -69,6 +69,29 @@ describe('Page.evaluate', () => {
     expect(value).toBe(42);
     expect(sendCommandMock).toHaveBeenCalledTimes(2);
   });
+
+  it('drops stale page identity and retries when the daemon reports page-not-found', async () => {
+    sendCommandFullMock.mockResolvedValueOnce({ data: { title: 'ok' }, page: 'stale-page-id' });
+    sendCommandMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Page not found: stale-page-id — stale page identity'))
+      .mockResolvedValueOnce(42);
+
+    const page = new Page('site:notebooklm');
+    await page.goto('https://notebooklm.google.com/');
+    const value = await page.evaluate('21 + 21');
+
+    expect(value).toBe(42);
+    expect(sendCommandMock).toHaveBeenCalledTimes(3);
+    expect(sendCommandMock.mock.calls[1][1]).toEqual(expect.objectContaining({
+      workspace: 'site:notebooklm',
+      page: 'stale-page-id',
+    }));
+    expect(sendCommandMock.mock.calls[2][1]).toEqual(expect.objectContaining({
+      workspace: 'site:notebooklm',
+    }));
+    expect(sendCommandMock.mock.calls[2][1]).not.toHaveProperty('page');
+  });
 });
 
 describe('Page network capture compatibility', () => {

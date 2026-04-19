@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type Listener<T extends (...args: any[]) => void> = { addListener: (fn: T) => void };
+type Listener<T extends (...args: any[]) => void> = {
+  addListener: ((fn: T) => void) | ReturnType<typeof vi.fn>;
+  removeListener?: ((fn: T) => void) | ReturnType<typeof vi.fn>;
+};
 
 type MockTab = {
   id: number;
@@ -427,7 +430,7 @@ describe('background tab isolation', () => {
     expect(mod.__test__.getIdleTimeout('browser:manual')).toBe(180_000);
 
     // Simulate user closing the window — invoke the onRemoved listener
-    const onRemovedListener = chrome.windows.onRemoved.addListener.mock.calls[0][0];
+    const onRemovedListener = (chrome.windows.onRemoved.addListener as ReturnType<typeof vi.fn>).mock.calls[0][0];
     await onRemovedListener(42);
 
     // Session and override should both be cleaned up
