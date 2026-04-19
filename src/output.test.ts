@@ -62,7 +62,7 @@ describe('output TTY detection', () => {
     expect(out).toContain('1 items');
   });
 
-  it('caps wide table columns to terminal width and wraps long values', () => {
+  it('caps wide table columns to terminal width and truncates long values', () => {
     Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
     Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
     render(
@@ -81,9 +81,9 @@ describe('output TTY detection', () => {
       { fmt: 'table', columns: ['name', 'status', 'description'] },
     );
     const out = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(out).toContain('This is a very long');
-    expect(out).toContain('description that');
-    expect(out).toContain('table extremely');
+    expect(out).toContain('This is a very l...');
+    expect(out).toContain('Another long des...');
+    expect(out).not.toContain('terminal width.');
 
     const maxLineLength = out.split('\n').reduce((max: number, line: string) => Math.max(max, line.length), 0);
     expect(maxLineLength).toBeLessThanOrEqual(40);

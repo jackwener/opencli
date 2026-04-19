@@ -72,6 +72,25 @@ function displayWidth(str: string): number {
   return w;
 }
 
+function truncateToWidth(str: string, maxWidth: number): string {
+  if (maxWidth <= 0 || displayWidth(str) <= maxWidth) return str;
+
+  const ellipsis = '...';
+  const ellipsisWidth = displayWidth(ellipsis);
+  if (maxWidth <= ellipsisWidth) return ellipsis.slice(0, maxWidth);
+
+  let out = '';
+  let width = 0;
+  for (const ch of str) {
+    const nextWidth = displayWidth(ch);
+    if (width + nextWidth + ellipsisWidth > maxWidth) break;
+    out += ch;
+    width += nextWidth;
+  }
+
+  return out + ellipsis;
+}
+
 // ── Table rendering ──
 
 // Fits typical date, status, and ID columns without truncation.
@@ -154,12 +173,10 @@ function renderTable(data: unknown, opts: RenderOptions): void {
     style: { head: [], border: [] },
     colWidths: colContentWidths,
     colAligns,
-    wordWrap: true,
-    wrapOnWordBoundary: true,
   });
 
   for (const row of cells) {
-    table.push(row);
+    table.push(row.map((cell, ci) => truncateToWidth(cell, colContentWidths[ci] - 2)));
   }
 
   console.log();
