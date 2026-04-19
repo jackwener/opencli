@@ -200,6 +200,63 @@ describe('background tab isolation', () => {
     ]);
   });
 
+  it('routes exec frameIndex through the same cross-origin frame ordering as handleFrames', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const evaluateInFrame = vi.fn(async () => 'frame-result');
+    vi.doMock('./cdp', () => ({
+      registerListeners: vi.fn(),
+      registerFrameTracking: vi.fn(),
+      hasActiveNetworkCapture: vi.fn(() => false),
+      detach: vi.fn(async () => {}),
+      evaluateAsync: vi.fn(async () => 'main-result'),
+      evaluateInFrame,
+      getFrameTree: vi.fn(async () => ({
+        frameTree: {
+          frame: { id: 'root', url: 'https://main.example/' },
+          childFrames: [
+            {
+              frame: { id: 'same-origin-parent', url: 'https://main.example/embed' },
+              childFrames: [
+                { frame: { id: 'cross-origin-nested', url: 'https://x.example/widget', name: 'nested-x' } },
+              ],
+            },
+            {
+              frame: { id: 'cross-origin-sibling', url: 'https://y.example/iframe', name: 'sibling-y' },
+            },
+          ],
+        },
+      })),
+      screenshot: vi.fn(),
+      setFileInputFiles: vi.fn(),
+      insertText: vi.fn(),
+      startNetworkCapture: vi.fn(),
+      readNetworkCapture: vi.fn(async () => []),
+      ensureAttached: vi.fn(),
+    }));
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('site:twitter', 1);
+
+    const listResult = await mod.__test__.handleCommand({ id: 'frames', action: 'frames', workspace: 'site:twitter' });
+    const execResult = await mod.__test__.handleCommand({
+      id: 'exec-in-frame',
+      action: 'exec',
+      code: 'document.title',
+      frameIndex: 0,
+      workspace: 'site:twitter',
+    });
+
+    expect(listResult.ok).toBe(true);
+    expect(listResult.data).toEqual([
+      { index: 0, frameId: 'cross-origin-nested', url: 'https://x.example/widget', name: 'nested-x' },
+      { index: 1, frameId: 'cross-origin-sibling', url: 'https://y.example/iframe', name: 'sibling-y' },
+    ]);
+    expect(execResult.ok).toBe(true);
+    expect(evaluateInFrame).toHaveBeenCalledWith(1, 'document.title', 'cross-origin-nested', false);
+  });
+
   it('creates new tabs inside the automation window', async () => {
     const { chrome, create } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
