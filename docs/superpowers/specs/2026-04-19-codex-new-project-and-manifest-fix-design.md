@@ -108,7 +108,13 @@ export const newCommand = cli({
   ],
   columns: ['Status', 'Project'],
   func: async (page, kwargs) => {
-    const target = kwargs.project ? kwargs.project.trim() : null;
+    let target = null;
+    if (kwargs.project !== undefined) {
+      target = kwargs.project.trim();
+      if (!target) {
+        throw new Error("--project cannot be empty");
+      }
+    }
     if (target) {
       const available = await listSidebarProjects(page);
       if (!available.includes(target)) {
@@ -177,10 +183,11 @@ user: opencli codex new          (no --project)
 4. Run `opencli codex dump` against the live Codex window. This writes `/tmp/codex-dom.html` and `/tmp/codex-snapshot.json`. Read both, identify the sidebar project row's selector/role.
 5. Fill `listSidebarProjects` and `clickProject` in `clis/codex/new.js` based on the real DOM.
 6. `npm run build` again.
-7. Manual verification (three cases):
-   - `opencli codex new --project Main` — chat appears under Main.
-   - `opencli codex new --project nonsense` — stderr lists projects, exit 1.
-   - `opencli codex new` — behaves as before.
+7. Manual verification (four cases; after each miss/error case run `echo $?` and assert `1`):
+   - `opencli codex new --project Main` — chat appears under Main; `echo $?` → 0.
+   - `opencli codex new --project nonsense` — stderr lists projects; `echo $?` → 1.
+   - `opencli codex new --project ""` — stderr says "--project cannot be empty"; `echo $?` → 1.
+   - `opencli codex new` — behaves as before; `echo $?` → 0.
 8. Add pattern fix unit test in `src/build-manifest.test.ts`; `npm test`.
 9. Commits:
    - `fix(manifest): recognize factory-style adapters (make*Command)` — step 2 + step 8.
@@ -195,7 +202,7 @@ user: opencli codex new          (no --project)
 | CDP endpoint unreachable / Codex not running | Error from Strategy.UI layer surfaces as-is (already covered). No new handling. |
 | Sidebar collapsed or not rendered | `listSidebarProjects` returns `[]`, miss-path prints "(none detected — is the sidebar collapsed?)". |
 | Project name contains spaces or unicode | User quotes in shell: `--project 'My Project'`. Exact match + trim handles it. |
-| Project name is empty string (`--project ""`) | Treated as no target (trimmed to `""`, then falsy); equivalent to no `--project`. This is deliberate: empty should not match any project. |
+| Project name is empty string (`--project ""`) | Throw "--project cannot be empty" and exit 1. Prevents scripts with unset `$VAR` from silently falling back to "current project". |
 | Click succeeds but `Cmd+N` fails | Sidebar stays on the switched project; user can retry. No rollback (D8). |
 | Multiple Codex windows | Out of scope — Codex is single-window. |
 
@@ -219,6 +226,7 @@ user: opencli codex new          (no --project)
 - Modifying Codex CDP connection or auto-launch logic.
 - Changing the existing `makeStatusCommand` / `makeNewCommand` factories themselves.
 - Adding telemetry or warnings to `build-manifest` for skipped files (a separate upstream improvement).
+- Accepted drift cost: inlining `codex/new.js` means future upstream changes to `makeNewCommand` (logging, error normalization, telemetry) won't propagate automatically. Tracked so rebase-time surprise is avoided.
 
 ## 11. Upstream PR Split (post-merge)
 
@@ -228,3 +236,4 @@ Once this PR lands in `ken-zy/OpenCLI:main`:
 - Cherry-pick the `fix(manifest):` commit alone (plus its unit test).
 - Open PR to `jackwener/opencli:main` with body explaining the silent-skip bug + the three affected sites + the unit test.
 - The `feat(codex):` commit stays in the fork.
+- If cherry-pick conflicts (fork's `src/build-manifest.ts` diverged from upstream): do **not** `git cherry-pick --strategy=...` hard; manually re-apply the one-line regex change + test file against upstream HEAD, then re-run `npm test`.
