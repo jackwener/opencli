@@ -176,17 +176,42 @@ describe('Page active target tracking', () => {
     }));
   });
 
-  it('creates a new tab and adopts its returned page identity', async () => {
+  it('creates a new tab without changing the current active page binding', async () => {
+    sendCommandFullMock
+      .mockResolvedValueOnce({ data: { url: 'https://first.example' }, page: 'page-1' })
+      .mockResolvedValueOnce({
+        data: { url: 'https://second.example' },
+        page: 'page-2',
+      });
+    sendCommandMock.mockResolvedValue('ok');
+
+    const page = new Page('browser:default');
+    await page.goto('https://first.example', { waitUntil: 'none' });
+
+    const created = await page.newTab?.('https://second.example');
+
+    expect(created).toBe('page-2');
+    expect(page.getActivePage()).toBe('page-1');
+    await page.evaluate('1 + 1');
+    expect(sendCommandMock).toHaveBeenLastCalledWith('exec', expect.objectContaining({
+      workspace: 'browser:default',
+      page: 'page-1',
+    }));
+  });
+
+  it('allows the caller to adopt a new tab explicitly after creation', async () => {
     sendCommandFullMock.mockResolvedValueOnce({
       data: { url: 'https://second.example' },
       page: 'page-2',
     });
-    sendCommandMock.mockResolvedValue('ok');
 
     const page = new Page('browser:default');
     const created = await page.newTab?.('https://second.example');
 
     expect(created).toBe('page-2');
+    expect(page.getActivePage()).toBeUndefined();
+
+    page.setActivePage?.(created);
     expect(page.getActivePage()).toBe('page-2');
     expect(sendCommandFullMock).toHaveBeenCalledWith('tabs', expect.objectContaining({
       op: 'new',

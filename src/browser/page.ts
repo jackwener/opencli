@@ -170,7 +170,6 @@ export class Page extends BasePage {
       ...(url !== undefined && { url }),
       ...this._wsOpt(),
     });
-    if (result.page) this._page = result.page;
     this._lastUrl = null;
     return result.page;
   }
