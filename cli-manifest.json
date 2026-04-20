@@ -16165,6 +16165,44 @@
   },
   {
     "site": "twitter",
+    "name": "tweets",
+    "description": "Fetch a Twitter user's most recent tweets (chronological, excludes pinned)",
+    "domain": "x.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "username",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Twitter screen name (with or without @)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Max tweets to return"
+      }
+    ],
+    "columns": [
+      "author",
+      "created_at",
+      "text",
+      "likes",
+      "retweets",
+      "replies",
+      "views",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "twitter/tweets.js",
+    "sourceFile": "twitter/tweets.js",
+    "navigateBefore": "https://x.com"
+  },
+  {
+    "site": "twitter",
     "name": "unblock",
     "description": "Unblock a Twitter user",
     "domain": "x.com",
