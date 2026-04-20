@@ -25,6 +25,7 @@ import { resolveTargetJs, getTextResolvedJs, getValueResolvedJs, getAttributesRe
 import { inferShape } from './browser/shape.js';
 import { assignKeys } from './browser/network-key.js';
 import { DEFAULT_TTL_MS, findEntry, loadNetworkCache, saveNetworkCache, type CachedNetworkEntry } from './browser/network-cache.js';
+import { buildHtmlTreeJs, type HtmlTreeResult } from './browser/html-tree.js';
 import { daemonStatus, daemonStop } from './commands/daemon.js';
 import { log } from './logger.js';
 
@@ -546,11 +547,69 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       console.log(val ?? '(empty)');
     }));
 
-  addBrowserTabOption(get.command('html').option('--selector <css>', 'CSS selector scope').description('Page HTML (or scoped)'))
+  addBrowserTabOption(
+    get.command('html')
+      .option('--selector <css>', 'CSS selector scope (first match)')
+      .option('--as <format>', 'Output format: "html" (default) or "json" for structured tree', 'html')
+      .option('--max <n>', 'Max characters of raw HTML to return (0 = unlimited)', '0')
+      .description('Page HTML (or scoped); use --as json for a {tag, attrs, text, children} tree'),
+  )
     .action(browserAction(async (page, opts) => {
+      const format = String(opts.as || 'html').toLowerCase();
+      if (format !== 'html' && format !== 'json') {
+        console.log(JSON.stringify({ error: { code: 'invalid_format', message: `--as must be "html" or "json", got "${opts.as}"` } }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+
+      if (format === 'json') {
+        const js = buildHtmlTreeJs({ selector: opts.selector ?? null });
+        const result = await page.evaluate(js) as HtmlTreeResult | null;
+        if (!result || result.matched === 0) {
+          console.log(JSON.stringify({
+            error: {
+              code: 'selector_not_found',
+              message: opts.selector
+                ? `Selector "${opts.selector}" matched 0 elements.`
+                : 'Page has no documentElement.',
+            },
+          }, null, 2));
+          process.exitCode = EXIT_CODES.USAGE_ERROR;
+          return;
+        }
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      // Raw HTML path — unbounded by default; --max optionally caps with a visible marker.
       const sel = opts.selector ? JSON.stringify(opts.selector) : 'null';
-      const html = await page.evaluate(`(${sel} ? document.querySelector(${sel})?.outerHTML : document.documentElement.outerHTML)?.slice(0, 50000)`);
-      console.log(html ?? '(empty)');
+      const html = await page.evaluate(
+        `(${sel} ? document.querySelector(${sel})?.outerHTML : document.documentElement.outerHTML) ?? null`,
+      ) as string | null;
+
+      if (html === null) {
+        if (opts.selector) {
+          console.log(JSON.stringify({
+            error: { code: 'selector_not_found', message: `Selector "${opts.selector}" matched 0 elements.` },
+          }, null, 2));
+          process.exitCode = EXIT_CODES.USAGE_ERROR;
+          return;
+        }
+        console.log('(empty)');
+        return;
+      }
+
+      const max = Number.parseInt(String(opts.max ?? '0'), 10);
+      if (!Number.isFinite(max) || max < 0) {
+        console.log(JSON.stringify({ error: { code: 'invalid_max', message: `--max must be a non-negative integer, got "${opts.max}"` } }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+      if (max > 0 && html.length > max) {
+        console.log(`<!-- opencli: truncated ${max} of ${html.length} chars; re-run without --max (or --max 0) for full -->\n${html.slice(0, max)}`);
+        return;
+      }
+      console.log(html);
     }));
 
   addBrowserTabOption(get.command('attributes').argument('<index>', 'Element index').description('Element attributes'))

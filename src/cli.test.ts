@@ -442,6 +442,114 @@ describe('browser network command', () => {
   });
 });
 
+describe('browser get html command', () => {
+  const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+  function lastLogArg(): unknown {
+    const calls = consoleLogSpy.mock.calls;
+    if (calls.length === 0) throw new Error('expected console.log call');
+    return calls[calls.length - 1][0];
+  }
+  function lastJsonLog(): any {
+    const arg = lastLogArg();
+    if (typeof arg !== 'string') throw new Error(`expected string arg, got ${typeof arg}`);
+    return JSON.parse(arg);
+  }
+
+  beforeEach(() => {
+    process.exitCode = undefined;
+    process.env.OPENCLI_CACHE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-html-'));
+    consoleLogSpy.mockClear();
+    mockBrowserConnect.mockClear();
+    mockBrowserClose.mockReset().mockResolvedValue(undefined);
+
+    browserState.page = {
+      setActivePage: vi.fn(),
+      getActivePage: vi.fn().mockReturnValue('tab-1'),
+      tabs: vi.fn().mockResolvedValue([{ page: 'tab-1', active: true }]),
+      evaluate: vi.fn(),
+    } as unknown as IPage;
+  });
+
+  it('returns full outerHTML by default with no truncation', async () => {
+    const big = '<div>' + 'x'.repeat(100_000) + '</div>';
+    (browserState.page!.evaluate as any).mockResolvedValueOnce(big);
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html']);
+
+    expect(lastLogArg()).toBe(big);
+  });
+
+  it('caps output with --max and prepends a visible truncation marker', async () => {
+    const big = '<div>' + 'x'.repeat(500) + '</div>';
+    (browserState.page!.evaluate as any).mockResolvedValueOnce(big);
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--max', '100']);
+
+    const out = String(lastLogArg());
+    expect(out.startsWith('<!-- opencli: truncated 100 of')).toBe(true);
+    expect(out.length).toBeGreaterThan(100);
+    expect(out.length).toBeLessThan(big.length);
+  });
+
+  it('rejects negative --max with invalid_max error', async () => {
+    (browserState.page!.evaluate as any).mockResolvedValueOnce('<html></html>');
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--max', '-1']);
+
+    expect(lastJsonLog().error.code).toBe('invalid_max');
+    expect(process.exitCode).toBeDefined();
+  });
+
+  it('--as json returns structured tree envelope', async () => {
+    (browserState.page!.evaluate as any).mockResolvedValueOnce({
+      selector: '.hero',
+      matched: 1,
+      tree: { tag: 'div', attrs: { class: 'hero' }, text: 'Hi', children: [] },
+    });
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--selector', '.hero', '--as', 'json']);
+
+    const out = lastJsonLog();
+    expect(out.matched).toBe(1);
+    expect(out.tree.tag).toBe('div');
+    expect(out.tree.attrs.class).toBe('hero');
+  });
+
+  it('--as json emits selector_not_found when matched is 0', async () => {
+    (browserState.page!.evaluate as any).mockResolvedValueOnce({ selector: '.missing', matched: 0, tree: null });
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--selector', '.missing', '--as', 'json']);
+
+    expect(lastJsonLog().error.code).toBe('selector_not_found');
+    expect(process.exitCode).toBeDefined();
+  });
+
+  it('raw mode emits selector_not_found when the selector matches nothing', async () => {
+    (browserState.page!.evaluate as any).mockResolvedValueOnce(null);
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--selector', '.missing']);
+
+    expect(lastJsonLog().error.code).toBe('selector_not_found');
+    expect(process.exitCode).toBeDefined();
+  });
+
+  it('rejects unknown --as format with invalid_format error', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--as', 'yaml']);
+
+    expect(lastJsonLog().error.code).toBe('invalid_format');
+    expect(process.exitCode).toBeDefined();
+  });
+});
+
 describe('findPackageRoot', () => {
   it('walks up from dist/src to the package root', () => {
     const packageRoot = path.join('repo-root');
