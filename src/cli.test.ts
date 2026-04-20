@@ -568,6 +568,134 @@ describe('browser network command', () => {
       expect(process.exitCode).toBeDefined();
     });
   });
+
+  describe('body truncation signals', () => {
+    it('flags body_truncated in list view when the capture layer capped the body', async () => {
+      browserState.page!.readNetworkCapture = vi.fn().mockResolvedValue([
+        {
+          url: 'https://api.example.com/huge',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'application/json',
+          responsePreview: '{"data":"x"}',
+          responseBodyFullSize: 99_999_999,
+          responseBodyTruncated: true,
+        },
+      ]);
+      const program = createProgram('', '');
+
+      await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+
+      const out = lastJsonLog();
+      expect(out.body_truncated_count).toBe(1);
+      expect(out.entries[0].body_truncated).toBe(true);
+      expect(out.entries[0].size).toBe(99_999_999);
+    });
+
+    it('--detail surfaces body_truncated + body_full_size when capture had to cap the body', async () => {
+      browserState.page!.readNetworkCapture = vi.fn().mockResolvedValue([
+        {
+          url: 'https://api.example.com/huge',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'application/json',
+          responsePreview: 'truncated-prefix-not-valid-json',
+          responseBodyFullSize: 50_000_000,
+          responseBodyTruncated: true,
+        },
+      ]);
+      const program = createProgram('', '');
+
+      await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+      consoleLogSpy.mockClear();
+      await program.parseAsync(['node', 'opencli', 'browser', 'network', '--detail', 'GET api.example.com/huge']);
+
+      const out = lastJsonLog();
+      expect(out.body_truncated).toBe(true);
+      expect(out.body_full_size).toBe(50_000_000);
+      expect(out.body_truncation_reason).toBe('capture-limit');
+    });
+
+    it('--max-body caps the emitted body and marks body_truncation_reason = max-body', async () => {
+      const longString = 'x'.repeat(5000);
+      browserState.page!.readNetworkCapture = vi.fn().mockResolvedValue([
+        {
+          url: 'https://api.example.com/plain',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'text/plain',
+          responsePreview: longString,
+        },
+      ]);
+      const program = createProgram('', '');
+
+      await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+      consoleLogSpy.mockClear();
+      await program.parseAsync([
+        'node', 'opencli', 'browser', 'network',
+        '--detail', 'GET api.example.com/plain',
+        '--max-body', '100',
+      ]);
+
+      const out = lastJsonLog();
+      expect(typeof out.body).toBe('string');
+      expect(out.body).toHaveLength(100);
+      expect(out.body_truncated).toBe(true);
+      expect(out.body_truncation_reason).toBe('max-body');
+      expect(out.body_full_size).toBe(5000);
+    });
+
+    it('--max-body leaves parsed JSON bodies untouched (no mid-object cut)', async () => {
+      browserState.page!.readNetworkCapture = vi.fn().mockResolvedValue([
+        {
+          url: 'https://api.example.com/json',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'application/json',
+          responsePreview: JSON.stringify({ data: { user: { rest_id: 'u1' } } }),
+        },
+      ]);
+      const program = createProgram('', '');
+
+      await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+      consoleLogSpy.mockClear();
+      await program.parseAsync([
+        'node', 'opencli', 'browser', 'network',
+        '--detail', 'GET api.example.com/json',
+        '--max-body', '10',
+      ]);
+
+      const out = lastJsonLog();
+      // JSON body already parsed at capture time — --max-body only applies to
+      // string bodies (which is where the agent-visible hazard lives).
+      expect(out.body).toEqual({ data: { user: { rest_id: 'u1' } } });
+      expect(out).not.toHaveProperty('body_truncated');
+    });
+
+    it('rejects non-numeric --max-body with invalid_max_body', async () => {
+      browserState.page!.readNetworkCapture = vi.fn().mockResolvedValue([
+        {
+          url: 'https://api.example.com/x',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'application/json',
+          responsePreview: '{"a":1}',
+        },
+      ]);
+      const program = createProgram('', '');
+
+      await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+      consoleLogSpy.mockClear();
+      await program.parseAsync([
+        'node', 'opencli', 'browser', 'network',
+        '--detail', 'GET api.example.com/x',
+        '--max-body', 'abc',
+      ]);
+
+      expect(lastJsonLog().error.code).toBe('invalid_max_body');
+      expect(process.exitCode).toBeDefined();
+    });
+  });
 });
 
 describe('browser get html command', () => {

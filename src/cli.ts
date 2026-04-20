@@ -27,6 +27,7 @@ import { assignKeys } from './browser/network-key.js';
 import { DEFAULT_TTL_MS, findEntry, loadNetworkCache, saveNetworkCache, type CachedNetworkEntry } from './browser/network-cache.js';
 import { parseFilter, shapeMatchesFilter } from './browser/shape-filter.js';
 import { buildHtmlTreeJs, type HtmlTreeResult } from './browser/html-tree.js';
+import { buildExtractHtmlJs, runExtractFromHtml } from './browser/extract.js';
 import { daemonStatus, daemonStop } from './commands/daemon.js';
 import { log } from './logger.js';
 
@@ -41,12 +42,18 @@ type BrowserNetworkItem = {
   size: number;
   ct: string;
   body: unknown;
+  /** Full body size in chars before any capture-layer truncation. */
+  bodyFullSize?: number;
+  /** True when the capture layer had to cap the stored body to protect memory. */
+  bodyTruncated?: boolean;
 };
 
 /**
  * Normalize raw capture entries (from daemon/CDP `readNetworkCapture` or
  * the JS interceptor's `window.__opencli_net`) into a consistent shape.
  * Response preview is parsed as JSON when possible, otherwise kept as string.
+ * `bodyFullSize` / `bodyTruncated` surface capture-layer truncation so the
+ * agent-facing envelope can warn when the body isn't whole.
  */
 async function captureNetworkItems(page: import('./types.js').IPage): Promise<BrowserNetworkItem[]> {
   if (page.readNetworkCapture) {
@@ -57,13 +64,19 @@ async function captureNetworkItems(page: import('./types.js').IPage): Promise<Br
       if (preview) {
         try { body = JSON.parse(preview); } catch { body = preview; }
       }
+      const fullSize = typeof e.responseBodyFullSize === 'number'
+        ? (e.responseBodyFullSize as number)
+        : (preview ? preview.length : 0);
+      const truncated = e.responseBodyTruncated === true;
       return {
         url: (e.url as string) || '',
         method: (e.method as string) || 'GET',
         status: (e.responseStatus as number) || 0,
-        size: preview ? preview.length : 0,
+        size: fullSize,
         ct: (e.responseContentType as string) || '',
         body,
+        bodyFullSize: fullSize,
+        bodyTruncated: truncated,
       };
     });
   }
@@ -553,6 +566,9 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       .option('--selector <css>', 'CSS selector scope (first match)')
       .option('--as <format>', 'Output format: "html" (default) or "json" for structured tree', 'html')
       .option('--max <n>', 'Max characters of raw HTML to return (0 = unlimited)', '0')
+      .option('--depth <n>', '(--as json) Max tree depth below root (0 = root only, 0 disables = unlimited via empty)', '')
+      .option('--children-max <n>', '(--as json) Max element children kept per node (empty = unlimited)', '')
+      .option('--text-max <n>', '(--as json) Max chars of direct text kept per node (empty = unlimited)', '')
       .description('Page HTML (or scoped); use --as json for a {tag, attrs, text, children} tree'),
   )
     .action(browserAction(async (page, opts) => {
@@ -574,7 +590,28 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       const max = Number.parseInt(rawMax, 10);
 
       if (format === 'json') {
-        const js = buildHtmlTreeJs({ selector: opts.selector ?? null });
+        const parseBudget = (flag: string, value: unknown): number | null | { error: string } => {
+          const raw = value === undefined || value === null ? '' : String(value);
+          if (raw === '') return null;
+          if (!/^\d+$/.test(raw)) return { error: `${flag} must be a non-negative integer, got "${raw}"` };
+          return Number.parseInt(raw, 10);
+        };
+        const depth = parseBudget('--depth', opts.depth);
+        const childrenMax = parseBudget('--children-max', opts.childrenMax);
+        const textMax = parseBudget('--text-max', opts.textMax);
+        for (const budget of [depth, childrenMax, textMax]) {
+          if (budget && typeof budget === 'object' && 'error' in budget) {
+            console.log(JSON.stringify({ error: { code: 'invalid_budget', message: budget.error } }, null, 2));
+            process.exitCode = EXIT_CODES.USAGE_ERROR;
+            return;
+          }
+        }
+        const js = buildHtmlTreeJs({
+          selector: opts.selector ?? null,
+          depth: depth as number | null,
+          childrenMax: childrenMax as number | null,
+          textMax: textMax as number | null,
+        });
         const result = await page.evaluate(js) as HtmlTreeResult | { selector: string; invalidSelector: true; reason: string } | null;
         if (result && typeof result === 'object' && 'invalidSelector' in result && result.invalidSelector) {
           console.log(JSON.stringify({
@@ -753,6 +790,70 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       else console.log(JSON.stringify(result, null, 2));
     }));
 
+  // ── Extract (content reading) ──
+  //
+  // `extract` answers the "read this page" question that `get html` / `get text`
+  // can't: denoise → markdown → paragraph-aware chunking. Agents walk long pages
+  // by passing back the `next_start_char` cursor instead of juggling selectors.
+
+  addBrowserTabOption(
+    browser.command('extract')
+      .option('--selector <css>', 'CSS selector scope; defaults to <main>/<article>/<body>')
+      .option('--chunk-size <chars>', 'Target chunk size in chars', '20000')
+      .option('--start <char>', 'Start offset (use next_start_char from a previous extract)', '0')
+      .description('Extract page content as markdown, paragraph-aware chunks for long pages'),
+  )
+    .action(browserAction(async (page, opts) => {
+      const rawChunk = String(opts.chunkSize ?? '20000');
+      if (!/^\d+$/.test(rawChunk) || Number.parseInt(rawChunk, 10) <= 0) {
+        console.log(JSON.stringify({ error: { code: 'invalid_chunk_size', message: `--chunk-size must be a positive integer, got "${opts.chunkSize}"` } }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+      const rawStart = String(opts.start ?? '0');
+      if (!/^\d+$/.test(rawStart)) {
+        console.log(JSON.stringify({ error: { code: 'invalid_start', message: `--start must be a non-negative integer, got "${opts.start}"` } }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+      const chunkSize = Number.parseInt(rawChunk, 10);
+      const start = Number.parseInt(rawStart, 10);
+      const selector = typeof opts.selector === 'string' && opts.selector.length > 0 ? opts.selector : null;
+
+      const js = buildExtractHtmlJs(selector);
+      const res = await page.evaluate(js) as
+        | { ok: true; url: string; title: string; html: string }
+        | { invalidSelector: true; reason: string }
+        | { notFound: true }
+        | null;
+
+      if (!res) {
+        console.log(JSON.stringify({ error: { code: 'extract_failed', message: 'Page returned no root element.' } }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+      if ('invalidSelector' in res) {
+        console.log(JSON.stringify({ error: { code: 'invalid_selector', message: `Selector "${selector}" is not a valid CSS selector: ${res.reason}` } }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+      if ('notFound' in res) {
+        console.log(JSON.stringify({ error: { code: 'selector_not_found', message: selector ? `Selector "${selector}" matched 0 elements.` : 'Page has no body/main/article element.' } }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+
+      const envelope = runExtractFromHtml({
+        html: res.html,
+        url: res.url,
+        title: res.title,
+        selector,
+        start,
+        chunkSize,
+      });
+      console.log(JSON.stringify(envelope, null, 2));
+    }));
+
   // ── Network (API discovery) ──
   //
   // Default output is JSON (agent-native). Each entry carries a stable `key`
@@ -765,6 +866,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .option('--all', 'Include static resources (js/css/images/telemetry)')
     .option('--raw', 'Emit full bodies for every entry (skip shape preview)')
     .option('--filter <fields>', 'Comma-separated field names; keep only entries whose body shape has ALL names as path segments')
+    .option('--max-body <chars>', 'With --detail: cap the emitted body at N chars (0 = unlimited, default)', '0')
     .option('--ttl <ms>', 'Cache TTL in ms for --detail lookups', String(DEFAULT_TTL_MS))
     .description('Capture network requests as shape previews; retrieve full bodies by key')
     .action(browserAction(async (page, opts) => {
@@ -814,7 +916,26 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
           });
           return;
         }
-        console.log(JSON.stringify({
+        const rawMaxBody = String(opts.maxBody ?? '0');
+        if (!/^\d+$/.test(rawMaxBody)) {
+          emitNetworkError('invalid_max_body', `--max-body must be a non-negative integer, got "${opts.maxBody}"`);
+          return;
+        }
+        const maxBody = Number.parseInt(rawMaxBody, 10);
+
+        // Body shape/source:
+        // - If capture already truncated it (entry.bodyTruncated), the body is a string.
+        // - If the adapter stored a JSON value, it parsed cleanly at capture time; leave it.
+        // - --max-body applies a transport-level cap when the caller wants to keep output small.
+        let outputBody: unknown = entry.body;
+        let transportTruncated = false;
+        if (maxBody > 0 && typeof entry.body === 'string' && entry.body.length > maxBody) {
+          outputBody = entry.body.slice(0, maxBody);
+          transportTruncated = true;
+        }
+        const captureTruncated = entry.bodyTruncated === true;
+
+        const detailEnvelope: Record<string, unknown> = {
           key: entry.key,
           url: entry.url,
           method: entry.method,
@@ -822,8 +943,16 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
           ct: entry.ct,
           size: entry.size,
           shape: inferShape(entry.body),
-          body: entry.body,
-        }, null, 2));
+          body: outputBody,
+        };
+        if (captureTruncated || transportTruncated) {
+          detailEnvelope.body_truncated = true;
+          detailEnvelope.body_full_size = entry.size;
+          detailEnvelope.body_truncation_reason = captureTruncated
+            ? 'capture-limit'
+            : 'max-body';
+        }
+        console.log(JSON.stringify(detailEnvelope, null, 2));
         return;
       }
 
@@ -848,6 +977,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         size: it.size,
         ct: it.ct,
         body: it.body,
+        ...(it.bodyTruncated ? { bodyTruncated: true } : {}),
       }));
       // Soft failure: the caller already has the data, so surface a warning
       // via the output envelope rather than erroring out the whole command.
@@ -881,6 +1011,12 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       }
       if (cacheWarning) envelope.cache_warning = cacheWarning;
 
+      const truncatedCount = visible.filter((s) => s.entry.bodyTruncated).length;
+      if (truncatedCount > 0) {
+        envelope.body_truncated_count = truncatedCount;
+        envelope.body_truncated_hint = 'Some bodies exceeded the capture limit; their `shape` reflects only the captured prefix.';
+      }
+
       if (opts.raw) {
         envelope.entries = visible.map((s) => s.entry);
       } else {
@@ -892,6 +1028,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
           ct: s.entry.ct,
           size: s.entry.size,
           shape: s.shape,
+          ...(s.entry.bodyTruncated ? { body_truncated: true } : {}),
         }));
         envelope.detail_hint = 'Run "browser network --detail <key>" for full body.';
       }

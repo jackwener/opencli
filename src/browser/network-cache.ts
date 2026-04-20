@@ -21,9 +21,12 @@ export interface CachedNetworkEntry {
     url: string;
     method: string;
     status: number;
+    /** Full body size in chars (may exceed stored body length when truncated). */
     size: number;
     ct: string;
     body: unknown;
+    /** True when the capture layer had to cap the body to protect memory. */
+    bodyTruncated?: boolean;
 }
 
 export interface NetworkCacheFile {
