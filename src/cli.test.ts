@@ -473,7 +473,7 @@ describe('browser get html command', () => {
 
   it('returns full outerHTML by default with no truncation', async () => {
     const big = '<div>' + 'x'.repeat(100_000) + '</div>';
-    (browserState.page!.evaluate as any).mockResolvedValueOnce(big);
+    (browserState.page!.evaluate as any).mockResolvedValueOnce({ kind: 'ok', html: big });
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html']);
@@ -483,7 +483,7 @@ describe('browser get html command', () => {
 
   it('caps output with --max and prepends a visible truncation marker', async () => {
     const big = '<div>' + 'x'.repeat(500) + '</div>';
-    (browserState.page!.evaluate as any).mockResolvedValueOnce(big);
+    (browserState.page!.evaluate as any).mockResolvedValueOnce({ kind: 'ok', html: big });
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--max', '100']);
@@ -495,13 +495,33 @@ describe('browser get html command', () => {
   });
 
   it('rejects negative --max with invalid_max error', async () => {
-    (browserState.page!.evaluate as any).mockResolvedValueOnce('<html></html>');
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--max', '-1']);
 
     expect(lastJsonLog().error.code).toBe('invalid_max');
     expect(process.exitCode).toBeDefined();
+    expect(browserState.page!.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects fractional --max with invalid_max error', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--max', '1.5']);
+
+    expect(lastJsonLog().error.code).toBe('invalid_max');
+    expect(process.exitCode).toBeDefined();
+    expect(browserState.page!.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-numeric --max (e.g. "10abc") with invalid_max error', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--max', '10abc']);
+
+    expect(lastJsonLog().error.code).toBe('invalid_max');
+    expect(process.exitCode).toBeDefined();
+    expect(browserState.page!.evaluate).not.toHaveBeenCalled();
   });
 
   it('--as json returns structured tree envelope', async () => {
@@ -531,12 +551,44 @@ describe('browser get html command', () => {
   });
 
   it('raw mode emits selector_not_found when the selector matches nothing', async () => {
-    (browserState.page!.evaluate as any).mockResolvedValueOnce(null);
+    (browserState.page!.evaluate as any).mockResolvedValueOnce({ kind: 'ok', html: null });
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--selector', '.missing']);
 
     expect(lastJsonLog().error.code).toBe('selector_not_found');
+    expect(process.exitCode).toBeDefined();
+  });
+
+  it('raw mode emits invalid_selector when the page rejects the selector syntax', async () => {
+    (browserState.page!.evaluate as any).mockResolvedValueOnce({
+      kind: 'invalid_selector',
+      reason: "'##$@@' is not a valid selector",
+    });
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--selector', '##$@@']);
+
+    const err = lastJsonLog().error;
+    expect(err.code).toBe('invalid_selector');
+    expect(err.message).toContain('##$@@');
+    expect(err.message).toContain('not a valid selector');
+    expect(process.exitCode).toBeDefined();
+  });
+
+  it('--as json emits invalid_selector when the page rejects the selector syntax', async () => {
+    (browserState.page!.evaluate as any).mockResolvedValueOnce({
+      selector: '##$@@',
+      invalidSelector: true,
+      reason: "'##$@@' is not a valid selector",
+    });
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'get', 'html', '--selector', '##$@@', '--as', 'json']);
+
+    const err = lastJsonLog().error;
+    expect(err.code).toBe('invalid_selector');
+    expect(err.message).toContain('##$@@');
     expect(process.exitCode).toBeDefined();
   });
 

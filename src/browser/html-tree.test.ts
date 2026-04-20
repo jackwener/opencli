@@ -16,6 +16,16 @@ function runTreeJs(root: unknown, selectorMatches: unknown[], selector: string |
     return fn(fakeDocument) as HtmlTreeResult;
 }
 
+function runTreeJsInvalid(selector: string, errorMessage: string): unknown {
+    const js = buildHtmlTreeJs({ selector });
+    const fakeDocument = {
+        querySelectorAll: () => { const e = new Error(errorMessage); e.name = 'SyntaxError'; throw e; },
+        documentElement: null,
+    };
+    const fn = new Function('document', `return ${js};`);
+    return fn(fakeDocument);
+}
+
 function el(tag: string, attrs: Record<string, string>, children: Array<ChildOf>): FakeEl {
     return {
         nodeType: 1,
@@ -83,5 +93,16 @@ describe('buildHtmlTreeJs', () => {
         const result = runTreeJs(null, [], '.nothing');
         expect(result.matched).toBe(0);
         expect(result.tree).toBeNull();
+    });
+
+    it('catches SyntaxError from querySelectorAll and returns {invalidSelector:true, reason}', () => {
+        const result = runTreeJsInvalid('##$@@', "'##$@@' is not a valid selector") as {
+            selector: string;
+            invalidSelector: boolean;
+            reason: string;
+        };
+        expect(result.invalidSelector).toBe(true);
+        expect(result.selector).toBe('##$@@');
+        expect(result.reason).toContain('not a valid selector');
     });
 });

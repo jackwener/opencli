@@ -562,10 +562,28 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         return;
       }
 
+      // `--max` is validated up-front (before touching the page) so a bad value
+      // gets the same structured error regardless of selector/format path.
+      const rawMax = String(opts.max ?? '0');
+      if (!/^\d+$/.test(rawMax)) {
+        console.log(JSON.stringify({ error: { code: 'invalid_max', message: `--max must be a non-negative integer, got "${opts.max}"` } }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+      const max = Number.parseInt(rawMax, 10);
+
       if (format === 'json') {
         const js = buildHtmlTreeJs({ selector: opts.selector ?? null });
-        const result = await page.evaluate(js) as HtmlTreeResult | null;
-        if (!result || result.matched === 0) {
+        const result = await page.evaluate(js) as HtmlTreeResult | { selector: string; invalidSelector: true; reason: string } | null;
+        if (result && typeof result === 'object' && 'invalidSelector' in result && result.invalidSelector) {
+          console.log(JSON.stringify({
+            error: { code: 'invalid_selector', message: `Selector "${opts.selector}" is not a valid CSS selector: ${result.reason}` },
+          }, null, 2));
+          process.exitCode = EXIT_CODES.USAGE_ERROR;
+          return;
+        }
+        const ok = result as HtmlTreeResult | null;
+        if (!ok || ok.matched === 0) {
           console.log(JSON.stringify({
             error: {
               code: 'selector_not_found',
@@ -577,15 +595,37 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
           process.exitCode = EXIT_CODES.USAGE_ERROR;
           return;
         }
-        console.log(JSON.stringify(result, null, 2));
+        console.log(JSON.stringify(ok, null, 2));
         return;
       }
 
       // Raw HTML path — unbounded by default; --max optionally caps with a visible marker.
+      // Selector lookup is wrapped in try/catch inside page context so an invalid
+      // selector returns a structured signal instead of throwing through page.evaluate.
       const sel = opts.selector ? JSON.stringify(opts.selector) : 'null';
-      const html = await page.evaluate(
-        `(${sel} ? document.querySelector(${sel})?.outerHTML : document.documentElement.outerHTML) ?? null`,
-      ) as string | null;
+      const rawResult = await page.evaluate(
+        `(() => {
+          const s = ${sel};
+          if (s) {
+            try {
+              const el = document.querySelector(s);
+              return { kind: 'ok', html: el ? el.outerHTML : null };
+            } catch (e) {
+              return { kind: 'invalid_selector', reason: (e && e.message) || String(e) };
+            }
+          }
+          return { kind: 'ok', html: document.documentElement ? document.documentElement.outerHTML : null };
+        })()`,
+      ) as { kind: 'ok'; html: string | null } | { kind: 'invalid_selector'; reason: string };
+
+      if (rawResult.kind === 'invalid_selector') {
+        console.log(JSON.stringify({
+          error: { code: 'invalid_selector', message: `Selector "${opts.selector}" is not a valid CSS selector: ${rawResult.reason}` },
+        }, null, 2));
+        process.exitCode = EXIT_CODES.USAGE_ERROR;
+        return;
+      }
+      const html = rawResult.html;
 
       if (html === null) {
         if (opts.selector) {
@@ -596,13 +636,6 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
           return;
         }
         console.log('(empty)');
-        return;
-      }
-
-      const max = Number.parseInt(String(opts.max ?? '0'), 10);
-      if (!Number.isFinite(max) || max < 0) {
-        console.log(JSON.stringify({ error: { code: 'invalid_max', message: `--max must be a non-negative integer, got "${opts.max}"` } }, null, 2));
-        process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
       if (max > 0 && html.length > max) {

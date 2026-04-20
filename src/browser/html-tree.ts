@@ -19,15 +19,29 @@ export interface BuildHtmlTreeJsOptions {
 
 /**
  * Returns a JS expression string. When evaluated in a page context the
- * expression resolves to `{selector, matched: number, tree: HtmlNode | null}`.
- * `matched` is the count of selector matches on the page (1 if no selector).
- * `tree` is the serialized first match.
+ * expression resolves to either
+ *   `{selector, matched: number, tree: HtmlNode | null}` on success, or
+ *   `{selector, invalidSelector: true, reason}` when `querySelectorAll`
+ *   throws a `SyntaxError` for an unparseable selector.
+ *
+ * Callers must branch on `invalidSelector` to convert it into the CLI's
+ * `invalid_selector` structured error; otherwise the browser-level exception
+ * would bubble out of `page.evaluate` and bypass the structured-error
+ * contract that agents rely on.
  */
 export function buildHtmlTreeJs(opts: BuildHtmlTreeJsOptions = {}): string {
     const selectorLiteral = opts.selector ? JSON.stringify(opts.selector) : 'null';
     return `(() => {
   const selector = ${selectorLiteral};
-  const matches = selector ? document.querySelectorAll(selector) : [document.documentElement];
+  let matches;
+  if (selector) {
+    try { matches = document.querySelectorAll(selector); }
+    catch (e) {
+      return { selector: selector, invalidSelector: true, reason: (e && e.message) || String(e) };
+    }
+  } else {
+    matches = [document.documentElement];
+  }
   const matched = matches.length;
   const root = matches[0] || null;
   function serialize(el) {
