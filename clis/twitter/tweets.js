@@ -151,7 +151,7 @@ cli({
         { name: 'username', type: 'string', positional: true, required: true, help: 'Twitter screen name (with or without @)' },
         { name: 'limit', type: 'int', default: 20, help: 'Max tweets to return' },
     ],
-    columns: ['author', 'created_at', 'text', 'likes', 'retweets', 'replies', 'views', 'url'],
+    columns: ['author', 'created_at', 'is_retweet', 'text', 'likes', 'retweets', 'replies', 'views', 'url'],
     func: async (page, kwargs) => {
         const limit = Math.max(1, Math.min(200, kwargs.limit || 20));
         const username = String(kwargs.username || '').replace(/^@/, '').trim();

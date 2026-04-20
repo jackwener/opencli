@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { getRegistry } from '@jackwener/opencli/registry';
 import { __test__ } from './tweets.js';
 
 describe('twitter tweets helpers', () => {
+    it('registers is_retweet in the default columns', () => {
+        const cmd = getRegistry().get('twitter/tweets');
+        expect(cmd?.columns).toEqual(['author', 'created_at', 'is_retweet', 'text', 'likes', 'retweets', 'replies', 'views', 'url']);
+    });
+
     it('falls back when queryId contains unsafe characters', () => {
         expect(__test__.sanitizeQueryId('safe_Query-123', 'fallback')).toBe('safe_Query-123');
         expect(__test__.sanitizeQueryId('bad"id', 'fallback')).toBe('fallback');

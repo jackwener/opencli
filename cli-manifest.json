@@ -16189,6 +16189,7 @@
     "columns": [
       "author",
       "created_at",
+      "is_retweet",
       "text",
       "likes",
       "retweets",
