@@ -5852,6 +5852,158 @@
   },
   {
     "site": "eastmoney",
+    "name": "announcement",
+    "description": "上市公司公告（按交易所筛选）",
+    "domain": "np-anotice-stock.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "market",
+        "type": "string",
+        "default": "SHA,SZA,BJA",
+        "required": false,
+        "help": "交易所：SHA (沪) / SZA (深) / BJA (北) 可逗号分隔"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量 (max 100)"
+      }
+    ],
+    "columns": [
+      "time",
+      "code",
+      "name",
+      "title",
+      "category",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/announcement.js",
+    "sourceFile": "eastmoney/announcement.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "convertible",
+    "description": "可转债行情列表（默认按成交额排序）",
+    "domain": "push2.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "sort",
+        "type": "string",
+        "default": "turnover",
+        "required": false,
+        "help": "排序：turnover / change / drop / price / premium"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量 (max 100)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "bondCode",
+      "bondName",
+      "bondPrice",
+      "bondChangePct",
+      "stockCode",
+      "stockName",
+      "stockPrice",
+      "stockChangePct",
+      "convPrice",
+      "convValue",
+      "convPremiumPct",
+      "remainingYears",
+      "ytm",
+      "listDate"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/convertible.js",
+    "sourceFile": "eastmoney/convertible.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "etf",
+    "description": "ETF 列表按成交额/涨跌幅排行",
+    "domain": "push2.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "sort",
+        "type": "string",
+        "default": "turnover",
+        "required": false,
+        "help": "排序：turnover / change / drop / volume / rate"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量 (max 100)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "code",
+      "name",
+      "price",
+      "changePercent",
+      "change",
+      "turnover",
+      "volume",
+      "turnoverRate"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/etf.js",
+    "sourceFile": "eastmoney/etf.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "holders",
+    "description": "十大流通股东（A股 F10 数据）",
+    "domain": "datacenter-web.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "symbol",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "A股代码（600519 / sh600519 等）"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回股东数（默认十大流通股东）"
+      }
+    ],
+    "columns": [
+      "rank",
+      "reportDate",
+      "name",
+      "holdNum",
+      "floatRatio",
+      "change"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/holders.js",
+    "sourceFile": "eastmoney/holders.js"
+  },
+  {
+    "site": "eastmoney",
     "name": "hot-rank",
     "description": "东方财富热股榜",
     "domain": "guba.eastmoney.com",
@@ -5879,6 +6031,379 @@
     "modulePath": "eastmoney/hot-rank.js",
     "sourceFile": "eastmoney/hot-rank.js",
     "navigateBefore": true
+  },
+  {
+    "site": "eastmoney",
+    "name": "index-board",
+    "description": "主要市场指数行情（A股 / 港股 / 美股）",
+    "domain": "push2.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "group",
+        "type": "string",
+        "default": "main",
+        "required": false,
+        "help": "指数分组：main (A股主要), hk (港股), us (美股), all"
+      }
+    ],
+    "columns": [
+      "code",
+      "name",
+      "price",
+      "changePercent",
+      "change",
+      "open",
+      "high",
+      "low",
+      "prevClose"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/index-board.js",
+    "sourceFile": "eastmoney/index-board.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "kline",
+    "description": "K线历史数据（分/日/周/月/前复权/后复权）",
+    "domain": "push2his.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "symbol",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "股票代码（A/HK/US 均可）"
+      },
+      {
+        "name": "period",
+        "type": "string",
+        "default": "day",
+        "required": false,
+        "help": "周期：1m/5m/15m/30m/60m/day/week/month"
+      },
+      {
+        "name": "adjust",
+        "type": "string",
+        "default": "forward",
+        "required": false,
+        "help": "复权：none / forward / backward"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 30,
+        "required": false,
+        "help": "返回最近 N 根（末尾）"
+      }
+    ],
+    "columns": [
+      "date",
+      "open",
+      "close",
+      "high",
+      "low",
+      "volume",
+      "turnover",
+      "amplitude",
+      "changePercent",
+      "change",
+      "turnoverRate"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/kline.js",
+    "sourceFile": "eastmoney/kline.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "kuaixun",
+    "description": "东方财富 7x24 财经快讯",
+    "domain": "np-listapi.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "column",
+        "type": "string",
+        "default": "102",
+        "required": false,
+        "help": "频道：102 (重要) / 101 (全部) / 104 / 105 / 106 / 107"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量 (max 100)"
+      }
+    ],
+    "columns": [
+      "time",
+      "title",
+      "summary",
+      "stocks"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/kuaixun.js",
+    "sourceFile": "eastmoney/kuaixun.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "longhu",
+    "description": "龙虎榜明细（A股交易所公开披露榜单）",
+    "domain": "datacenter-web.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "date",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "开始交易日 YYYY-MM-DD (默认昨天)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量 (max 100)"
+      }
+    ],
+    "columns": [
+      "tradeDate",
+      "code",
+      "name",
+      "closePrice",
+      "changeRate",
+      "boardAmt",
+      "buyAmt",
+      "sellAmt",
+      "netAmt",
+      "turnover",
+      "dealRatio",
+      "market",
+      "reason"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/longhu.js",
+    "sourceFile": "eastmoney/longhu.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "money-flow",
+    "description": "主力资金净流入排行（今日/5日/10日）",
+    "domain": "push2.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "range",
+        "type": "string",
+        "default": "today",
+        "required": false,
+        "help": "周期：today / 5d / 10d"
+      },
+      {
+        "name": "order",
+        "type": "string",
+        "default": "desc",
+        "required": false,
+        "help": "排序：desc (净流入排行) / asc (净流出)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量 (max 100)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "code",
+      "name",
+      "price",
+      "changePercent",
+      "mainNet",
+      "mainNetRatio",
+      "superNet",
+      "bigNet",
+      "mediumNet",
+      "smallNet"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/money-flow.js",
+    "sourceFile": "eastmoney/money-flow.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "northbound",
+    "description": "沪深港通北向/南向资金当日分时净流入（万元）",
+    "domain": "push2.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "direction",
+        "type": "string",
+        "default": "north",
+        "required": false,
+        "help": "方向：north (北向，即外资买A) / south (南向，即内地买港)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "返回最近 N 分钟"
+      }
+    ],
+    "columns": [
+      "time",
+      "cumulativeNetYi",
+      "minuteNetYi",
+      "totalNetYi"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/northbound.js",
+    "sourceFile": "eastmoney/northbound.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "quote",
+    "description": "个股实时行情（A股 / 港股 / 美股）— 来自 push2.eastmoney.com",
+    "domain": "push2.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "symbols",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "股票代码（可用逗号/空格分隔多个）"
+      }
+    ],
+    "columns": [
+      "code",
+      "name",
+      "market",
+      "price",
+      "changePercent",
+      "change",
+      "open",
+      "high",
+      "low",
+      "prevClose",
+      "volume",
+      "turnover",
+      "turnoverRate",
+      "amplitude",
+      "peDynamic",
+      "priceBook",
+      "marketCap",
+      "floatMarketCap"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/quote.js",
+    "sourceFile": "eastmoney/quote.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "rank",
+    "description": "东财市场涨跌/成交排行（沪深/北证/创/科/港/美）",
+    "domain": "push2.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "market",
+        "type": "string",
+        "default": "hs-a",
+        "required": false,
+        "help": "市场：hs-a / sh-a / sz-a / bj-a / cyb / kcb / hk / us"
+      },
+      {
+        "name": "sort",
+        "type": "string",
+        "default": "change",
+        "required": false,
+        "help": "排序：change / drop / turnover / volume / amplitude / rate"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量 (max 100)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "code",
+      "name",
+      "price",
+      "changePercent",
+      "change",
+      "turnover",
+      "volume",
+      "turnoverRate",
+      "peDynamic",
+      "marketCap"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/rank.js",
+    "sourceFile": "eastmoney/rank.js"
+  },
+  {
+    "site": "eastmoney",
+    "name": "sectors",
+    "description": "板块排行（行业/概念/地域）按涨跌幅、主力资金或成交额排序",
+    "domain": "push2.eastmoney.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "type",
+        "type": "string",
+        "default": "industry",
+        "required": false,
+        "help": "板块类型：industry / concept / region"
+      },
+      {
+        "name": "sort",
+        "type": "string",
+        "default": "change",
+        "required": false,
+        "help": "排序：change / drop / money-flow / out-flow / turnover"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量 (max 100)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "code",
+      "name",
+      "price",
+      "changePercent",
+      "mainNet",
+      "leadStock",
+      "leadChangePercent",
+      "upCount",
+      "downCount"
+    ],
+    "type": "js",
+    "modulePath": "eastmoney/sectors.js",
+    "sourceFile": "eastmoney/sectors.js"
   },
   {
     "site": "facebook",
@@ -16173,7 +16698,8 @@
       "author",
       "publish_time",
       "status",
-      "size"
+      "size",
+      "saved"
     ],
     "type": "js",
     "modulePath": "web/read.js",
@@ -16434,7 +16960,8 @@
       "author",
       "publish_time",
       "status",
-      "size"
+      "size",
+      "saved"
     ],
     "type": "js",
     "modulePath": "weixin/download.js",

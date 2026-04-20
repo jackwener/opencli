@@ -15,7 +15,6 @@ import { findPackageRoot, getBuiltEntryCandidates } from './package-paths.js';
 import { type CliCommand, fullName, getRegistry, strategyLabel } from './registry.js';
 import { serializeCommand, formatArgSummary } from './serialization.js';
 import { render as renderOutput } from './output.js';
-import { getBrowserFactory, browserSession } from './runtime.js';
 import { PKG_VERSION } from './version.js';
 import { printCompletionScript } from './completion.js';
 import { loadExternalClis, executeExternalCli, installExternalCli, registerExternalCli, isBinaryInstalled } from './external.js';
@@ -290,145 +289,6 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       const r = await verifyClis({ builtinClis: BUILTIN_CLIS, userClis: USER_CLIS, target, smoke: opts.smoke });
       console.log(renderVerifyReport(r));
       process.exitCode = r.ok ? EXIT_CODES.SUCCESS : EXIT_CODES.GENERIC_ERROR;
-    });
-
-  // ── Built-in: explore / synthesize / generate / cascade ───────────────────
-
-  program
-    .command('explore')
-    .alias('probe')
-    .description('Explore a website: discover APIs, stores, and recommend strategies')
-    .argument('<url>')
-    .option('--site <name>')
-    .option('--goal <text>')
-    .option('--wait <s>', '', '3')
-    .option('--auto', 'Enable interactive fuzzing')
-    .option('--click <labels>', 'Comma-separated labels to click before fuzzing')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (url: string, opts: {
-      site?: string;
-      goal?: string;
-      wait: string;
-      auto?: boolean;
-      click?: string;
-      verbose?: boolean;
-    }) => {
-      applyVerbose(opts);
-      const { exploreUrl, renderExploreSummary } = await import('./explore.js');
-      const clickLabels = opts.click
-        ? opts.click.split(',').map((s: string) => s.trim())
-        : undefined;
-      const workspace = `explore:${inferHost(url, opts.site)}`;
-      const result = await exploreUrl(url, {
-        BrowserFactory: getBrowserFactory(),
-        site: opts.site,
-        goal: opts.goal,
-        waitSeconds: parseFloat(opts.wait),
-        auto: opts.auto,
-        clickLabels,
-        workspace,
-      });
-      console.log(renderExploreSummary(result));
-    });
-
-  program
-    .command('synthesize')
-    .description('Synthesize CLIs from explore')
-    .argument('<target>')
-    .option('--top <n>', '', '3')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (target, opts) => {
-      applyVerbose(opts);
-      const { synthesizeFromExplore, renderSynthesizeSummary } = await import('./synthesize.js');
-      console.log(renderSynthesizeSummary(synthesizeFromExplore(target, { top: parseInt(opts.top) })));
-    });
-
-  program
-    .command('generate')
-    .description('One-shot: explore → synthesize → verify → register')
-    .argument('<url>')
-    .option('--goal <text>')
-    .option('--site <name>')
-    .option('--format <fmt>', 'Output format: table, json', 'table')
-    .option('--no-register', 'Verify the generated adapter without registering it')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (url: string, opts: {
-      goal?: string;
-      site?: string;
-      format?: string;
-      register?: boolean;
-      verbose?: boolean;
-    }) => {
-      applyVerbose(opts);
-      const { generateVerifiedFromUrl, renderGenerateVerifiedSummary } = await import('./generate-verified.js');
-      const workspace = `generate:${inferHost(url, opts.site)}`;
-      const r = await generateVerifiedFromUrl({
-        url,
-        BrowserFactory: getBrowserFactory(),
-        goal: opts.goal,
-        site: opts.site,
-        workspace,
-        noRegister: opts.register === false,
-      });
-      if (opts.format === 'json') console.log(JSON.stringify(r, null, 2));
-      else console.log(renderGenerateVerifiedSummary(r));
-      process.exitCode = r.status === 'success' ? EXIT_CODES.SUCCESS : EXIT_CODES.GENERIC_ERROR;
-    });
-
-  // ── Built-in: record ─────────────────────────────────────────────────────
-
-  program
-    .command('record')
-    .description('Record API calls from a live browser session → generate YAML candidates')
-    .argument('<url>', 'URL to open and record')
-    .option('--site <name>', 'Site name (inferred from URL if omitted)')
-    .option('--out <dir>', 'Output directory for candidates')
-    .option('--poll <ms>', 'Poll interval in milliseconds', '2000')
-    .option('--timeout <ms>', 'Auto-stop after N milliseconds (default: 60000)', '60000')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (url: string, opts: {
-      site?: string;
-      out?: string;
-      poll: string;
-      timeout: string;
-      verbose?: boolean;
-    }) => {
-      applyVerbose(opts);
-      const { recordSession, renderRecordSummary } = await import('./record.js');
-      const result = await recordSession({
-        BrowserFactory: getBrowserFactory(),
-        url,
-        site: opts.site,
-        outDir: opts.out,
-        pollMs: parseInt(opts.poll, 10),
-        timeoutMs: parseInt(opts.timeout, 10),
-      });
-      console.log(renderRecordSummary(result));
-      process.exitCode = result.candidateCount > 0 ? EXIT_CODES.SUCCESS : EXIT_CODES.EMPTY_RESULT;
-    });
-
-  program
-    .command('cascade')
-    .description('Strategy cascade: find simplest working strategy')
-    .argument('<url>')
-    .option('--site <name>')
-    .option('-v, --verbose', 'Debug output')
-    .action(async (url: string, opts: {
-      site?: string;
-      verbose?: boolean;
-    }) => {
-      applyVerbose(opts);
-      const { cascadeProbe, renderCascadeResult } = await import('./cascade.js');
-      const workspace = `cascade:${inferHost(url, opts.site)}`;
-      const result = await browserSession(getBrowserFactory(), async (page) => {
-        try {
-          const siteUrl = new URL(url);
-          await page.goto(`${siteUrl.protocol}//${siteUrl.host}`);
-          await page.wait(2);
-        } catch {}
-        return cascadeProbe(page, url);
-      }, { workspace });
-      console.log(renderCascadeResult(result));
     });
 
   // ── Built-in: browser (browser control for Claude Code skill) ───────────────
@@ -1459,8 +1319,3 @@ export function resolveBrowserVerifyInvocation(opts: {
   };
 }
 
-/** Infer a workspace-friendly hostname from a URL, with site override. */
-function inferHost(url: string, site?: string): string {
-  if (site) return site;
-  try { return new URL(url).host; } catch { return 'default'; }
-}

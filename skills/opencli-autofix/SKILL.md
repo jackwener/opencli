@@ -250,7 +250,7 @@ If `gh` is not installed or not authenticated, tell the user and skip — do not
 **Soft stops (report after attempting):**
 - **3 repair rounds exhausted** — stop, report what was tried and what failed
 - **Feature completely removed** — the data no longer exists
-- **Major redesign** — needs full adapter rewrite via `opencli-explorer` skill
+- **Major redesign** — needs full adapter rewrite via `opencli-adapter-author` skill
 
 In all stop cases, clearly communicate the situation to the user rather than making futile patches.
 
