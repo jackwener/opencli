@@ -41,7 +41,7 @@ START
 │   2. ~/.opencli/sites/<site>/notes.md               │
 │   3. references/site-memory/<site>.md               │
 └────────────────────────────────────────────────────┘
-  │ 命中 endpoint + 字段 → 跳到【写 adapter】
+  │ 命中 endpoint + 字段 → 直接跳到【endpoint 验证】（不跳写 adapter！memory 可能过期）
   │ 没命中 → 继续
   ▼
 ┌──────────────────────────┐
@@ -54,15 +54,17 @@ START
 └──────────────────────────┘
   │ 拿到候选 endpoint
   ▼
-┌──────────────────────────┐
-│ 直接 fetch 验证 endpoint  │── 401/403 ──→ 回到 §4 排 token
-│ 数据非空 + 200           │── 空/HTML ──→ 回到 site-recon 换 Pattern
-└──────────────────────────┘
+┌────────────────────────────────────────────┐
+│ 直接 fetch 验证 endpoint（memory 命中也要跑）│── 401/403 ──→ 回到 §4 排 token
+│ 数据非空 + 200                              │── 空/HTML ──→ 回到 site-recon 换 Pattern
+│ memory 里的值还活着吗？                     │── 站点换版 ──→ 标记旧 endpoint，回 api-discovery
+└────────────────────────────────────────────┘
   │ OK
   ▼
-┌──────────────────────────┐
-│ 字段解码                  │  自解释 → 直接 / 已知代号 → field-conventions / 未知 → decode-playbook
-└──────────────────────────┘
+┌───────────────────────────────────────┐
+│ 字段解码（memory 里的 field-map 也要抽查）│  自解释 → 直接 / 已知代号 → field-conventions / 未知 → decode-playbook
+│ 比一条已知字段和网页肉眼值，确认没错位     │
+└───────────────────────────────────────┘
   │
   ▼
 ┌──────────────────────────┐
@@ -104,7 +106,8 @@ DONE
 [ ] 2. 读站点记忆：
        [ ] ~/.opencli/sites/<site>/endpoints.json 存在？里面有想要的 endpoint？
        [ ] references/site-memory/<site>.md 存在？看"已知 endpoint"节
-       [ ] 两个都命中 → 跳到第 9
+       [ ] 命中后：**跳到第 5（endpoint 验证） + 第 7（字段核对）**，不能直接跳第 9 写 adapter
+       [ ] memory 写入超过 30 天（看 `verified_at`）→ 当作过期，按冷启动走 Step 3 → 4
 [ ] 3. 侦察（site-recon.md）：
        [ ] opencli browser open <url>
        [ ] opencli browser wait time 3
@@ -134,11 +137,11 @@ DONE
        [ ] 改 name / URL / 字段映射
 [ ] 10. opencli browser verify <site>/<name>
 [ ] 11. 字段值 vs 网页肉眼比对（别只看 "Adapter works!"）
-[ ] 12. 回写站点记忆：
-        [ ] 追加 endpoint 到 ~/.opencli/sites/<site>/endpoints.json
-        [ ] 追加新字段到 ~/.opencli/sites/<site>/field-map.json
-        [ ] 追加本次 notes 到 ~/.opencli/sites/<site>/notes.md
-        [ ] 存一份样本响应到 ~/.opencli/sites/<site>/fixtures/
+[ ] 12. 回写站点记忆（**verify 通过 + 肉眼比对对得上之后**，schema 见 `references/site-memory.md`）：
+        [ ] `endpoints.json`：以 endpoint 的短名为 key，value = `{url, method, params.{required,optional}, response, verified_at: YYYY-MM-DD, notes}`
+        [ ] `field-map.json`：只追加新代号。key = 字段代号，value = `{meaning, verified_at: YYYY-MM-DD, source}`；**已存在的 key 不要覆盖**，有冲突先和网页肉眼值对齐再写
+        [ ] `notes.md`：顶部追加一段 `## YYYY-MM-DD by <agent/user>`，写本次写 adapter 时遇到的新坑 / 新结论
+        [ ] `fixtures/<cmd>-<YYYYMMDDHHMM>.json`：存一份该 endpoint 的完整响应样本（去掉 cookie / token / 用户私有字段后再存），给后续 regression / 字段对比用
 ```
 
 ---

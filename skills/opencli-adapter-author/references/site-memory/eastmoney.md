@@ -49,7 +49,7 @@
 
 1. **`fltt=2` 必传**：否则价格字段是 `int × 10^f152` 的整数表示，要自己除
 2. **资金流单位混乱**：`f6` 成交额是元，但 `f62 / f66 / f72 / f78 / f84` 等净流入大部分接口返回"万元"，核对单条接口后再乘
-3. **secid vs code**：`0.000001 / 1.600000` 是 secid（market + code），只有纯 code 时要先判断所属市场前缀再拼（`_secid.js` 里的 `resolveSecids` 工具）
+3. **secid vs code**：`0.000001 / 1.600000` 是 secid（market + code），只有纯 code 时要先判断所属市场前缀再拼。用 `clis/eastmoney/_secid.js` 导出的 `resolveSecid(input)`（单股）或 `splitSymbols(s)`（批量参数拆分），不要自己硬拼前缀
 4. **港股代码 `00700.HK` 不是 secid**：只有前缀属于 `{0, 1, 105, 106, 107, 116, 100, 90}` 才当 secid
 5. **kline CSV 列序**：`fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61` 对应 `date,open,close,high,low,volume,turnover,amplitude,changePct,changeAmt,turnoverRate`
 6. **datacenter-web 字段名大写**：`SECURITY_CODE` 不是 `security_code`

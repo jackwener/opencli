@@ -84,7 +84,7 @@ Adapter code, validation, and error handling have been modernized.
 1. **Update Node.js** to v21 or later (v22 LTS recommended).
 2. **Run `npm install -g @jackwener/opencli@latest`** — the preuninstall hook gracefully stops the old daemon; the first browser command after upgrade auto-restarts it.
 3. **If you have custom `.ts` adapters** in `~/.opencli/clis/`, rename or compile them to `.js`. A warning will be printed on startup if stale `.ts` files are detected.
-4. **If you have custom `.yaml` adapters**, convert them to JS using the `cli()` API (see `skills/opencli-explorer/references/adapter-templates.md`).
+4. **If you have custom `.yaml` adapters**, convert them to JS using the `cli()` API (see `skills/opencli-adapter-author/references/adapter-template.md`).
 5. **If you parse error output from stdout**, switch to stderr. Errors are now structured YAML envelopes with typed exit codes.
 
 
