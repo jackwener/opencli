@@ -2,7 +2,7 @@ import { cli, Strategy } from '@jackwener/opencli/registry';
 import { CommandExecutionError } from '@jackwener/opencli/errors';
 import {
     DEEPSEEK_DOMAIN, DEEPSEEK_URL, ensureOnDeepSeek, selectModel, setFeature,
-    sendMessage, getBubbleCount, waitForResponse, parseBoolFlag, withRetry, attachAndSend,
+    sendMessage, sendWithFile, getBubbleCount, waitForResponse, parseBoolFlag, withRetry,
 } from './utils.js';
 
 export const askCommand = cli({
@@ -60,13 +60,13 @@ export const askCommand = cli({
         if (thinkResult.toggled || searchResult.toggled) await page.wait(0.5);
 
         if (kwargs.file) {
-            // Atomic attach+send: "Promise was collected" after click means SPA navigated (send succeeded)
             try {
-                const result = await attachAndSend(page, kwargs.file, prompt);
-                if (result && !result.ok) {
-                    throw new CommandExecutionError(result.reason || 'Failed to attach file and send');
+                const fileResult = await sendWithFile(page, kwargs.file, prompt);
+                if (fileResult && !fileResult.ok) {
+                    throw new CommandExecutionError(fileResult.reason || 'Failed to attach file');
                 }
             } catch (err) {
+                // SPA navigates after send; "Promise was collected" means send succeeded
                 if (!String(err?.message || err).includes('Promise was collected')) throw err;
             }
             await page.wait(3);

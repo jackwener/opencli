@@ -65,7 +65,7 @@ opencli deepseek history --limit 10
 | `--model` | Model to use: `instant` or `expert` (default: instant) |
 | `--think` | Enable DeepThink mode (default: false) |
 | `--search` | Enable web search (default: false) |
-| `--file` | Attach a file (PDF, image, text) with the prompt (max 50 MB) |
+| `--file` | Attach a file (PDF, image, text) with the prompt (max 100 MB) |
 
 ## Prerequisites
 
@@ -77,4 +77,4 @@ opencli deepseek history --limit 10
 - This adapter drives the DeepSeek web UI in the browser, not an API
 - Default mode is Instant with DeepThink and Search disabled; each flag (`--model`, `--think`, `--search`) is synced on every invocation so omitting a flag resets it
 - Long responses (code, essays) may need a higher `--timeout`
-- File upload reads the file into memory and passes it via base64 to the browser; files over 50 MB are rejected
+- File upload reads the file into memory and passes it via base64 to the browser; files over 100 MB are rejected

@@ -89,16 +89,6 @@ export async function sendMessage(page, prompt) {
             }
         }
 
-        // Fallback: find send button by its arrow-up SVG path
-        const paths = document.querySelectorAll('svg path[d^="M8.3125"]');
-        for (const p of paths) {
-            const sendBtn = p.closest('div[role="button"]');
-            if (sendBtn && sendBtn.getAttribute('aria-disabled') !== 'true') {
-                sendBtn.click();
-                return { ok: true, method: 'svg-match' };
-            }
-        }
-
         box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
         return { ok: true, method: 'enter' };
     })()`);
@@ -171,7 +161,6 @@ export async function getConversationList(page) {
             if (btn) btn.click();
         }
     })()`);
-    // Poll for sidebar history links to render
     for (let attempt = 0; attempt < 5; attempt++) {
         await page.wait(2);
         const items = await page.evaluate(`(() => {
@@ -196,66 +185,7 @@ export async function getConversationList(page) {
     return [];
 }
 
-export async function attachFile(page, filePath) {
-    const fs = await import('node:fs');
-    const path = await import('node:path');
-    const absPath = path.default.resolve(filePath);
-
-    if (!fs.default.existsSync(absPath)) {
-        return { ok: false, reason: `File not found: ${absPath}` };
-    }
-
-    const stats = fs.default.statSync(absPath);
-    if (stats.size > 50 * 1024 * 1024) {
-        return { ok: false, reason: `File too large (${(stats.size / 1024 / 1024).toFixed(1)} MB). Max: 50 MB` };
-    }
-
-    const content = fs.default.readFileSync(absPath);
-    const base64 = content.toString('base64');
-    const fileName = path.default.basename(absPath);
-
-    const attachResult = await page.evaluate(`(async () => {
-        const binary = atob('${base64}');
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-        const file = new File([bytes], ${JSON.stringify(fileName)});
-        const dt = new DataTransfer();
-        dt.items.add(file);
-
-        const inp = document.querySelector('input[type="file"]');
-        if (!inp) return { ok: false, reason: 'file input element not found' };
-
-        inp.files = dt.files;
-        const propsKey = Object.keys(inp).find(k => k.startsWith('__reactProps$'));
-        if (!propsKey || typeof inp[propsKey].onChange !== 'function') {
-            return { ok: false, reason: 'React onChange handler not found on file input' };
-        }
-        inp[propsKey].onChange({ target: { files: dt.files } });
-        return { ok: true };
-    })()`);
-
-    if (!attachResult?.ok) return attachResult;
-
-    // Poll until file preview appears in the UI (confirms upload completed)
-    for (let attempt = 0; attempt < 5; attempt++) {
-        await page.wait(2);
-        const verified = await page.evaluate(`(() => {
-            const els = document.querySelectorAll('div');
-            for (const el of els) {
-                if (el.children.length === 0 && el.textContent.trim() === ${JSON.stringify(fileName)}) {
-                    return true;
-                }
-            }
-            return false;
-        })()`);
-        if (verified) return { ok: true, fileName };
-    }
-
-    return { ok: false, reason: 'File preview did not appear after upload' };
-}
-
-export async function attachAndSend(page, filePath, prompt) {
+export async function sendWithFile(page, filePath, prompt) {
     const fs = await import('node:fs');
     const path = await import('node:path');
     const absPath = path.default.resolve(filePath);
@@ -272,62 +202,68 @@ export async function attachAndSend(page, filePath, prompt) {
     const content = fs.default.readFileSync(absPath);
     const base64 = content.toString('base64');
     const fileName = path.default.basename(absPath);
-    const promptJson = JSON.stringify(prompt);
 
-    // Attach file, wait for upload, type prompt, and click send in a single evaluate
-    // to avoid SPA navigation breaking the CDP context between separate calls.
+    // Collapse sidebar to keep DOM simple for send button matching
+    await page.evaluate(`(() => {
+        if (document.querySelectorAll('a[href*="/a/chat/s/"]').length > 0) {
+            const btn = document.querySelector('div[tabindex="0"][role="button"]');
+            if (btn) btn.click();
+        }
+    })()`);
+    await page.wait(0.5);
+
+    // Single evaluate: attach file, wait for upload, type prompt, click send.
+    // Keeps everything in one CDP call to avoid idle timeout during SPA navigation.
     return page.evaluate(`(async () => {
-        const binary = atob('${base64}');
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        var binary = atob('${base64}');
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-        const file = new File([bytes], ${JSON.stringify(fileName)});
-        const dt = new DataTransfer();
+        var file = new File([bytes], ${JSON.stringify(fileName)});
+        var dt = new DataTransfer();
         dt.items.add(file);
 
-        const inp = document.querySelector('input[type="file"]');
-        if (!inp) return { ok: false, reason: 'file input element not found' };
+        var inp = document.querySelector('input[type="file"]');
+        if (!inp) return { ok: false, reason: 'file input not found' };
+
+        var propsKey = Object.keys(inp).find(function(k) { return k.startsWith('__reactProps$'); });
+        if (!propsKey || typeof inp[propsKey].onChange !== 'function') {
+            return { ok: false, reason: 'React onChange not found' };
+        }
 
         inp.files = dt.files;
-        const propsKey = Object.keys(inp).find(k => k.startsWith('__reactProps$'));
-        if (!propsKey || typeof inp[propsKey].onChange !== 'function') {
-            return { ok: false, reason: 'React onChange handler not found on file input' };
-        }
         inp[propsKey].onChange({ target: { files: dt.files } });
 
-        // Poll until file preview appears (upload complete)
-        for (let i = 0; i < 10; i++) {
-            await new Promise(r => setTimeout(r, 2000));
-            const els = document.querySelectorAll('div');
-            for (const el of els) {
-                if (el.children.length === 0 && el.textContent.trim() === ${JSON.stringify(fileName)}) {
-                    // File uploaded, now type and send
-                    const box = document.querySelector('${TEXTAREA_SELECTOR}');
-                    if (!box) return { ok: false, reason: 'textarea not found after file upload' };
+        // Poll until file preview appears (max 16s)
+        for (var a = 0; a < 8; a++) {
+            await new Promise(function(r) { setTimeout(r, 2000); });
+            var divs = document.querySelectorAll('div');
+            for (var d = 0; d < divs.length; d++) {
+                if (divs[d].children.length === 0 && divs[d].textContent.trim() === ${JSON.stringify(fileName)}) {
+                    var box = document.querySelector('${TEXTAREA_SELECTOR}');
+                    if (!box) return { ok: false, reason: 'textarea not found' };
 
                     box.focus();
                     document.execCommand('selectAll');
-                    document.execCommand('insertText', false, ${promptJson});
-                    await new Promise(r => setTimeout(r, 800));
-
-                    const paths = document.querySelectorAll('svg path[d^="M8.3125"]');
-                    for (const p of paths) {
-                        const btn = p.closest('div[role="button"]');
-                        if (btn && btn.getAttribute('aria-disabled') !== 'true') {
-                            btn.click();
-                            return { ok: true, method: 'file+send' };
+                    document.execCommand('insertText', false, ${JSON.stringify(prompt)});
+                    // Wait for send button to become enabled after typing
+                    for (var w = 0; w < 5; w++) {
+                        await new Promise(function(r) { setTimeout(r, 1000); });
+                        var paths = document.querySelectorAll('svg path[d^="M8.3125"]');
+                        for (var p = 0; p < paths.length; p++) {
+                            var sendBtn = paths[p].closest('div[role="button"]');
+                            if (sendBtn && sendBtn.getAttribute('aria-disabled') !== 'true') {
+                                sendBtn.click();
+                                return { ok: true };
+                            }
                         }
                     }
-
-                    box.dispatchEvent(new KeyboardEvent('keydown', {
-                        key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true
-                    }));
-                    return { ok: true, method: 'file+enter' };
+                    return { ok: false, reason: 'send button not found or disabled' };
                 }
             }
         }
 
-        return { ok: false, reason: 'File preview did not appear after upload' };
+        return { ok: false, reason: 'file preview did not appear' };
     })()`);
 }
 
