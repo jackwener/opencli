@@ -295,6 +295,125 @@ describe('browser tab targeting commands', () => {
     expect(stderrSpy.mock.calls.flat().join('\n')).toContain('Target tab tab-stale is not part of the current browser session');
   });
 });
+
+describe('browser network command', () => {
+  const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+  function getNetworkCachePath(cacheDir: string): string {
+    return path.join(cacheDir, 'browser-network', 'browser_default.json');
+  }
+
+  function lastJsonLog(): any {
+    const calls = consoleLogSpy.mock.calls;
+    if (calls.length === 0) throw new Error('Expected at least one console.log call');
+    const last = calls[calls.length - 1][0];
+    if (typeof last !== 'string') throw new Error(`Expected string arg to console.log, got ${typeof last}`);
+    return JSON.parse(last);
+  }
+
+  beforeEach(() => {
+    process.exitCode = undefined;
+    process.env.OPENCLI_CACHE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-browser-net-'));
+    consoleLogSpy.mockClear();
+    mockBrowserConnect.mockClear();
+    mockBrowserClose.mockReset().mockResolvedValue(undefined);
+
+    browserState.page = {
+      setActivePage: vi.fn(),
+      getActivePage: vi.fn().mockReturnValue('tab-1'),
+      tabs: vi.fn().mockResolvedValue([{ page: 'tab-1', active: true }]),
+      evaluate: vi.fn().mockResolvedValue(''),
+      readNetworkCapture: vi.fn().mockResolvedValue([
+        {
+          url: 'https://x.com/i/api/graphql/qid/UserTweets?v=1',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'application/json',
+          responsePreview: JSON.stringify({ data: { user: { rest_id: '42' } } }),
+        },
+        {
+          url: 'https://cdn.example.com/app.js',
+          method: 'GET',
+          responseStatus: 200,
+          responseContentType: 'application/javascript',
+          responsePreview: '// js',
+        },
+      ]),
+    } as unknown as IPage;
+  });
+
+  it('emits JSON with shape previews and persists the capture to disk', async () => {
+    const cacheDir = String(process.env.OPENCLI_CACHE_DIR);
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+
+    const out = lastJsonLog();
+    expect(out.count).toBe(1);
+    expect(out.filtered_out).toBe(1);
+    expect(out.entries[0].key).toBe('UserTweets');
+    expect(out.entries[0].shape['$.data.user.rest_id']).toBe('string');
+    expect(out.entries[0]).not.toHaveProperty('body');
+    expect(fs.existsSync(getNetworkCachePath(cacheDir))).toBe(true);
+  });
+
+  it('--all includes static resources that the default filter drops', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'network', '--all']);
+
+    const out = lastJsonLog();
+    expect(out.count).toBe(2);
+    expect(out.entries.map((e: any) => e.key)).toContain('UserTweets');
+    expect(out.entries.map((e: any) => e.key)).toContain('GET cdn.example.com/app.js');
+  });
+
+  it('--raw emits full bodies inline for every entry', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'network', '--raw']);
+
+    const out = lastJsonLog();
+    expect(out.entries[0].body).toEqual({ data: { user: { rest_id: '42' } } });
+  });
+
+  it('--detail <key> returns the full body for the requested entry', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+    consoleLogSpy.mockClear();
+    await program.parseAsync(['node', 'opencli', 'browser', 'network', '--detail', 'UserTweets']);
+
+    const out = lastJsonLog();
+    expect(out.key).toBe('UserTweets');
+    expect(out.body).toEqual({ data: { user: { rest_id: '42' } } });
+    expect(out.shape['$.data.user.rest_id']).toBe('string');
+  });
+
+  it('--detail reports key_not_found with the list of available keys', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'network']);
+    consoleLogSpy.mockClear();
+    await program.parseAsync(['node', 'opencli', 'browser', 'network', '--detail', 'NopeOp']);
+
+    const out = lastJsonLog();
+    expect(out.error.code).toBe('key_not_found');
+    expect(out.error.available_keys).toContain('UserTweets');
+    expect(process.exitCode).toBeDefined();
+  });
+
+  it('--detail reports cache_missing when no capture has been persisted yet', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'network', '--detail', 'UserTweets']);
+
+    const out = lastJsonLog();
+    expect(out.error.code).toBe('cache_missing');
+    expect(process.exitCode).toBeDefined();
+  });
+});
+
 describe('findPackageRoot', () => {
   it('walks up from dist/src to the package root', () => {
     const packageRoot = path.join('repo-root');

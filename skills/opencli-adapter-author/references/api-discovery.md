@@ -14,26 +14,34 @@
 opencli browser network
 ```
 
-输出里过掉这些噪音：
-- `.css / .js / .woff / .png / .svg / .webp / .mp4` — 静态资源
-- `googletagmanager / sentry / crazyegg / doubleclick / tracking / beacon` — 埋点
-- `/healthz / /ping / /heartbeat` — 健康检查
+默认输出是 JSON，每个候选都带：
+- `key` — 稳定引用（GraphQL 的 `operationName` 或 `METHOD host+pathname`）
+- `shape` — response body 的路径→类型映射（不含原 body，省 token）
+- `status / url / method / ct / size`
 
-剩下的每一条都是候选。挑 URL 里含业务词（`list / detail / quote / feed / timeline / stock / user` 等）的优先看：
+静态资源 / 埋点 / 追踪默认已过滤；需要全量看用 `--all`。
+
+### 按 shape 初筛
+
+挑 `key` 里含业务词（`list / detail / Timeline / User / Tweets / Quote`）的优先看 `shape`：
+
+- `$.data` 是 `object` 且下面出现 `array(N)` / `total` / `page` → 基本是它
+- 路径里出现 `nickname / avatar / title / price / tweets / items` → 就是它
+- shape 只有 `$: string` 或全是 HTML 噪音 → 下一条
+
+### 拉完整 body
+
+候选定了再拉完整 body（by key，不是 index — 数组顺序会随每次 capture 变）：
 
 ```bash
-opencli browser network --detail <N>
+opencli browser network --detail <key>
 ```
 
-看 response body 前 200 字节：
-
-- 含数组 / `total` / `page` 字段 → 基本是它
-- 含 `nickname / avatar / title / price` → 就是它
-- 是 HTML 或纯广告 → 下一条
+capture 会持久化到 `~/.opencli/cache/browser-network/<workspace>.json`（默认 TTL 24h），所以 `--detail` 即使跨多条其他命令也还在。
 
 ### 关键 request headers
 
-找到候选后，`--detail <N>` 里看请求头：
+`browser network` 当前只抓响应（body + status + ct），抓不到请求头。要看请求头就在 DevTools Network 面板里点这条 request，或用 `browser eval` 手动 `fetch(url)` 复现一次观察浏览器发出去的头：
 
 | 看到 | 含义 | 对应策略 |
 |------|------|---------|

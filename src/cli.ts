@@ -22,6 +22,9 @@ import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage, BrowserConnectError } from './errors.js';
 import { TargetError } from './browser/target-errors.js';
 import { resolveTargetJs, getTextResolvedJs, getValueResolvedJs, getAttributesResolvedJs, selectResolvedJs, isAutocompleteResolvedJs } from './browser/target-resolver.js';
+import { inferShape } from './browser/shape.js';
+import { assignKeys } from './browser/network-key.js';
+import { DEFAULT_TTL_MS, findEntry, loadNetworkCache, saveNetworkCache, type CachedNetworkEntry } from './browser/network-cache.js';
 import { daemonStatus, daemonStop } from './commands/daemon.js';
 import { log } from './logger.js';
 
@@ -37,6 +40,49 @@ type BrowserNetworkItem = {
   ct: string;
   body: unknown;
 };
+
+/**
+ * Normalize raw capture entries (from daemon/CDP `readNetworkCapture` or
+ * the JS interceptor's `window.__opencli_net`) into a consistent shape.
+ * Response preview is parsed as JSON when possible, otherwise kept as string.
+ */
+async function captureNetworkItems(page: import('./types.js').IPage): Promise<BrowserNetworkItem[]> {
+  if (page.readNetworkCapture) {
+    const raw = await page.readNetworkCapture();
+    return (raw as Array<Record<string, unknown>>).map((e) => {
+      const preview = (e.responsePreview as string) ?? null;
+      let body: unknown = null;
+      if (preview) {
+        try { body = JSON.parse(preview); } catch { body = preview; }
+      }
+      return {
+        url: (e.url as string) || '',
+        method: (e.method as string) || 'GET',
+        status: (e.responseStatus as number) || 0,
+        size: preview ? preview.length : 0,
+        ct: (e.responseContentType as string) || '',
+        body,
+      };
+    });
+  }
+  const raw = await page.evaluate(`(function(){ return JSON.stringify(window.__opencli_net || []); })()`) as string;
+  try { return JSON.parse(raw) as BrowserNetworkItem[]; } catch { return []; }
+}
+
+/** Drop static-resource / telemetry noise so agents see only API-shaped traffic. */
+function filterNetworkItems(items: BrowserNetworkItem[]): BrowserNetworkItem[] {
+  return items.filter((r) =>
+    (r.ct?.includes('json') || r.ct?.includes('xml') || r.ct?.includes('text/plain')) &&
+    !/\.(js|css|png|jpg|gif|svg|woff|ico|map)(\?|$)/i.test(r.url) &&
+    !/analytics|tracking|telemetry|beacon|pixel|gtag|fbevents/i.test(r.url),
+  );
+}
+
+/** Emit a structured error JSON so agents can branch on `error.code` without regex. */
+function emitNetworkError(code: string, message: string, extra: Record<string, unknown> = {}): void {
+  console.log(JSON.stringify({ error: { code, message, ...extra } }, null, 2));
+  process.exitCode = EXIT_CODES.USAGE_ERROR;
+}
 
 type BrowserTargetState = {
   defaultPage?: string;
@@ -615,70 +661,101 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     }));
 
   // ── Network (API discovery) ──
+  //
+  // Default output is JSON (agent-native). Each entry carries a stable `key`
+  // (GraphQL operationName or `METHOD host+pathname`) so agents can fetch
+  // full bodies with `--detail <key>` even after subsequent commands.
+  // Captures are persisted per workspace under ~/.opencli/cache/browser-network/.
 
   addBrowserTabOption(browser.command('network'))
-    .option('--detail <index>', 'Show full response body of request at index')
-    .option('--all', 'Show all requests including static resources')
-    .description('Show captured network requests (auto-captured since last open)')
+    .option('--detail <key>', 'Emit full body for the entry with this key')
+    .option('--all', 'Include static resources (js/css/images/telemetry)')
+    .option('--raw', 'Emit full bodies for every entry (skip shape preview)')
+    .option('--ttl <ms>', 'Cache TTL in ms for --detail lookups', String(DEFAULT_TTL_MS))
+    .description('Capture network requests as shape previews; retrieve full bodies by key')
     .action(browserAction(async (page, opts) => {
-      let items: BrowserNetworkItem[] = [];
-      if (page.readNetworkCapture) {
-        const raw = await page.readNetworkCapture();
-        // Normalize daemon/CDP capture entries to __opencli_net shape.
-        // Daemon returns: responseStatus, responseContentType, responsePreview
-        // CDP returns the same shape after PR A fix.
-        items = (raw as Array<Record<string, unknown>>).map(e => {
-          const preview = (e.responsePreview as string) ?? null;
-          let body: unknown = null;
-          if (preview) {
-            try { body = JSON.parse(preview); } catch { body = preview; }
-          }
-          return {
-            url: (e.url as string) || '',
-            method: (e.method as string) || 'GET',
-            status: (e.responseStatus as number) || 0,
-            size: preview ? preview.length : 0,
-            ct: (e.responseContentType as string) || '',
-            body,
-          };
-        });
-      } else {
-        // Fallback to JS interceptor data
-        const requests = await page.evaluate(`(function(){
-          var reqs = window.__opencli_net || [];
-          return JSON.stringify(reqs);
-        })()`) as string;
-        try { items = JSON.parse(requests); } catch { console.log('No network data captured. Run "browser open <url>" first.'); return; }
+      const ttlMs = parsePositiveIntOption(opts.ttl, 'ttl', DEFAULT_TTL_MS);
+      const workspace = DEFAULT_BROWSER_WORKSPACE;
+
+      // --detail short-circuits: read from cache only, no live capture needed.
+      if (typeof opts.detail === 'string' && opts.detail.length > 0) {
+        const res = loadNetworkCache(workspace, { ttlMs });
+        if (res.status === 'missing') {
+          emitNetworkError('cache_missing', `No cached capture. Run "browser network" first (in workspace "${workspace}").`);
+          return;
+        }
+        if (res.status === 'expired') {
+          emitNetworkError('cache_expired', `Cache is stale (age ${res.ageMs}ms > ttl ${ttlMs}ms). Re-run "browser network" to refresh.`);
+          return;
+        }
+        if (res.status === 'corrupt' || !res.file) {
+          emitNetworkError('cache_corrupt', 'Cache file is malformed; re-run "browser network" to regenerate.');
+          return;
+        }
+        const entry = findEntry(res.file, opts.detail);
+        if (!entry) {
+          emitNetworkError('key_not_found', `Key "${opts.detail}" not in cache.`, {
+            available_keys: res.file.entries.map((e) => e.key),
+          });
+          return;
+        }
+        console.log(JSON.stringify({
+          key: entry.key,
+          url: entry.url,
+          method: entry.method,
+          status: entry.status,
+          ct: entry.ct,
+          size: entry.size,
+          shape: inferShape(entry.body),
+          body: entry.body,
+        }, null, 2));
+        return;
       }
 
-      if (items.length === 0) { console.log('No requests captured.'); return; }
+      // Fresh capture path.
+      const rawItems = await captureNetworkItems(page);
+      const items = opts.all ? rawItems : filterNetworkItems(rawItems);
+      const filteredOut = rawItems.length - items.length;
 
-      // Filter out static resources unless --all
-      if (!opts.all) {
-        items = items.filter(r =>
-          (r.ct?.includes('json') || r.ct?.includes('xml') || r.ct?.includes('text/plain')) &&
-          !/\.(js|css|png|jpg|gif|svg|woff|ico|map)(\?|$)/i.test(r.url) &&
-          !/analytics|tracking|telemetry|beacon|pixel|gtag|fbevents/i.test(r.url)
-        );
+      const keyed = assignKeys(items);
+      const cacheEntries: CachedNetworkEntry[] = keyed.map((it) => ({
+        key: it.key,
+        url: it.url,
+        method: it.method,
+        status: it.status,
+        size: it.size,
+        ct: it.ct,
+        body: it.body,
+      }));
+      saveNetworkCache(workspace, cacheEntries);
+
+      if (opts.raw) {
+        console.log(JSON.stringify({
+          workspace,
+          captured_at: new Date().toISOString(),
+          count: cacheEntries.length,
+          filtered_out: filteredOut,
+          entries: cacheEntries,
+        }, null, 2));
+        return;
       }
 
-      if (opts.detail !== undefined) {
-        const idx = parseInt(opts.detail, 10);
-        const req = items[idx];
-        if (!req) { console.error(`Request #${idx} not found. ${items.length} requests available.`); process.exitCode = EXIT_CODES.USAGE_ERROR; return; }
-        console.log(`${req.method} ${req.url}`);
-        console.log(`Status: ${req.status} | Size: ${req.size} | Type: ${req.ct}`);
-        console.log('---');
-        console.log(typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2));
-      } else {
-        console.log(`Captured ${items.length} API requests:\n`);
-        items.forEach((r, i) => {
-          const bodyPreview = r.body ? (typeof r.body === 'string' ? r.body.slice(0, 60) : JSON.stringify(r.body).slice(0, 60)) : '';
-          console.log(`  [${i}] ${r.method} ${r.status} ${r.url.slice(0, 80)}`);
-          if (bodyPreview) console.log(`      ${bodyPreview}...`);
-        });
-        console.log(`\nUse --detail <index> to see full response body.`);
-      }
+      console.log(JSON.stringify({
+        workspace,
+        captured_at: new Date().toISOString(),
+        count: cacheEntries.length,
+        filtered_out: filteredOut,
+        entries: cacheEntries.map((e) => ({
+          key: e.key,
+          method: e.method,
+          status: e.status,
+          url: e.url,
+          ct: e.ct,
+          size: e.size,
+          shape: inferShape(e.body),
+        })),
+        detail_hint: 'Run "browser network --detail <key>" for full body.',
+      }, null, 2));
     }));
 
   // ── Init (adapter scaffolding) ──

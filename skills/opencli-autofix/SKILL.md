@@ -130,8 +130,8 @@ opencli browser open https://example.com/target-page && opencli browser state
 # Interact to trigger API calls
 opencli browser click <N> && opencli browser network
 
-# Inspect specific API response
-opencli browser network --detail <index>
+# Inspect specific API response (key is the `key` field from the default JSON output)
+opencli browser network --detail <key>
 ```
 
 ## Step 4: Patch the Adapter
