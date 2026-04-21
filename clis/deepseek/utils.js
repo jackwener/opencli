@@ -38,31 +38,26 @@ export async function getPageState(page) {
 
 export async function selectModel(page, modelName) {
     return page.evaluate(`(() => {
-        const radios = document.querySelectorAll('div[role="radio"]');
-        for (const radio of radios) {
-            const span = radio.querySelector('span');
-            if (span && span.textContent.trim().toLowerCase() === '${modelName}'.toLowerCase()) {
-                const alreadySelected = radio.getAttribute('aria-checked') === 'true';
-                if (!alreadySelected) radio.click();
-                return { ok: true, toggled: !alreadySelected };
-            }
-        }
-        return { ok: false };
+        var radios = document.querySelectorAll('div[role="radio"]');
+        if (radios.length === 0) return { ok: false };
+        var isFirst = '${modelName}'.toLowerCase() === 'instant';
+        var target = isFirst ? radios[0] : radios[radios.length - 1];
+        var alreadySelected = target.getAttribute('aria-checked') === 'true';
+        if (!alreadySelected) target.click();
+        return { ok: true, toggled: !alreadySelected };
     })()`);
 }
 
 export async function setFeature(page, featureName, enabled) {
+    // Match by position: DeepThink is the first toggle, Search is the second
+    var index = featureName === 'DeepThink' ? 0 : 1;
     return page.evaluate(`(() => {
-        const btns = document.querySelectorAll('div[role="button"]');
-        for (const btn of btns) {
-            const span = btn.querySelector('span');
-            if (span && span.textContent.trim() === '${featureName}') {
-                const isActive = btn.classList.contains('ds-toggle-button--selected');
-                if (${enabled} !== isActive) btn.click();
-                return { ok: true, toggled: ${enabled} !== isActive };
-            }
-        }
-        return { ok: false };
+        var toggles = Array.from(document.querySelectorAll('.ds-toggle-button'));
+        var btn = toggles[${index}];
+        if (!btn) return { ok: false };
+        var isActive = btn.classList.contains('ds-toggle-button--selected');
+        if (${enabled} !== isActive) btn.click();
+        return { ok: true, toggled: ${enabled} !== isActive };
     })()`);
 }
 
