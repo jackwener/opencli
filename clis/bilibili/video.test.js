@@ -78,4 +78,55 @@ describe('bilibili video', () => {
       (err) => err instanceof CommandExecutionError && /啥都木有|-404/.test(err.message),
     );
   });
+
+  it('extracts BV ID from full bilibili.com URL input', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      code: 0,
+      data: { bvid: 'BV1xx411c7mD', stat: {}, owner: {}, desc: '' },
+    });
+
+    await command.func(page, { bvid: 'https://www.bilibili.com/video/BV1xx411c7mD/' });
+
+    expect(page.goto).toHaveBeenCalledWith('https://www.bilibili.com/video/BV1xx411c7mD/');
+    expect(mockApiGet).toHaveBeenCalledWith(page, '/x/web-interface/view', { params: { bvid: 'BV1xx411c7mD' } });
+  });
+
+  it('extracts BV ID from bilibili URL with trailing query string', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      code: 0,
+      data: { bvid: 'BV1Je9EBnEha', stat: {}, owner: {}, desc: '' },
+    });
+
+    await command.func(page, {
+      bvid: 'https://www.bilibili.com/video/BV1Je9EBnEha/?spm_id_from=333.1007&vd_source=abc',
+    });
+
+    expect(mockApiGet).toHaveBeenCalledWith(page, '/x/web-interface/view', { params: { bvid: 'BV1Je9EBnEha' } });
+  });
+
+  it('extracts BV ID from m.bilibili.com mobile URL', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      code: 0,
+      data: { bvid: 'BV1xx411c7mD', stat: {}, owner: {}, desc: '' },
+    });
+
+    await command.func(page, { bvid: 'https://m.bilibili.com/video/BV1xx411c7mD' });
+
+    expect(mockApiGet).toHaveBeenCalledWith(page, '/x/web-interface/view', { params: { bvid: 'BV1xx411c7mD' } });
+  });
+
+  it('returns full description without truncation or whitespace collapse', async () => {
+    const longDesc = '第一行描述\n\n第二段，有多个空格   和换行\n\n' + 'x'.repeat(500);
+    mockApiGet.mockResolvedValueOnce({
+      code: 0,
+      data: { bvid: 'BV1xx411c7mD', stat: {}, owner: {}, desc: longDesc },
+    });
+
+    const rows = await command.func(page, { bvid: 'BV1xx411c7mD' });
+    const byField = Object.fromEntries(rows.map((r) => [r.field, r.value]));
+    // JSON/YAML consumers must receive the complete description verbatim,
+    // including original whitespace and length > 200 chars.
+    expect(byField.description).toBe(longDesc);
+    expect(byField.description.length).toBeGreaterThan(200);
+  });
 });

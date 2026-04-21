@@ -15,7 +15,16 @@ cli({
     if (!page) {
       throw new CommandExecutionError('Browser session required for bilibili video');
     }
-    const bvid = await resolveBvid(kwargs.bvid);
+
+    // Resolve BV ID from three advertised input forms:
+    //   1. Bare "BV..." id
+    //   2. Full bilibili.com/video/<BV>... URL (with or without query string / www / m.)
+    //   3. b23.tv short link (delegated to resolveBvid)
+    // resolveBvid() alone handles (1) and (3) but not (2), so we pre-extract
+    // from bilibili URLs before falling through.
+    const input = String(kwargs.bvid ?? '').trim();
+    const bilibiliUrlMatch = input.match(/bilibili\.com\/(?:video|bangumi\/play)\/(BV[A-Za-z0-9]+)/i);
+    const bvid = bilibiliUrlMatch ? bilibiliUrlMatch[1] : await resolveBvid(input);
 
     // Navigate to video page first so subsequent api call shares a primed session.
     await page.goto(`https://www.bilibili.com/video/${bvid}/`);
@@ -35,8 +44,6 @@ cli({
     const dur = d.duration || 0;
     const mm = Math.floor(dur / 60);
     const ss = dur % 60;
-    const desc = (d.desc || '').replace(/\s+/g, ' ').trim();
-    const descTrunc = desc.length > 200 ? desc.slice(0, 200) + '…' : desc;
 
     return [
       { field: 'bvid',         value: d.bvid ?? '' },
@@ -55,7 +62,7 @@ cli({
       { field: 'share',        value: String(stat.share ?? '') },
       { field: 'parts',        value: String(d.videos ?? 1) },
       { field: 'thumbnail',    value: d.pic ?? '' },
-      { field: 'description',  value: descTrunc },
+      { field: 'description',  value: d.desc ?? '' },
     ];
   },
 });
