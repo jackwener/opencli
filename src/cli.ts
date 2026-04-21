@@ -29,6 +29,7 @@ import { DEFAULT_TTL_MS, findEntry, loadNetworkCache, saveNetworkCache, type Cac
 import { parseFilter, shapeMatchesFilter } from './browser/shape-filter.js';
 import { buildHtmlTreeJs, type HtmlTreeResult } from './browser/html-tree.js';
 import { buildExtractHtmlJs, runExtractFromHtml } from './browser/extract.js';
+import { analyzeSite, type PageSignals } from './browser/analyze.js';
 import { daemonStatus, daemonStop } from './commands/daemon.js';
 import { log } from './logger.js';
 
@@ -98,6 +99,66 @@ function filterNetworkItems(items: BrowserNetworkItem[]): BrowserNetworkItem[] {
 function emitNetworkError(code: string, message: string, extra: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ error: { code, message, ...extra } }, null, 2));
   process.exitCode = EXIT_CODES.USAGE_ERROR;
+}
+
+/**
+ * Check whether the site-memory scaffolding exists under
+ * ~/.opencli/sites/<site>/. Agents have a strong tendency to forget to write
+ * endpoints.json / notes.md after a successful verify, which dooms the next
+ * agent to redo recon from scratch. Surfacing the current state as part of
+ * verify's final report converts that "silent skip" into a visible nudge;
+ * `--strict-memory` escalates it to a failure so agents driving a hardened
+ * workflow can't forget.
+ */
+export type SiteMemoryReport = {
+  ok: boolean;
+  siteDir: string;
+  endpoints: { present: boolean; count: number; path: string };
+  notes: { present: boolean; path: string };
+};
+
+export function checkSiteMemory(site: string): SiteMemoryReport {
+  const siteDir = path.join(os.homedir(), '.opencli', 'sites', site);
+  const endpointsPath = path.join(siteDir, 'endpoints.json');
+  const notesPath = path.join(siteDir, 'notes.md');
+  let endpointsCount = 0;
+  let endpointsPresent = fs.existsSync(endpointsPath);
+  if (endpointsPresent) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(endpointsPath, 'utf-8'));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        endpointsCount = Object.keys(parsed).length;
+      } else if (Array.isArray(parsed)) {
+        endpointsCount = parsed.length;
+      }
+    } catch {
+      endpointsPresent = false;
+    }
+  }
+  const notesPresent = fs.existsSync(notesPath);
+  return {
+    ok: endpointsPresent && endpointsCount > 0 && notesPresent,
+    siteDir,
+    endpoints: { present: endpointsPresent, count: endpointsCount, path: endpointsPath },
+    notes: { present: notesPresent, path: notesPath },
+  };
+}
+
+export function printSiteMemoryReport(report: SiteMemoryReport, strict: boolean | undefined): void {
+  if (report.ok) {
+    console.log(`  ✓ Memory: endpoints.json (${report.endpoints.count}), notes.md present at ${report.siteDir}`);
+    return;
+  }
+  const marker = strict ? '✗' : '⚠';
+  const missing: string[] = [];
+  if (!report.endpoints.present) missing.push('endpoints.json');
+  else if (report.endpoints.count === 0) missing.push('endpoints.json (empty)');
+  if (!report.notes.present) missing.push('notes.md');
+  console.log(`  ${marker} Memory: missing ${missing.join(', ')} under ${report.siteDir}`);
+  console.log(`    Write the endpoint you just verified + a 1-line session note so the next agent starts from minute 0, not minute 95.`);
+  if (!strict) {
+    console.log(`    (Re-run with --strict-memory to fail instead of warn.)`);
+  }
 }
 
 /** Coerce adapter JSON output into a row array. Accepts `[{...}]`, single `{}`, or `{items:[...]}`-style envelopes. */
@@ -631,6 +692,74 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       }
     }));
 
+  // ── Analyze (site recon, agent-native) ──
+  //
+  // Mechanizes the `site-recon.md` decision tree into one CLI call. The agent
+  // calls `browser analyze <url>` and gets back:
+  //
+  //   - pattern: A/B/C/D (mapped from network + SSR-globals signals)
+  //   - anti_bot: vendor + evidence + the one-liner for "what to do next"
+  //   - initial_state: which window globals are populated
+  //   - nearest_adapter: existing commands for the same site, if any
+  //   - recommended_next_step: a single imperative sentence
+  //
+  // Intent: replace the "open → eyeball network → curl → WAF → try again"
+  // feedback loop with a single deterministic verdict. Without this, agents
+  // burn ~20min per WAF-protected site re-discovering anti-bot posture.
+  addBrowserTabOption(browser.command('analyze').argument('<url>'))
+    .description('Classify site: anti-bot vendor, pattern (A/B/C/D), nearest adapter, recommended next step')
+    .action(browserAction(async (page, url) => {
+      const hasSessionCapture = await page.startNetworkCapture?.() ?? false;
+      await page.goto(url);
+      await page.wait(2);
+      if (!hasSessionCapture) {
+        try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
+      }
+      // Best-effort: give the page another beat so XHR after DOMContentLoaded lands.
+      await page.wait(1);
+
+      const rawItems = await captureNetworkItems(page);
+      const networkEntries = rawItems.map((e) => ({
+        url: e.url,
+        status: e.status,
+        contentType: e.ct,
+        bodyPreview: typeof e.body === 'string'
+          ? e.body.slice(0, 2000)
+          : (e.body ? JSON.stringify(e.body).slice(0, 2000) : null),
+      }));
+
+      const probeJs = `(function(){
+        return {
+          cookieNames: (document.cookie || '').split(';').map(function(c){ return c.trim().split('=')[0]; }).filter(Boolean),
+          initialState: {
+            __INITIAL_STATE__: typeof window.__INITIAL_STATE__ !== 'undefined',
+            __NUXT__: typeof window.__NUXT__ !== 'undefined',
+            __NEXT_DATA__: typeof window.__NEXT_DATA__ !== 'undefined',
+            __APOLLO_STATE__: typeof window.__APOLLO_STATE__ !== 'undefined',
+          },
+          title: document.title || '',
+          finalUrl: location.href,
+        };
+      })()`;
+      const probe = await page.evaluate(probeJs) as {
+        cookieNames: string[];
+        initialState: PageSignals['initialState'];
+        title: string;
+        finalUrl: string;
+      };
+
+      const signals: PageSignals = {
+        requestedUrl: url,
+        finalUrl: probe.finalUrl,
+        cookieNames: probe.cookieNames,
+        networkEntries,
+        initialState: probe.initialState,
+        title: probe.title,
+      };
+      const report = analyzeSite(signals, getRegistry());
+      console.log(JSON.stringify(report, null, 2));
+    }));
+
   // ── Find (structured CSS query, agent-native) ──
   //
   // `browser find --css <sel>` lets agents jump straight from a semantic
@@ -1001,10 +1130,10 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
   // ── Wait commands ──
 
   addBrowserTabOption(browser.command('wait'))
-    .argument('<type>', 'selector, text, or time')
-    .argument('[value]', 'CSS selector, text string, or seconds')
+    .argument('<type>', 'selector, text, time, or xhr')
+    .argument('[value]', 'CSS selector, text string, seconds, or XHR URL regex')
     .option('--timeout <ms>', 'Timeout in milliseconds', '10000')
-    .description('Wait for selector, text, or time (e.g. wait selector ".loaded", wait text "Success", wait time 3)')
+    .description('Wait for selector, text, time, or matching XHR (e.g. wait selector ".loaded", wait text "Success", wait time 3, wait xhr "/api/search")')
     .action(browserAction(async (page, type, value, opts) => {
       const timeout = parseInt(opts.timeout, 10);
       if (type === 'time') {
@@ -1019,8 +1148,42 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         if (!value) { console.error('Missing text'); process.exitCode = EXIT_CODES.USAGE_ERROR; return; }
         await page.wait({ text: value, timeout: timeout / 1000 });
         console.log(`Text "${value}" appeared`);
+      } else if (type === 'xhr') {
+        // Poll the capture ring until an entry matches the URL regex — turns
+        // the common "open page, wait N seconds, hope the data landed" idiom
+        // into a deterministic barrier keyed on the API the agent actually
+        // cares about. Prevents silent "empty DOM" failures on slow SPAs.
+        if (!value) { console.error('Missing XHR URL regex'); process.exitCode = EXIT_CODES.USAGE_ERROR; return; }
+        let re: RegExp;
+        try { re = new RegExp(value); } catch (err) {
+          console.error(`Invalid regex "${value}": ${err instanceof Error ? err.message : String(err)}`);
+          process.exitCode = EXIT_CODES.USAGE_ERROR;
+          return;
+        }
+        const deadline = Date.now() + timeout;
+        const pollMs = 400;
+        let matched: BrowserNetworkItem | null = null;
+        while (Date.now() < deadline && !matched) {
+          const items = await captureNetworkItems(page);
+          matched = items.find((e) => re.test(e.url)) ?? null;
+          if (!matched) await new Promise((r) => setTimeout(r, pollMs));
+        }
+        if (!matched) {
+          console.log(JSON.stringify({
+            error: {
+              code: 'xhr_not_seen',
+              message: `No captured XHR matched /${value}/ within ${timeout}ms`,
+              hint: 'Check the pattern against `browser network` output; the endpoint may not have fired yet, or capture is disabled.',
+            },
+          }, null, 2));
+          process.exitCode = EXIT_CODES.GENERIC_ERROR;
+          return;
+        }
+        console.log(JSON.stringify({
+          matched: { url: matched.url, status: matched.status, contentType: matched.ct },
+        }, null, 2));
       } else {
-        console.error(`Unknown wait type "${type}". Use: selector, text, or time`);
+        console.error(`Unknown wait type "${type}". Use: selector, text, time, or xhr`);
         process.exitCode = EXIT_CODES.USAGE_ERROR;
       }
     }));
@@ -1378,8 +1541,9 @@ cli({
     .option('--write-fixture', 'Write a starter fixture to ~/.opencli/sites/<site>/verify/<command>.json if none exists')
     .option('--update-fixture', 'Overwrite an existing fixture with one derived from current output')
     .option('--no-fixture', 'Ignore any fixture file for this run (no value-level validation)')
+    .option('--strict-memory', 'Fail (not just warn) when ~/.opencli/sites/<site>/endpoints.json or notes.md is missing')
     .description('Execute an adapter and validate output; uses fixture at ~/.opencli/sites/<site>/verify/<cmd>.json when present')
-    .action(async (name: string, opts: { fixture?: boolean; writeFixture?: boolean; updateFixture?: boolean } = {}) => {
+    .action(async (name: string, opts: { fixture?: boolean; writeFixture?: boolean; updateFixture?: boolean; strictMemory?: boolean } = {}) => {
       try {
         const parts = name.split('/');
         if (parts.length !== 2) { console.error('Name must be site/command format'); process.exitCode = EXIT_CODES.USAGE_ERROR; return; }
@@ -1481,6 +1645,11 @@ cli({
         const failures = validateRows(rows, fixture);
         if (failures.length === 0) {
           console.log(`\n  ✓ Adapter matches fixture (${fixturePath(site, command)}).`);
+          const memoryReport = checkSiteMemory(site);
+          printSiteMemoryReport(memoryReport, opts.strictMemory);
+          if (!memoryReport.ok && opts.strictMemory) {
+            process.exitCode = EXIT_CODES.GENERIC_ERROR;
+          }
           return;
         }
 

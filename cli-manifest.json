@@ -1668,29 +1668,6 @@
   },
   {
     "site": "bilibili",
-    "name": "video",
-    "description": "Get Bilibili video metadata (title, author, duration, stats, etc.)",
-    "strategy": "cookie",
-    "browser": true,
-    "args": [
-      {
-        "name": "bvid",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "BV ID, video URL, or b23.tv short link"
-      }
-    ],
-    "columns": [
-      "field",
-      "value"
-    ],
-    "type": "js",
-    "modulePath": "bilibili/video.js",
-    "sourceFile": "bilibili/video.js"
-  },
-  {
-    "site": "bilibili",
     "name": "user-videos",
     "description": "查看指定用户的投稿视频",
     "domain": "www.bilibili.com",
@@ -1738,6 +1715,30 @@
     "modulePath": "bilibili/user-videos.js",
     "sourceFile": "bilibili/user-videos.js",
     "navigateBefore": "https://www.bilibili.com"
+  },
+  {
+    "site": "bilibili",
+    "name": "video",
+    "description": "Get Bilibili video metadata (title, author, duration, stats, etc.)",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "bvid",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "BV ID, video URL, or b23.tv short link"
+      }
+    ],
+    "columns": [
+      "field",
+      "value"
+    ],
+    "type": "js",
+    "modulePath": "bilibili/video.js",
+    "sourceFile": "bilibili/video.js",
+    "navigateBefore": true
   },
   {
     "site": "binance",
@@ -8937,13 +8938,20 @@
         "default": 20,
         "required": false,
         "help": "Number of results (max 50)"
+      },
+      {
+        "name": "since_days",
+        "type": "int",
+        "required": false,
+        "help": "Only keep rows published within N days"
       }
     ],
     "columns": [
       "rank",
       "content_type",
       "title",
-      "publish_time",
+      "published_at",
+      "detail_status",
       "project_code",
       "budget_or_limit",
       "url"
@@ -15714,7 +15722,9 @@
       "name",
       "text",
       "likes",
-      "url"
+      "url",
+      "has_media",
+      "media_urls"
     ],
     "type": "js",
     "modulePath": "twitter/likes.js",
@@ -16079,7 +16089,9 @@
       "created_at",
       "likes",
       "views",
-      "url"
+      "url",
+      "has_media",
+      "media_urls"
     ],
     "type": "js",
     "modulePath": "twitter/search.js",
@@ -16115,7 +16127,9 @@
       "text",
       "likes",
       "retweets",
-      "url"
+      "url",
+      "has_media",
+      "media_urls"
     ],
     "type": "js",
     "modulePath": "twitter/thread.js",
@@ -16158,7 +16172,9 @@
       "replies",
       "views",
       "created_at",
-      "url"
+      "url",
+      "has_media",
+      "media_urls"
     ],
     "type": "js",
     "modulePath": "twitter/timeline.js",
@@ -16224,7 +16240,9 @@
       "retweets",
       "replies",
       "views",
-      "url"
+      "url",
+      "has_media",
+      "media_urls"
     ],
     "type": "js",
     "modulePath": "twitter/tweets.js",

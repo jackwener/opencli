@@ -153,12 +153,20 @@ key = 字段代号（`f237` / `f152`），value 三件套：
 - `expect.types`：支持 `|` union（`string|null`）和 `any` 通配。写多少列类型看列的稳定性；波动大的列直接 `any` 比频繁改 fixture 好
 - `expect.patterns`：正则表达式 **字符串**（注意 `\\` 转义）。`null` / `undefined` 会被跳过，不要用正则校验可空字段
 - `expect.notEmpty`：trim 后不能为空的列。这是"adapter 没吃掉核心业务字段"的最后一道保险
+- `expect.mustNotContain`：`Record<col, string[]>`。列值里不允许出现这些子串。用来挡"字段内容污染"——比如 `description` 里混进了 `address:` / `category:` 的邻居节点文字、`title` 前面粘了面包屑前缀。`notEmpty` 挡不住这种软污染
+- `expect.mustBeTruthy`：列数组。列值必须是 JS truthy。用来挡"silent `|| 0` / `|| false` 兜底"——数值列返回 0 / 空字符串 / false 都会被 `notEmpty` 放过，但业务上通常是"没抓到"
 
 ### 什么时候手写 vs `--write-fixture` 自动生成
 
-- Step 10 首轮通过：`opencli browser verify <site>/<cmd> --write-fixture` 会根据真实行生成一份 `deriveFixture` 种子（rowCount.min=1 / columns / types），没有 patterns/notEmpty。
-- 拿到种子后**必须手改**：加 `patterns`（URL / 日期 / ID 格式）、加 `notEmpty`（核心字段）、收紧 `rowCount`。纯机器生成的 fixture 挡不住数值错位。
+- `--write-fixture` 只是种子：生成 `rowCount.min=1` / `columns` / `types`，**没有** `patterns` / `notEmpty` / `mustNotContain` / `mustBeTruthy`——纯类型 fixture 挡不住数值错位 / 字段污染 / silent fallback。
+- 拿到种子后**必须手改**，四件套一起上：
+  - `patterns`：URL / 日期 / ID 等格式列
+  - `notEmpty`：核心业务字段
+  - `mustNotContain`：描述类文本列容易被兄弟节点污染时，把禁词（`address:` / `category:` 等）列出来
+  - `mustBeTruthy`：数值 / 布尔业务列，挡 `|| 0` / `|| false`
+- adapter 是 positional 主语型（`<tid>` / `<url>` / `<query>`）时，`--write-fixture` 的 `args` 要手写成数组形态。工具不会替你决定形态。
 - 站点换版导致 fixture 过时：`--update-fixture` 覆盖。改之前**先用肉眼核对一次网页值**，别闭着眼把错的响应固化下来。
+- **规避反模式：不要为了让 verify 通过去放松 pattern**。失败的 pattern 说明 adapter 输出有问题，要收紧 adapter，不是收紧 fixture。放松 fixture 等于默认把错数据接受下来。
 
 ### `notes.md` 格式
 

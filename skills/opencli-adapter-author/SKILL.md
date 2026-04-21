@@ -111,9 +111,8 @@ DONE
        [ ] 命中后：**跳到第 5（endpoint 验证） + 第 7（字段核对）**，不能直接跳第 9 写 adapter
        [ ] memory 写入超过 30 天（看 `verified_at`）→ 当作过期，按冷启动走 Step 3 → 4
 [ ] 3. 侦察（site-recon.md）：
-       [ ] opencli browser open <url>
-       [ ] opencli browser wait time 3
-       [ ] opencli browser network
+       [ ] **首选**：`opencli browser analyze <url>` 一步拿 pattern + 反爬 + 最近 adapter + next step
+       [ ] `analyze` 结论模糊时再手跑：`open` → `wait time 2` (或 `wait xhr <regex>`) → `network`
        [ ] 定 Pattern（A / B / C / D / E）
 [ ] 4. API 发现（api-discovery.md）按 Pattern 选 §：
        [ ] Pattern A → §1 network 精读
@@ -187,6 +186,7 @@ DONE
 | `references/adapter-template.md` | Step 9 文件结构 + 活例子 `convertible.js` |
 | `references/site-memory.md` | 总览：in-repo 种子 + 本地 `~/.opencli/sites/` 的两层结构 |
 | `references/site-memory/<site>.md` | Step 2 读站点公共知识（eastmoney / xueqiu / bilibili / tonghuashun 已铺） |
+| `references/success-rate-pitfalls.md` | Step 7 / 11 踩坑前翻：10 种"verify 能过但数据是错的"静默失败 |
 
 ---
 

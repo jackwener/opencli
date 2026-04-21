@@ -19,7 +19,11 @@
  *       "columns":  ["a", "b"],                // every row must have these keys
  *       "types":    { "a": "string", "b": "number|string" },
  *       "patterns": { "url": "^https?://" },
- *       "notEmpty": ["title", "url"]           // trimmed string must be non-empty
+ *       "notEmpty": ["title", "url"],          // trimmed string must be non-empty
+ *       "mustNotContain": {                     // catch content-contamination bleed
+ *         "description": ["address:", "category:"]
+ *       },
+ *       "mustBeTruthy": ["count"]               // catch silent `|| 0` fallbacks
  *     }
  *   }
  */
@@ -33,6 +37,23 @@ export type FixtureExpect = {
   types?: Record<string, string>;
   patterns?: Record<string, string>;
   notEmpty?: string[];
+  /**
+   * Substrings/regex fragments that MUST NOT appear in the column value.
+   *
+   * Catches silent content contamination that `notEmpty` alone misses —
+   * e.g. a `description` field that accidentally carries "address: ..." /
+   * "category: ..." fragments from sibling DOM nodes, or a `title` that
+   * bled in a navigation-breadcrumb prefix. Each entry is matched as a
+   * plain substring against the stringified column value.
+   */
+  mustNotContain?: Record<string, string[]>;
+  /**
+   * Columns whose values must be truthy. Complements `notEmpty` (which
+   * only rejects empty-string/null/undefined) by also catching silent
+   * `|| 0` / `|| false` fallbacks in numeric/boolean fields. Fires when
+   * the value coerces to `false` in JS.
+   */
+  mustBeTruthy?: string[];
 };
 
 export type FixtureArgs = Record<string, unknown> | unknown[];
@@ -43,7 +64,7 @@ export type Fixture = {
 };
 
 export type ValidationFailure = {
-  rule: 'rowCount' | 'column' | 'type' | 'pattern' | 'notEmpty';
+  rule: 'rowCount' | 'column' | 'type' | 'pattern' | 'notEmpty' | 'mustNotContain' | 'mustBeTruthy';
   detail: string;
   rowIndex?: number;
 };
@@ -171,6 +192,31 @@ export function validateRows(rows: Row[], fixture: Fixture): ValidationFailure[]
       const v = row[col];
       if (v === null || v === undefined || String(v).trim() === '') {
         failures.push({ rule: 'notEmpty', detail: `"${col}" is empty`, rowIndex: i });
+      }
+    }
+    for (const [col, needles] of Object.entries(expect.mustNotContain ?? {})) {
+      if (!(col in row)) continue;
+      const v = row[col];
+      if (v === null || v === undefined) continue;
+      const haystack = String(v);
+      for (const needle of needles) {
+        if (haystack.includes(needle)) {
+          failures.push({
+            rule: 'mustNotContain',
+            detail: `"${col}" contains forbidden substring ${JSON.stringify(needle)}`,
+            rowIndex: i,
+          });
+        }
+      }
+    }
+    for (const col of expect.mustBeTruthy ?? []) {
+      if (!(col in row)) continue;
+      if (!row[col]) {
+        failures.push({
+          rule: 'mustBeTruthy',
+          detail: `"${col}" is falsy (${JSON.stringify(row[col])}) — likely silent fallback`,
+          rowIndex: i,
+        });
       }
     }
   });

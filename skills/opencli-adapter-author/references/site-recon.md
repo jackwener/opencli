@@ -6,11 +6,31 @@
 
 ---
 
-## 三步诊断
+## 一步诊断（推荐）
+
+```bash
+opencli browser analyze <url>
+```
+
+返回一份 JSON：
+
+```json
+{
+  "pattern": { "pattern": "A", "reason": "3 JSON XHR responses observed", "json_responses": 3, "auth_failures": 0 },
+  "anti_bot": { "detected": false, "vendor": null, "evidence": [], "implication": "No known anti-bot signatures. Node-side fetch may work; try COOKIE first, fall back to browser-context fetch if blocked." },
+  "initial_state": { "__INITIAL_STATE__": false, "__NUXT__": false, "__NEXT_DATA__": false, "__APOLLO_STATE__": false },
+  "nearest_adapter": { "site": "xueqiu", "example_commands": ["xueqiu search", "xueqiu hot"], "reason": "2 existing adapters target this site — reuse strategy/cookie config" },
+  "recommended_next_step": "Pick the most specific JSON endpoint from `opencli browser network` and try a bare Node fetch with cookies; escalate to browser-context fetch only if blocked."
+}
+```
+
+`analyze` 一步把 Pattern 分类 / 反爬厂商识别 / 最近 adapter 匹配 / 下一步建议给完。直接按 `recommended_next_step` 走，多数情况不用手跑三步诊断。
+
+## 手动三步诊断（analyze 给不出明确结论时）
 
 ```bash
 opencli browser open <url>
-opencli browser wait time 3
+opencli browser wait time 2
 opencli browser network
 ```
 
@@ -25,6 +45,8 @@ opencli browser network
 | `Content-Type: text/event-stream` / WebSocket 握手 | **E. 流式** | 行情 tick / chat |
 
 分不清时参考下面五节的其他信号。
+
+**数据是 SPA / 异步加载时，`wait time 2` 可能不够**。改用 `opencli browser wait xhr '/api/path-fragment'` 直接等具体接口到场，比盲 `wait time 5` 更稳。
 
 ---
 

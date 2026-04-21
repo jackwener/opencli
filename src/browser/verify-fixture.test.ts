@@ -113,6 +113,41 @@ describe('validateRows', () => {
     it('no failures when fixture has no expect block', () => {
         expect(validateRows([{ anything: 1 }], {})).toEqual([]);
     });
+
+    it('mustNotContain flags substring bleed in columns', () => {
+        const failures = validateRows(
+            [
+                { description: 'Lead engineer, 5 years exp. address: Shanghai. category: IT' },
+                { description: 'Clean text.' },
+            ],
+            {
+                expect: {
+                    mustNotContain: { description: ['address:', 'category:'] },
+                },
+            },
+        );
+        expect(failures).toHaveLength(2);
+        expect(failures.every((f) => f.rule === 'mustNotContain')).toBe(true);
+        expect(failures.every((f) => f.rowIndex === 0)).toBe(true);
+    });
+
+    it('mustNotContain skips null/undefined values', () => {
+        const failures = validateRows(
+            [{ description: null }, { description: undefined }],
+            { expect: { mustNotContain: { description: ['x'] } } },
+        );
+        expect(failures).toEqual([]);
+    });
+
+    it('mustBeTruthy catches silent 0 / false / "" fallbacks', () => {
+        const failures = validateRows(
+            [{ count: 10 }, { count: 0 }, { count: false }, { count: '' }, { count: null }],
+            { expect: { mustBeTruthy: ['count'] } },
+        );
+        expect(failures).toHaveLength(4);
+        expect(failures.every((f) => f.rule === 'mustBeTruthy')).toBe(true);
+        expect(failures.map((f) => f.rowIndex)).toEqual([1, 2, 3, 4]);
+    });
 });
 
 describe('deriveFixture', () => {

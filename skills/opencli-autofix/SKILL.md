@@ -179,6 +179,7 @@ cat <RepairContext.adapter.sourcePath>
 3. **Prefer API over DOM scraping** — if you discover a JSON API during exploration, switch to it
 4. **Use `@jackwener/opencli/*` imports only** — never add third-party package imports
 5. **Test after patching** — run the command again to verify
+6. **Never relax `verify/<cmd>.json` fixtures to silence a failure.** A failing `patterns` / `notEmpty` / `mustNotContain` / `mustBeTruthy` rule means the adapter's output is broken. Tighten the adapter so it produces correct values; do not loosen the fixture to accept the broken values. The one legitimate reason to edit a fixture during repair is when the **site itself** changed shape (e.g. URL format migration) — in that case update the fixture and note the change in `~/.opencli/sites/<site>/notes.md`. Otherwise editing the fixture is covering up a silent correctness regression.
 
 ## Step 5: Verify the Fix
 
