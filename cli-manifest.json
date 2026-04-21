@@ -3274,7 +3274,7 @@
       {
         "name": "op",
         "type": "str",
-        "default": "/Users/jakevin/Pictures/chatgpt",
+        "default": "~/Pictures/chatgpt",
         "required": false,
         "help": "Output directory"
       },
@@ -6865,7 +6865,7 @@
       {
         "name": "op",
         "type": "str",
-        "default": "/Users/jakevin/tmp/gemini-images",
+        "default": "~/tmp/gemini-images",
         "required": false,
         "help": "Output directory shorthand"
       },
@@ -8146,7 +8146,7 @@
       {
         "name": "path",
         "type": "str",
-        "default": "/Users/jakevin/Downloads/Instagram",
+        "default": "~/Downloads/Instagram",
         "required": false,
         "help": "Download directory"
       }
