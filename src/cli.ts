@@ -1391,7 +1391,7 @@ cli({
         }
 
         const { execFileSync } = await import('node:child_process');
-        const { loadFixture, writeFixture, deriveFixture, validateRows, fixturePath } = await import('./browser/verify-fixture.js');
+        const { loadFixture, writeFixture, deriveFixture, validateRows, fixturePath, expandFixtureArgs } = await import('./browser/verify-fixture.js');
         const filePath = path.join(os.homedir(), '.opencli', 'clis', site, `${command}.js`);
         if (!fs.existsSync(filePath)) {
           console.error(`Adapter not found: ${filePath}`);
@@ -1407,11 +1407,12 @@ cli({
         let fixture = useFixture ? loadFixture(site, command) : null;
 
         // Build adapter args: fixture.args override the legacy --limit 3 heuristic.
+        //   - object form   { "limit": 3 }            → `--limit 3`
+        //   - array form    ["123", "--limit", "3"]   → verbatim (for positional subjects)
         const adapterSrc = fs.readFileSync(filePath, 'utf-8');
         const hasLimitArg = /['"]limit['"]/.test(adapterSrc);
-        const fixtureArgs = fixture?.args ?? {};
-        const cliArgs: string[] = [];
-        for (const [k, v] of Object.entries(fixtureArgs)) cliArgs.push(`--${k}`, String(v));
+        const fixtureArgs = fixture?.args;
+        const cliArgs: string[] = expandFixtureArgs(fixtureArgs);
         if (cliArgs.length === 0 && hasLimitArg) cliArgs.push('--limit', '3');
 
         const argDisplay = cliArgs.join(' ');
@@ -1461,7 +1462,10 @@ cli({
             console.log(`\n  Fixture already exists at ${fixturePath(site, command)}.`);
             console.log(`  Use --update-fixture to overwrite.`);
           } else {
-            const derived = deriveFixture(rows, Object.keys(fixtureArgs).length > 0 ? fixtureArgs : (hasLimitArg ? { limit: 3 } : undefined));
+            const seedArgs = fixtureArgs !== undefined
+              ? fixtureArgs
+              : (hasLimitArg ? { limit: 3 } : undefined);
+            const derived = deriveFixture(rows, seedArgs);
             const p = writeFixture(site, command, derived);
             console.log(`\n  ${fixture ? '↻ Updated' : '✎ Wrote'} fixture: ${p}`);
             console.log(`  Review and hand-tune the derived expectations (add patterns / notEmpty, tighten rowCount).`);

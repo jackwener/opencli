@@ -9,7 +9,11 @@
  *
  * Schema:
  *   {
- *     "args": { "limit": 3 },              // args to pass on verify invocation
+ *     // args can be either:
+ *     //   - an object of named flags: { "limit": 3 }  → expands to `--limit 3`
+ *     //   - a raw argv array:         ["123", "--limit", "3"]  → passed verbatim
+ *     // Use the array form for adapters that take positional subjects (e.g. <tid>, <url>, <query>).
+ *     "args": { "limit": 3 },
  *     "expect": {
  *       "rowCount": { "min": 1, "max": 10 },  // inclusive bounds
  *       "columns":  ["a", "b"],                // every row must have these keys
@@ -31,8 +35,10 @@ export type FixtureExpect = {
   notEmpty?: string[];
 };
 
+export type FixtureArgs = Record<string, unknown> | unknown[];
+
 export type Fixture = {
-  args?: Record<string, unknown>;
+  args?: FixtureArgs;
   expect?: FixtureExpect;
 };
 
@@ -77,7 +83,7 @@ export function writeFixture(site: string, command: string, fixture: Fixture): s
  * - types = typeof of the first row's values, with "number|string" for mixed
  * - no auto patterns / notEmpty — author should add those deliberately
  */
-export function deriveFixture(rows: Row[], args?: Record<string, unknown>): Fixture {
+export function deriveFixture(rows: Row[], args?: FixtureArgs): Fixture {
   const expect: FixtureExpect = {};
   if (rows.length === 0) {
     expect.rowCount = { min: 0 };
@@ -170,6 +176,21 @@ export function validateRows(rows: Row[], fixture: Fixture): ValidationFailure[]
   });
 
   return failures;
+}
+
+/**
+ * Convert fixture args into argv tokens appended after the command name.
+ * - Array form is passed through verbatim (stringified), supporting positional subjects.
+ * - Object form is expanded to `--key value` pairs.
+ */
+export function expandFixtureArgs(args: FixtureArgs | undefined): string[] {
+  if (!args) return [];
+  if (Array.isArray(args)) return args.map((v) => String(v));
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(args)) {
+    out.push(`--${k}`, String(v));
+  }
+  return out;
 }
 
 function jsType(v: unknown): string {

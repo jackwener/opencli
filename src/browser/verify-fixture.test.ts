@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveFixture, validateRows, type Fixture } from './verify-fixture.js';
+import { deriveFixture, expandFixtureArgs, validateRows, type Fixture } from './verify-fixture.js';
 
 describe('validateRows', () => {
     it('passes when rows meet all expectations', () => {
@@ -148,9 +148,41 @@ describe('deriveFixture', () => {
         expect(fixture.args).toEqual({ limit: 5 });
     });
 
+    it('embeds positional argv array when provided', () => {
+        const fixture = deriveFixture([{ x: 1 }], ['123', '--limit', '3']);
+        expect(fixture.args).toEqual(['123', '--limit', '3']);
+    });
+
     it('does not add patterns or notEmpty automatically', () => {
         const fixture = deriveFixture([{ a: 'x' }]);
         expect(fixture.expect?.patterns).toBeUndefined();
         expect(fixture.expect?.notEmpty).toBeUndefined();
+    });
+});
+
+describe('expandFixtureArgs', () => {
+    it('returns [] for undefined', () => {
+        expect(expandFixtureArgs(undefined)).toEqual([]);
+    });
+
+    it('expands object form as --key value pairs', () => {
+        expect(expandFixtureArgs({ limit: 3, sort: 'hot' })).toEqual(['--limit', '3', '--sort', 'hot']);
+    });
+
+    it('passes array form verbatim, stringifying values', () => {
+        expect(expandFixtureArgs(['123456', '--limit', 3])).toEqual(['123456', '--limit', '3']);
+    });
+
+    it('handles empty object and empty array', () => {
+        expect(expandFixtureArgs({})).toEqual([]);
+        expect(expandFixtureArgs([])).toEqual([]);
+    });
+
+    it('preserves positional + flag mix (e.g. <tid> --limit 3)', () => {
+        expect(expandFixtureArgs(['https://example.com/thread-1', '--comments', '5'])).toEqual([
+            'https://example.com/thread-1',
+            '--comments',
+            '5',
+        ]);
     });
 });

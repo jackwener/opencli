@@ -288,6 +288,79 @@ if (/暂时没有提醒内容/.test(html)) {
 
 ---
 
+## Verify fixture（每个 adapter 配一份 `~/.opencli/sites/<site>/verify/<name>.json`）
+
+verify fixture 是"adapter 产出长什么样"的结构锚点。没有它，`opencli browser verify` 只能证"adapter 能跑完不抛"，证不出数据没错位。**必写**。
+
+详细 schema 见 `site-memory.md` 的 `verify/<cmd>.json` 节。这里只讲两个容易踩的地方：
+
+### args 形态：object vs array
+
+`args` 字段决定 verify 怎么调你的 adapter：
+
+- **对象形态** `{ "limit": 3 }` → 展开成 `--limit 3`，标准 named-flag adapter 用这个
+- **数组形态** `["123", "--limit", "3"]` → 原样 append 到命令后，**positional 主语型** adapter 必须用这个
+
+repo 约定"主语优先 positional"——thread 详情型、url 解析型、关键词搜索型都用 positional：
+
+```js
+// clis/1point3acres/thread.js — 接收 <tid> 作为主语
+cli({
+  site: '1point3acres',
+  name: 'thread',
+  args: [
+    { name: 'tid',   type: 'string', required: true, positional: true },
+    { name: 'limit', type: 'int',    default: 20 },
+  ],
+  // ...
+});
+```
+
+对应 fixture：
+
+```json
+{
+  "args": ["1234567", "--limit", "3"],
+  "expect": { "rowCount": { "min": 1, "max": 3 }, "...": "..." }
+}
+```
+
+**不要写成** `{ "tid": "1234567", "limit": 3 }`——这会被展开成 `--tid 1234567 --limit 3`，commander 把 `--tid` 当未知 flag 报错，或者 adapter 根本不认。
+
+### 种子 → 手改
+
+named-flag adapter（`hot` / `latest` 类）可以直接让工具生成种子：
+
+```bash
+# 1. 让 verify 先跑一遍，--write-fixture 生成种子（默认追加 --limit 3）
+opencli browser verify 1point3acres/hot --write-fixture
+
+# 2. 手改 ~/.opencli/sites/1point3acres/verify/hot.json
+#    - patterns: 加 URL / 日期 / ID 正则
+#    - notEmpty: 加核心字段（title / author / url）
+#    - rowCount: 收紧到业务合理区间
+
+# 3. 再跑 verify，fixture 吃得动就 OK
+opencli browser verify 1point3acres/hot
+```
+
+positional adapter 目前 `--write-fixture` 没法表达主语，**首份 fixture 要手写**：
+
+```bash
+# 1. 先直跑 adapter 看输出长啥样
+opencli 1point3acres thread 1173710 --limit 2 --format json | head
+
+# 2. 照着响应手写 ~/.opencli/sites/1point3acres/verify/thread.json
+#    （args 一定用数组: ["1173710", "--limit", "2"]）
+
+# 3. 跑 verify 核对
+opencli browser verify 1point3acres/thread
+```
+
+机器生成的种子只有 rowCount.min=1 / columns / types，挡不住字段值错位。**patterns + notEmpty 无论哪种情形都是肉写的**。
+
+---
+
 ## 私人 adapter vs repo 贡献
 
 ```
