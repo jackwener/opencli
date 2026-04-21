@@ -1639,6 +1639,11 @@ cli({
 
         if (!fixture) {
           console.log(`\n  ✓ Adapter runs. (No fixture at ${fixturePath(site, command)} — consider --write-fixture to seed one.)`);
+          const memoryReport = checkSiteMemory(site);
+          printSiteMemoryReport(memoryReport, opts.strictMemory);
+          if (!memoryReport.ok && opts.strictMemory) {
+            process.exitCode = EXIT_CODES.GENERIC_ERROR;
+          }
           return;
         }
 
@@ -2172,4 +2177,3 @@ export function resolveBrowserVerifyInvocation(opts: {
     ...(platform === 'win32' ? { shell: true } : {}),
   };
 }
-
