@@ -117,7 +117,13 @@ cli({
 
         // If Home tab has no videos, try Videos tab
         if (recentVideos.length === 0) {
-          const videosTab = tabs.find(t => t.tabRenderer?.title === 'Videos');
+          const videosTab = tabs.find(t => {
+            const tab = t.tabRenderer;
+            const url = tab?.endpoint?.commandMetadata?.webCommandMetadata?.url || '';
+            return tab?.tabIdentifier === 'VIDEOS'
+              || url.endsWith('/videos')
+              || tab?.title === 'Videos';
+          });
           const videosTabParams = videosTab?.tabRenderer?.endpoint?.browseEndpoint?.params;
           if (videosTabParams) {
             const videosResp = await fetch('/youtubei/v1/browse?key=' + apiKey + '&prettyPrint=false', {
