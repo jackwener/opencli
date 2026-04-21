@@ -168,8 +168,8 @@ cat <RepairContext.adapter.sourcePath>
 
 **Wait condition update:**
 ```typescript
-// Before: await page.waitForSelector('.loading-spinner', { hidden: true })
-// After:  await page.waitForSelector('[data-loaded="true"]')
+// Before: await page.wait({ selector: '.loading-spinner', hidden: true })
+// After:  await page.wait({ selector: '[data-loaded="true"]' })
 ```
 
 ### Rules for Patching
