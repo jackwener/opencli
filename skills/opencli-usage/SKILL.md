@@ -19,7 +19,7 @@ OpenCLI turns any website, Electron desktop app, or external CLI into a uniform 
 ```bash
 # npm global
 npm install -g @jackwener/opencli          # binary: opencli, requires Node >= 21
-opencli doctor                              # must be green before anything else
+opencli doctor                              # run before browser-dependent work (see below)
 
 # From source
 git clone git@github.com:jackwener/OpenCLI.git
@@ -27,7 +27,7 @@ cd OpenCLI && npm install
 npx tsx src/main.ts <command>               # same surface, no global install
 ```
 
-`opencli doctor` prints a structured `DoctorReport` — daemon status, extension connection, version checks. If it's not green, fix that first; nothing else will work reliably. Flags: `--no-live` (skip live browser test), `--sessions` (list active automation sessions), `-v` (verbose).
+`opencli doctor` prints a structured `DoctorReport` — daemon status, extension connection, version checks. Scope is narrow: it diagnoses the **browser bridge** (daemon + extension + Chrome wiring). `PUBLIC` / `LOCAL` adapters, `opencli list`, `validate`, `verify`, plugin commands, and external-CLI passthrough don't need it to be green — only `COOKIE` / `HEADER` / `INTERCEPT` / `UI` adapters and the `opencli browser *` subcommands do. Flags: `--no-live` (skip live browser test), `--sessions` (list active automation sessions), `-v` (verbose).
 
 ## Prerequisites by command type
 
@@ -101,7 +101,7 @@ Scaffolding & verification:
 
 ```bash
 opencli browser init <site>/<command>   # generates a skeleton
-opencli validate [target]               # static checks on YAML/TS syntax
+opencli validate [target]               # semantic checks on the loaded registry (description, domain, pipeline step names, func|pipeline|_lazy presence, arg duplicates) — no network, no browser
 opencli verify [target] [--smoke]       # run the command with synthetic args
 opencli browser verify <site>/<command> # end-to-end smoke inside the bridge
 ```
