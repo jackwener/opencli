@@ -345,4 +345,18 @@ describe('Search Element Detection', () => {
     const js = generateSnapshotJs();
     expect(js).toContain('isSearchElement(el)');
   });
+
+  // Blocker B regression: compound contract must be emitted by `browser state`,
+  // not only by `browser find --css`. Otherwise agents inspecting the default
+  // snapshot still have to round-trip `find` on every date/select/file control.
+  it('inlines compoundInfoOf() and attaches compound info to each interactive ref', () => {
+    const js = generateSnapshotJs();
+    expect(js).toContain('function compoundInfoOf(el)');
+    // Wiring: the walk body should call compoundInfoOf on every interactive node
+    expect(js).toContain('compoundInfoOf(el)');
+    // And collect them into a per-ref map keyed by the same [N] index as the tree
+    expect(js).toContain('compoundInfos');
+    // And emit a sidecar section after the tree so agents can find the JSON
+    expect(js).toContain("'compounds ('");
+  });
 });

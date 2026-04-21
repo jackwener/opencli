@@ -16,7 +16,16 @@
  * combination of `depth` / `childrenMax` / `textMax`; each hit is reported in
  * the `truncated` envelope so agents know to narrow their selector or raise
  * the budget.
+ *
+ * Compound controls (date / time / datetime-local / month / week / select /
+ * file) gain a `compound` field so agents inspecting the JSON tree see the
+ * full contract — date format, full option list (up to cap) with selections
+ * preserved for options beyond the cap, file `accept` and `multiple`. Without
+ * this wiring agents repeatedly guess values on these controls from the raw
+ * attributes, which is the failure mode compound.ts was built to eliminate.
  */
+
+import { COMPOUND_INFO_JS, type CompoundInfo } from './compound.js';
 
 export interface BuildHtmlTreeJsOptions {
     /** CSS selector to scope the tree; unscoped = documentElement */
@@ -53,6 +62,7 @@ export function buildHtmlTreeJs(opts: BuildHtmlTreeJsOptions = {}): string {
         ? String(opts.textMax)
         : 'null';
     return `(() => {
+  ${COMPOUND_INFO_JS}
   const selector = ${selectorLiteral};
   const maxDepth = ${depthLiteral};
   const maxChildren = ${childrenMaxLiteral};
@@ -98,7 +108,10 @@ export function buildHtmlTreeJs(opts: BuildHtmlTreeJsOptions = {}): string {
       // Budget hit: we're at max depth. Count any element children we would have visited.
       for (const n of el.childNodes) if (n.nodeType === 1) { trunc.depth = true; break; }
     }
-    return { tag: el.tagName.toLowerCase(), attrs, text, children };
+    const node = { tag: el.tagName.toLowerCase(), attrs, text, children };
+    const compound = compoundInfoOf(el);
+    if (compound) node.compound = compound;
+    return node;
   }
   const tree = root ? serialize(root, 0) : null;
   const truncatedOut = {};
@@ -116,6 +129,11 @@ export interface HtmlNode {
     attrs: Record<string, string>;
     text: string;
     children: HtmlNode[];
+    /**
+     * Rich view for date/select/file controls. Omitted for non-compound elements
+     * so agents can rely on `compound != null` as a signal.
+     */
+    compound?: CompoundInfo;
 }
 
 export interface HtmlTreeTruncationInfo {

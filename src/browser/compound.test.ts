@@ -159,6 +159,32 @@ describe('compoundInfoOf — select', () => {
     ]));
     expect(info).toMatchObject({ current: '' });
   });
+
+  // Regression: the previous loop stopped walking options once it hit
+  // COMPOUND_SELECT_OPTIONS_CAP, so a long country dropdown with the
+  // selected country sitting at index 80 would be reported with current="".
+  // Agents then thought nothing was selected and picked another country.
+  it('populates current even when the selected option sits past the serialization cap', () => {
+    const big = Array.from({ length: COMPOUND_SELECT_OPTIONS_CAP + 25 }, (_, i) => ({
+      value: 'v' + i,
+      label: 'L' + i,
+      selected: i === COMPOUND_SELECT_OPTIONS_CAP + 10,
+    }));
+    const info = runCompound(mockSelect(big)) as { current: string; options: unknown[]; options_total: number };
+    expect(info.current).toBe('L' + (COMPOUND_SELECT_OPTIONS_CAP + 10));
+    expect(info.options.length).toBe(COMPOUND_SELECT_OPTIONS_CAP);
+    expect(info.options_total).toBe(COMPOUND_SELECT_OPTIONS_CAP + 25);
+  });
+
+  it('multi-select: current[] includes labels for selected options beyond the cap', () => {
+    const big = Array.from({ length: COMPOUND_SELECT_OPTIONS_CAP + 10 }, (_, i) => ({
+      value: 'v' + i,
+      label: 'L' + i,
+      selected: i === 3 || i === COMPOUND_SELECT_OPTIONS_CAP + 5,
+    }));
+    const info = runCompound(mockSelect(big, true)) as { current: string[] };
+    expect(info.current).toEqual(['L3', 'L' + (COMPOUND_SELECT_OPTIONS_CAP + 5)]);
+  });
 });
 
 describe('compoundInfoOf — unsupported shapes', () => {

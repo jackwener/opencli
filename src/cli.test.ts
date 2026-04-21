@@ -1010,33 +1010,33 @@ describe('browser get text/value/attributes commands', () => {
     evaluate: vi.fn(),
   }));
 
-  it('emits {value, matches_n} envelope for a numeric ref', async () => {
+  it('emits {value, matches_n, match_level} envelope for a numeric ref', async () => {
     const evalMock = browserState.page!.evaluate as any;
-    // 1st call: resolveTargetJs -> { ok: true, matches_n: 1 }
-    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1 });
+    // 1st call: resolveTargetJs -> { ok: true, matches_n: 1, match_level: 'exact' }
+    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1, match_level: 'exact' });
     // 2nd call: getTextResolvedJs -> the element's text
     evalMock.mockResolvedValueOnce('Hello world');
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'get', 'text', '7']);
 
-    expect(lastJsonLog()).toEqual({ value: 'Hello world', matches_n: 1 });
+    expect(lastJsonLog()).toEqual({ value: 'Hello world', matches_n: 1, match_level: 'exact' });
   });
 
   it('reports matches_n on multi-match CSS (read path: first match wins)', async () => {
     const evalMock = browserState.page!.evaluate as any;
-    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 3 });
+    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 3, match_level: 'exact' });
     evalMock.mockResolvedValueOnce('first');
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'get', 'text', '.btn']);
 
-    expect(lastJsonLog()).toEqual({ value: 'first', matches_n: 3 });
+    expect(lastJsonLog()).toEqual({ value: 'first', matches_n: 3, match_level: 'exact' });
   });
 
   it('parses the attributes payload back into a real object', async () => {
     const evalMock = browserState.page!.evaluate as any;
-    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1 });
+    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1, match_level: 'exact' });
     // getAttributesResolvedJs returns a JSON-encoded string — the CLI must parse it
     evalMock.mockResolvedValueOnce(JSON.stringify({ id: 'nav', class: 'hero' }));
     const program = createProgram('', '');
@@ -1045,6 +1045,7 @@ describe('browser get text/value/attributes commands', () => {
 
     const out = lastJsonLog();
     expect(out.matches_n).toBe(1);
+    expect(out.match_level).toBe('exact');
     expect(out.value).toEqual({ id: 'nav', class: 'hero' });
   });
 
@@ -1065,7 +1066,7 @@ describe('browser get text/value/attributes commands', () => {
 
   it('forwards --nth into the resolver opts and reports matches_n', async () => {
     const evalMock = browserState.page!.evaluate as any;
-    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 4 });
+    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 4, match_level: 'exact' });
     evalMock.mockResolvedValueOnce('second');
     const program = createProgram('', '');
 
@@ -1074,7 +1075,7 @@ describe('browser get text/value/attributes commands', () => {
     const resolveJs = evalMock.mock.calls[0][0] as string;
     // resolveTargetJs embeds nth as a raw number literal; look for the binding
     expect(resolveJs).toContain('const nth = 1');
-    expect(lastJsonLog()).toEqual({ value: 'second', matches_n: 4 });
+    expect(lastJsonLog()).toEqual({ value: 'second', matches_n: 4, match_level: 'exact' });
   });
 
   it('rejects malformed --nth with usage_error before touching the page', async () => {
@@ -1091,29 +1092,38 @@ describe('browser get text/value/attributes commands', () => {
 describe('browser click/type commands', () => {
   const { lastJsonLog } = installSelectorFirstTestHarness('click-type', () => ({
     evaluate: vi.fn().mockResolvedValue(false),
-    click: vi.fn().mockResolvedValue({ matches_n: 1 }),
-    typeText: vi.fn().mockResolvedValue({ matches_n: 1 }),
+    click: vi.fn().mockResolvedValue({ matches_n: 1, match_level: 'exact' }),
+    typeText: vi.fn().mockResolvedValue({ matches_n: 1, match_level: 'exact' }),
     wait: vi.fn().mockResolvedValue(undefined),
   }));
 
-  it('emits {clicked, target, matches_n} on success', async () => {
-    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 1 });
+  it('emits {clicked, target, matches_n, match_level} on success', async () => {
+    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 1, match_level: 'exact' });
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'click', '#save']);
 
     expect(browserState.page!.click).toHaveBeenCalledWith('#save', {});
-    expect(lastJsonLog()).toEqual({ clicked: true, target: '#save', matches_n: 1 });
+    expect(lastJsonLog()).toEqual({ clicked: true, target: '#save', matches_n: 1, match_level: 'exact' });
+  });
+
+  it('surfaces match_level=stable when resolver falls back to fingerprint match', async () => {
+    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 1, match_level: 'stable' });
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'click', '7']);
+
+    expect(lastJsonLog()).toEqual({ clicked: true, target: '7', matches_n: 1, match_level: 'stable' });
   });
 
   it('forwards --nth as ResolveOptions.nth to page.click', async () => {
-    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 3 });
+    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 3, match_level: 'exact' });
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'click', '.btn', '--nth', '2']);
 
     expect(browserState.page!.click).toHaveBeenCalledWith('.btn', { nth: 2 });
-    expect(lastJsonLog()).toEqual({ clicked: true, target: '.btn', matches_n: 3 });
+    expect(lastJsonLog()).toEqual({ clicked: true, target: '.btn', matches_n: 3, match_level: 'exact' });
   });
 
   it('surfaces selector_ambiguous from page.click as an error envelope', async () => {
@@ -1158,9 +1168,9 @@ describe('browser click/type commands', () => {
     expect(process.exitCode).toBeDefined();
   });
 
-  it('type: clicks, waits, then typeText — emits {typed, text, target, matches_n, autocomplete}', async () => {
-    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 1 });
-    (browserState.page!.typeText as any).mockResolvedValueOnce({ matches_n: 1 });
+  it('type: clicks, waits, then typeText — emits {typed, text, target, matches_n, match_level, autocomplete}', async () => {
+    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 1, match_level: 'exact' });
+    (browserState.page!.typeText as any).mockResolvedValueOnce({ matches_n: 1, match_level: 'exact' });
     (browserState.page!.evaluate as any).mockResolvedValueOnce(false); // isAutocomplete
     const program = createProgram('', '');
 
@@ -1170,13 +1180,13 @@ describe('browser click/type commands', () => {
     expect(browserState.page!.wait).toHaveBeenCalledWith(0.3);
     expect(browserState.page!.typeText).toHaveBeenCalledWith('#q', 'hello', {});
     expect(lastJsonLog()).toEqual({
-      typed: true, text: 'hello', target: '#q', matches_n: 1, autocomplete: false,
+      typed: true, text: 'hello', target: '#q', matches_n: 1, match_level: 'exact', autocomplete: false,
     });
   });
 
   it('type: waits an extra 0.4s when the input reports autocomplete=true', async () => {
-    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 1 });
-    (browserState.page!.typeText as any).mockResolvedValueOnce({ matches_n: 1 });
+    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 1, match_level: 'exact' });
+    (browserState.page!.typeText as any).mockResolvedValueOnce({ matches_n: 1, match_level: 'exact' });
     (browserState.page!.evaluate as any).mockResolvedValueOnce(true);
     const program = createProgram('', '');
 
@@ -1186,11 +1196,24 @@ describe('browser click/type commands', () => {
     expect(waitCalls).toContainEqual([0.3]);
     expect(waitCalls).toContainEqual([0.4]);
     expect(lastJsonLog().autocomplete).toBe(true);
+    expect(lastJsonLog().match_level).toBe('exact');
+  });
+
+  it('type: surfaces match_level=reidentified when ref had to be reidentified by fingerprint', async () => {
+    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 1, match_level: 'reidentified' });
+    (browserState.page!.typeText as any).mockResolvedValueOnce({ matches_n: 1, match_level: 'reidentified' });
+    (browserState.page!.evaluate as any).mockResolvedValueOnce(false);
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'type', '9', 'hi']);
+
+    // The typeText call is the authoritative match_level source for the `type` envelope.
+    expect(lastJsonLog().match_level).toBe('reidentified');
   });
 
   it('type: forwards --nth to both click and typeText', async () => {
-    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 5 });
-    (browserState.page!.typeText as any).mockResolvedValueOnce({ matches_n: 5 });
+    (browserState.page!.click as any).mockResolvedValueOnce({ matches_n: 5, match_level: 'exact' });
+    (browserState.page!.typeText as any).mockResolvedValueOnce({ matches_n: 5, match_level: 'exact' });
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'type', '.field', 'x', '--nth', '3']);
@@ -1205,20 +1228,20 @@ describe('browser select command', () => {
     evaluate: vi.fn(),
   }));
 
-  it('emits {selected, target, matches_n} on success', async () => {
+  it('emits {selected, target, matches_n, match_level} on success', async () => {
     const evalMock = browserState.page!.evaluate as any;
-    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1 });
+    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1, match_level: 'exact' });
     evalMock.mockResolvedValueOnce({ selected: 'US' });
     const program = createProgram('', '');
 
     await program.parseAsync(['node', 'opencli', 'browser', 'select', '#country', 'US']);
 
-    expect(lastJsonLog()).toEqual({ selected: 'US', target: '#country', matches_n: 1 });
+    expect(lastJsonLog()).toEqual({ selected: 'US', target: '#country', matches_n: 1, match_level: 'exact' });
   });
 
   it('maps "Not a <select>" to a not_a_select error envelope', async () => {
     const evalMock = browserState.page!.evaluate as any;
-    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1 });
+    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1, match_level: 'exact' });
     evalMock.mockResolvedValueOnce({ error: 'Not a <select>' });
     const program = createProgram('', '');
 
@@ -1232,7 +1255,7 @@ describe('browser select command', () => {
 
   it('maps missing-option failures to an option_not_found envelope with available list', async () => {
     const evalMock = browserState.page!.evaluate as any;
-    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1 });
+    evalMock.mockResolvedValueOnce({ ok: true, matches_n: 1, match_level: 'exact' });
     evalMock.mockResolvedValueOnce({ error: 'Option "XX" not found', available: ['US', 'CA'] });
     const program = createProgram('', '');
 

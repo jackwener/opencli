@@ -27,8 +27,19 @@ import {
   typeResolvedJs,
   scrollResolvedJs,
   type ResolveOptions,
+  type TargetMatchLevel,
 } from './target-resolver.js';
 import { TargetError, type TargetErrorCode } from './target-errors.js';
+
+export interface ResolveSuccess {
+  matches_n: number;
+  /**
+   * Cascading stale-ref tier the resolver traversed. Callers surface this to
+   * agents so `stable` / `reidentified` hits are visibly distinct from a
+   * clean `exact` match — the page changed, the action still succeeded.
+   */
+  match_level: TargetMatchLevel;
+}
 
 /**
  * Execute `resolveTargetJs` once, throw structured `TargetError` on failure.
@@ -39,9 +50,9 @@ async function runResolve(
   page: { evaluate(js: string): Promise<unknown> },
   ref: string,
   opts: ResolveOptions = {},
-): Promise<{ matches_n: number }> {
+): Promise<ResolveSuccess> {
   const resolution = (await page.evaluate(resolveTargetJs(ref, opts))) as
-    | { ok: true; matches_n: number }
+    | { ok: true; matches_n: number; match_level: TargetMatchLevel }
     | { ok: false; code: TargetErrorCode; message: string; hint: string; candidates?: string[]; matches_n?: number };
   if (!resolution.ok) {
     throw new TargetError({
@@ -52,7 +63,7 @@ async function runResolve(
       matches_n: resolution.matches_n,
     });
   }
-  return { matches_n: resolution.matches_n };
+  return { matches_n: resolution.matches_n, match_level: resolution.match_level };
 }
 import { formatSnapshot } from '../snapshotFormatter.js';
 export abstract class BasePage implements IPage {
@@ -92,9 +103,9 @@ export abstract class BasePage implements IPage {
 
   // ── Shared DOM helper implementations ──
 
-  async click(ref: string, opts: ResolveOptions = {}): Promise<{ matches_n: number }> {
+  async click(ref: string, opts: ResolveOptions = {}): Promise<ResolveSuccess> {
     // Phase 1: Resolve target with fingerprint verification
-    const { matches_n } = await runResolve(this, ref, opts);
+    const resolved = await runResolve(this, ref, opts);
 
     // Phase 2: Execute click on resolved element
     const result = await this.evaluate(clickResolvedJs()) as
@@ -102,14 +113,14 @@ export abstract class BasePage implements IPage {
       | { status: string; x?: number; y?: number; w?: number; h?: number; error?: string }
       | null;
 
-    if (typeof result === 'string' || result == null) return { matches_n };
+    if (typeof result === 'string' || result == null) return resolved;
 
-    if (result.status === 'clicked') return { matches_n };
+    if (result.status === 'clicked') return resolved;
 
     // JS click failed — try CDP native click if coordinates available
     if (result.x != null && result.y != null) {
       const success = await this.tryNativeClick(result.x, result.y);
-      if (success) return { matches_n };
+      if (success) return resolved;
     }
 
     throw new Error(`Click failed: ${result.error ?? 'JS click and CDP fallback both failed'}`);
@@ -120,10 +131,10 @@ export abstract class BasePage implements IPage {
     return false;
   }
 
-  async typeText(ref: string, text: string, opts: ResolveOptions = {}): Promise<{ matches_n: number }> {
-    const { matches_n } = await runResolve(this, ref, opts);
+  async typeText(ref: string, text: string, opts: ResolveOptions = {}): Promise<ResolveSuccess> {
+    const resolved = await runResolve(this, ref, opts);
     await this.evaluate(typeResolvedJs(text));
-    return { matches_n };
+    return resolved;
   }
 
   async pressKey(key: string): Promise<void> {
@@ -131,8 +142,14 @@ export abstract class BasePage implements IPage {
   }
 
   async scrollTo(ref: string, opts: ResolveOptions = {}): Promise<unknown> {
-    await runResolve(this, ref, opts);
-    return this.evaluate(scrollResolvedJs());
+    const resolved = await runResolve(this, ref, opts);
+    const result = (await this.evaluate(scrollResolvedJs())) as Record<string, unknown> | null;
+    // Fold match_level into the scroll payload so the user-facing envelope
+    // carries it the same way click / type do.
+    if (result && typeof result === 'object') {
+      return { ...result, matches_n: resolved.matches_n, match_level: resolved.match_level };
+    }
+    return { matches_n: resolved.matches_n, match_level: resolved.match_level };
   }
 
   async getFormState(): Promise<Record<string, unknown>> {

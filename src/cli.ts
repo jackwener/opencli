@@ -21,7 +21,7 @@ import { loadExternalClis, executeExternalCli, installExternalCli, registerExter
 import { registerAllCommands } from './commanderAdapter.js';
 import { EXIT_CODES, getErrorMessage, BrowserConnectError } from './errors.js';
 import { TargetError, type TargetErrorCode } from './browser/target-errors.js';
-import { resolveTargetJs, getTextResolvedJs, getValueResolvedJs, getAttributesResolvedJs, selectResolvedJs, isAutocompleteResolvedJs, clickResolvedJs, type ResolveOptions } from './browser/target-resolver.js';
+import { resolveTargetJs, getTextResolvedJs, getValueResolvedJs, getAttributesResolvedJs, selectResolvedJs, isAutocompleteResolvedJs, clickResolvedJs, type ResolveOptions, type TargetMatchLevel } from './browser/target-resolver.js';
 import { buildFindJs, isFindError, type FindResult, type FindError } from './browser/find.js';
 import { inferShape } from './browser/shape.js';
 import { assignKeys } from './browser/network-key.js';
@@ -371,9 +371,9 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     page: Awaited<ReturnType<typeof getBrowserPage>>,
     ref: string,
     opts: ResolveOptions = {},
-  ): Promise<{ matches_n: number }> {
+  ): Promise<{ matches_n: number; match_level: TargetMatchLevel }> {
     const resolution = await page.evaluate(resolveTargetJs(ref, opts)) as
-      | { ok: true; matches_n: number }
+      | { ok: true; matches_n: number; match_level: TargetMatchLevel }
       | { ok: false; code: TargetErrorCode; message: string; hint: string; candidates?: string[]; matches_n?: number };
     if (!resolution.ok) {
       throw new TargetError({
@@ -384,7 +384,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         matches_n: resolution.matches_n,
       });
     }
-    return { matches_n: resolution.matches_n };
+    return { matches_n: resolution.matches_n, match_level: resolution.match_level };
   }
 
   /**
@@ -667,7 +667,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       process.exitCode = EXIT_CODES.USAGE_ERROR;
       return;
     }
-    const { matches_n } = await resolveRef(page, String(target), {
+    const { matches_n, match_level } = await resolveRef(page, String(target), {
       firstOnMulti: nth === null,
       ...(typeof nth === 'number' ? { nth } : {}),
     });
@@ -681,7 +681,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     } else {
       value = raw ?? null;
     }
-    console.log(JSON.stringify({ value, matches_n }, null, 2));
+    console.log(JSON.stringify({ value, matches_n, match_level }, null, 2));
   };
 
   addBrowserTabOption(
@@ -868,8 +868,8 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
-      const { matches_n } = await page.click(String(target), parsed.opts);
-      console.log(JSON.stringify({ clicked: true, target: String(target), matches_n }, null, 2));
+      const { matches_n, match_level } = await page.click(String(target), parsed.opts);
+      console.log(JSON.stringify({ clicked: true, target: String(target), matches_n, match_level }, null, 2));
     }));
 
   addBrowserTabOption(
@@ -889,7 +889,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       // Click first (focuses the field), wait briefly, then type.
       await page.click(String(target), parsed.opts);
       await page.wait(0.3);
-      const { matches_n } = await page.typeText(String(target), String(text), parsed.opts);
+      const { matches_n, match_level } = await page.typeText(String(target), String(text), parsed.opts);
       // __resolved is already set by the resolver call inside page.typeText
       const isAutocomplete = await page.evaluate(isAutocompleteResolvedJs()) as boolean;
       if (isAutocomplete) await page.wait(0.4);
@@ -898,6 +898,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         text: String(text),
         target: String(target),
         matches_n,
+        match_level,
         autocomplete: !!isAutocomplete,
       }, null, 2));
     }));
@@ -916,7 +917,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       }
-      const { matches_n } = await resolveRef(page, String(target), parsed.opts);
+      const { matches_n, match_level } = await resolveRef(page, String(target), parsed.opts);
       const result = await page.evaluate(selectResolvedJs(String(option))) as
         | { error?: string; selected?: string; available?: string[] }
         | null;
@@ -939,6 +940,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         selected: result?.selected ?? String(option),
         target: String(target),
         matches_n,
+        match_level,
       }, null, 2));
     }));
 

@@ -51,8 +51,8 @@ export interface IPage {
   evaluateWithArgs?(js: string, args: Record<string, unknown>): Promise<any>;
   getCookies(opts?: { domain?: string; url?: string }): Promise<BrowserCookie[]>;
   snapshot(opts?: SnapshotOptions): Promise<any>;
-  click(ref: string, opts?: { nth?: number; firstOnMulti?: boolean }): Promise<{ matches_n: number }>;
-  typeText(ref: string, text: string, opts?: { nth?: number; firstOnMulti?: boolean }): Promise<{ matches_n: number }>;
+  click(ref: string, opts?: { nth?: number; firstOnMulti?: boolean }): Promise<{ matches_n: number; match_level: 'exact' | 'stable' | 'reidentified' }>;
+  typeText(ref: string, text: string, opts?: { nth?: number; firstOnMulti?: boolean }): Promise<{ matches_n: number; match_level: 'exact' | 'stable' | 'reidentified' }>;
   pressKey(key: string): Promise<void>;
   scrollTo(ref: string, opts?: { nth?: number; firstOnMulti?: boolean }): Promise<any>;
   getFormState(): Promise<any>;

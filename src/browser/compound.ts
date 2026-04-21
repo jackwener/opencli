@@ -120,14 +120,19 @@ function compoundInfoOf(el) {
     try {
       const opts = el.options || [];
       total = opts.length;
-      const cap = Math.min(opts.length, OPTS_CAP);
-      for (let i = 0; i < cap; i++) {
+      // Walk ALL options so \`current\` reflects selections that sit beyond the
+      // serialization cap. Only the first OPTS_CAP entries get pushed into
+      // options[]; anything past the cap still contributes to selectedLabels
+      // so agents see the true current state of big dropdowns.
+      for (let i = 0; i < opts.length; i++) {
         const o = opts[i];
         const labelRaw = (o.label != null && o.label !== '') ? o.label : (o.text || '');
         const label = String(labelRaw).trim().slice(0, LABEL_CAP);
-        const entry = { label: label, value: o.value, selected: !!o.selected };
-        if (o.disabled) entry.disabled = true;
-        options.push(entry);
+        if (i < OPTS_CAP) {
+          const entry = { label: label, value: o.value, selected: !!o.selected };
+          if (o.disabled) entry.disabled = true;
+          options.push(entry);
+        }
         if (o.selected) selectedLabels.push(label);
       }
     } catch (_) {}

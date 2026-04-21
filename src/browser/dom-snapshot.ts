@@ -22,7 +22,16 @@
  * Additional tools:
  *   - scrollToRefJs(ref) — scroll to a data-opencli-ref element
  *   - getFormStateJs()  — extract all form fields as structured JSON
+ *
+ * Compound sidecar:
+ *   After the tree, a `compounds:` section lists rich JSON for every
+ *   date/select/file ref — format, full option list (up to cap) with
+ *   `options_total` reflecting the true count, file `accept` + `multiple`.
+ *   This is what the snapshot's inline attr dump cannot express and what
+ *   agents kept blowing turns on.
  */
+
+import { COMPOUND_INFO_JS } from './compound.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -195,6 +204,8 @@ export function generateSnapshotJs(opts: DomSnapshotOptions = {}): string {
   return `
 (() => {
   'use strict';
+
+  ${COMPOUND_INFO_JS}
 
   // ── Config ─────────────────────────────────────────────────────────
   const VIEWPORT_EXPAND = ${viewportExpand};
@@ -649,6 +660,7 @@ export function generateSnapshotJs(opts: DomSnapshotOptions = {}): string {
   const hiddenInteractives = [];
   const currentHashes = [];
   const refIdentity = {};
+  const compoundInfos = {};
   let iframeCount = 0;
   let crossOriginIndex = 0;
 
@@ -811,6 +823,10 @@ export function generateSnapshotJs(opts: DomSnapshotOptions = {}): string {
         id: el.id || '',
         testId: el.getAttribute('data-testid') || el.getAttribute('data-test') || '',
       };
+      // Compound contract for date/select/file — captured per-ref so the
+      // sidecar maps one-to-one with the [N] tokens in the tree.
+      const compound = compoundInfoOf(el);
+      if (compound) compoundInfos['' + interactiveIndex] = compound;
     }
 
     // Tag + attributes
@@ -890,6 +906,19 @@ export function generateSnapshotJs(opts: DomSnapshotOptions = {}): string {
       lines.push('  <' + h.tag + '>' + label + ' ~' + h.pagesAway + ' pages ' + h.direction);
     }
     if (hiddenInteractives.length > 10) lines.push('  …' + (hiddenInteractives.length - 10) + ' more');
+  }
+
+  // Compound sidecar — rich JSON for date/select/file refs. Keys align with [N] tokens in the tree.
+  const compoundRefs = Object.keys(compoundInfos);
+  if (compoundRefs.length > 0) {
+    lines.push('---');
+    lines.push('compounds (' + compoundRefs.length + '):');
+    compoundRefs.sort(function (a, b) { return parseInt(a, 10) - parseInt(b, 10); });
+    for (const ref of compoundRefs) {
+      try {
+        lines.push('  [' + ref + '] ' + JSON.stringify(compoundInfos[ref]));
+      } catch {}
+    }
   }
 
   // Footer
