@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.7.6](https://github.com/jackwener/opencli/compare/v1.7.5...v1.7.6) (2026-04-21)
+
+Extension bumped to 1.0.2 (body-truncation signal unified across raw / detail / fallback paths).
+
+### Features
+
+* **Window lifecycle flags** — `--live` (or `OPENCLI_LIVE=1`) keeps the automation window open after a command finishes; `--focus` (or `OPENCLI_WINDOW_FOCUSED=1`) brings the window to the foreground. Works on any subcommand. ([#1122](https://github.com/jackwener/opencli/issues/1122))
+* **Selector-first browser interactions** — `find` / `get` / `click` / `type` / `select` accept CSS selectors in addition to numeric refs; `--nth` disambiguates multiple matches. ([#1112](https://github.com/jackwener/opencli/issues/1112))
+* **Agent-native browser payload** — structured `network` bodies with truncation signal, `get html --as json` with `--depth` / `--children-max` / `--text-max` budgets, new `browser extract` command for long-form content with resume cursor. ([#1104](https://github.com/jackwener/opencli/issues/1104))
+* **`network --filter <fields>`** — filter captured requests by body-shape path segments for quick API discovery. ([#1103](https://github.com/jackwener/opencli/issues/1103))
+* **`get html --as json`** — structured HTML tree output; no more silent truncation on raw `--as html`. ([#1102](https://github.com/jackwener/opencli/issues/1102))
+* **`browser network` rewrite** — agent-native discovery with cache keys and shape preview. ([#1100](https://github.com/jackwener/opencli/issues/1100))
+* **Compound form fields** — date / select / file controls surface a `compound` envelope with format, options, `accept`. Cascading stale-ref recovery + bbox 0.99 dedup for tagged elements. ([#1116](https://github.com/jackwener/opencli/issues/1116))
+* **twitter `tweets`** — fetch a user's recent posts. ([#1098](https://github.com/jackwener/opencli/issues/1098))
+* **bilibili `video`** — new video command. ([#1110](https://github.com/jackwener/opencli/issues/1110))
+* **deepseek `--file`** — file upload support on `ask`. ([#1093](https://github.com/jackwener/opencli/issues/1093))
+
+### Bug Fixes
+
+* **twitter** — 5s timeout on `resolveTwitterQueryId` to prevent hang. ([#1106](https://github.com/jackwener/opencli/issues/1106))
+* **youtube** — fall back to Videos tab when Home has no videos. ([#1109](https://github.com/jackwener/opencli/issues/1109))
+* **jianyu** — keep accessible detail urls in search. ([#1099](https://github.com/jackwener/opencli/issues/1099))
+* **jianyu** — block inaccessible detail links and verification pages. ([#918](https://github.com/jackwener/opencli/issues/918))
+
+### Docs
+
+* **opencli-browser skill** — restored and upgraded for selector-first workflow. ([#1119](https://github.com/jackwener/opencli/issues/1119))
+* **Window lifecycle** — sync README + skill docs with `--live` / `--focus` behavior. ([#1125](https://github.com/jackwener/opencli/issues/1125))
+
+### Extension (1.0.2)
+
+* Unify body-truncation contract across raw / detail / fallback network paths; surface `body_truncated` / `body_full_size` / `body_truncation_reason`. ([#1104](https://github.com/jackwener/opencli/issues/1104))
+
 ## [1.7.5](https://github.com/jackwener/opencli/compare/v1.7.4...v1.7.5) (2026-04-20)
 
 Extension bumped to 1.0.1 (multi-tab routing + cross-origin iframe).
