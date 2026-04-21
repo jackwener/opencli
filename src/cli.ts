@@ -715,6 +715,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       if (!hasSessionCapture) {
         try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
       }
+      await captureNetworkItems(page);
       // Best-effort: give the page another beat so XHR after DOMContentLoaded lands.
       await page.wait(1);
 
@@ -747,11 +748,15 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         title: string;
         finalUrl: string;
       };
+      const browserCookieNames = (await page.getCookies({ url: probe.finalUrl || url }).catch(() => []))
+        .map((c) => c.name)
+        .filter(Boolean);
+      const cookieNames = [...new Set([...probe.cookieNames, ...browserCookieNames])];
 
       const signals: PageSignals = {
         requestedUrl: url,
         finalUrl: probe.finalUrl,
-        cookieNames: probe.cookieNames,
+        cookieNames,
         networkEntries,
         initialState: probe.initialState,
         title: probe.title,
@@ -1160,6 +1165,11 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
           process.exitCode = EXIT_CODES.USAGE_ERROR;
           return;
         }
+        const hasSessionCapture = await page.startNetworkCapture?.() ?? false;
+        if (!hasSessionCapture) {
+          try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
+        }
+        await captureNetworkItems(page);
         const deadline = Date.now() + timeout;
         const pollMs = 400;
         let matched: BrowserNetworkItem | null = null;

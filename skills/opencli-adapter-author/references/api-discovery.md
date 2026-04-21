@@ -16,12 +16,12 @@
 
 | cookie / body 信号 | 厂商 | 裸 Node fetch / curl 结果 | 策略 |
 |------------------|------|-----|-----|
-| `acw_sc__v2` / `acw_tc` / `ssxmod_itna`；body 含 `arg1 = '32-HEX'` 或 `/ntc_captcha/` | **Aliyun WAF** | 返回 slider HTML，不是真数据 | 必须 `page.evaluate(fetch(url, {credentials:'include'}))` **在浏览器上下文里** |
-| `__cf_bm` / `cf_clearance` / `__cfduid`；body 含 `Cloudflare Ray ID` / `Checking your browser` | **Cloudflare** | TLS 指纹被标记，失败 | 同上，浏览器上下文 |
+| `acw_sc__v2` / `acw_tc` / `ssxmod_itna`；body 含 `arg1 = '32-HEX'` 或 `/ntc_captcha/` | **Aliyun WAF** | 返回 slider HTML，不是真数据 | 先在浏览器上下文里验证 endpoint；HTML 型 COOKIE adapter 最终仍走 Node-side fetch + `page.getCookies()` |
+| `__cf_bm` / `cf_clearance` / `__cfduid`；body 含 `Cloudflare Ray ID` / `Checking your browser` | **Cloudflare** | TLS 指纹被标记，失败 | 同上：先 browser-context probe，最终 adapter 仍按模板选 fetch 路线 |
 | `_abck` / `bm_sz` / `bm_sv` | **Akamai** | 即使带 cookie 也常被挡 | 同上 |
 | body 含 `geetest` / `gt_captcha` | **Geetest** | 滑块/拼图，程序无解 | 超出 skill 范围，放弃或 UI 策略 |
 
-**规则**：看到上面四种任一个，**不要尝试裸 Node fetch**。从一开始就写 browser-context fetch。省掉"curl 试试 → 401 → 改 cookie → 还是 401 → 改头 → 发现响应根本不是数据"的一整轮时间。
+**规则**：看到上面四种任一个，先不要拿**裸** Node fetch 做 endpoint 验证。先用 browser-context probe 或目标 origin 页面确认接口能通；最终 adapter 的 fetch 路线仍按 `adapter-template.md` 选，HTML 型 COOKIE adapter 继续走 Node-side fetch + `page.getCookies()`。
 
 ### 0.2 跨 subdomain = CORS 默认关
 

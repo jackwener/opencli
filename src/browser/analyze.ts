@@ -85,21 +85,21 @@ const WAF_SIGNATURES: Array<{
     cookiePatterns: [/^acw_sc__v2$/, /^acw_tc$/, /^ssxmod_itna/],
     bodyPatterns: [/arg1\s*=\s*['"][0-9A-F]{30,}/, /\/ntc_captcha\//i],
     implication:
-      'Node-side fetch/curl will return the slider HTML. Use page.evaluate(fetch(url, {credentials:"include"})) in browser context instead.',
+      'Direct Node-side fetch/curl will return the slider HTML. Validate the endpoint in browser context first; HTML COOKIE adapters still finish with Node-side fetch + page.getCookies.',
   },
   {
     vendor: 'cloudflare',
     cookiePatterns: [/^__cf_bm$/, /^cf_clearance$/, /^__cfduid$/],
     bodyPatterns: [/Cloudflare Ray ID/i, /Checking your browser before accessing/i, /cf-chl-/i],
     implication:
-      'Cloudflare bot check. Agent must drive a real browser session; Node-side fetch is flagged on TLS fingerprint.',
+      'Cloudflare bot check. Start from a real browser session; probe in browser context first. HTML COOKIE adapters still finish with Node-side fetch + page.getCookies.',
   },
   {
     vendor: 'akamai',
     cookiePatterns: [/^_abck$/, /^bm_sz$/, /^bm_sv$/],
     bodyPatterns: [/akamai/i],
     implication:
-      'Akamai Bot Manager. Browser-context fetch only; do not attempt bare Node fetch even with cookies.',
+      'Akamai Bot Manager. Probe in browser context first; keep final HTML COOKIE adapters on Node-side fetch + page.getCookies.',
   },
   {
     vendor: 'geetest',
@@ -139,7 +139,7 @@ export function detectAntiBot(signals: PageSignals): AntiBotVerdict {
       detected: false,
       vendor: null,
       evidence: [],
-      implication: 'No known anti-bot signatures. Node-side fetch may work; try COOKIE first, fall back to browser-context fetch if blocked.',
+      implication: 'No known anti-bot signatures. Try Node-side COOKIE fetch first; if endpoint validation is blocked, retry from browser context.',
     };
   }
 
@@ -322,7 +322,7 @@ export function analyzeSite(
   } else if (pattern.pattern === 'A') {
     next = 'Pick the most specific JSON endpoint from `opencli browser network` and try a bare Node fetch with cookies; escalate to browser-context fetch only if blocked.';
   } else if (pattern.pattern === 'B') {
-    next = 'Read the SSR global via `opencli browser eval "JSON.stringify(window.__INITIAL_STATE__ ?? window.__NUXT__ ?? window.__NEXT_DATA__)"` — no API needed.';
+    next = 'Read the SSR global via `opencli browser eval "JSON.stringify(window.__INITIAL_STATE__ ?? window.__NUXT__ ?? window.__NEXT_DATA__ ?? window.__APOLLO_STATE__)"` — no API needed.';
   } else if (pattern.pattern === 'C') {
     next = 'No API visible — use SSR HTML scrape (e.g. `opencli browser extract`) against the rendered page.';
   } else if (pattern.pattern === 'D') {

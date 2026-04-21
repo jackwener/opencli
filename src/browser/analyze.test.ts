@@ -76,7 +76,7 @@ describe('detectAntiBot', () => {
     const v = detectAntiBot(mkSignals());
     expect(v.detected).toBe(false);
     expect(v.vendor).toBeNull();
-    expect(v.implication).toMatch(/COOKIE first/);
+    expect(v.implication).toMatch(/Node-side COOKIE fetch first/);
   });
 });
 
@@ -184,6 +184,17 @@ describe('analyzeSite', () => {
     );
     expect(report.pattern.pattern).toBe('B');
     expect(report.recommended_next_step).toMatch(/__NUXT__|__INITIAL_STATE__|__NEXT_DATA__/);
+  });
+
+  it('includes __APOLLO_STATE__ in Pattern B next-step guidance', () => {
+    const report = analyzeSite(
+      mkSignals({
+        initialState: { __INITIAL_STATE__: false, __NUXT__: false, __NEXT_DATA__: false, __APOLLO_STATE__: true },
+      }),
+      new Map(),
+    );
+    expect(report.pattern.pattern).toBe('B');
+    expect(report.recommended_next_step).toMatch(/__APOLLO_STATE__/);
   });
 
   it('includes nearest_adapter when the registry has a match', () => {
