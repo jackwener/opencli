@@ -356,6 +356,72 @@ describe('browser tab targeting commands', () => {
     expect(out.anti_bot.evidence).toContain('cookie:cf_clearance');
   });
 
+  it('browser analyze falls back to interceptor buffer when network capture is unsupported', async () => {
+    let bufferReads = 0;
+    browserState.page = {
+      goto: vi.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
+      setActivePage: vi.fn(),
+      getActivePage: vi.fn().mockReturnValue('tab-1'),
+      getCurrentUrl: vi.fn().mockResolvedValue('https://target.example'),
+      startNetworkCapture: vi.fn().mockResolvedValue(false),
+      getCookies: vi.fn().mockResolvedValue([{ name: 'cf_clearance', value: 'x', domain: '.target.example' }]),
+      evaluate: vi.fn().mockImplementation(async (arg: string) => {
+        if (typeof arg === 'string' && arg.includes('document.cookie')) {
+          return {
+            cookieNames: [],
+            initialState: {
+              __INITIAL_STATE__: false,
+              __NUXT__: false,
+              __NEXT_DATA__: false,
+              __APOLLO_STATE__: false,
+            },
+            title: 'Target',
+            finalUrl: 'https://target.example/',
+          };
+        }
+        if (typeof arg === 'string' && arg.includes('window.__opencli_net = []')) {
+          bufferReads += 1;
+          if (bufferReads === 1) {
+            return JSON.stringify([
+              {
+                url: 'https://stale.example/api/old',
+                method: 'GET',
+                status: 200,
+                size: 12,
+                ct: 'application/json',
+                body: { stale: true },
+              },
+            ]);
+          }
+          return JSON.stringify([
+            {
+              url: 'https://target.example/waf',
+              method: 'GET',
+              status: 403,
+              size: 17,
+              ct: 'text/html',
+              body: 'Cloudflare Ray ID',
+            },
+          ]);
+        }
+        return undefined;
+      }),
+      tabs: vi.fn().mockResolvedValue([{ index: 0, page: 'tab-1', url: 'https://target.example', title: 'Target', active: true }]),
+      readNetworkCapture: vi.fn().mockResolvedValue([]),
+    } as unknown as IPage;
+
+    const program = createProgram('', '');
+    await program.parseAsync(['node', 'opencli', 'browser', 'analyze', 'https://target.example/']);
+
+    const out = lastJsonLog();
+    expect(browserState.page?.readNetworkCapture).toHaveBeenCalledTimes(2);
+    expect(bufferReads).toBe(2);
+    expect(out.anti_bot.vendor).toBe('cloudflare');
+    expect(out.anti_bot.evidence).toContain('cookie:cf_clearance');
+    expect(out.anti_bot.evidence).toContain('body:https://target.example/waf');
+  });
+
   it('browser wait xhr starts capture, injects interceptor on fallback, and ignores stale ring entries', async () => {
     browserState.page = {
       goto: vi.fn().mockResolvedValue(undefined),
@@ -394,6 +460,57 @@ describe('browser tab targeting commands', () => {
     expect(browserState.page?.startNetworkCapture).toHaveBeenCalledTimes(1);
     expect(browserState.page?.evaluate).toHaveBeenCalledWith(expect.stringContaining('window.__opencli_net'));
     expect(browserState.page?.readNetworkCapture).toHaveBeenCalledTimes(2);
+    expect(out.matched.url).toBe('https://target.example/api/target');
+  });
+
+  it('browser wait xhr reads interceptor buffer when network capture is unsupported', async () => {
+    let bufferReads = 0;
+    browserState.page = {
+      goto: vi.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
+      setActivePage: vi.fn(),
+      getActivePage: vi.fn().mockReturnValue('tab-1'),
+      getCurrentUrl: vi.fn().mockResolvedValue('https://target.example'),
+      startNetworkCapture: vi.fn().mockResolvedValue(false),
+      evaluate: vi.fn().mockImplementation(async (arg: string) => {
+        if (typeof arg === 'string' && arg.includes('window.__opencli_net = []')) {
+          bufferReads += 1;
+          if (bufferReads === 1) {
+            return JSON.stringify([
+              {
+                url: 'https://stale.example/api/old',
+                method: 'GET',
+                status: 200,
+                size: 12,
+                ct: 'application/json',
+                body: { stale: true },
+              },
+            ]);
+          }
+          return JSON.stringify([
+            {
+              url: 'https://target.example/api/target',
+              method: 'GET',
+              status: 200,
+              size: 11,
+              ct: 'application/json',
+              body: { ok: true },
+            },
+          ]);
+        }
+        return undefined;
+      }),
+      tabs: vi.fn().mockResolvedValue([{ index: 0, page: 'tab-1', url: 'https://target.example', title: 'Target', active: true }]),
+      readNetworkCapture: vi.fn().mockResolvedValue([]),
+    } as unknown as IPage;
+
+    const program = createProgram('', '');
+    await program.parseAsync(['node', 'opencli', 'browser', 'wait', 'xhr', '/api/target', '--timeout', '900']);
+
+    const out = lastJsonLog();
+    expect(browserState.page?.startNetworkCapture).toHaveBeenCalledTimes(1);
+    expect(browserState.page?.readNetworkCapture).toHaveBeenCalledTimes(2);
+    expect(bufferReads).toBe(2);
     expect(out.matched.url).toBe('https://target.example/api/target');
   });
 });

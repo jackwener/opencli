@@ -60,29 +60,31 @@ type BrowserNetworkItem = {
 async function captureNetworkItems(page: import('./types.js').IPage): Promise<BrowserNetworkItem[]> {
   if (page.readNetworkCapture) {
     const raw = await page.readNetworkCapture();
-    return (raw as Array<Record<string, unknown>>).map((e) => {
-      const preview = (e.responsePreview as string) ?? null;
-      let body: unknown = null;
-      if (preview) {
-        try { body = JSON.parse(preview); } catch { body = preview; }
-      }
-      const fullSize = typeof e.responseBodyFullSize === 'number'
-        ? (e.responseBodyFullSize as number)
-        : (preview ? preview.length : 0);
-      const truncated = e.responseBodyTruncated === true;
-      return {
-        url: (e.url as string) || '',
-        method: (e.method as string) || 'GET',
-        status: (e.responseStatus as number) || 0,
-        size: fullSize,
-        ct: (e.responseContentType as string) || '',
-        body,
-        bodyFullSize: fullSize,
-        bodyTruncated: truncated,
-      };
-    });
+    if (Array.isArray(raw) && raw.length > 0) {
+      return (raw as Array<Record<string, unknown>>).map((e) => {
+        const preview = (e.responsePreview as string) ?? null;
+        let body: unknown = null;
+        if (preview) {
+          try { body = JSON.parse(preview); } catch { body = preview; }
+        }
+        const fullSize = typeof e.responseBodyFullSize === 'number'
+          ? (e.responseBodyFullSize as number)
+          : (preview ? preview.length : 0);
+        const truncated = e.responseBodyTruncated === true;
+        return {
+          url: (e.url as string) || '',
+          method: (e.method as string) || 'GET',
+          status: (e.responseStatus as number) || 0,
+          size: fullSize,
+          ct: (e.responseContentType as string) || '',
+          body,
+          bodyFullSize: fullSize,
+          bodyTruncated: truncated,
+        };
+      });
+    }
   }
-  const raw = await page.evaluate(`(function(){ return JSON.stringify(window.__opencli_net || []); })()`) as string;
+  const raw = await page.evaluate(`(function(){ var out = window.__opencli_net || []; window.__opencli_net = []; return JSON.stringify(out); })()`) as string;
   try { return JSON.parse(raw) as BrowserNetworkItem[]; } catch { return []; }
 }
 
