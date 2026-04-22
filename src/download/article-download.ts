@@ -130,17 +130,21 @@ function createTurndown(
   // Per-adapter dirty-node removal. Adapters know their site's specific noise
   // (zhihu 折叠卡, weixin 赞赏栏, wiki 折叠 infobox …); we keep the default set
   // empty so the generic converter stays untouched.
-  if (cleanSelectors && cleanSelectors.length > 0) {
-    const selectorList = cleanSelectors.join(', ');
+  const selectorRules = (cleanSelectors ?? [])
+    .map(sel => sel.trim())
+    .filter(Boolean);
+  if (selectorRules.length > 0) {
     td.addRule('cleanSelectors', {
       filter: (node) => {
         const match = (node as Element).matches;
         if (typeof match !== 'function') return false;
-        try {
-          return match.call(node, selectorList);
-        } catch {
-          return false;
-        }
+        return selectorRules.some((sel) => {
+          try {
+            return match.call(node, sel);
+          } catch {
+            return false;
+          }
+        });
       },
       replacement: () => '',
     });

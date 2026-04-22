@@ -46,6 +46,12 @@ describe('buildExtractArticleJs', () => {
     }
   });
 
+  it('runs fallback selection against the cleaned clone', () => {
+    const js = buildExtractArticleJs({ cleanSelectors: ['.noise'] });
+    expect(js).toContain('el = cloneDoc.querySelector(sel);');
+    expect(js).not.toContain('el = document.querySelector(sel);');
+  });
+
   it('produces syntactically valid JavaScript', () => {
     // Parsing via the Function constructor rejects any syntax error in the
     // generated code — including accidental template-literal break-outs from

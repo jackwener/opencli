@@ -159,7 +159,7 @@ export function buildExtractArticleJs(options: ExtractArticleOptions = {}): stri
     '  // Fallback chain',
     '  for (const sel of fallbackSelectors) {',
     '    let el = null;',
-    '    try { el = document.querySelector(sel); } catch (e) { continue; }',
+    '    try { el = cloneDoc.querySelector(sel); } catch (e) { continue; }',
     '    if (!el) continue;',
     '    const text = (el.textContent || "").trim();',
     '    if (text.length < minFallbackText) continue;',

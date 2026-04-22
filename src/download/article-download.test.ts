@@ -166,5 +166,15 @@ describe('downloadArticle', () => {
       expect(md).toContain('survives');
       expect(md).toContain('and-this-too');
     });
+
+    it('cleanSelectors keeps valid selectors active when one selector is invalid', async () => {
+      const md = await runAndRead(
+        '<p>keep</p><div class="vote-card">strip-me</div><p>also-keep</p>',
+        { cleanSelectors: ['!!!not-a-valid-selector', '.vote-card'] },
+      );
+      expect(md).toContain('keep');
+      expect(md).toContain('also-keep');
+      expect(md).not.toContain('strip-me');
+    });
   });
 });
