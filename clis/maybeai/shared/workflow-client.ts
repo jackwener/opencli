@@ -1,6 +1,6 @@
 import { CliError } from '@jackwener/opencli/errors';
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 600_000;
 const DETAIL_TIMEOUT_MS = 60_000;
 
 export interface WorkflowAuth {
