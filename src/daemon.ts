@@ -299,6 +299,7 @@ wss.on('connection', (ws: WebSocket) => {
     if (extensionWs === ws) {
       extensionWs = null;
       extensionVersion = null;
+      extensionCompatRange = null;
       // Reject pending requests in case 'close' does not follow this 'error'
       for (const [, p] of pending) {
         clearTimeout(p.timer);

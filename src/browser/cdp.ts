@@ -116,7 +116,12 @@ export class CDPBridge implements IBrowserFactory {
               for (const fn of listeners) fn(msg.params);
             }
           }
-        } catch {}
+        } catch (err) {
+          if (process.env.OPENCLI_VERBOSE) {
+            // eslint-disable-next-line no-console
+            console.error('[cdp] Failed to parse WebSocket message:', err instanceof Error ? err.message : err);
+          }
+        }
       });
     });
   }
@@ -300,8 +305,12 @@ class CDPPage extends BasePage {
               this._networkEntries[idx].responseBodyFullSize = fullSize;
               this._networkEntries[idx].responseBodyTruncated = truncated;
             }
-          }).catch(() => {
+          }).catch((err) => {
             // Body unavailable for some requests (e.g. uploads) — non-fatal
+            if (process.env.OPENCLI_VERBOSE) {
+              // eslint-disable-next-line no-console
+              console.error(`[cdp] getResponseBody failed for ${p.requestId}:`, err instanceof Error ? err.message : err);
+            }
           }).finally(() => {
             this._pendingBodyFetches.delete(bodyFetch);
           });
