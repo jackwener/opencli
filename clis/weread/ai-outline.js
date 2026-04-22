@@ -42,7 +42,7 @@ async function postWebApiWithCookies(page, path, body) {
         throw new CliError('PARSE_ERROR', `Invalid JSON response for ${path}`, 'WeRead may have returned an HTML error page');
     }
 
-    if (data?.errCode === -2010 || data?.errCode === -2012) {
+    if (data?.errcode === -2010 || data?.errcode === -2012) {
         throw new CliError('AUTH_REQUIRED', 'Not logged in to WeRead', 'Please log in to weread.qq.com in Chrome first');
     }
     if (!resp.ok) {
@@ -77,6 +77,7 @@ cli({
     description: 'Get AI-generated outline for a book',
     domain: 'weread.qq.com',
     strategy: Strategy.COOKIE,
+    defaultFormat: 'plain',
     args: [
         { name: 'book-id', positional: true, required: true, help: 'Book ID (from shelf or search results)' },
         { name: 'limit', type: 'int', default: 200, help: 'Max outline items to return' },

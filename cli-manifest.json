@@ -17056,6 +17056,48 @@
   },
   {
     "site": "weread",
+    "name": "ai-outline",
+    "description": "Get AI-generated outline for a book",
+    "domain": "weread.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "book-id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Book ID (from shelf or search results)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 200,
+        "required": false,
+        "help": "Max outline items to return"
+      },
+      {
+        "name": "depth",
+        "type": "int",
+        "default": 4,
+        "required": false,
+        "help": "Max outline depth (2=topics, 3=key points, 4=details)"
+      },
+      {
+        "name": "raw",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Output structured rows (chapter/idx/level/text) for programmatic use"
+      }
+    ],
+    "type": "js",
+    "modulePath": "weread/ai-outline.js",
+    "sourceFile": "weread/ai-outline.js",
+    "navigateBefore": "https://weread.qq.com"
+  },
+  {
+    "site": "weread",
     "name": "book",
     "description": "View book details on WeRead",
     "domain": "weread.qq.com",
@@ -17264,48 +17306,6 @@
     "type": "js",
     "modulePath": "weread/shelf.js",
     "sourceFile": "weread/shelf.js",
-    "navigateBefore": "https://weread.qq.com"
-  },
-  {
-    "site": "weread",
-    "name": "ai-outline",
-    "description": "Get AI-generated outline for a book",
-    "domain": "weread.qq.com",
-    "strategy": "cookie",
-    "browser": true,
-    "args": [
-      {
-        "name": "book-id",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Book ID (from shelf or search results)"
-      },
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 200,
-        "required": false,
-        "help": "Max outline items to return"
-      },
-      {
-        "name": "depth",
-        "type": "int",
-        "default": 4,
-        "required": false,
-        "help": "Max outline depth (2=topics, 3=key points, 4=details)"
-      },
-      {
-        "name": "raw",
-        "type": "boolean",
-        "default": false,
-        "required": false,
-        "help": "Output structured rows (chapter/idx/level/text) for programmatic use"
-      }
-    ],
-    "type": "js",
-    "modulePath": "weread/ai-outline.js",
-    "sourceFile": "weread/ai-outline.js",
     "navigateBefore": "https://weread.qq.com"
   },
   {
