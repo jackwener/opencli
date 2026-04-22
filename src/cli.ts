@@ -85,7 +85,34 @@ async function captureNetworkItems(page: import('./types.js').IPage): Promise<Br
     }
   }
   const raw = await page.evaluate(`(function(){ var out = window.__opencli_net || []; window.__opencli_net = []; return JSON.stringify(out); })()`) as string;
-  try { return JSON.parse(raw) as BrowserNetworkItem[]; } catch { return []; }
+  try {
+    const jsItems = JSON.parse(raw) as BrowserNetworkItem[];
+    if (jsItems.length > 0) return jsItems;
+  } catch { /* fall through */ }
+
+  // Fallback: legacy networkRequests() via extension webRequest API
+  if (page.networkRequests) {
+    const legacy = await page.networkRequests();
+    if (Array.isArray(legacy) && legacy.length > 0) {
+      return (legacy as Array<Record<string, unknown>>).map((e) => {
+        let body: unknown = null;
+        const bodyRaw = (e.body as string) ?? null;
+        if (bodyRaw) {
+          try { body = JSON.parse(bodyRaw); } catch { body = bodyRaw; }
+        }
+        return {
+          url: (e.url as string) || '',
+          method: (e.method as string) || 'GET',
+          status: (e.status as number) || 0,
+          size: typeof e.size === 'number' ? (e.size as number) : (bodyRaw ? bodyRaw.length : 0),
+          ct: (e.ct as string) || '',
+          body,
+        };
+      });
+    }
+  }
+
+  return [];
 }
 
 /** Drop static-resource / telemetry noise so agents see only API-shaped traffic. */
@@ -1392,6 +1419,12 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         }
         console.log(JSON.stringify(detailEnvelope, null, 2));
         return;
+      }
+
+      // Ensure network capture is active (may have been lost if window was recycled)
+      const hasSessionCapture = await page.startNetworkCapture?.().then(() => true).catch(() => false);
+      if (!hasSessionCapture) {
+        try { await page.evaluate(NETWORK_INTERCEPTOR_JS); } catch { /* non-fatal */ }
       }
 
       // Fresh capture path.
