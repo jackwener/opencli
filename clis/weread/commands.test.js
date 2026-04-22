@@ -12,6 +12,7 @@ vi.mock('./utils.js', async () => {
 });
 import { getRegistry } from '@jackwener/opencli/registry';
 import './book.js';
+import { parseReaderDocumentTitle } from './book.js';
 import './highlights.js';
 import './notes.js';
 describe('weread book-id positional args', () => {
@@ -30,6 +31,14 @@ describe('weread book-id positional args', () => {
     beforeEach(() => {
         mockFetchPrivateApi.mockReset();
         vi.unstubAllGlobals();
+    });
+    it('parses author from the penultimate document.title segment when the book title contains hyphens', () => {
+        expect(parseReaderDocumentTitle('Part 1 - Part 2 - 作者甲 - 微信读书')).toBe('作者甲');
+        expect(parseReaderDocumentTitle('Foo - Bar - Baz - 微信读书')).toBe('Baz');
+    });
+    it('does not guess an author from non-reader document.title formats', () => {
+        expect(parseReaderDocumentTitle('Foo - Bar')).toBe('');
+        expect(parseReaderDocumentTitle('Foo - Bar - Baz')).toBe('');
     });
     it('passes the positional book-id to book details', async () => {
         mockFetchPrivateApi.mockResolvedValue({ title: 'Three Body', newRating: 880 });

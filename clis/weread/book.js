@@ -37,6 +37,18 @@ function countSearchIdentities(entries) {
     }
     return counts;
 }
+export function parseReaderDocumentTitle(documentTitle) {
+    const parts = String(documentTitle || '')
+        .split(' - ')
+        .map((part) => part.trim())
+        .filter(Boolean);
+    if (parts.length < 3)
+        return '';
+    const brand = parts.at(-1) || '';
+    if (!/微信读书/.test(brand))
+        return '';
+    return parts.at(-2) || '';
+}
 /**
  * Reuse the public search page as a last-resort reader URL source when the
  * cached shelf page cannot provide a trustworthy bookId-to-reader mapping.
@@ -111,6 +123,7 @@ async function loadReaderFallbackResult(page, readerUrl) {
     await page.wait({ selector: '.horizontalReaderCoverPage_content_bookTitle, .wr_flyleaf_page_bookInfo_bookTitle, .readerTopBar_title_link', timeout: 10 });
     const result = await page.evaluate(`
     (() => {
+      const parseReaderDocumentTitle = ${parseReaderDocumentTitle.toString()};
       const text = (node) => node?.textContent?.trim() || '';
       const firstText = (...sels) => { for (const s of sels) { const v = text(document.querySelector(s)); if (v) return v; } return ''; };
       const bodyText = document.body?.innerText?.replace(/\\s+/g, ' ').trim() || '';
@@ -140,7 +153,7 @@ async function loadReaderFallbackResult(page, readerUrl) {
         .find((scriptText) => scriptText.includes('"category"')) || '';
       const categoryMatch = categorySource.match(/"category"\\s*:\\s*"([^"]+)"/);
       const title = firstText('.horizontalReaderCoverPage_content_bookTitle', '.wr_flyleaf_page_bookInfo_bookTitle', '.outline_book_detail_header_title', '.readerTopBar_title_link');
-      const author = firstText('.horizontalReaderCoverPage_content_author', '.wr_flyleaf_page_bookInfo_author', '.outline_book_detail_header_author') || (() => { const parts = (document.title || '').split(' - '); return parts.length >= 3 ? parts[1].trim() : ''; })();
+      const author = firstText('.horizontalReaderCoverPage_content_author', '.wr_flyleaf_page_bookInfo_author', '.outline_book_detail_header_author') || parseReaderDocumentTitle(document.title || '');
 
       return {
         title,
