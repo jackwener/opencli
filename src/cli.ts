@@ -85,7 +85,12 @@ async function captureNetworkItems(page: import('./types.js').IPage): Promise<Br
     }
   }
   const raw = await page.evaluate(`(function(){ var out = window.__opencli_net || []; window.__opencli_net = []; return JSON.stringify(out); })()`) as string;
-  try { return JSON.parse(raw) as BrowserNetworkItem[]; } catch { return []; }
+  try {
+    return JSON.parse(raw) as BrowserNetworkItem[];
+  } catch {
+    if (process.env.OPENCLI_VERBOSE) log.warn(`[network] Failed to parse interceptor buffer: ${typeof raw === 'string' ? raw.slice(0, 200) : String(raw)}`);
+    return [];
+  }
 }
 
 /** Drop static-resource / telemetry noise so agents see only API-shaped traffic. */
@@ -97,10 +102,17 @@ function filterNetworkItems(items: BrowserNetworkItem[]): BrowserNetworkItem[] {
   );
 }
 
+/** Exit codes by network error code — usage errors vs runtime failures. */
+const NETWORK_ERROR_EXIT: Record<string, number> = {
+  invalid_args: EXIT_CODES.USAGE_ERROR,
+  invalid_filter: EXIT_CODES.USAGE_ERROR,
+  invalid_max_body: EXIT_CODES.USAGE_ERROR,
+};
+
 /** Emit a structured error JSON so agents can branch on `error.code` without regex. */
 function emitNetworkError(code: string, message: string, extra: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ error: { code, message, ...extra } }, null, 2));
-  process.exitCode = EXIT_CODES.USAGE_ERROR;
+  process.exitCode = NETWORK_ERROR_EXIT[code] ?? EXIT_CODES.GENERIC_ERROR;
 }
 
 /**
