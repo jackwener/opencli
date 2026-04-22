@@ -12839,7 +12839,7 @@
       "product_url",
       "shopdora_login_message"
     ],
-    "timeout": 600,
+    "timeout": 1800,
     "type": "ts",
     "modulePath": "shopee/product-shopdora-download.js",
     "sourceFile": "shopee/product-shopdora-download.ts",

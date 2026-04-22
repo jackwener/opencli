@@ -35,7 +35,7 @@ describe('shopee product-shopdora-download adapter', () => {
     expect(command!.domain).toBe('shopee.sg');
     expect(command!.strategy).toBe('cookie');
     expect(command!.navigateBefore).toBe(false);
-    expect(command!.timeoutSeconds).toBe(600);
+    expect(command!.timeoutSeconds).toBe(1800);
     expect(command!.columns).toEqual(['status', 'message', 'local_url', 'local_path', 'product_url', 'shopdora_login_message']);
     expect(typeof command!.func).toBe('function');
   });
@@ -228,7 +228,7 @@ describe('shopee product-shopdora-download adapter', () => {
     expect(evaluate).toHaveBeenCalledWith(expect.stringContaining('.putButton .common-btn.en_common-btn'));
     expect(waitForDownload).toHaveBeenCalledWith({
       startedAfterMs: expect.any(Number),
-      timeoutMs: 600000,
+      timeoutMs: 1800000,
     });
     expect(result).toEqual([{
       status: 'success',
@@ -288,7 +288,7 @@ describe('shopee product-shopdora-download adapter', () => {
     expect(click).toHaveBeenCalledWith(CONFIRM_EXPORT_BUTTON_SELECTOR);
     expect(waitForDownload).toHaveBeenCalledWith({
       startedAfterMs: expect.any(Number),
-      timeoutMs: 600000,
+      timeoutMs: 1800000,
     });
     expect(result).toEqual([{
       status: 'success',
