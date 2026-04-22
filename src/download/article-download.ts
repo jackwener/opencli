@@ -88,6 +88,13 @@ function createTurndown(configure?: (td: TurndownService) => void): TurndownServ
   });
   td.use(gfm);
   td.remove(STRIPPED_TAGS);
+  // turndown-plugin-gfm@1.0.2 emits single-tilde strikethrough (`~x~`), which
+  // is not the canonical GFM form. Override it so exported markdown is
+  // portable across common renderers.
+  td.addRule('canonicalStrikethrough', {
+    filter: (node) => ['DEL', 'S', 'STRIKE'].includes(node.nodeName),
+    replacement: (content) => `~~${content}~~`,
+  });
   // SVG isn't in the static HTML tag map; match by name with a custom filter.
   td.addRule('stripSvg', {
     filter: (node) => node.nodeName === 'svg' || node.nodeName === 'SVG',

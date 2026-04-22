@@ -71,8 +71,7 @@ describe('downloadArticle', () => {
         '<p><del>gone</del></p>' +
         '<ul><li><input type="checkbox" checked>done</li><li><input type="checkbox">todo</li></ul>',
       );
-      // turndown-plugin-gfm@1.0.2 emits single-tilde strikethrough.
-      expect(md).toMatch(/~+gone~+/);
+      expect(md).toContain('~~gone~~');
       expect(md).toContain('[x] done');
       expect(md).toContain('[ ] todo');
     });
