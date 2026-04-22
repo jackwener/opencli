@@ -199,7 +199,7 @@ cli({
             referer = parsed.origin + '/';
         }
         catch { /* ignore */ }
-        return downloadArticle({
+        const result = await downloadArticle({
             title: data?.title || 'untitled',
             author: data?.author,
             publishTime: data?.publishTime,
@@ -212,5 +212,10 @@ cli({
             imageHeaders: referer ? { Referer: referer } : undefined,
             stdout: kwargs.stdout,
         });
+        // `--stdout` is a content-streaming mode. The markdown body already went
+        // to process.stdout inside downloadArticle(), so returning rows here
+        // would make Commander append table/JSON output to the same stdout
+        // stream and break piping.
+        return kwargs.stdout ? null : result;
     },
 });
