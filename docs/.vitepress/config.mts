@@ -63,6 +63,7 @@ export default defineConfig({
                 { text: 'LinkedIn', link: '/adapters/browser/linkedin' },
                 { text: 'Coupang', link: '/adapters/browser/coupang' },
                 { text: 'BOSS Zhipin', link: '/adapters/browser/boss' },
+                { text: '51job', link: '/adapters/browser/51job' },
                 { text: 'Ctrip', link: '/adapters/browser/ctrip' },
                 { text: 'Reuters', link: '/adapters/browser/reuters' },
                 { text: 'SMZDM', link: '/adapters/browser/smzdm' },

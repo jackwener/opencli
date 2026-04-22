@@ -8,7 +8,7 @@
 
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { CliError } from '@jackwener/opencli/errors';
-import { JOBS_ORIGIN, requirePage, navigateTo } from './utils.js';
+import { JOBS_ORIGIN, requirePage, navigateTo, parseCompanyJobCard } from './utils.js';
 
 cli({
     site: '51job',
@@ -56,9 +56,11 @@ cli({
                 .filter(a => /\\/\\d{6,}\\.html/.test(a.href || ''))
                 .slice(0, 60)
                 .map(a => {
-                    let d = null;
-                    try { d = JSON.parse(a.getAttribute('sensorsdata')); } catch {}
-                    return { href: a.href, data: d, text: (a.innerText || '').trim() };
+                    return {
+                        href: a.href,
+                        sensorsdata: a.getAttribute('sensorsdata') || '',
+                        text: (a.innerText || '').trim(),
+                    };
                 });
             // Company meta is three inline spans under .c-info.ellipsis
             // (title/size/industry) — extract them by position.
@@ -68,7 +70,7 @@ cli({
                 : [];
             return {
                 companyName,
-                companyIntro: companyIntro.slice(0, 1200),
+                companyIntro,
                 links,
                 cInfoParts,
                 sidebarText: sidebarText.slice(0, 400),
@@ -88,21 +90,13 @@ cli({
         const seen = new Set();
         const rows = [];
         for (const link of data.links || []) {
-            const jd = link.data;
-            if (!jd || !jd.jobId) continue;
-            if (seen.has(jd.jobId)) continue;
-            seen.add(jd.jobId);
+            const job = parseCompanyJobCard(link);
+            if (!job) continue;
+            if (seen.has(job.jobId)) continue;
+            seen.add(job.jobId);
             rows.push({
                 rank: rows.length + 1,
-                jobId: String(jd.jobId),
-                title: jd.jobTitle || '',
-                salary: jd.jobSalary || '',
-                city: jd.jobArea || '',
-                workYear: jd.jobYear || '',
-                degree: jd.jobDegree || '',
-                funcType: jd.funcType || '',
-                issueDate: jd.jobTime || '',
-                url: link.href,
+                ...job,
                 companyName: data.companyName,
                 companyType,
                 companySize,

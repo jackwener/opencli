@@ -120,6 +120,7 @@ export const SORT_CODES = {
 export function resolveCity(input) {
     if (!input) return '000000';
     const s = String(input).trim();
+    if (!s || s === '全国' || s.toLowerCase() === 'all') return '000000';
     if (/^\d{6}$/.test(s)) return s;
     const key = s.toLowerCase();
     if (CITY_CODES[s] !== undefined) return CITY_CODES[s];
@@ -127,7 +128,7 @@ export function resolveCity(input) {
     for (const [name, code] of Object.entries(CITY_CODES)) {
         if (typeof name === 'string' && name.includes(s)) return code;
     }
-    return '000000';
+    throw new CliError('INVALID_ARGUMENT', `Unknown city/area "${s}"`, 'Use a supported city name like "杭州" or a 6-digit city code');
 }
 
 export function resolveCode(input, table, fallback = '') {
@@ -270,3 +271,32 @@ export const SEARCH_COLUMNS = [
     'company', 'companyFull', 'companyType', 'companySize', 'industry',
     'hr', 'issueDate', 'url', 'companyUrl', 'encCoId',
 ];
+
+/**
+ * Parse a 51job company-page `<a sensorsdata="...">` payload into a stable
+ * row fragment. Returns null when the attribute is absent or malformed.
+ */
+export function parseCompanyJobCard(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const href = typeof raw.href === 'string' ? raw.href : '';
+    const sensorsdata = typeof raw.sensorsdata === 'string' ? raw.sensorsdata : '';
+    if (!href || !sensorsdata) return null;
+    let data;
+    try {
+        data = JSON.parse(sensorsdata);
+    } catch {
+        return null;
+    }
+    if (!data || !data.jobId) return null;
+    return {
+        jobId: String(data.jobId),
+        title: data.jobTitle || '',
+        salary: data.jobSalary || '',
+        city: data.jobArea || '',
+        workYear: data.jobYear || '',
+        degree: data.jobDegree || '',
+        funcType: data.funcType || '',
+        issueDate: data.jobTime || '',
+        url: href,
+    };
+}
