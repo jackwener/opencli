@@ -2,6 +2,7 @@ import { CliError } from '@jackwener/opencli/errors';
 
 const DEFAULT_TIMEOUT_MS = 600_000;
 const DETAIL_TIMEOUT_MS = 60_000;
+const TASK_POLL_INTERVAL_MS = 3_000;
 
 export interface WorkflowAuth {
   token: string;
@@ -12,6 +13,17 @@ export interface WorkflowClientOptions {
   baseUrl: string;
   auth: WorkflowAuth;
   service: string;
+}
+
+interface WorkflowTaskRecord {
+  id: string;
+  status?: string | null;
+  dataflow_output?: string | null;
+  run_summary?: string | null;
+  meta?: {
+    error_message?: string | null;
+    root_task_id?: string | null;
+  } | null;
 }
 
 export class WorkflowClient {
@@ -69,7 +81,11 @@ export class WorkflowClient {
           if (attempt < maxRetries && isRetryableRunFailure(error)) continue;
           throw withRetryDetails(error, attemptTaskIds);
         }
-        return await readWorkflowStream(response, body as { task_id: string; last_chunk_id: string | null });
+        return await readWorkflowStream(
+          response,
+          body as { task_id: string; last_chunk_id: string | null },
+          async () => this.pollTaskResult(currentTaskId),
+        );
       } catch (error) {
         const cliError = toCliWorkflowError(error, currentTaskId);
         if (attempt < maxRetries && isRetryableRunFailure(cliError)) continue;
@@ -89,6 +105,67 @@ export class WorkflowClient {
     });
     if (!response.ok) throw cliWorkflowError('WORKFLOW_RUN', `Workflow detail failed: ${response.status}`, await response.text());
     return await response.json() as { id: string; artifact_id: string; variables?: Array<{ name?: string }>; user_input?: Array<{ name?: string }> };
+  }
+
+  async pollTaskResult(taskId: string): Promise<unknown[]> {
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.options.auth.token}`,
+      'user-id': this.options.auth.userId,
+    };
+    const deadline = Date.now() + DEFAULT_TIMEOUT_MS;
+    let lastKnownStatus = 'pending';
+    let lastKnownSummary = '';
+
+    while (Date.now() < deadline) {
+      try {
+        const remaining = Math.max(1_000, deadline - Date.now());
+        const response = await fetch(`${this.options.baseUrl}/api/v1/workflow/task/prev-tasks`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ task_id: taskId }),
+          signal: AbortSignal.timeout(Math.min(DETAIL_TIMEOUT_MS, remaining)),
+        });
+        if (!response.ok) {
+          throw cliWorkflowError('WORKFLOW_RUN', `Workflow task poll failed: ${response.status}`, await response.text(), { taskId });
+        }
+
+        const tasks = await response.json() as WorkflowTaskRecord[];
+        const task = pickWorkflowTask(tasks, taskId);
+        if (task) {
+          if (typeof task.status === 'string' && task.status.trim()) lastKnownStatus = task.status;
+          if (typeof task.run_summary === 'string' && task.run_summary.trim()) lastKnownSummary = task.run_summary;
+
+          if (task.status === 'succeeded') {
+            if (typeof task.dataflow_output !== 'string' || !task.dataflow_output.trim()) {
+              throw cliWorkflowError('WORKFLOW_RUN', 'Workflow task succeeded but dataflow_output is empty', `Task ID: ${taskId}`, { taskId });
+            }
+            return parseDataflowOutputContent(task.dataflow_output, taskId);
+          }
+
+          if (task.status === 'failed') {
+            throw cliWorkflowError(
+              'WORKFLOW_RUN',
+              task.meta?.error_message?.trim() || task.run_summary?.trim() || 'Workflow task failed',
+              `Task ID: ${taskId}`,
+              { taskId },
+            );
+          }
+        }
+      } catch (error) {
+        const cliError = toCliWorkflowError(error, taskId);
+        if (!isRetryablePollFailure(cliError) || Date.now() + TASK_POLL_INTERVAL_MS >= deadline) throw cliError;
+      }
+
+      await sleep(TASK_POLL_INTERVAL_MS);
+    }
+
+    throw cliWorkflowError(
+      'WORKFLOW_RUN',
+      'Workflow task polling timed out',
+      [`Task ID: ${taskId}`, `Last status: ${lastKnownStatus}`, lastKnownSummary].filter(Boolean).join(' | '),
+      { taskId },
+    );
   }
 }
 
@@ -151,7 +228,11 @@ function normalizePromptConfig(item: Record<string, unknown>) {
   return result;
 }
 
-async function readWorkflowStream(response: Response, body: { task_id: string; last_chunk_id: string | null }) {
+async function readWorkflowStream(
+  response: Response,
+  body: { task_id: string; last_chunk_id: string | null },
+  pollTaskResult: (() => Promise<unknown[]>) | undefined,
+) {
   const reader = response.body?.getReader();
   if (!reader) throw cliWorkflowError('WORKFLOW_RUN', 'Workflow stream is empty', `Task ID: ${body.task_id}`, { taskId: body.task_id });
   const decoder = new TextDecoder();
@@ -175,11 +256,18 @@ async function readWorkflowStream(response: Response, body: { task_id: string; l
         dataflowOutput.push(...parsed.data);
       } else if (parsed.type === 'failed') {
         throw cliWorkflowError('WORKFLOW_RUN', parsed.message, `Task ID: ${body.task_id}`, { taskId: body.task_id });
+      } else if (parsed.type === 'completed') {
+        if (sawOutputEvent) return dataflowOutput;
+        if (pollTaskResult) return await pollTaskResult();
+        throw cliWorkflowError('WORKFLOW_RUN', 'Workflow completed without any dataflow_output event', `Task ID: ${body.task_id}`, { taskId: body.task_id });
       }
     }
   }
 
-  if (!sawOutputEvent) throw cliWorkflowError('WORKFLOW_RUN', 'Workflow run did not return any dataflow_output event', `Task ID: ${body.task_id}`, { taskId: body.task_id });
+  if (!sawOutputEvent) {
+    if (pollTaskResult) return await pollTaskResult();
+    throw cliWorkflowError('WORKFLOW_RUN', 'Workflow run did not return any dataflow_output event', `Task ID: ${body.task_id}`, { taskId: body.task_id });
+  }
   return dataflowOutput;
 }
 
@@ -198,19 +286,12 @@ function parseWorkflowEvent(eventData: string, body: { task_id: string; last_chu
   if (parsed.event_type === 'workflow_failed' || parsed.event_type === 'action_failed') {
     return { type: 'failed' as const, message: JSON.stringify(parsed).slice(-800) };
   }
+  if (parsed.event_type === 'workflow_completed') {
+    return { type: 'completed' as const };
+  }
   if (parsed.event_type !== 'dataflow_output' || typeof parsed.content !== 'string') return null;
 
-  const parsedContent = JSON.parse(parsed.content);
-  const output = parsedContent.output;
-  if (!output || typeof output !== 'object') return null;
-  if (output.type === 'dataframe' && Array.isArray(output.data)) {
-    if (output.data.length === 0) throw cliWorkflowError('WORKFLOW_RUN', 'Workflow returned empty dataframe output', JSON.stringify(parsed).slice(-800), { taskId: body.task_id });
-    return { type: 'output' as const, data: output.data };
-  }
-  if (output.type === 'scalar') {
-    return { type: 'output' as const, data: [flattenScalarOutput(String(parsedContent.output_id ?? ''), output.data)] };
-  }
-  return null;
+  return { type: 'output' as const, data: parseDataflowOutputContent(parsed.content, body.task_id) };
 }
 
 function unwrapStreamPayload(payload: any): any {
@@ -253,10 +334,40 @@ function isRetryableRunFailure(error: CliError) {
   return retrySignals.some(signal => haystack.includes(signal));
 }
 
+function isRetryablePollFailure(error: CliError) {
+  const haystack = `${error.message}\n${error.hint ?? ''}`.toLowerCase();
+  const retrySignals = ['workflow task poll failed: 429', 'workflow task poll failed: 500', 'workflow task poll failed: 502', 'workflow task poll failed: 503', 'workflow task poll failed: 504', 'workflow request failed', 'connection', 'timeout', 'network'];
+  return retrySignals.some(signal => haystack.includes(signal));
+}
+
 function withRetryDetails(error: CliError, taskIds: string[]) {
   const details = [`Task IDs: ${taskIds.join(', ')}`];
   if (!error.hint?.includes('Task IDs:')) details.unshift(error.hint ?? '');
   return cliWorkflowError(error.code, error.message, details.filter(Boolean).join(' | '), { taskId: taskIds[taskIds.length - 1], taskIds, retryCount: Math.max(0, taskIds.length - 1) });
+}
+
+function parseDataflowOutputContent(content: string, taskId: string) {
+  const parsedContent = JSON.parse(content) as { output?: { type?: string; data?: unknown }; output_id?: unknown };
+  const output = parsedContent.output;
+  if (!output || typeof output !== 'object') return [];
+  if (output.type === 'dataframe' && Array.isArray(output.data)) {
+    if (output.data.length === 0) throw cliWorkflowError('WORKFLOW_RUN', 'Workflow returned empty dataframe output', content.slice(-800), { taskId });
+    return output.data;
+  }
+  if (output.type === 'scalar') {
+    return [flattenScalarOutput(String(parsedContent.output_id ?? ''), output.data)];
+  }
+  return [];
+}
+
+function pickWorkflowTask(tasks: WorkflowTaskRecord[], taskId: string) {
+  return tasks.find(task => task.id === taskId)
+    || tasks.find(task => task.meta?.root_task_id === taskId)
+    || tasks[0];
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function flattenScalarOutput(outputId: string, data: unknown) {
