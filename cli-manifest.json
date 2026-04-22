@@ -13040,6 +13040,43 @@
     "navigateBefore": "https://www.pixiv.net"
   },
   {
+    "site": "powerchina",
+    "name": "search",
+    "description": "搜索中国电建阳光采购公告",
+    "domain": "bid.powerchina.cn",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search keyword, e.g. \"procurement\""
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Number of results (max 50)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "content_type",
+      "title",
+      "publish_time",
+      "project_code",
+      "budget_or_limit",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "powerchina/search.js",
+    "sourceFile": "powerchina/search.js",
+    "navigateBefore": "https://bid.powerchina.cn"
+  },
+  {
     "site": "producthunt",
     "name": "browse",
     "description": "Best products in a Product Hunt category",
