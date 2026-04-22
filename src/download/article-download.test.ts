@@ -17,7 +17,10 @@ afterEach(() => {
   tempDirs.length = 0;
 });
 
-async function runAndRead(contentHtml: string): Promise<string> {
+async function runAndRead(
+  contentHtml: string,
+  opts: { cleanSelectors?: string[] } = {},
+): Promise<string> {
   const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'opencli-article-'));
   tempDirs.push(tempDir);
   const result = await downloadArticle({
@@ -26,6 +29,7 @@ async function runAndRead(contentHtml: string): Promise<string> {
   }, {
     output: tempDir,
     downloadImages: false,
+    ...(opts.cleanSelectors && { cleanSelectors: opts.cleanSelectors }),
   });
   expect(result[0].status).toBe('success');
   return fs.readFileSync(result[0].saved, 'utf8');
@@ -123,6 +127,44 @@ describe('downloadArticle', () => {
       expect(md).not.toMatch(/^\s*·\s*$/m);
       expect(md).toContain('top');
       expect(md).toContain('bottom');
+    });
+
+    it('strips page chrome (header / footer / nav / aside)', async () => {
+      const md = await runAndRead(
+        '<header><p>page-header-text</p></header>' +
+        '<nav><a href="/">home-link</a></nav>' +
+        '<p>article-body</p>' +
+        '<aside><p>sidebar-text</p></aside>' +
+        '<footer><p>page-footer-text</p></footer>',
+      );
+      expect(md).toContain('article-body');
+      expect(md).not.toContain('page-header-text');
+      expect(md).not.toContain('home-link');
+      expect(md).not.toContain('sidebar-text');
+      expect(md).not.toContain('page-footer-text');
+    });
+
+    it('cleanSelectors removes matching nodes before conversion', async () => {
+      const md = await runAndRead(
+        '<p>keep-me</p>' +
+        '<div class="vote-card">折叠卡</div>' +
+        '<section class="reward-panel">赞赏栏</section>' +
+        '<p>also-keep</p>',
+        { cleanSelectors: ['.vote-card', '.reward-panel'] },
+      );
+      expect(md).toContain('keep-me');
+      expect(md).toContain('also-keep');
+      expect(md).not.toContain('折叠卡');
+      expect(md).not.toContain('赞赏栏');
+    });
+
+    it('cleanSelectors silently ignores invalid selectors', async () => {
+      const md = await runAndRead(
+        '<p>survives</p><div class="x">and-this-too</div>',
+        { cleanSelectors: ['!!!not-a-valid-selector', '.missing'] },
+      );
+      expect(md).toContain('survives');
+      expect(md).toContain('and-this-too');
     });
   });
 });

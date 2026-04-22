@@ -74,6 +74,7 @@
     "url": "git+https://github.com/jackwener/opencli.git"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "js-yaml": "^4.1.0",

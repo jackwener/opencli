@@ -49,6 +49,12 @@ export interface ArticleDownloadOptions {
   detectImageExt?: (url: string) => string;
   /** Custom frontmatter labels (default: Chinese labels) */
   frontmatterLabels?: FrontmatterLabels;
+  /**
+   * Extra CSS selectors removed from the article before Turndown conversion.
+   * Use this to drop site-specific noise the adapter can't always trim upstream
+   * (e.g. zhihu 折叠卡, weixin 赞赏栏, wiki infobox).
+   */
+  cleanSelectors?: string[];
 }
 
 export interface ArticleDownloadResult {
@@ -74,13 +80,20 @@ const DEFAULT_LABELS: Required<FrontmatterLabels> = {
 // adapter's contentHtml extraction misses one, CSS / scripts / widget markup
 // ends up inline in the .md. Strip them unconditionally at the converter level.
 // `svg` is not in HTMLElementTagNameMap, so we type-narrow manually.
+// `header/footer/nav/aside` cover page chrome that adapters occasionally
+// forget to trim — the article's own title/author/publishTime are supplied
+// as separate fields on ArticleData, so duplicated nodes are redundant.
 const STRIPPED_TAGS: Array<keyof HTMLElementTagNameMap> = [
   'script', 'style', 'noscript',
   'iframe', 'canvas',
   'form', 'button', 'dialog',
+  'header', 'footer', 'nav', 'aside',
 ];
 
-function createTurndown(configure?: (td: TurndownService) => void): TurndownService {
+function createTurndown(
+  configure?: (td: TurndownService) => void,
+  cleanSelectors?: string[],
+): TurndownService {
   const td = new TurndownService({
     headingStyle: 'atx',
     codeBlockStyle: 'fenced',
@@ -114,6 +127,24 @@ function createTurndown(configure?: (td: TurndownService) => void): TurndownServ
     },
     replacement: () => '',
   });
+  // Per-adapter dirty-node removal. Adapters know their site's specific noise
+  // (zhihu 折叠卡, weixin 赞赏栏, wiki 折叠 infobox …); we keep the default set
+  // empty so the generic converter stays untouched.
+  if (cleanSelectors && cleanSelectors.length > 0) {
+    const selectorList = cleanSelectors.join(', ');
+    td.addRule('cleanSelectors', {
+      filter: (node) => {
+        const match = (node as Element).matches;
+        if (typeof match !== 'function') return false;
+        try {
+          return match.call(node, selectorList);
+        } catch {
+          return false;
+        }
+      },
+      replacement: () => '',
+    });
+  }
   if (configure) configure(td);
   return td;
 }
@@ -122,8 +153,9 @@ function convertToMarkdown(
   contentHtml: string,
   codeBlocks: Array<{ lang: string; code: string }>,
   configure?: (td: TurndownService) => void,
+  cleanSelectors?: string[],
 ): string {
-  const td = createTurndown(configure);
+  const td = createTurndown(configure, cleanSelectors);
   let md = td.turndown(contentHtml);
 
   // Restore code block placeholders
@@ -241,6 +273,7 @@ export async function downloadArticle(
     configureTurndown,
     detectImageExt,
     frontmatterLabels,
+    cleanSelectors,
   } = options;
 
   const labels = { ...DEFAULT_LABELS, ...frontmatterLabels };
@@ -272,6 +305,7 @@ export async function downloadArticle(
     data.contentHtml,
     data.codeBlocks || [],
     configureTurndown,
+    cleanSelectors,
   );
 
   // Prepare output directory
