@@ -15,7 +15,7 @@
  */
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { downloadArticle } from '@jackwener/opencli/download/article-download';
-cli({
+const command = cli({
     site: 'web',
     name: 'read',
     description: 'Fetch any web page and export as Markdown',
@@ -219,3 +219,4 @@ cli({
         return kwargs.stdout ? null : result;
     },
 });
+export const __test__ = { command };

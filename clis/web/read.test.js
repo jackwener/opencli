@@ -7,13 +7,11 @@ const { mockDownloadArticle } = vi.hoisted(() => ({
 vi.mock('@jackwener/opencli/download/article-download', () => ({
     downloadArticle: mockDownloadArticle,
 }));
-vi.mock('@jackwener/opencli/registry', async () => await vi.importActual('../../src/registry.js'));
 
-import { getRegistry } from '../../src/registry.js';
-import './read.js';
+const { __test__ } = await import('./read.js');
 
 describe('web/read stdout behavior', () => {
-    const read = getRegistry().get('web/read');
+    const read = __test__.command;
     const page = {
         goto: vi.fn().mockResolvedValue(undefined),
         wait: vi.fn().mockResolvedValue(undefined),

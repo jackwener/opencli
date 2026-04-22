@@ -81,7 +81,7 @@ describe('article extract → markdown e2e fixtures', () => {
     expect(md).not.toContain('Standard file extension');
   });
 
-  it('extracts a Deno blog fixture and strips embedded iframe chrome from markdown', async () => {
+  it('extracts a Deno blog fixture, preserves embedded iframes as markdown links, and drops page chrome', async () => {
     const url = 'https://deno.com/blog/v2.0';
     const article = runExtract(loadFixture('deno-v2.html'), url);
     expect(article?.source).toBe('readability');
@@ -91,7 +91,7 @@ describe('article extract → markdown e2e fixtures', () => {
     const md = await renderMarkdown(article, url);
     expect(md).toContain('## Announcing Deno 2');
     expect(md).toContain('The web is humanity’s largest software platform');
-    expect(md).not.toContain('youtube.com/embed');
+    expect(md).toMatch(/\]\(https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\/[^)]+\)/);
     expect(md).not.toContain('Skip to main content');
   });
 
