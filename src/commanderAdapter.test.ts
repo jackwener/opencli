@@ -80,7 +80,6 @@ describe('commanderAdapter arg passing', () => {
     expect(mockExecuteCommand).toHaveBeenCalled();
     const kwargs = mockExecuteCommand.mock.calls[0][1];
     expect(kwargs.__opencliOptionSources).toMatchObject({
-      'dry-run': 'default',
       'prepare-only': 'cli',
     });
   });
