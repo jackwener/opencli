@@ -3,6 +3,7 @@ import {
   UIVERSE_BASE_URL,
   parseComponentInput,
   parseHtmlRootSignature,
+  getPreviewFallbackTags,
   inferLanguage,
   getCodeLength,
 } from './_shared.js';
@@ -37,6 +38,12 @@ describe('uiverse shared helpers', () => {
       classes: ['theme-switch', 'primary'],
     });
     expect(parseHtmlRootSignature('')).toEqual({ tag: null, id: null, classes: [] });
+  });
+
+  it('uses broader preview fallback tags for input roots', () => {
+    expect(getPreviewFallbackTags({ tag: 'input' })).toEqual(['input', 'label', 'button', 'a', 'div']);
+    expect(getPreviewFallbackTags({ tag: 'label' })).toEqual(['label']);
+    expect(getPreviewFallbackTags({ tag: null })).toEqual(['label', 'button', 'a', 'div']);
   });
 
   it('infers the language from target and metadata', () => {
