@@ -133,7 +133,12 @@ cli({
             });
             if (videosResp.ok) {
               const videosData = await videosResp.json();
-              const richGrid = videosData.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.richGridRenderer?.contents || [];
+              // The InnerTube response includes ALL tabs (Home/Videos/Shorts/...),
+              // not just the requested one. Pick the selected tab — assuming
+              // tabs[0] silently misreads Home (empty) for channels that surface
+              // multiple tabs in the response.
+              const respTabs = videosData.contents?.twoColumnBrowseResultsRenderer?.tabs || [];
+              const richGrid = respTabs.find(t => t.tabRenderer?.selected)?.tabRenderer?.content?.richGridRenderer?.contents || [];
               for (const item of richGrid) {
                 if (recentVideos.length >= limit) break;
                 const v = item.richItemRenderer?.content?.videoRenderer;
