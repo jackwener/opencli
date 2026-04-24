@@ -1,3 +1,4 @@
+import { AuthRequiredError, EmptyResultError } from '@jackwener/opencli/errors';
 import { cli, Strategy } from '@jackwener/opencli/registry';
 
 const WEIXIN_DOMAIN = 'mp.weixin.qq.com';
@@ -21,7 +22,7 @@ export const draftsCommand = cli({
         await page.wait(3);
         const token = await page.evaluate(`(window.location.href.match(/token=(\\d+)/)||[])[1]`);
         if (!token) {
-            return [{ Index: 0, Title: 'Not logged in', Time: '' }];
+            throw new AuthRequiredError(WEIXIN_DOMAIN, '微信公众号草稿箱需要已登录的 mp.weixin.qq.com 会话');
         }
 
         await page.goto(`https://mp.weixin.qq.com/cgi-bin/appmsg?begin=0&count=${kwargs.limit}&type=77&action=list_card&token=${token}&lang=zh_CN`);
@@ -52,15 +53,11 @@ export const draftsCommand = cli({
                     results.push({ Index: ++idx, Title: title, Time: time });
                 }
             });
-            if (results.length > 0) return results;
-
-            var allText = document.body.innerText;
-            var lines = allText.split('\\n').filter(function(l) { return l.trim().length > 2 && l.trim().length < 80; });
-            return lines.slice(0, 5).map(function(l, i) { return { Index: i+1, Title: l.trim(), Time: '' }; });
+            return results;
         })()`);
 
         if (!drafts || drafts.length === 0) {
-            return [{ Index: 0, Title: 'No drafts found', Time: '' }];
+            throw new EmptyResultError('weixin drafts', 'No structured drafts found in the current Weixin Official Account backend');
         }
 
         return drafts.slice(0, kwargs.limit);
