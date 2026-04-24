@@ -16683,7 +16683,8 @@
     ],
     "type": "js",
     "modulePath": "uiverse/code.js",
-    "sourceFile": "uiverse/code.js"
+    "sourceFile": "uiverse/code.js",
+    "navigateBefore": "https://uiverse.io"
   },
   {
     "site": "uiverse",
@@ -16723,7 +16724,8 @@
     ],
     "type": "js",
     "modulePath": "uiverse/preview.js",
-    "sourceFile": "uiverse/preview.js"
+    "sourceFile": "uiverse/preview.js",
+    "navigateBefore": "https://uiverse.io"
   },
   {
     "site": "v2ex",
