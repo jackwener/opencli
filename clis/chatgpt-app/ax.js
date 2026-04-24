@@ -75,6 +75,10 @@ func s(_ el: AXUIElement, _ name: String) -> String? {
     return nil
 }
 
+func isEnabled(_ el: AXUIElement) -> Bool {
+    (attr(el, kAXEnabledAttribute as String) as? Bool) ?? true
+}
+
 func children(_ el: AXUIElement) -> [AXUIElement] {
     (attr(el, kAXChildrenAttribute as String) as? [AnyObject] ?? []).map { $0 as! AXUIElement }
 }
@@ -82,16 +86,29 @@ func children(_ el: AXUIElement) -> [AXUIElement] {
 func collectEditableInputs(_ el: AXUIElement, into out: inout [AXUIElement], depth: Int = 0) {
     guard depth < 25 else { return }
     let role = s(el, kAXRoleAttribute as String) ?? ""
-    if role == kAXTextAreaRole as String || role == kAXTextFieldRole as String {
+    if (role == kAXTextAreaRole as String || role == kAXTextFieldRole as String) && isEnabled(el) {
         out.append(el)
     }
     for c in children(el) { collectEditableInputs(c, into: &out, depth: depth + 1) }
 }
 
+func isInput(_ el: AXUIElement) -> Bool {
+    let role = s(el, kAXRoleAttribute as String) ?? ""
+    return role == kAXTextAreaRole as String || role == kAXTextFieldRole as String
+}
+
+func focusedInput(_ axApp: AXUIElement) -> AXUIElement? {
+    guard let focused = attr(axApp, kAXFocusedUIElementAttribute as String) as! AXUIElement? else {
+        return nil
+    }
+    return isInput(focused) && isEnabled(focused) ? focused : nil
+}
+
 func findByDescriptions(_ el: AXUIElement, _ targets: [String], depth: Int = 0) -> AXUIElement? {
     guard depth < 25 else { return nil }
+    let role = s(el, kAXRoleAttribute as String) ?? ""
     let desc = s(el, kAXDescriptionAttribute as String) ?? ""
-    if targets.contains(desc) { return el }
+    if role == "AXButton" && targets.contains(desc) && isEnabled(el) { return el }
     for c in children(el) {
         if let found = findByDescriptions(c, targets, depth: depth + 1) { return found }
     }
@@ -122,7 +139,7 @@ guard let win = attr(axApp, kAXFocusedWindowAttribute as String) as! AXUIElement
 
 var inputs: [AXUIElement] = []
 collectEditableInputs(win, into: &inputs)
-guard let input = inputs.last else {
+guard let input = focusedInput(axApp) ?? inputs.last else {
     fputs("Could not find editable input area\\n", stderr)
     exit(1)
 }
@@ -134,12 +151,32 @@ guard AXUIElementSetAttributeValue(input, kAXValueAttribute as CFString, text as
 
 Thread.sleep(forTimeInterval: 0.2)
 
+guard s(input, kAXValueAttribute as String) == text else {
+    fputs("Failed to verify input value after AX set\\n", stderr)
+    exit(1)
+}
+
 guard let sendButton = findByDescriptions(win, ["发送", "Send"]) else {
     fputs("Could not find send button\\n", stderr)
     exit(1)
 }
 
 press(sendButton)
+
+var submitted = false
+for _ in 0..<15 {
+    Thread.sleep(forTimeInterval: 0.1)
+    if s(input, kAXValueAttribute as String) != text {
+        submitted = true
+        break
+    }
+}
+
+guard submitted else {
+    fputs("Prompt did not leave input after pressing send\\n", stderr)
+    exit(1)
+}
+
 print("Sent")
 `;
 const AX_MODEL_SCRIPT = `
@@ -340,3 +377,7 @@ export function getVisibleChatMessages() {
         .map((item) => item.replace(/[\uFFFC\u200B-\u200D\uFEFF]/g, '').trim())
         .filter((item) => item.length > 0);
 }
+export const __test__ = {
+    AX_SEND_SCRIPT,
+    AX_GENERATING_SCRIPT,
+};
