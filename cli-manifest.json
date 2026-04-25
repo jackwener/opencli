@@ -7393,6 +7393,86 @@
   },
   {
     "site": "google-scholar",
+    "name": "cite",
+    "description": "Get citation for a Google Scholar paper",
+    "domain": "scholar.google.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Paper title to search for"
+      },
+      {
+        "name": "style",
+        "type": "str",
+        "default": "bibtex",
+        "required": false,
+        "help": "Citation format",
+        "choices": [
+          "bibtex",
+          "endnote",
+          "refman",
+          "refworks"
+        ]
+      },
+      {
+        "name": "index",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Which search result to cite (1-based)"
+      }
+    ],
+    "columns": [
+      "title",
+      "format",
+      "citation"
+    ],
+    "type": "js",
+    "modulePath": "google-scholar/cite.js",
+    "sourceFile": "google-scholar/cite.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "google-scholar",
+    "name": "profile",
+    "description": "View a Google Scholar author profile",
+    "domain": "scholar.google.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "author",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Author name or Scholar user ID (e.g. JicYPdAAAAAJ)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Max papers to show (max 20)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "cited",
+      "year"
+    ],
+    "type": "js",
+    "modulePath": "google-scholar/profile.js",
+    "sourceFile": "google-scholar/profile.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "google-scholar",
     "name": "search",
     "description": "Google Scholar 学术搜索",
     "domain": "scholar.google.com",
