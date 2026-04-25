@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.7.8](https://github.com/jackwener/opencli/compare/v1.7.7...v1.7.8) (2026-04-25)
+
+### Features
+
+* **powerchina** — procurement search adapter. ([#1155](https://github.com/jackwener/opencli/issues/1155))
+* **toutiao** — `articles` adapter for 头条号 creator dashboard. ([#1148](https://github.com/jackwener/opencli/issues/1148))
+* **weixin** — `create-draft` and `drafts` commands for Official Account. ([#1095](https://github.com/jackwener/opencli/issues/1095))
+
+### Bug Fixes
+
+* **chatgpt-app** — use AX send flow and support zh-CN generating state. ([#1135](https://github.com/jackwener/opencli/issues/1135))
+* **deepseek** — fix history titles and resume conversation on `ask`. ([#1153](https://github.com/jackwener/opencli/issues/1153))
+* **amazon** — fall back discussion to product page. ([#1154](https://github.com/jackwener/opencli/issues/1154))
+* **sinafinance** — match stock symbol in addition to name. ([#1158](https://github.com/jackwener/opencli/issues/1158))
+
+### Chores
+
+* **extension** — restore pre-1.6.8 neon terminal icons. ([#1177](https://github.com/jackwener/opencli/issues/1177))
+
 ## [1.7.7](https://github.com/jackwener/opencli/compare/v1.7.6...v1.7.7) (2026-04-23)
 
 ### Features
