@@ -59,6 +59,12 @@ Key rules:
 
 The daemon manages the WebSocket connection between your CLI commands and the Chrome extension. The extension executes JavaScript in the context of web pages, with access to the logged-in session.
 
+## Changing the Daemon Port
+
+If you need to run multiple `opencli` profiles simultaneously or avoid port conflicts, you can change the default `19825` port:
+1. Export the `OPENCLI_DAEMON_PORT` environment variable before running CLI commands (e.g., `export OPENCLI_DAEMON_PORT=19826`).
+2. Open the Chrome Extension popup, enter the matching port, and click **Save**. The extension will immediately reconnect.
+
 ## Daemon Lifecycle
 
 The daemon auto-starts on first browser command and stays alive persistently.
