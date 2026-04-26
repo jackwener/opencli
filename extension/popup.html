@@ -76,6 +76,18 @@
   <div class="hint" id="hint">
     This is normal. The extension connects automatically when you run any <code>opencli</code> command.
   </div>
+  
+  <div class="settings" style="margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: #f9f9f9; border: 1px solid #eaeaea;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <label for="portInput" style="font-size: 13px; font-weight: 500;">Daemon Port</label>
+      <div style="display: flex; gap: 6px;">
+        <input type="number" id="portInput" placeholder="19825" style="width: 65px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; text-align: center;" />
+        <button id="saveBtn" style="padding: 4px 10px; border: none; background: #007aff; color: #fff; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">Save</button>
+      </div>
+    </div>
+    <div id="portError" style="color: #ff3b30; font-size: 11px; margin-top: 6px; display: none;">Invalid port (1024-65535)</div>
+  </div>
+
   <div class="footer">
     <a href="https://github.com/jackwener/opencli" target="_blank">Documentation</a>
   </div>

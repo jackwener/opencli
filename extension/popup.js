@@ -23,3 +23,30 @@ chrome.runtime.sendMessage({ type: 'getStatus' }, (resp) => {
     hint.style.display = 'block';
   }
 });
+
+const portInput = document.getElementById('portInput');
+const saveBtn = document.getElementById('saveBtn');
+const portError = document.getElementById('portError');
+
+chrome.storage.local.get(['daemonPort'], (res) => {
+  if (res.daemonPort) {
+    portInput.value = res.daemonPort;
+  }
+});
+
+saveBtn.addEventListener('click', () => {
+  const port = parseInt(portInput.value, 10);
+  if (isNaN(port) || port <= 1024 || port > 65535) {
+    portError.style.display = 'block';
+    return;
+  }
+  portError.style.display = 'none';
+  saveBtn.textContent = 'Saving...';
+  
+  chrome.storage.local.set({ daemonPort: port }, () => {
+    saveBtn.textContent = 'Saved!';
+    setTimeout(() => {
+      saveBtn.textContent = 'Save';
+    }, 1500);
+  });
+});

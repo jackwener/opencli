@@ -8,7 +8,7 @@
 declare const __OPENCLI_COMPAT_RANGE__: string;
 
 import type { Command, Result } from './protocol';
-import { DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
+import { DAEMON_PORT, DAEMON_HOST, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
 import * as executor from './cdp';
 import * as identity from './identity';
 
@@ -44,18 +44,39 @@ console.error = (...args: unknown[]) => { _origError(...args); forwardLog('error
  * JS handler can intercept it.  By keeping the probe inside connect() every
  * call site remains unchanged and the guard can never be accidentally skipped.
  */
+async function getDaemonWsUrl(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['daemonPort'], (res) => {
+      const port = res?.daemonPort || DAEMON_PORT;
+      resolve(`ws://${DAEMON_HOST}:${port}/ext`);
+    });
+  });
+}
+
+async function getDaemonPingUrl(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['daemonPort'], (res) => {
+      const port = res?.daemonPort || DAEMON_PORT;
+      resolve(`http://${DAEMON_HOST}:${port}/ping`);
+    });
+  });
+}
+
 async function connect(): Promise<void> {
   if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
 
+  const pingUrl = await getDaemonPingUrl();
+  const wsUrl = await getDaemonWsUrl();
+
   try {
-    const res = await fetch(DAEMON_PING_URL, { signal: AbortSignal.timeout(1000) });
+    const res = await fetch(pingUrl, { signal: AbortSignal.timeout(1000) });
     if (!res.ok) return; // unexpected response — not our daemon
   } catch {
     return; // daemon not running — skip WebSocket to avoid console noise
   }
 
   try {
-    ws = new WebSocket(DAEMON_WS_URL);
+    ws = new WebSocket(wsUrl);
   } catch {
     scheduleReconnect();
     return;
@@ -283,6 +304,20 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keepalive') void connect();
 });
+
+if (chrome.storage) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.daemonPort) {
+      console.log(`[opencli] Daemon port changed to ${changes.daemonPort.newValue}, reconnecting...`);
+      if (ws) {
+        ws.close();
+      } else {
+        reconnectAttempts = 0;
+        void connect();
+      }
+    }
+  });
+}
 
 // ─── Popup status API ───────────────────────────────────────────────
 
