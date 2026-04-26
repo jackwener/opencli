@@ -74,14 +74,18 @@ export async function sendMessage(page, prompt) {
         document.execCommand('insertText', false, ${promptJson});
         await new Promise(r => setTimeout(r, 800));
 
-        const btns = document.querySelectorAll('div[role="button"]');
-        for (const btn of btns) {
-            if (btn.getAttribute('aria-disabled') === 'false') {
-                const svgs = btn.querySelectorAll('svg');
-                if (svgs.length > 0 && btn.closest('div')?.querySelector('textarea')) {
-                    btn.click();
-                    return { ok: true };
-                }
+        // Find the send button: last non-toggle button in the textarea's container
+        var container = box.parentElement;
+        while (container && !container.querySelector('div[role="button"]')) {
+            container = container.parentElement;
+        }
+        if (container) {
+            var btns = container.querySelectorAll('div[role="button"]:not(.ds-toggle-button)');
+            var sendBtn = btns[btns.length - 1];
+            if (sendBtn && sendBtn.getAttribute('aria-disabled') === 'false'
+                && sendBtn.querySelectorAll('svg').length > 0) {
+                sendBtn.click();
+                return { ok: true };
             }
         }
 
@@ -341,7 +345,8 @@ export async function sendWithFile(page, filePath, prompt) {
             }
 
             inp.files = dt.files;
-            inp[propsKey].onChange({ target: { files: dt.files } });
+            // Use inp.files, not dt.files; assignment transfers ownership
+            inp[propsKey].onChange({ target: { files: inp.files } });
             return { ok: true };
         })()`);
         if (fallbackResult && !fallbackResult.ok) return fallbackResult;
@@ -349,6 +354,23 @@ export async function sendWithFile(page, filePath, prompt) {
 
     const ready = await waitForFilePreview(page, fileName);
     if (!ready) return { ok: false, reason: 'file preview did not appear' };
+
+    // File preview appears immediately but send button stays disabled until
+    // the server upload finishes. Wait for it.
+    for (let tick = 0; tick < 15; tick++) {
+        const enabled = await page.evaluate(`(() => {
+            var box = document.querySelector('${TEXTAREA_SELECTOR}');
+            if (!box) return false;
+            var c = box.parentElement;
+            while (c && !c.querySelector('div[role="button"]')) c = c.parentElement;
+            if (!c) return false;
+            var btns = c.querySelectorAll('div[role="button"]:not(.ds-toggle-button)');
+            var last = btns[btns.length - 1];
+            return last && last.getAttribute('aria-disabled') === 'false';
+        })()`);
+        if (enabled) break;
+        await page.wait(1);
+    }
 
     return sendMessage(page, prompt);
 }

@@ -107,9 +107,10 @@ describe('deepseek sendWithFile', () => {
       setFileInput: vi.fn().mockResolvedValue(undefined),
       wait: vi.fn().mockResolvedValue(undefined),
       evaluate: vi.fn()
-        .mockResolvedValueOnce(undefined)
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce({ ok: true }),
+        .mockResolvedValueOnce(undefined)    // sidebar collapse
+        .mockResolvedValueOnce(true)         // waitForFilePreview
+        .mockResolvedValueOnce(true)         // send button enabled check
+        .mockResolvedValueOnce({ ok: true }), // sendMessage
     };
 
     const result = await sendWithFile(page, filePath, 'summarize this');
