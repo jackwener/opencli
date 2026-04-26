@@ -420,84 +420,15 @@ function detectDoubaoVerificationScript() {
 function clickSendButtonScript() {
     return `
     (() => {
-      ${buildDoubaoComposerLocatorScript()}
-      const composer = findComposer();
-      if (!(composer instanceof HTMLElement)) return false;
+      const sendBtn = document.querySelector('button#flow-end-msg-send');
+      if (!sendBtn) return false;
 
-      const composerRect = composer.getBoundingClientRect();
-      const rootCandidates = [
-        composer.closest('form'),
-        composer.closest('[role="form"]'),
-        composer.closest('[data-testid="chat_input"]'),
-        composer.closest('.chat-input'),
-        composer.parentElement,
-        composer.parentElement?.parentElement,
-      ].filter(Boolean);
+      const disabled = sendBtn.getAttribute('disabled') !== null
+        || sendBtn.getAttribute('aria-disabled') === 'true';
+      if (disabled) return false;
 
-      const seen = new Set();
-      const buttons = [];
-      for (const root of rootCandidates) {
-        root.querySelectorAll('button, [role="button"]').forEach((node) => {
-          if (!(node instanceof HTMLElement)) return;
-          if (seen.has(node)) return;
-          seen.add(node);
-          buttons.push(node);
-        });
-      }
-
-      const submitPattern = /send|发送|提交|发消息/i;
-      const excludedPattern = /新对话|new chat|快速|视频生成|深入研究|图像生成|帮我写作|音乐生成|更多|上传|upload|麦克风|microphone|模式|mode|工具|tools|设置|settings|云盘|history|历史/i;
-      let bestButton = null;
-      let bestScore = -Infinity;
-
-      for (const button of buttons) {
-        if (!isVisible(button)) continue;
-        const disabled = button.getAttribute('disabled') !== null
-          || button.getAttribute('aria-disabled') === 'true';
-        if (disabled) continue;
-
-        const text = (button.innerText || button.textContent || '').trim();
-        const aria = (button.getAttribute('aria-label') || '').trim();
-        const title = (button.getAttribute('title') || '').trim();
-        const className = String(button.className || '');
-        const haystack = [text, aria, title].join(' ').trim();
-        if (excludedPattern.test(haystack)) continue;
-
-        const rect = button.getBoundingClientRect();
-        const dx = rect.left - composerRect.right;
-        const dy = Math.abs((rect.top + rect.height / 2) - (composerRect.top + composerRect.height / 2));
-        const distancePenalty = Math.abs(dx) + dy;
-        const isSubmitLike = submitPattern.test(haystack)
-          || button.getAttribute('type') === 'submit'
-          || className.includes('bg-dbx-text-highlight')
-          || className.includes('bg-dbx-fill-highlight')
-          || className.includes('text-dbx-text-static-white-primary');
-        if (!isSubmitLike) continue;
-        if (dx < -80 || dx > 280) continue;
-        if (dy > 140) continue;
-
-        let score = -distancePenalty;
-        if (submitPattern.test(haystack)) score += 5000;
-        if (button.getAttribute('type') === 'submit') score += 1200;
-        if (button.closest('.chat-input-button')) score += 1200;
-        if (className.includes('bg-dbx-text-highlight')) score += 600;
-        if (className.includes('bg-dbx-fill-highlight')) score += 600;
-        if (className.includes('text-dbx-text-static-white-primary')) score += 400;
-        if (dx >= -40 && dx <= 240) score += 120;
-        if (rect.left >= composerRect.left - 40) score += 40;
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestButton = button;
-        }
-      }
-
-      if (bestButton && bestScore >= 200) {
-        bestButton.click();
-        return true;
-      }
-
-      return false;
+      sendBtn.click();
+      return true;
     })()
   `;
 }
