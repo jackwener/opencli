@@ -63,7 +63,7 @@ function getTranscriptLinesScript() {
       const stopLines = new Set([
         '豆包',
         '新对话',
-        '内容由豆包 AI 生成',
+        '内容由豆包 AI 生成，请仔细甄别',
         'AI 创作',
         '云盘',
         '更多',
@@ -75,6 +75,8 @@ function getTranscriptLinesScript() {
         'PPT 生成',
         '图像生成',
         '帮我写作',
+        '请仔细甄别',
+        '下载电脑版',
       ]);
 
       const noisyPatterns = [
@@ -88,7 +90,7 @@ function getTranscriptLinesScript() {
 
       const transcriptText = clean(root.innerText || root.textContent || '')
         .replace(/新对话/g, '\\n')
-        .replace(/内容由豆包 AI 生成/g, '\\n')
+        .replace(/内容由豆包 AI 生成，请仔细甄别/g, '\\n')
         .replace(/在此处拖放文件/g, '\\n')
         .replace(/文件数量：[^\\n]*/g, '')
         .replace(/文件类型：[^\\n]*/g, '');
@@ -144,12 +146,20 @@ function getTurnsScript() {
         if (
           root.matches('[data-testid="send_message"], [class*="send-message"]')
           || root.querySelector('[data-testid="send_message"], [class*="send-message"]')
+          || root.matches('[class*="bg-g-send-msg-bubble"]')
+          ||
+          root.querySelector('[class*="bg-g-send-msg-bubble"]')
+          || root.querySelector('[data-foundation-type="send-message-action-bar"]')
         ) {
           return 'User';
         }
         if (
           root.matches('[data-testid="receive_message"], [data-testid*="receive_message"], [class*="receive-message"]')
           || root.querySelector('[data-testid="receive_message"], [data-testid*="receive_message"], [class*="receive-message"]')
+          || root.matches('[class*="bg-g-receive-msg-bubble"]')
+          ||
+          root.querySelector('[class*="bg-g-receive-msg-bubble"]')
+          || root.querySelector('[data-foundation-type="receive-message-action-bar"]')
         ) {
           return 'Assistant';
         }
@@ -163,6 +173,10 @@ function getTurnsScript() {
         '[data-testid*="message_content"]',
         '[class*="message-text"]',
         '[class*="message-content"]',
+        '[class*="bg-g-send-msg-bubble"]',
+        '[class*="bg-g-receive-msg-bubble"]',
+        '.flow-markdown-body',
+        '[class*="bubble"]',
       ];
       const messageImageSelector = messageTextSelectors.map((s) => s + ' img').join(', ');
 
@@ -205,14 +219,30 @@ function getTurnsScript() {
         return text ? text + '\\n' + imageLines.join('\\n') : imageLines.join('\\n');
       };
 
-      const messageList = document.querySelector('[data-testid="message-list"]');
+      const messageList = document.querySelector('[class*="message-list-S2Fv2S"], .container-PvPoAn, .scroll-view-OEiNXD, [data-testid="message-list"]');
       if (!messageList) return [];
 
-      const unionRoots = Array.from(messageList.querySelectorAll('[data-testid="union_message"]'))
-        .filter((el) => isVisible(el));
-      const blockRoots = Array.from(messageList.querySelectorAll('[data-testid="message-block-container"]'))
-        .filter((el) => isVisible(el) && !el.closest('[data-testid="union_message"]'));
-      const roots = (unionRoots.length > 0 ? unionRoots : blockRoots)
+      const itemSelectors = [
+        '[class*="item-kDun2N"]',
+        '[data-testid="union_message"]',
+        '[data-testid="message-block-container"]',
+        '[data-message-id]',
+        '[class*="bg-g-send-msg-bubble"]',
+        '[class*="bg-g-receive-msg-bubble"]',
+      ];
+
+      const allRoots = [];
+      const seen = new Set();
+      for (const sel of itemSelectors) {
+        messageList.querySelectorAll(sel).forEach((el) => {
+          if (!seen.has(el)) {
+            seen.add(el);
+            allRoots.push(el);
+          }
+        });
+      }
+      const roots = allRoots
+        .filter((el) => isVisible(el) && !el.closest('script, style, noscript'))
         .filter((el, index, items) => !items.some((other, otherIndex) => otherIndex !== index && other.contains(el)));
 
       const turns = roots
@@ -230,11 +260,11 @@ function getTurnsScript() {
       });
 
       const deduped = [];
-      const seen = new Set();
+      const dedupedSeen = new Set();
       for (const turn of turns) {
         const key = turn.role + '::' + turn.text;
-        if (seen.has(key)) continue;
-        seen.add(key);
+        if (dedupedSeen.has(key)) continue;
+        dedupedSeen.add(key);
         deduped.push({ Role: turn.role, Text: turn.text });
       }
 
@@ -1086,6 +1116,8 @@ export const __test__ = {
     clickSendButtonScript,
     composerStateScript,
     detectDoubaoVerificationScript,
+    getTurnsScript,
+    getTranscriptLinesScript,
 };
 export async function startNewDoubaoChat(page) {
     await ensureDoubaoChatPage(page);

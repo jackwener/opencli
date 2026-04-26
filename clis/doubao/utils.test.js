@@ -144,6 +144,25 @@ describe('doubao send strategy', () => {
         await expect(sendDoubaoMessage(page, '你好')).rejects.toBeInstanceOf(CommandExecutionError);
     });
 });
+describe('doubao receive strategy', () => {
+    it('keeps both the new skin selectors and the older structural fallbacks in the turns script', () => {
+        const turnsScript = __test__.getTurnsScript();
+        expect(turnsScript).toContain('[class*="message-list-S2Fv2S"]');
+        expect(turnsScript).toContain('.container-PvPoAn');
+        expect(turnsScript).toContain('[data-testid="message-list"]');
+        expect(turnsScript).toContain('[class*="bg-g-receive-msg-bubble"]');
+        expect(turnsScript).toContain('[data-testid="receive_message"]');
+        expect(turnsScript).toContain('[data-foundation-type="receive-message-action-bar"]');
+        expect(turnsScript).toContain('[data-testid="union_message"]');
+        expect(turnsScript).toContain('[data-testid="message-block-container"]');
+    });
+
+    it('extends transcript-noise cleanup for the current zh-CN chrome copy', () => {
+        const transcriptScript = __test__.getTranscriptLinesScript();
+        expect(transcriptScript).toContain('请仔细甄别');
+        expect(transcriptScript).toContain('下载电脑版');
+    });
+});
 describe('collectDoubaoTranscriptAdditions', () => {
     it('ignores landing-page capability chips that are not assistant content', () => {
         const before = ['older'];
