@@ -55,6 +55,41 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
 
   subCmd.addHelpText('after', formatRegistryHelpText(cmd));
 
+  // When a command has positional args, protect against dash-prefixed values
+  // (e.g. `opencli boss detail -123abc`) being misinterpreted as options.
+  // We override parseOptions to insert '--' before the first unrecognized
+  // dash-arg so Commander treats it as an operand.
+  if (positionalArgs.length > 0) {
+    const origParseOptions = subCmd.parseOptions.bind(subCmd);
+    subCmd.parseOptions = (argv: string[]) => {
+      if (!argv.includes('--')) {
+        const optFlags = new Set<string>();
+        for (const opt of subCmd.options) {
+          if (opt.short) optFlags.add(opt.short);
+          if (opt.long) optFlags.add(opt.long);
+        }
+        for (let i = 0; i < argv.length; i++) {
+          const a = argv[i];
+          if (a === '--') break;
+          if (a.startsWith('-') && optFlags.has(a)) {
+            // Known option — skip its value arg if it expects one
+            const opt = subCmd.options.find(
+              (o) => o.short === a || o.long === a,
+            );
+            if (opt && opt.required) i++;
+            continue;
+          }
+          if (a.startsWith('-')) {
+            // Unknown dash-arg in positional position — insert '--' sentinel
+            argv.splice(i, 0, '--');
+            break;
+          }
+        }
+      }
+      return origParseOptions(argv);
+    };
+  }
+
   subCmd.action(async (...actionArgs: unknown[]) => {
     const actionOpts = actionArgs[positionalArgs.length] ?? {};
     const optionsRecord = typeof actionOpts === 'object' && actionOpts !== null ? actionOpts as Record<string, unknown> : {};

@@ -307,6 +307,63 @@ describe('commanderAdapter default formats', () => {
   });
 });
 
+describe('commanderAdapter dash-prefixed positional args', () => {
+  const cmd: CliCommand = {
+    site: 'boss',
+    name: 'detail',
+    description: 'BOSS直聘查看职位详情',
+    browser: true,
+    args: [
+      { name: 'security-id', positional: true, required: true, help: 'Security ID from search results' },
+    ],
+    func: vi.fn(),
+  };
+
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockExecuteCommand.mockResolvedValue([]);
+    mockRenderOutput.mockReset();
+    delete process.env.OPENCLI_VERBOSE;
+    process.exitCode = undefined;
+  });
+
+  it('accepts a positional arg that starts with a dash', async () => {
+    const program = new Command();
+    const siteCmd = program.command('boss');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'boss', 'detail', '-123456abdc']);
+
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs['security-id']).toBe('-123456abdc');
+  });
+
+  it('accepts a dash-prefixed positional arg with options before it', async () => {
+    const program = new Command();
+    const siteCmd = program.command('boss');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'boss', 'detail', '-f', 'json', '-abc123']);
+
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs['security-id']).toBe('-abc123');
+  });
+
+  it('still works with normal (non-dash) positional args', async () => {
+    const program = new Command();
+    const siteCmd = program.command('boss');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'opencli', 'boss', 'detail', 'abc123']);
+
+    expect(mockExecuteCommand).toHaveBeenCalled();
+    const kwargs = mockExecuteCommand.mock.calls[0][1];
+    expect(kwargs['security-id']).toBe('abc123');
+  });
+});
+
 describe('commanderAdapter error envelope output', () => {
   const cmd: CliCommand = {
     site: 'xiaohongshu',
