@@ -47,6 +47,11 @@ export function noteIdToDate(url) {
     // Offset by UTC+8 (China Standard Time) so the date matches what XHS users see
     return new Date((ts + 8 * 3600) * 1000).toISOString().slice(0, 10);
 }
+export function stripXhsAuthorDateSuffix(value) {
+    const text = (value || '').replace(/\s+/g, ' ').trim();
+    const stripped = text.replace(/\s*(?:\d{1,2}天前|\d+小时前|\d+分钟前|\d+秒前|刚刚|昨天|前天|\d+周前|\d+个月前|\d{1,2}-\d{1,2}|\d{4}-\d{1,2}-\d{1,2})$/u, '').trim();
+    return stripped || text;
+}
 cli({
     site: 'xiaohongshu',
     name: 'search',
@@ -81,6 +86,7 @@ cli({
         };
 
         const cleanText = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+        const stripXhsAuthorDateSuffix = ${stripXhsAuthorDateSuffix.toString()};
 
         const results = [];
         const seen = new Set();
@@ -95,7 +101,7 @@ cli({
           let author = cleanText(nameEl?.textContent || '');
           if (!author && authorWrapEl) {
             const nameChild = authorWrapEl.querySelector('.name');
-            author = nameChild ? cleanText(nameChild.textContent || '') : cleanText(authorWrapEl.textContent || '').replace(/\d{1,2}天前|\d+小时前|\d+分钟前|\d+秒前|刚刚|昨天|前天|\d+周前|\d+个月前|\d{1,2}-\d{1,2}|\d{4}-\d{1,2}-\d{1,2}$/g, '').trim();
+            author = nameChild ? cleanText(nameChild.textContent || '') : stripXhsAuthorDateSuffix(authorWrapEl.textContent || '');
           }
           const likesEl = el.querySelector('.count, .like-count, .like-wrapper .count');
           // Prefer search_result link (preserves xsec_token) over generic /explore/ link
@@ -136,3 +142,6 @@ cli({
         }));
     },
 });
+export const __test__ = {
+    stripXhsAuthorDateSuffix,
+};

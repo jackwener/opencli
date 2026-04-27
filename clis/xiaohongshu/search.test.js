@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '@jackwener/opencli/registry';
-import { noteIdToDate } from './search.js';
+import { JSDOM } from 'jsdom';
+import { __test__, noteIdToDate } from './search.js';
 function createPageMock(evaluateResults) {
     const evaluate = vi.fn();
     for (const result of evaluateResults) {
@@ -126,6 +127,41 @@ describe('xiaohongshu search', () => {
         expect(page.goto).toHaveBeenCalledTimes(1);
         // Two evaluate calls: wait + extraction
         expect(page.evaluate).toHaveBeenCalledTimes(2);
+    });
+    it('separates fallback author text from appended relative date', async () => {
+        const cmd = getRegistry().get('xiaohongshu/search');
+        expect(cmd?.func).toBeTypeOf('function');
+        const dom = new JSDOM(`
+          <section class="note-item">
+            <a class="cover mask" href="/search_result/68e90be80000000004022e66?xsec_token=test-token"></a>
+            <div class="title">数字作者测试</div>
+            <a class="author" href="/user/profile/author123">
+              <span>数字3天前端</span><span>3天前</span>
+            </a>
+            <span class="count">8</span>
+          </section>
+        `, { url: 'https://www.xiaohongshu.com/search_result?keyword=test' });
+        const page = createPageMock([]);
+        page.evaluate.mockImplementationOnce(async () => 'content');
+        page.evaluate.mockImplementationOnce(async (script) => Function('document', `return (${script})`)(dom.window.document));
+
+        const result = await cmd.func(page, { query: '测试', limit: 1 });
+
+        expect(result[0]).toMatchObject({
+            title: '数字作者测试',
+            author: '数字3天前端',
+            likes: '8',
+            author_url: 'https://www.xiaohongshu.com/user/profile/author123',
+        });
+    });
+});
+describe('stripXhsAuthorDateSuffix', () => {
+    it('only strips trailing date suffixes and preserves date-like author text', () => {
+        expect(__test__.stripXhsAuthorDateSuffix('作者名 3天前')).toBe('作者名');
+        expect(__test__.stripXhsAuthorDateSuffix('作者名2026-04-01')).toBe('作者名');
+        expect(__test__.stripXhsAuthorDateSuffix('3天前端工程师')).toBe('3天前端工程师');
+        expect(__test__.stripXhsAuthorDateSuffix('刚刚好')).toBe('刚刚好');
+        expect(__test__.stripXhsAuthorDateSuffix('刚刚')).toBe('刚刚');
     });
 });
 describe('noteIdToDate (ObjectID timestamp parsing)', () => {
