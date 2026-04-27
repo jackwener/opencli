@@ -7,6 +7,23 @@
 - Ensure the opencli Browser Bridge extension is installed and **enabled** in `chrome://extensions`.
 - Run `opencli doctor` to diagnose connectivity.
 
+### "Multiple profiles connected. Pick one..."
+
+You have the Browser Bridge extension installed in more than one Chrome profile and no default has been set. Choose a profile in one of three ways:
+
+- Per-command: `opencli --profile <name> ...`
+- Per-shell: `export OPENCLI_PROFILE=<name>`
+- Persistent default: `opencli profile use <name>`
+
+Run `opencli profile list` to see connected labels, and use the extension popup's pencil icon to rename profiles to short, memorable labels (`work`, `home`, etc.).
+
+### "Profile 'X' not connected"
+
+The label or profileId you specified is not in the daemon's active set. Common causes:
+
+- The target Chrome profile is not currently running, or its extension is disabled in `chrome://extensions`.
+- The label does not match. Run `opencli profile list` to see what's actually connected; rename via the extension popup if needed.
+
 ### Empty data or 'Unauthorized' error
 
 - Your login session in Chrome might have expired. Open a normal Chrome tab, navigate to the target site, and log in or refresh the page.

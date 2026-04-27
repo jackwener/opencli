@@ -46,6 +46,46 @@ opencli browser tab close <targetId>
 - `tab select <targetId>` 会把该 tab 设为后续未显式指定 target 的 `opencli browser ...` 命令默认目标。
 - `tab close <targetId>` 会关闭该 tab；如果它正好是当前默认目标，会一并清掉这条默认绑定。
 
+## 多 Chrome Profile
+
+如果你在多个 Chrome profile（例如 `Work` 和 `Personal`）里都装了 Browser Bridge 扩展，它们会同时连到同一个 daemon。命令按 profile 路由，每条 CLI 调用都会命中你指定的那个浏览器，而不是静默落到最后连上来的那个。
+
+### 给 profile 命名
+
+每个扩展首次启动会生成唯一的 `profileId`。popup 默认显示 `Profile-<短 hash>`，点 chip 上的铅笔图标可以改成 `work`、`home` 这样的短名。CLI 里引用的就是这个 label。
+
+### 选择命令跑在哪个 profile
+
+优先级（从高到低）：
+
+1. 单条命令上的 `--profile <name>` 参数
+2. `OPENCLI_PROFILE` 环境变量（shell 级）
+3. `opencli profile use <name>` 持久化默认（`~/.opencli/config.json`）
+4. 仅一个 profile 在线时的自动路由（向后兼容）
+
+```bash
+opencli profile list                     # 查看已连接的 profile
+opencli profile use work                 # 持久化默认
+opencli profile current                  # 查看当前默认来源
+opencli --profile personal reddit saved  # 单条命令覆盖
+```
+
+### 多个 session 同时操作不同 profile
+
+用 `OPENCLI_PROFILE`（进程级环境变量）——两个 terminal / Claude Code session / Codex session 各自指向不同 profile，不会互相覆盖共享默认。
+
+```bash
+# Terminal 1
+export OPENCLI_PROFILE=work
+opencli reddit saved
+
+# Terminal 2 —— 并发独立
+export OPENCLI_PROFILE=personal
+opencli reddit saved
+```
+
+两条命令分别进入各自 Chrome profile 的自动化窗口，cookie、会话状态、登录信息完全隔离。
+
 ## Daemon 生命周期
 
 Daemon 在首次运行浏览器命令时自动启动，之后保持常驻运行。

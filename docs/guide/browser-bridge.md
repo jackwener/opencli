@@ -48,6 +48,46 @@ Key rules:
 - `tab select <targetId>` makes that tab the default target for later untargeted `opencli browser ...` commands.
 - `tab close <targetId>` removes the tab; if it was the current default target, the stored default is cleared.
 
+## Multiple Chrome Profiles
+
+If you install the Browser Bridge extension in more than one Chrome profile (e.g. `Work` and `Personal`), all of them stay connected to the same daemon simultaneously. Commands route by profile so each CLI invocation lands in the Chrome profile you intended instead of silently hitting whichever extension connected last.
+
+### Label a profile
+
+Each extension generates a unique `profileId` the first time it runs. The popup shows a default label (`Profile-<short-hash>`); click the pencil icon on the chip to rename it to something short like `work` or `home`. That label is what you use in the CLI.
+
+### Select which profile a command runs in
+
+Resolution order (highest priority first):
+
+1. `--profile <name>` flag on the individual command
+2. `OPENCLI_PROFILE` environment variable (per-shell)
+3. `opencli profile use <name>` persistent default (`~/.opencli/config.json`)
+4. Automatic routing when exactly one profile is connected (backwards-compatible)
+
+```bash
+opencli profile list                     # See connected profiles
+opencli profile use work                 # Persist a default
+opencli profile current                  # Show the resolved default
+opencli --profile personal reddit saved  # Override for one command
+```
+
+### Concurrent sessions on different profiles
+
+Use `OPENCLI_PROFILE` (per-shell env) when running two terminals / Claude Code sessions / Codex sessions at the same time. Each session targets its own profile without fighting over a shared default.
+
+```bash
+# Terminal 1
+export OPENCLI_PROFILE=work
+opencli reddit saved
+
+# Terminal 2 — independent, concurrent
+export OPENCLI_PROFILE=personal
+opencli reddit saved
+```
+
+Both commands reach their own Chrome profile's automation window; cookies, session state, and logins stay fully isolated.
+
 ## How It Works
 
 ```

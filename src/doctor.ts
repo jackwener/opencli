@@ -65,6 +65,8 @@ export type DoctorReport = {
   extensionFlaky?: boolean;
   extensionVersion?: string;
   latestExtensionVersion?: string;
+  /** All connected Chrome profiles. Populated when ≥1 profile is connected. */
+  profiles?: Array<{ profileId: string; profileLabel: string; version: string | null }>;
   connectivity?: ConnectivityResult;
   sessions?: Array<{ workspace: string; windowId: number; tabCount: number; idleMsRemaining: number }>;
   issues: string[];
@@ -195,6 +197,12 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
     );
   }
 
+  const profiles = (health.status?.profiles ?? []).map((p) => ({
+    profileId: p.profileId,
+    profileLabel: p.profileLabel,
+    version: p.version ?? null,
+  }));
+
   return {
     cliVersion: opts.cliVersion,
     daemonRunning,
@@ -204,6 +212,7 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
     extensionFlaky,
     extensionVersion,
     latestExtensionVersion,
+    profiles: profiles.length > 0 ? profiles : undefined,
     connectivity,
     sessions,
     issues,
@@ -222,22 +231,35 @@ export function renderBrowserDoctorReport(report: DoctorReport): string {
     : report.daemonRunning ? `running on port ${DEFAULT_DAEMON_PORT}` + (report.daemonVersion ? ` (v${report.daemonVersion})` : '') : 'not running';
   lines.push(`${daemonIcon} Daemon: ${daemonLabel}`);
 
-  // Extension status
+  // Extension status. For ≥2 connected profiles, render a multi-line block so
+  // the user can see every profile's label + version at a glance.
   const extIcon = report.extensionFlaky || (report.extensionConnected && !report.extensionVersion)
     ? styleText('yellow', '[WARN]')
     : report.extensionConnected ? styleText('green', '[OK]') : styleText('yellow', '[MISSING]');
   const extUpdateHint = report.extensionVersion && report.latestExtensionVersion && isNewerVersion(report.latestExtensionVersion, report.extensionVersion)
     ? styleText('yellow', ` → v${report.latestExtensionVersion} available`)
     : '';
-  const extVersion = !report.extensionConnected
-    ? ''
-    : report.extensionVersion
-      ? styleText('dim', ` (v${report.extensionVersion})`) + extUpdateHint
-      : styleText('dim', ' (version unknown)');
-  const extLabel = report.extensionFlaky
-    ? 'unstable (connected during live check, then disconnected)'
-    : report.extensionConnected ? 'connected' : 'not connected';
-  lines.push(`${extIcon} Extension: ${extLabel}${extVersion}`);
+  const profileCount = report.profiles?.length ?? 0;
+  if (profileCount >= 2) {
+    const label = report.extensionFlaky
+      ? 'unstable (connected during live check, then disconnected)'
+      : `${profileCount} Chrome profiles connected`;
+    lines.push(`${extIcon} Extension: ${label}${extUpdateHint}`);
+    for (const p of report.profiles!) {
+      const v = p.version ? styleText('dim', ` (v${p.version})`) : '';
+      lines.push(`        ${styleText('dim', '·')} ${p.profileLabel}${v}`);
+    }
+  } else {
+    const extVersion = !report.extensionConnected
+      ? ''
+      : report.extensionVersion
+        ? styleText('dim', ` (v${report.extensionVersion})`) + extUpdateHint
+        : styleText('dim', ' (version unknown)');
+    const extLabel = report.extensionFlaky
+      ? 'unstable (connected during live check, then disconnected)'
+      : report.extensionConnected ? 'connected' : 'not connected';
+    lines.push(`${extIcon} Extension: ${extLabel}${extVersion}`);
+  }
 
   // Connectivity
   if (report.connectivity) {

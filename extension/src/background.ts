@@ -16,6 +16,62 @@ let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 
+// ─── Profile identity ────────────────────────────────────────────────
+// Each Chrome profile has isolated chrome.storage.local, so a UUID stored
+// there uniquely identifies this extension instance to the daemon.
+// profileLabel is human-readable; label renames (e.g. email upgrade) happen
+// in chrome.storage.local and get picked up on next hello.
+
+let profileId: string | null = null;
+let profileLabel: string | null = null;
+
+async function loadProfileIdentity(): Promise<void> {
+  const stored = await chrome.storage.local.get(['profileId', 'profileLabel']);
+  if (stored.profileId && typeof stored.profileId === 'string') {
+    profileId = stored.profileId;
+    profileLabel = typeof stored.profileLabel === 'string' && stored.profileLabel
+      ? stored.profileLabel
+      : `Profile-${profileId!.slice(0, 8)}`;
+    return;
+  }
+  const id = crypto.randomUUID();
+  const label = `Profile-${id.slice(0, 8)}`;
+  await chrome.storage.local.set({ profileId: id, profileLabel: label });
+  profileId = id;
+  profileLabel = label;
+}
+
+function defaultLabelFor(id: string): string {
+  return `Profile-${id.slice(0, 8)}`;
+}
+
+/** Persist a new profile label and re-announce to the daemon so it updates its Map. */
+async function renameProfile(label: string | null): Promise<string | null> {
+  if (!profileId) await loadProfileIdentity();
+  const cleaned = label?.trim();
+  const finalLabel = cleaned && cleaned.length > 0
+    ? cleaned.slice(0, 60)
+    : defaultLabelFor(profileId!);
+  await chrome.storage.local.set({ profileLabel: finalLabel });
+  profileLabel = finalLabel;
+  // If currently connected, re-send hello so the daemon updates the entry in
+  // its Map. Same ws, same profileId → hello handler overwrites the label.
+  if (ws?.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify({
+        type: 'hello',
+        version: chrome.runtime.getManifest().version,
+        compatRange: __OPENCLI_COMPAT_RANGE__,
+        profileId,
+        profileLabel,
+      }));
+    } catch (err) {
+      console.warn('[opencli] Failed to re-announce renamed label:', err);
+    }
+  }
+  return finalLabel;
+}
+
 // ─── Console log forwarding ──────────────────────────────────────────
 // Hook console.log/warn/error to forward logs to daemon via WebSocket.
 
@@ -47,6 +103,9 @@ console.error = (...args: unknown[]) => { _origError(...args); forwardLog('error
 async function connect(): Promise<void> {
   if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
 
+  // profileId must be known before hello — generated once per Chrome profile.
+  if (!profileId) await loadProfileIdentity();
+
   try {
     const res = await fetch(DAEMON_PING_URL, { signal: AbortSignal.timeout(1000) });
     if (!res.ok) return; // unexpected response — not our daemon
@@ -68,11 +127,15 @@ async function connect(): Promise<void> {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
-    // Send version + compatibility range so the daemon can report mismatches to the CLI
+    // Send version + compatibility range so the daemon can report mismatches to the CLI.
+    // profileId/profileLabel let the daemon route commands to the right profile when
+    // multiple Chrome profiles are each running their own extension instance.
     ws?.send(JSON.stringify({
       type: 'hello',
       version: chrome.runtime.getManifest().version,
       compatRange: __OPENCLI_COMPAT_RANGE__,
+      profileId,
+      profileLabel,
     }));
   };
 
@@ -291,7 +354,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({
       connected: ws?.readyState === WebSocket.OPEN,
       reconnecting: reconnectTimer !== null,
+      profileLabel,
     });
+    return false;
+  }
+  if (msg?.type === 'renameProfile') {
+    const newLabel = typeof msg.label === 'string' ? msg.label : null;
+    // async — keep the channel open until the storage write + re-hello resolve.
+    renameProfile(newLabel)
+      .then((finalLabel) => sendResponse({ ok: true, profileLabel: finalLabel }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
   }
   return false;
 });

@@ -5,7 +5,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 280px;
+      width: 300px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 13px;
       color: #333;
@@ -22,22 +22,108 @@
     .header h1 { font-size: 15px; font-weight: 600; }
     .status-row {
       display: flex;
-      align-items: center;
-      gap: 8px;
+      align-items: flex-start;
+      gap: 10px;
       padding: 10px 12px;
       border-radius: 8px;
       background: #f5f5f5;
     }
     .dot {
-      width: 8px; height: 8px;
+      width: 10px; height: 10px;
       border-radius: 50%;
       flex-shrink: 0;
+      margin-top: 4px;
     }
     .dot.connected { background: #34c759; }
     .dot.disconnected { background: #ff3b30; }
     .dot.connecting { background: #ff9500; }
-    .status-text { font-size: 13px; color: #555; }
-    .status-text strong { color: #333; }
+    .status-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      flex: 1;
+    }
+    .status-text {
+      font-size: 13px;
+      color: #333;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .profile-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      align-self: flex-start;
+      max-width: 100%;
+      padding: 3px 6px 3px 8px;
+      border: 1px solid #d0d7de;
+      border-radius: 5px;
+      background: #fff;
+      font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      color: #555;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .profile-chip:hover { background: #fafbff; border-color: #a8c1f7; }
+    .profile-chip__label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .profile-chip__label:hover { color: #1f6feb; }
+    .profile-chip__actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px; height: 18px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: #8b94a3;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .icon-btn:hover { background: #eef1f6; color: #1f6feb; }
+    .icon-btn svg { width: 11px; height: 11px; }
+    .profile-chip__input {
+      flex: 1;
+      min-width: 0;
+      padding: 2px 4px;
+      border: 1px solid #1f6feb;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 11px;
+      color: #333;
+      background: #fff;
+      outline: none;
+    }
+    .toast {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      padding: 6px 12px;
+      background: rgba(30, 30, 30, 0.92);
+      color: #fff;
+      font-size: 11px;
+      border-radius: 6px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s, transform 0.18s;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
     .hint {
       margin-top: 10px;
       padding: 8px 10px;
@@ -71,7 +157,25 @@
   </div>
   <div class="status-row">
     <span class="dot disconnected" id="dot"></span>
-    <span class="status-text" id="status">Checking...</span>
+    <div class="status-content">
+      <span class="status-text" id="status">Checking…</span>
+      <div class="profile-chip" id="profile-chip" style="display:none">
+        <span class="profile-chip__label" id="profile-label" title="Click to copy"></span>
+        <span class="profile-chip__actions">
+          <button class="icon-btn" id="copy-btn" type="button" title="Copy label">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/>
+              <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="rename-btn" type="button" title="Rename profile">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"/>
+            </svg>
+          </button>
+        </span>
+      </div>
+    </div>
   </div>
   <div class="hint" id="hint">
     This is normal. The extension connects automatically when you run any <code>opencli</code> command.
@@ -79,6 +183,7 @@
   <div class="footer">
     <a href="https://github.com/jackwener/opencli" target="_blank">Documentation</a>
   </div>
+  <div class="toast" id="toast">Copied</div>
   <script src="popup.js"></script>
 </body>
 </html>
