@@ -686,6 +686,31 @@ describe('background tab isolation', () => {
     expect(chrome.windows.create).not.toHaveBeenCalled();
   });
 
+  it('refuses bind-current when the bound workspace already owns an automation window', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId('bound:default', 1);
+
+    const result = await mod.__test__.handleBindCurrent({
+      id: 'bind-overwrite',
+      action: 'bind-current',
+      workspace: 'bound:default',
+      matchDomain: 'user.example',
+    }, 'bound:default');
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: false,
+      errorCode: 'invalid_bind_workspace',
+    }));
+    expect(chrome.tabs.query).not.toHaveBeenCalled();
+    expect(mod.__test__.getSession('bound:default')).toEqual(expect.objectContaining({
+      windowId: 1,
+      owned: true,
+    }));
+  });
+
   it('keeps borrowed bound sessions alive without closing the user window on idle', async () => {
     const { chrome } = createChromeMock();
     vi.useFakeTimers();
