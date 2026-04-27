@@ -14,6 +14,7 @@ cli({
   domain: 'uiverse.io',
   strategy: Strategy.PUBLIC,
   browser: true,
+  navigateBefore: 'https://uiverse.io',
   args: [
     { name: 'input', type: 'str', required: true, positional: true, help: 'Uiverse URL or author/slug identifier' },
     { name: 'output', type: 'str', required: false, help: 'Output image path (defaults to a temp file)' },

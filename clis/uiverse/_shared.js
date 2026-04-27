@@ -273,13 +273,52 @@ export function parseHtmlRootSignature(html) {
   };
 }
 
+export function getPreviewFallbackTags(signature) {
+  const tag = String(signature?.tag || '').toLowerCase();
+  if (!tag) return ['label', 'button', 'a', 'div'];
+  if (tag === 'input') return ['input', 'label', 'button', 'a', 'div'];
+  return [tag];
+}
+
 export async function locatePreviewElement(page, html) {
   const signature = parseHtmlRootSignature(html);
   const raw = await page.evaluate(`(async () => {
     const sig = ${JSON.stringify(signature)};
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const fallbackTags = sig.tag ? [sig.tag] : ['label', 'button', 'a', 'div'];
+    const fallbackTags = ${JSON.stringify(getPreviewFallbackTags(signature))};
+
+    const getSearchRoots = () => {
+      const roots = [document];
+      const seen = new Set([document]);
+      for (let index = 0; index < roots.length; index += 1) {
+        const root = roots[index];
+        const nodes = root.querySelectorAll ? Array.from(root.querySelectorAll('*')) : [];
+        for (const node of nodes) {
+          const shadowRoot = node.shadowRoot;
+          if (shadowRoot && !seen.has(shadowRoot)) {
+            seen.add(shadowRoot);
+            roots.push(shadowRoot);
+          }
+        }
+      }
+      return roots;
+    };
+
+    const queryAcrossRoots = (selector, limit = 200) => {
+      const results = [];
+      const seen = new Set();
+      for (const root of getSearchRoots()) {
+        const matches = root.querySelectorAll ? Array.from(root.querySelectorAll(selector)) : [];
+        for (const match of matches) {
+          if (seen.has(match)) continue;
+          seen.add(match);
+          results.push(match);
+          if (results.length >= limit) return results;
+        }
+      }
+      return results;
+    };
 
     const isVisible = (element) => {
       if (!element || !(element instanceof Element)) return false;
@@ -292,6 +331,7 @@ export async function locatePreviewElement(page, html) {
 
     const scoreCandidate = (element, source) => {
       const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
       const centerX = rect.x + rect.width / 2;
       const centerY = rect.y + rect.height / 2;
       const area = rect.width * rect.height;
@@ -299,10 +339,15 @@ export async function locatePreviewElement(page, html) {
       if (sig.tag && element.tagName.toLowerCase() === sig.tag) score += 30;
       if (sig.id && element.id === sig.id) score += 120;
       if (sig.classes.length && sig.classes.every((className) => element.classList.contains(className))) score += 120;
+      if (sig.tag === 'input' && source === 'shadow-host') score += 220;
+      if (sig.tag === 'input' && element.tagName.toLowerCase() === 'label') score += 80;
+      if (element.id && element.id.includes('shadow-root')) score += 80;
       if (centerX <= viewportWidth * 0.65) score += 40;
       if (centerY <= viewportHeight * 0.6) score += 40;
       if (area <= viewportWidth * viewportHeight * 0.2) score += 30;
       if (area <= viewportWidth * viewportHeight * 0.05) score += 20;
+      if (style.position === 'fixed') score -= 180;
+      if (rect.height <= 24 && rect.width >= viewportWidth * 0.8) score -= 120;
       return {
         source,
         tag: element.tagName.toLowerCase(),
@@ -327,11 +372,25 @@ export async function locatePreviewElement(page, html) {
       candidates.push(scoreCandidate(element, source));
     };
 
-    if (sig.id) collect(document.getElementById(sig.id), 'id');
-    if (sig.classes.length) collect(document.querySelector('.' + sig.classes.join('.')), 'classes');
+    if (sig.id) {
+      for (const element of queryAcrossRoots('#' + CSS.escape(sig.id), 20)) {
+        collect(element, 'id');
+      }
+    }
+    if (sig.classes.length) {
+      const classSelector = '.' + sig.classes.map((className) => CSS.escape(className)).join('.');
+      for (const element of queryAcrossRoots(classSelector, 20)) {
+        collect(element, 'classes');
+      }
+    }
+    if (sig.tag === 'input') {
+      for (const element of queryAcrossRoots('#shadow-root-div-ready,[id*="shadow-root"]', 20)) {
+        collect(element, 'shadow-host');
+      }
+    }
 
     for (const tagName of fallbackTags) {
-      const tagNodes = Array.from(document.querySelectorAll(tagName));
+      const tagNodes = queryAcrossRoots(tagName, 200);
       for (const node of tagNodes.slice(0, 200)) {
         collect(node, 'tag:' + tagName);
       }
