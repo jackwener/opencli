@@ -34,7 +34,7 @@ npx tsx src/main.ts <command>               # same surface, no global install
 | Strategy tag on `opencli list` | What it needs |
 |--------------------------------|---------------|
 | `PUBLIC` | Nothing — pure HTTP, no browser. |
-| `COOKIE` / `HEADER` | Chrome logged into the target site + **opencli Browser Bridge** extension loaded (see `extension/`). Command captures the credential from your live session — no re-login. |
+| `COOKIE` / `HEADER` | Chrome logged into the target site + **OpenCLI** extension installed from the [Chrome Web Store](https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk). Command captures the credential from your live session — no re-login. |
 | `INTERCEPT` | Same as COOKIE, plus opencli opens an automation window to capture a signed request. |
 | `UI` | Same as COOKIE, full DOM interaction. |
 | `LOCAL` | No browser; talks to a local/dev endpoint. |

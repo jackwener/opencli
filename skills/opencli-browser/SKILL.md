@@ -337,7 +337,7 @@ opencli browser eval "(() => document.querySelector('input[name=cardnumber]')?.v
 
 | symptom | fix |
 |---------|-----|
-| `opencli doctor` red: "Browser not connected" | Start Chrome with `--remote-debugging-port=9222`, or rerun the extension install. |
+| `opencli doctor` red: "Browser not connected" | Start Chrome with `--remote-debugging-port=9222`, or install the extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk). |
 | `attach failed: chrome-extension://...` | Disable 1Password / other CDP-hungry extensions temporarily. |
 | `selector_not_found` right after `state` | Page mutated. `wait selector "..."` then retry. |
 | `stale_ref` across every command | You are reusing refs from a prior page. Re-`state`. |

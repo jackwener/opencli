@@ -39,9 +39,7 @@ npm install -g @jackwener/opencli
 
 OpenCLI 通过轻量 Browser Bridge 扩展和本地微型 daemon 与 Chrome/Chromium 通信。daemon 会按需自动启动。
 
-1. 到 GitHub [Releases 页面](https://github.com/jackwener/opencli/releases) 下载最新的 `opencli-extension-v{version}.zip`。
-2. 解压后打开 `chrome://extensions`，启用 **开发者模式**。
-3. 点击 **加载已解压的扩展程序**，选择解压后的目录。
+在 [Chrome Web Store](https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk) 安装 **OpenCLI** 扩展。
 
 ### 3. 验证环境
 
@@ -493,7 +491,7 @@ opencli plugin uninstall my-tool                            # 卸载
 ## 常见问题排查
 
 - **"Extension not connected" 报错**
-  - 确保你当前的 Chrome 或 Chromium 已安装且**开启了** opencli Browser Bridge 扩展（在 `chrome://extensions` 中检查）。
+  - 确保你已从 [Chrome Web Store](https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk) 安装 OpenCLI 扩展，且在 `chrome://extensions` 中**已启用**。
 - **"attach failed: Cannot access a chrome-extension:// URL" 报错**
   - 其他 Chrome/Chromium 扩展（如 youmind、New Tab Override 或 AI 助手类扩展）可能产生冲突。请尝试**暂时禁用其他扩展**后重试。
 - **返回空数据，或者报错 "Unauthorized"**
