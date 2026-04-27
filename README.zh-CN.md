@@ -239,7 +239,7 @@ npm link
 | **uiverse** | `code` `preview` | 浏览器 |
 | **apple-podcasts** | `search` `episodes` `top` | 公开 |
 | **baidu-scholar** | `search` | 公开 |
-| **google-scholar** | `search` | 公开 |
+| **google-scholar** | `search` `cite` `profile` | 公开 |
 | **gov-law** | `search` `recent` | 公开 |
 | **gov-policy** | `search` `recent` | 公开 |
 | **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` | 公开 / 浏览器 |

@@ -238,7 +238,7 @@ To load the source Browser Bridge extension:
 | **quark** | `ls` `mkdir` `mv` `rename` `rm` `save` `share-tree` |
 | **uiverse** | `code` `preview` |
 | **baidu-scholar** | `search` |
-| **google-scholar** | `search` |
+| **google-scholar** | `search` `cite` `profile` |
 | **gov-law** | `search` `recent` |
 | **gov-policy** | `search` `recent` |
 | **nowcoder** | `hot` `trending` `topics` `recommend` `creators` `companies` `jobs` `search` `suggest` `experience` `referral` `salary` `papers` `practice` `notifications` `detail` |
