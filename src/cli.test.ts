@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { BrowserCommandError } from './browser/daemon-client.js';
 import type { IPage } from './types.js';
 import { TargetError } from './browser/target-errors.js';
 
@@ -9,11 +10,13 @@ const {
   mockBrowserConnect,
   mockBrowserClose,
   mockBindTab,
+  mockSendCommand,
   browserState,
 } = vi.hoisted(() => ({
   mockBrowserConnect: vi.fn(),
   mockBrowserClose: vi.fn(),
   mockBindTab: vi.fn(),
+  mockSendCommand: vi.fn(),
   browserState: { page: null as IPage | null },
 }));
 
@@ -32,6 +35,7 @@ vi.mock('./browser/daemon-client.js', async () => {
   return {
     ...actual,
     bindTab: mockBindTab,
+    sendCommand: mockSendCommand,
   };
 });
 
@@ -130,6 +134,7 @@ describe('browser tab targeting commands', () => {
       url: 'https://user.example/inbox',
       title: 'Inbox',
     });
+    mockSendCommand.mockReset().mockResolvedValue({ closed: true });
 
     browserState.page = {
       goto: vi.fn().mockResolvedValue(undefined),
@@ -214,6 +219,32 @@ describe('browser tab targeting commands', () => {
     expect(browserState.page?.evaluate).not.toHaveBeenCalled();
     const out = lastJsonLog();
     expect(out.error.code).toBe('bound_navigation_blocked');
+  });
+
+  it('unbinds a bound workspace through the daemon close-window command', async () => {
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'unbind', '--workspace', 'bound:default']);
+
+    expect(mockBrowserConnect).toHaveBeenCalledWith({ timeout: 30, workspace: 'bound:default' });
+    expect(mockSendCommand).toHaveBeenCalledWith('close-window', { workspace: 'bound:default' });
+    const out = lastJsonLog();
+    expect(out).toEqual({ unbound: true, workspace: 'bound:default' });
+  });
+
+  it('does not print false success when unbind fails', async () => {
+    mockSendCommand.mockRejectedValueOnce(new BrowserCommandError(
+      'Workspace "bound:default" is not attached to a tab.',
+      'bound_session_missing',
+      'Run bind again, then retry the browser command.',
+    ));
+    const program = createProgram('', '');
+
+    await program.parseAsync(['node', 'opencli', 'browser', 'unbind', '--workspace', 'bound:default']);
+
+    const out = lastJsonLog();
+    expect(out.error.code).toBe('bound_session_missing');
+    expect(process.exitCode).toBeDefined();
   });
 
   it('binds browser commands to an explicit target tab via --tab', async () => {

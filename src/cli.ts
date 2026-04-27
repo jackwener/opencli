@@ -32,7 +32,7 @@ import { buildExtractHtmlJs, runExtractFromHtml } from './browser/extract.js';
 import { analyzeSite, type PageSignals } from './browser/analyze.js';
 import { daemonStatus, daemonStop } from './commands/daemon.js';
 import { log } from './logger.js';
-import { bindTab, BrowserCommandError } from './browser/daemon-client.js';
+import { bindTab, BrowserCommandError, sendCommand } from './browser/daemon-client.js';
 
 const CLI_FILE = fileURLToPath(import.meta.url);
 const DEFAULT_BROWSER_WORKSPACE = 'browser:default';
@@ -681,12 +681,22 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
       try {
         const { BrowserBridge } = await import('./browser/index.js');
         const bridge = new BrowserBridge();
-        const page = await bridge.connect({ timeout: 30, workspace });
-        await page.closeWindow?.();
+        await bridge.connect({ timeout: 30, workspace });
+        await sendCommand('close-window', { workspace });
         saveBrowserTargetState(undefined, workspace);
         console.log(JSON.stringify({ unbound: true, workspace }, null, 2));
       } catch (err) {
+        if (err instanceof BrowserCommandError && err.code) {
+          console.log(JSON.stringify({
+            error: {
+              code: err.code,
+              message: err.message,
+              ...(err.hint ? { hint: err.hint } : {}),
+            },
+          }, null, 2));
+        }
         log.error(err instanceof Error ? err.message : String(err));
+        if (err instanceof BrowserCommandError && err.hint) log.error(`Hint: ${err.hint}`);
         process.exitCode = EXIT_CODES.GENERIC_ERROR;
       }
     });
