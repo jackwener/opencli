@@ -1,4 +1,5 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { CommandExecutionError } from '@jackwener/opencli/errors';
 import { clampInt, requireNonEmptyQuery } from '../_shared/common.js';
 
 cli({
@@ -31,7 +32,9 @@ cli({
                 return false;
             })()`);
 
-            if (!profileClicked) return [{ rank: 0, title: 'No profile found for: ' + author, cited: '-', year: '-' }];
+            if (!profileClicked) {
+                throw new CommandExecutionError(`No profile found for: ${author}`);
+            }
         }
 
         await page.wait(3);
@@ -69,8 +72,12 @@ cli({
             };
         })()`);
 
-        if (!data || !data.papers || data.papers.length === 0) {
-            return [{ rank: 0, title: 'No papers found', cited: '-', year: '-' }];
+        if (!data?.name) {
+            throw new CommandExecutionError(`Could not load Google Scholar profile for: ${author}`);
+        }
+
+        if (!data.papers || data.papers.length === 0) {
+            throw new CommandExecutionError(`No papers found for: ${data.name || author}`);
         }
 
         const summary = {

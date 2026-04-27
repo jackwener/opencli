@@ -1,4 +1,5 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { CommandExecutionError } from '@jackwener/opencli/errors';
 import { requireNonEmptyQuery } from '../_shared/common.js';
 
 cli({
@@ -36,7 +37,9 @@ cli({
             return { ok: true, title: title };
         })()`);
 
-        if (!clicked?.ok) return [{ title: '-', format: format, citation: clicked?.reason || 'cite button not found' }];
+        if (!clicked?.ok) {
+            throw new CommandExecutionError(clicked?.reason || `Could not find search result at index ${index + 1}`);
+        }
 
         await page.wait(2);
 
@@ -51,7 +54,9 @@ cli({
             return null;
         })()`);
 
-        if (!citeUrl) return [{ title: clicked.title, format: format, citation: 'citation link not found' }];
+        if (!citeUrl) {
+            throw new CommandExecutionError(`Could not find ${formatLabel} citation link for result ${index + 1}`);
+        }
 
         await page.goto(citeUrl);
         await page.wait(2);
@@ -60,6 +65,10 @@ cli({
             return (document.body.innerText || '').trim();
         })()`);
 
-        return [{ title: clicked.title, format: format, citation: citation || 'empty response' }];
+        if (!citation) {
+            throw new CommandExecutionError(`${formatLabel} citation page returned an empty response`);
+        }
+
+        return [{ title: clicked.title, format: format, citation }];
     },
 });
