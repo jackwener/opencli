@@ -202,10 +202,10 @@ describe('collectDoubaoTranscriptAdditions', () => {
         expect(collectDoubaoTranscriptAdditions(before, current, '测试一下，只回复OK', (value) => value.replace('测试一下，只回复OK', '').trim())).toBe('');
     });
     it('treats only the exact landing-page chip string as UI noise', () => {
-        expect(__test__.clickSendButtonScript()).not.toContain('document,');
-        expect(__test__.clickSendButtonScript()).toContain('bestScore >= 200');
-        expect(__test__.clickSendButtonScript()).not.toContain("|| !!button.closest('.chat-input-button')");
-        expect(__test__.clickSendButtonScript()).toContain("button.getAttribute('type') === 'submit') score += 1200");
+        expect(__test__.clickSendButtonScript()).toContain("button#flow-end-msg-send");
+        expect(__test__.clickSendButtonScript()).toContain("getAttribute('disabled') !== null");
+        expect(__test__.clickSendButtonScript()).toContain("getAttribute('aria-disabled') === 'true'");
+        expect(__test__.clickSendButtonScript()).not.toContain('bestScore >= 200');
         expect(__test__.composerStateScript()).toContain("(composer.innerText || '').trim() || (composer.textContent || '').trim()");
         expect(__test__.detectDoubaoVerificationScript()).not.toContain('document.body?.innerText');
         expect(__test__.detectDoubaoVerificationScript()).not.toContain('[class*=\"verify\"]');
