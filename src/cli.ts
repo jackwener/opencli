@@ -32,7 +32,7 @@ import { buildExtractHtmlJs, runExtractFromHtml } from './browser/extract.js';
 import { analyzeSite, type PageSignals } from './browser/analyze.js';
 import { daemonStatus, daemonStop } from './commands/daemon.js';
 import { log } from './logger.js';
-import { bindCurrentTab, BrowserCommandError } from './browser/daemon-client.js';
+import { bindTab, BrowserCommandError } from './browser/daemon-client.js';
 
 const CLI_FILE = fileURLToPath(import.meta.url);
 const DEFAULT_BROWSER_WORKSPACE = 'browser:default';
@@ -607,7 +607,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     };
   }
 
-  browser.command('bind-current')
+  browser.command('bind')
     .option('--domain <host>', 'Only bind a current/visible tab whose hostname matches this domain')
     .option('--path-prefix <path>', 'Only bind a current/visible tab whose pathname starts with this prefix')
     .option('--workspace <name>', 'Bound workspace name (must start with bound:)')
@@ -634,7 +634,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
         const { BrowserBridge } = await import('./browser/index.js');
         const bridge = new BrowserBridge();
         await bridge.connect({ timeout: 30, workspace });
-        const data = await bindCurrentTab(workspace, {
+        const data = await bindTab(workspace, {
           ...(typeof opts.domain === 'string' && opts.domain.trim() ? { matchDomain: opts.domain.trim() } : {}),
           ...(typeof opts.pathPrefix === 'string' && opts.pathPrefix.trim() ? { matchPathPrefix: opts.pathPrefix.trim() } : {}),
         });

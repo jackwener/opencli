@@ -648,15 +648,15 @@ describe('background tab isolation', () => {
     expect(mod.__test__.getIdleTimeout('browser:manual')).toBe(600_000);
   });
 
-  it('bind-current attaches only bound:* workspaces to the matching current tab', async () => {
+  it('bind attaches only bound:* workspaces to the matching current tab', async () => {
     const { chrome } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
 
     const mod = await import('./background');
 
-    const rejected = await mod.__test__.handleBindCurrent({
+    const rejected = await mod.__test__.handleBind({
       id: 'bind-bad',
-      action: 'bind-current',
+      action: 'bind',
       workspace: 'browser:default',
       matchDomain: 'user.example',
     }, 'browser:default');
@@ -665,9 +665,9 @@ describe('background tab isolation', () => {
       errorCode: 'invalid_bind_workspace',
     }));
 
-    const bound = await mod.__test__.handleBindCurrent({
+    const bound = await mod.__test__.handleBind({
       id: 'bind-good',
-      action: 'bind-current',
+      action: 'bind',
       workspace: 'bound:default',
       matchDomain: 'user.example',
     }, 'bound:default');
@@ -686,16 +686,16 @@ describe('background tab isolation', () => {
     expect(chrome.windows.create).not.toHaveBeenCalled();
   });
 
-  it('refuses bind-current when the bound workspace already owns an automation window', async () => {
+  it('refuses bind when the bound workspace already owns an automation window', async () => {
     const { chrome } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
 
     const mod = await import('./background');
     mod.__test__.setAutomationWindowId('bound:default', 1);
 
-    const result = await mod.__test__.handleBindCurrent({
+    const result = await mod.__test__.handleBind({
       id: 'bind-overwrite',
-      action: 'bind-current',
+      action: 'bind',
       workspace: 'bound:default',
       matchDomain: 'user.example',
     }, 'bound:default');

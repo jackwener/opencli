@@ -25,26 +25,26 @@ Until `doctor` is green, nothing else will work. Typical failures: Chrome not ru
 ## Window lifecycle
 
 - `opencli browser *` commands already keep the automation session alive between calls. The window stays open until you run `opencli browser close` or the idle timeout expires.
-- `opencli browser bind-current` binds a `bound:*` workspace to the Chrome tab you already have open. Use this for logged-in pages, SSO flows, or pages you manually positioned before handing control to the agent.
+- `opencli browser bind` binds a `bound:*` workspace to the Chrome tab you already have open. Use this for logged-in pages, SSO flows, or pages you manually positioned before handing control to the agent.
 - `--focus` (or `OPENCLI_WINDOW_FOCUSED=1`) opens the automation window in the foreground. Use it when you want to watch the page live.
 - `--live` (or `OPENCLI_LIVE=1`) is mainly for browser-backed adapter commands such as `opencli xiaohongshu note ...`. It keeps the adapter's automation window open after the command returns so you can inspect the final page state.
 
-### Bind Current Tab
+### Bind Tab
 
 ```bash
-opencli browser bind-current --domain example.com
+opencli browser bind --domain example.com
 opencli browser --workspace bound:default state
 opencli browser --workspace bound:default click "Search"
 opencli browser --workspace bound:default network
 opencli browser unbind
 ```
 
-Binding uses a separate `bound:*` workspace. It never owns the user window, never closes the user tab, and fails closed if the tab is closed or becomes non-debuggable. Re-run `bind-current` when you switch to a different real tab.
+Binding uses a separate `bound:*` workspace. It never owns the user window, never closes the user tab, and fails closed if the tab is closed or becomes non-debuggable. Re-run `bind` when you switch to a different real tab.
 
 Use `--domain <host>` and `--path-prefix <path>` to avoid binding the wrong tab:
 
 ```bash
-opencli browser bind-current --workspace bound:gmail --domain mail.google.com --path-prefix /mail
+opencli browser bind --workspace bound:gmail --domain mail.google.com --path-prefix /mail
 opencli browser --workspace bound:gmail state
 ```
 
@@ -195,7 +195,7 @@ Default output keeps JSON/XML/plain-text and JS-like API responses, then drops o
 | `browser tab close [targetId]` | Close by `page`. |
 | `browser back` | History back on the active tab. |
 | `browser close` | Close the automation window when done. |
-| `browser bind-current` | Bind `bound:default` (or `--workspace bound:<name>`) to the current Chrome tab. |
+| `browser bind` | Bind `bound:default` (or `--workspace bound:<name>`) to the current Chrome tab. |
 | `browser unbind` | Detach a bound workspace without closing the user tab/window. |
 
 ---

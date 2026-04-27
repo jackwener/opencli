@@ -8,12 +8,12 @@ import { TargetError } from './browser/target-errors.js';
 const {
   mockBrowserConnect,
   mockBrowserClose,
-  mockBindCurrentTab,
+  mockBindTab,
   browserState,
 } = vi.hoisted(() => ({
   mockBrowserConnect: vi.fn(),
   mockBrowserClose: vi.fn(),
-  mockBindCurrentTab: vi.fn(),
+  mockBindTab: vi.fn(),
   browserState: { page: null as IPage | null },
 }));
 
@@ -31,7 +31,7 @@ vi.mock('./browser/daemon-client.js', async () => {
   const actual = await vi.importActual<typeof import('./browser/daemon-client.js')>('./browser/daemon-client.js');
   return {
     ...actual,
-    bindCurrentTab: mockBindCurrentTab,
+    bindTab: mockBindTab,
   };
 });
 
@@ -124,7 +124,7 @@ describe('browser tab targeting commands', () => {
     stderrSpy.mockClear();
     mockBrowserConnect.mockClear();
     mockBrowserClose.mockReset().mockResolvedValue(undefined);
-    mockBindCurrentTab.mockReset().mockResolvedValue({
+    mockBindTab.mockReset().mockResolvedValue({
       workspace: 'bound:default',
       page: 'tab-2',
       url: 'https://user.example/inbox',
@@ -167,10 +167,10 @@ describe('browser tab targeting commands', () => {
   it('binds the current Chrome tab into a bound workspace', async () => {
     const program = createProgram('', '');
 
-    await program.parseAsync(['node', 'opencli', 'browser', 'bind-current', '--domain', 'user.example', '--path-prefix', '/inbox']);
+    await program.parseAsync(['node', 'opencli', 'browser', 'bind', '--domain', 'user.example', '--path-prefix', '/inbox']);
 
     expect(mockBrowserConnect).toHaveBeenCalledWith({ timeout: 30, workspace: 'bound:default' });
-    expect(mockBindCurrentTab).toHaveBeenCalledWith('bound:default', {
+    expect(mockBindTab).toHaveBeenCalledWith('bound:default', {
       matchDomain: 'user.example',
       matchPathPrefix: '/inbox',
     });
@@ -179,13 +179,13 @@ describe('browser tab targeting commands', () => {
     expect(out.url).toBe('https://user.example/inbox');
   });
 
-  it('rejects bind-current workspaces outside the bound namespace', async () => {
+  it('rejects bind workspaces outside the bound namespace', async () => {
     const program = createProgram('', '');
 
-    await program.parseAsync(['node', 'opencli', 'browser', 'bind-current', '--workspace', 'browser:default']);
+    await program.parseAsync(['node', 'opencli', 'browser', 'bind', '--workspace', 'browser:default']);
 
     expect(mockBrowserConnect).not.toHaveBeenCalled();
-    expect(mockBindCurrentTab).not.toHaveBeenCalled();
+    expect(mockBindTab).not.toHaveBeenCalled();
     const out = lastJsonLog();
     expect(out.error.code).toBe('invalid_bind_workspace');
     expect(process.exitCode).toBeDefined();

@@ -557,8 +557,8 @@ async function getAutomationWindow(workspace, initialUrl) {
   if (workspace.startsWith("bound:") && !automationSessions.has(workspace)) {
     throw new CommandFailure(
       "bound_session_missing",
-      `Bound workspace "${workspace}" is not attached to a tab. Run "opencli browser bind-current --workspace ${workspace}" first.`,
-      "Run bind-current again, then retry the browser command."
+      `Bound workspace "${workspace}" is not attached to a tab. Run "opencli browser bind --workspace ${workspace}" first.`,
+      "Run bind again, then retry the browser command."
     );
   }
   const existing = automationSessions.get(workspace);
@@ -694,8 +694,8 @@ async function handleCommand(cmd) {
         return await handleSetFileInput(cmd, workspace);
       case "insert-text":
         return await handleInsertText(cmd, workspace);
-      case "bind-current":
-        return await handleBindCurrent(cmd, workspace);
+      case "bind":
+        return await handleBind(cmd, workspace);
       case "network-capture-start":
         return await handleNetworkCaptureStart(cmd, workspace);
       case "network-capture-read":
@@ -819,7 +819,7 @@ async function resolveTab(tabId, workspace, initialUrl) {
         throw new CommandFailure(
           matchesSession ? "bound_tab_not_debuggable" : "bound_tab_mismatch",
           matchesSession ? `Bound tab for workspace "${workspace}" is not debuggable (${tab.url ?? "unknown URL"}).` : `Target tab is not the tab bound to workspace "${workspace}".`,
-          'Run "opencli browser bind-current" again on a debuggable http(s) tab.'
+          'Run "opencli browser bind" again on a debuggable http(s) tab.'
         );
       }
       if (session && !matchesSession && session.preferredTabId === null && isDebuggableUrl(tab.url)) {
@@ -843,7 +843,7 @@ async function resolveTab(tabId, workspace, initialUrl) {
         throw new CommandFailure(
           "bound_tab_gone",
           `Bound tab for workspace "${workspace}" no longer exists.`,
-          'Run "opencli browser bind-current" again, then retry the command.'
+          'Run "opencli browser bind" again, then retry the command.'
         );
       }
       console.warn(`[opencli] Tab ${tabId} no longer exists, re-resolving`);
@@ -859,7 +859,7 @@ async function resolveTab(tabId, workspace, initialUrl) {
         throw new CommandFailure(
           "bound_tab_not_debuggable",
           `Bound tab for workspace "${workspace}" is not debuggable (${preferredTab.url ?? "unknown URL"}).`,
-          'Switch the tab to an http(s) page or run "opencli browser bind-current" on another tab.'
+          'Switch the tab to an http(s) page or run "opencli browser bind" on another tab.'
         );
       }
     } catch (err) {
@@ -869,7 +869,7 @@ async function resolveTab(tabId, workspace, initialUrl) {
         throw new CommandFailure(
           "bound_tab_gone",
           `Bound tab for workspace "${workspace}" no longer exists.`,
-          'Run "opencli browser bind-current" again, then retry the command.'
+          'Run "opencli browser bind" again, then retry the command.'
         );
       }
     }
@@ -1028,7 +1028,7 @@ async function handleNavigate(cmd, workspace) {
       ok: false,
       errorCode: "bound_tab_moved",
       error: `Bound tab for workspace "${workspace}" moved to another window during navigation.`,
-      errorHint: 'Run "opencli browser bind-current" again on the intended tab.'
+      errorHint: 'Run "opencli browser bind" again on the intended tab.'
     };
   }
   if (postNavigationSession && tab.windowId !== postNavigationSession.windowId) {
@@ -1272,13 +1272,13 @@ async function handleSessions(cmd) {
   })));
   return { id: cmd.id, ok: true, data };
 }
-async function handleBindCurrent(cmd, workspace) {
+async function handleBind(cmd, workspace) {
   if (!workspace.startsWith("bound:")) {
     return {
       id: cmd.id,
       ok: false,
       errorCode: "invalid_bind_workspace",
-      error: `bind-current workspace must start with "bound:", got "${workspace}".`,
+      error: `bind workspace must start with "bound:", got "${workspace}".`,
       errorHint: 'Use the default "bound:default" or pass --workspace bound:<name>.'
     };
   }
@@ -1302,7 +1302,7 @@ async function handleBindCurrent(cmd, workspace) {
       ok: false,
       errorCode: "bound_tab_not_found",
       error: cmd.matchDomain || cmd.matchPathPrefix ? `No visible tab matching ${cmd.matchDomain ?? "domain"}${cmd.matchPathPrefix ? ` ${cmd.matchPathPrefix}` : ""}` : "No active debuggable tab found",
-      errorHint: "Focus the target Chrome tab or relax --domain / --path-prefix, then retry bind-current."
+      errorHint: "Focus the target Chrome tab or relax --domain / --path-prefix, then retry bind."
     };
   }
   if (existing && !existing.owned && existing.preferredTabId !== null && existing.preferredTabId !== boundTab.id) {

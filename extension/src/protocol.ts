@@ -15,7 +15,7 @@ export type Action =
   | 'sessions'
   | 'set-file-input'
   | 'insert-text'
-  | 'bind-current'
+  | 'bind'
   | 'network-capture-start'
   | 'network-capture-read'
   | 'cdp'
