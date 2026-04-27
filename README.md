@@ -41,7 +41,13 @@ npm install -g @jackwener/opencli
 
 OpenCLI connects to Chrome/Chromium through a lightweight Browser Bridge extension plus a small local daemon. The daemon auto-starts when needed.
 
+**Option A — Chrome Web Store (recommended):**
 Install **OpenCLI** from the [Chrome Web Store](https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk).
+
+**Option B — Manual install:**
+1. Download the latest `opencli-extension-v{version}.zip` from the GitHub [Releases page](https://github.com/jackwener/opencli/releases).
+2. Unzip it, open `chrome://extensions`, and enable **Developer mode**.
+3. Click **Load unpacked** and select the unzipped folder.
 
 ### 3. Verify the setup
 
