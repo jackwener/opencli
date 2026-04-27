@@ -90,7 +90,13 @@ cli({
           if (el.classList.contains('query-note-item')) return;
 
           const titleEl = el.querySelector('.title, .note-title, a.title, .footer .title span');
-          const nameEl = el.querySelector('a.author .name, .name, .author-name, .nick-name, a.author');
+          const nameEl = el.querySelector('a.author .name, .author-name, .nick-name, .name');
+          const authorWrapEl = el.querySelector('a.author');
+          let author = cleanText(nameEl?.textContent || '');
+          if (!author && authorWrapEl) {
+            const nameChild = authorWrapEl.querySelector('.name');
+            author = nameChild ? cleanText(nameChild.textContent || '') : cleanText(authorWrapEl.textContent || '').replace(/\d{1,2}天前|\d+小时前|\d+分钟前|\d+秒前|刚刚|昨天|前天|\d+周前|\d+个月前|\d{1,2}-\d{1,2}|\d{4}-\d{1,2}-\d{1,2}$/g, '').trim();
+          }
           const likesEl = el.querySelector('.count, .like-count, .like-wrapper .count');
           // Prefer search_result link (preserves xsec_token) over generic /explore/ link
           const detailLinkEl =
@@ -109,7 +115,7 @@ cli({
 
           results.push({
             title: cleanText(titleEl?.textContent || ''),
-            author: cleanText(nameEl?.textContent || ''),
+            author,
             likes: cleanText(likesEl?.textContent || '0'),
             url,
             author_url: normalizeUrl(authorLinkEl?.getAttribute('href') || ''),
