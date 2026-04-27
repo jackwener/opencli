@@ -205,7 +205,8 @@ describe('collectDoubaoTranscriptAdditions', () => {
         expect(__test__.clickSendButtonScript()).toContain("button#flow-end-msg-send");
         expect(__test__.clickSendButtonScript()).toContain("getAttribute('disabled') !== null");
         expect(__test__.clickSendButtonScript()).toContain("getAttribute('aria-disabled') === 'true'");
-        expect(__test__.clickSendButtonScript()).not.toContain('bestScore >= 200');
+        expect(__test__.clickSendButtonScript()).toContain('bestScore >= 200');
+        expect(__test__.clickSendButtonScript()).toContain("button.getAttribute('type') === 'submit') score += 1200");
         expect(__test__.composerStateScript()).toContain("(composer.innerText || '').trim() || (composer.textContent || '').trim()");
         expect(__test__.detectDoubaoVerificationScript()).not.toContain('document.body?.innerText');
         expect(__test__.detectDoubaoVerificationScript()).not.toContain('[class*=\"verify\"]');
