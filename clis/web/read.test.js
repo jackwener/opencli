@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { JSDOM } from 'jsdom';
 
 const { mockDownloadArticle } = vi.hoisted(() => ({
     mockDownloadArticle: vi.fn(),
@@ -12,19 +13,29 @@ const { __test__ } = await import('./read.js');
 
 describe('web/read stdout behavior', () => {
     const read = __test__.command;
-    const page = {
-        goto: vi.fn().mockResolvedValue(undefined),
-        wait: vi.fn().mockResolvedValue(undefined),
-        evaluate: vi.fn().mockResolvedValue({
+    const extractedArticle = {
             title: 'Example Article',
             author: 'Author',
             publishTime: '2026-04-22',
             contentHtml: '<p>hello</p>',
             imageUrls: ['https://example.com/a.jpg'],
-        }),
+            diagnostics: {
+                url: 'https://example.com/article',
+                frames: [],
+                emptyContainers: [],
+                includedFrameCount: 0,
+            },
+        };
+    const page = {
+        goto: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue(undefined),
+        evaluate: vi.fn().mockResolvedValue(extractedArticle),
+        startNetworkCapture: vi.fn().mockResolvedValue(true),
+        readNetworkCapture: vi.fn().mockResolvedValue([]),
     };
 
     beforeEach(() => {
+        vi.restoreAllMocks();
         mockDownloadArticle.mockReset();
         mockDownloadArticle.mockResolvedValue([{
             title: 'Example Article',
@@ -37,6 +48,11 @@ describe('web/read stdout behavior', () => {
         page.goto.mockClear();
         page.wait.mockClear();
         page.evaluate.mockClear();
+        page.evaluate.mockResolvedValue(extractedArticle);
+        page.startNetworkCapture.mockClear();
+        page.startNetworkCapture.mockResolvedValue(true);
+        page.readNetworkCapture.mockClear();
+        page.readNetworkCapture.mockResolvedValue([]);
     });
 
     it('returns null in --stdout mode so the CLI does not append result rows to stdout', async () => {
@@ -58,6 +74,7 @@ describe('web/read stdout behavior', () => {
                 stdout: true,
             }),
         );
+        expect(page.evaluate.mock.calls[0]?.[0]).toContain('const frameMode = "same-origin"');
     });
 
     it('still returns the saved-row payload when writing to disk', async () => {
@@ -72,5 +89,162 @@ describe('web/read stdout behavior', () => {
         });
 
         expect(result).toBe(rows);
+    });
+
+    it('waits for a selector in the main document or same-origin iframes before extracting', async () => {
+        page.evaluate
+            .mockResolvedValueOnce({ ok: true, scope: 'iframe', url: 'https://example.com/frame' })
+            .mockResolvedValueOnce(extractedArticle);
+
+        await read.func(page, {
+            url: 'https://example.com/article',
+            output: '/tmp/out',
+            'download-images': false,
+            'wait-for': '#gridDatas li',
+            wait: 7,
+            stdout: false,
+        });
+
+        expect(page.wait).not.toHaveBeenCalled();
+        expect(page.evaluate).toHaveBeenCalledTimes(2);
+        expect(page.evaluate.mock.calls[0]?.[0]).toContain('"#gridDatas li"');
+        expect(page.evaluate.mock.calls[0]?.[0]).toContain('sameOriginFrameDocs');
+        expect(page.evaluate.mock.calls[1]?.[0]).toContain('const frameMode = "same-origin"');
+    });
+
+    it('throws a clear error when --wait-for times out', async () => {
+        page.evaluate.mockResolvedValueOnce({ ok: false, timedOut: true, selector: '#missing' });
+
+        await expect(read.func(page, {
+            url: 'https://example.com/article',
+            output: '/tmp/out',
+            'download-images': false,
+            'wait-for': '#missing',
+            wait: 1,
+            stdout: false,
+        })).rejects.toThrow('Timed out waiting for selector "#missing"');
+
+        expect(mockDownloadArticle).not.toHaveBeenCalled();
+    });
+
+    it('starts network capture and writes diagnostics in diagnose mode', async () => {
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        page.readNetworkCapture.mockResolvedValueOnce([{
+            method: 'POST',
+            url: 'https://example.com/api/data',
+            responseStatus: 200,
+            responseContentType: 'application/json',
+            responsePreview: '{"ok":true}',
+        }]);
+
+        await read.func(page, {
+            url: 'https://example.com/article',
+            output: '/tmp/out',
+            'download-images': false,
+            diagnose: true,
+            wait: 0,
+            stdout: false,
+        });
+
+        expect(page.startNetworkCapture).toHaveBeenCalledWith('');
+        expect(page.readNetworkCapture).toHaveBeenCalledTimes(1);
+        expect(stderr).toHaveBeenCalledWith(expect.stringContaining('[web-read diagnose]'));
+        expect(stderr).toHaveBeenCalledWith(expect.stringContaining('POST 200 application/json https://example.com/api/data'));
+    });
+
+    it('passes --frames none into the extractor', async () => {
+        await read.func(page, {
+            url: 'https://example.com/article',
+            output: '/tmp/out',
+            'download-images': false,
+            frames: 'none',
+            stdout: false,
+        });
+
+        expect(page.evaluate.mock.calls[0]?.[0]).toContain('const frameMode = "none"');
+    });
+});
+
+describe('web/read render-aware helpers', () => {
+    it('merges accessible same-origin iframe bodies into the extracted HTML', () => {
+        const dom = new JSDOM(`
+          <main>
+            <h1>Shell</h1>
+            <iframe id="MF" src="/frame.html"></iframe>
+          </main>
+        `, { url: 'https://example.com/main.html', runScripts: 'outside-only' });
+        const frame = dom.window.document.querySelector('iframe');
+        frame.contentDocument.open();
+        frame.contentDocument.write('<body><table id="gridHd"><tr><th>Name</th></tr></table><ul id="gridDatas"><li>Station A 42</li></ul></body>');
+        frame.contentDocument.close();
+
+        const result = dom.window.eval(__test__.buildRenderAwareExtractorJs({ frames: 'same-origin' }));
+
+        expect(result.diagnostics.includedFrameCount).toBe(1);
+        expect(result.contentHtml).toContain('data-opencli-iframe-source="https://example.com/frame.html"');
+        expect(result.contentHtml).toContain('来自 iframe: https://example.com/frame.html');
+        expect(result.contentHtml).toContain('Station A 42');
+    });
+
+    it('marks API-like network entries as interesting and ignores static assets', () => {
+        expect(__test__.isInterestingNetworkEntry({
+            method: 'POST',
+            url: 'https://example.com/GJZ/Ajax/Publish.ashx',
+            status: 200,
+            contentType: 'text/html',
+            size: 100,
+            bodyTruncated: false,
+        })).toBe(true);
+        expect(__test__.isInterestingNetworkEntry({
+            method: 'POST',
+            url: 'https://example.com/GJZ/Ajax/Publish.ashx',
+            status: 200,
+            contentType: 'application/json',
+            size: 100,
+            bodyTruncated: false,
+        })).toBe(true);
+        expect(__test__.isInterestingNetworkEntry({
+            method: 'GET',
+            url: 'https://example.com/app.js',
+            status: 200,
+            contentType: 'application/javascript',
+            size: 100,
+            bodyTruncated: false,
+        })).toBe(false);
+    });
+
+    it('formats frame and XHR diagnostics for shell pages', () => {
+        const output = __test__.formatDiagnostics({
+            diagnostics: {
+                url: 'https://example.com/main.html',
+                includedFrameCount: 1,
+                frames: [{
+                    index: 0,
+                    src: 'https://example.com/frame.html',
+                    sameOrigin: true,
+                    accessible: true,
+                    textLength: 42,
+                }],
+                emptyContainers: [{
+                    scope: 'iframe',
+                    url: 'https://example.com/frame.html',
+                    tag: 'ul',
+                    id: 'gridDatas',
+                    className: '',
+                }],
+            },
+        }, [{
+            method: 'POST',
+            url: 'https://example.com/GJZ/Ajax/Publish.ashx',
+            status: 200,
+            contentType: 'application/json',
+            size: 64,
+            bodyTruncated: false,
+        }], true);
+
+        expect(output).toContain('frames: 1, included_same_origin: 1');
+        expect(output).toContain('[frame 0] same-origin accessible text=42 https://example.com/frame.html');
+        expect(output).toContain('iframe: ul#gridDatas (https://example.com/frame.html)');
+        expect(output).toContain('POST 200 application/json https://example.com/GJZ/Ajax/Publish.ashx');
     });
 });

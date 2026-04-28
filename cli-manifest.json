@@ -17184,6 +17184,42 @@
         "help": "Seconds to wait after page load"
       },
       {
+        "name": "wait-for",
+        "type": "str",
+        "required": false,
+        "valueRequired": true,
+        "help": "CSS selector to wait for in the main document or same-origin iframes"
+      },
+      {
+        "name": "wait-until",
+        "type": "str",
+        "default": "domstable",
+        "required": false,
+        "help": "Readiness policy after navigation: domstable or networkidle",
+        "choices": [
+          "domstable",
+          "networkidle"
+        ]
+      },
+      {
+        "name": "frames",
+        "type": "str",
+        "default": "same-origin",
+        "required": false,
+        "help": "Iframe handling mode: same-origin or none",
+        "choices": [
+          "same-origin",
+          "none"
+        ]
+      },
+      {
+        "name": "diagnose",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Print render diagnostics (frames, empty containers, XHR/API-like requests) to stderr"
+      },
+      {
         "name": "stdout",
         "type": "boolean",
         "default": false,
