@@ -3,6 +3,14 @@ import { JSDOM } from 'jsdom';
 import { getRegistry } from '@jackwener/opencli/registry';
 import { __test__ } from './item.js';
 import './item.js';
+const originalPerformance = globalThis.performance;
+const originalWindow = globalThis.window;
+const originalDocument = globalThis.document;
+function restoreGlobals() {
+    globalThis.performance = originalPerformance;
+    globalThis.window = originalWindow;
+    globalThis.document = originalDocument;
+}
 describe('jd item adapter', () => {
     const command = getRegistry().get('jd/item');
     it('registers the command with correct shape', () => {
@@ -24,6 +32,11 @@ describe('jd item adapter', () => {
         expect(imagesArg).toBeDefined();
         expect(imagesArg.default).toBe(200);
     });
+    it('normalizes JD item URL input to a SKU before building selectors', () => {
+        expect(__test__.normalizeJdSkuInput('100328272886')).toBe('100328272886');
+        expect(__test__.normalizeJdSkuInput('https://item.jd.com/100328272886.html?purchasetab=gfgm')).toBe('100328272886');
+        expect(__test__.normalizeJdSkuInput('skuId=10218494560141')).toBe('10218494560141');
+    });
     it('includes expected columns', () => {
         expect(command.columns).toEqual(expect.arrayContaining(['title', 'price', 'shop', 'specs', 'mainImages', 'detailImages']));
         expect(command.columns).not.toContain('avifImages');
@@ -40,6 +53,39 @@ describe('jd item adapter', () => {
         expect(result).toEqual([
             'https://img10.360buyimg.com/imgzone/jfs/t1/detail.avif',
         ]);
+    });
+    it('treats WareGraphic sku images as detail images only for WareGraphic fallback', () => {
+        expect(__test__.isJdDetailImage('https://img10.360buyimg.com/sku/jfs/t1/color-option.gif')).toBe(false);
+        expect(__test__.isJdWareGraphicDetailImage('https://img10.360buyimg.com/sku/jfs/t1/ware-graphic.jpg')).toBe(true);
+        expect(__test__.isJdWareGraphicDetailImage('https://img10.360buyimg.com/sku/s228x228_jfs/t1/thumb.jpg')).toBe(false);
+    });
+    it('keeps main gallery images while ignoring unrelated contexts for detail images', () => {
+        const dom = new JSDOM(`
+      <div class="_gallery_116km_1">
+        <img src="https://img10.360buyimg.com/pcpubliccms/jfs/t1/main-a.jpg" />
+        <img data-src="//img10.360buyimg.com/n1/jfs/t1/main-b.jpg" />
+      </div>
+      <div class="recommend">
+        <img src="https://img10.360buyimg.com/imgzone/jfs/t1/recommend.jpg.avif" />
+      </div>
+      <div class="detail-content-wrap">
+        <img src="https://img10.360buyimg.com/imgzone/jfs/t1/detail-a.jpg.avif" />
+      </div>
+    `);
+        const previousDocument = globalThis.document;
+        globalThis.document = dom.window.document;
+        try {
+            expect(__test__.extractMainImages(10)).toEqual([
+                'https://img10.360buyimg.com/pcpubliccms/jfs/t1/main-a.jpg',
+                'https://img10.360buyimg.com/n1/jfs/t1/main-b.jpg',
+            ]);
+            expect(__test__.extractDetailImagesFromDom(10)).toEqual([
+                'https://img10.360buyimg.com/imgzone/jfs/t1/detail-a.jpg.avif',
+            ]);
+        }
+        finally {
+            globalThis.document = previousDocument;
+        }
     });
     it('collects JD detail images from computed background images', () => {
         const dom = new JSDOM(`
@@ -115,6 +161,135 @@ describe('jd item adapter', () => {
         }
         finally {
             globalThis.document = previousDocument;
+        }
+    });
+    it('collects JD detail images from page data objects', async () => {
+        const dom = new JSDOM(`
+      <h2 id="SPXQ-title">商品详情</h2>
+    `);
+        globalThis.document = dom.window.document;
+        globalThis.window = dom.window;
+        globalThis.__PAGE_DATA__ = {
+            detail: {
+                images: [
+                    'https://img10.360buyimg.com/imgzone/jfs/t1/page-data-a.jpg.avif',
+                    { src: '//img11.360buyimg.com/imgzone/jfs/t1/page-data-b.webp' },
+                ],
+            },
+        };
+        try {
+            await expect(__test__.extractDetailImagesFromPage(10)).resolves.toEqual([
+                'https://img10.360buyimg.com/imgzone/jfs/t1/page-data-a.jpg.avif',
+                'https://img11.360buyimg.com/imgzone/jfs/t1/page-data-b.webp',
+            ]);
+        }
+        finally {
+            delete globalThis.__PAGE_DATA__;
+            restoreGlobals();
+        }
+    });
+    it('collects JD detail images from network resource text', async () => {
+        const dom = new JSDOM(`
+      <h2 id="SPXQ-title">商品详情</h2>
+    `);
+        const previousFetch = globalThis.fetch;
+        globalThis.document = dom.window.document;
+        globalThis.window = dom.window;
+        globalThis.performance = {
+            getEntriesByType: () => [{ name: 'https://cdn.jd.com/detail/data.json' }],
+            now: () => 0,
+        };
+        globalThis.fetch = (async () => ({
+            ok: true,
+            headers: { get: () => 'application/json' },
+            text: async () => JSON.stringify({
+                detail: {
+                    imgs: ['https://img10.360buyimg.com/imgzone/jfs/t1/network-detail-a.jpg.avif'],
+                },
+            }),
+        }));
+        try {
+            await expect(__test__.extractDetailImagesFromPage(10)).resolves.toEqual([
+                'https://img10.360buyimg.com/imgzone/jfs/t1/network-detail-a.jpg.avif',
+            ]);
+        }
+        finally {
+            globalThis.fetch = previousFetch;
+            restoreGlobals();
+        }
+    });
+    it('collects JD detail images from WareGraphic graphicContent', async () => {
+        const dom = new JSDOM(`
+      <h2 id="SPXQ-title">商品详情</h2>
+    `);
+        const previousFetch = globalThis.fetch;
+        globalThis.document = dom.window.document;
+        globalThis.window = dom.window;
+        globalThis.performance = {
+            getEntriesByType: () => [
+                { name: 'https://api.m.jd.com/client.action?functionId=pc_item_getWareGraphic&skuId=100328272886' },
+            ],
+            now: () => 0,
+        };
+        globalThis.fetch = (async () => ({
+            ok: true,
+            headers: { get: () => 'application/json' },
+            text: async () => JSON.stringify({
+                data: {
+                    graphicContent: `
+            <div style="background-image:url(//img30.360buyimg.com/sku/jfs/t1/ware-a.jpg)"></div>
+            <img src="https://img30.360buyimg.com/sku/jfs/t1/ware-b.png" />
+            <a href="https://item.jd.com/100328272886.html">not image</a>
+          `,
+                },
+            }),
+        }));
+        try {
+            await expect(__test__.extractDetailImagesFromPage(10)).resolves.toEqual([
+                'https://img30.360buyimg.com/sku/jfs/t1/ware-a.jpg',
+                'https://img30.360buyimg.com/sku/jfs/t1/ware-b.png',
+            ]);
+        }
+        finally {
+            globalThis.fetch = previousFetch;
+            restoreGlobals();
+        }
+    });
+    it('extracts selected specs from the newer JD spec-list DOM', () => {
+        const dom = new JSDOM(`
+      <div id="spec-list" class="page-right-spec">
+        <div class="horizontal-layout specification-series-layout">
+          <div class="layout-label">系列品</div>
+          <div class="layout-content">
+            <div class="specification-series-item specification-series-item--selected">
+              <span class="specification-series-item-text">【年度新品】玉兔3.0pro 12kg</span>
+            </div>
+            <div class="specification-series-item"><span class="specification-series-item-text">其他系列</span></div>
+          </div>
+        </div>
+        <div class="specifications-panel-content">
+          <div class="specification-group">
+            <div class="specification-group-label">款式</div>
+            <div class="specification-group-content">
+              <div class="specification-item-sku has-image specification-item-sku--selected" title="">
+                <img class="specification-item-sku-image" alt="洗烘套装" src="https://img13.360buyimg.com/pcpubliccms/s48x48_jfs/t1/spec.jpg.avif" />
+                <span class="specification-item-sku-text">洗烘套装</span>
+              </div>
+              <div class="specification-item-sku has-image"><span class="specification-item-sku-text">滚筒单洗</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+        globalThis.document = dom.window.document;
+        try {
+            expect(__test__.extractSpecs()).toEqual({
+                系列品: '【年度新品】玉兔3.0pro 12kg',
+                款式: '洗烘套装',
+            });
+        }
+        finally {
+            restoreGlobals();
         }
     });
 });

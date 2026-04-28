@@ -9,6 +9,18 @@ function normalizePositiveInt(value, fallback) {
     const n = Number(value);
     return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
 }
+function normalizeJdSkuInput(input) {
+    const text = String(input || '').trim();
+    const itemMatch = text.match(/item\.jd\.com\/(\d+)\.html/i);
+    if (itemMatch)
+        return itemMatch[1];
+    if (/^\d+$/.test(text))
+        return text;
+    const paramMatch = text.match(/(?:skuId|sku|wareId|productId)[=:](\d+)/i);
+    if (paramMatch)
+        return paramMatch[1];
+    return text;
+}
 function normalizeJdImageUrl(rawUrl) {
     if (!rawUrl || typeof rawUrl !== 'string')
         return '';
@@ -33,10 +45,22 @@ function isJdMainImage(url) {
         !/\/(?:s\d+x\d+_|n\d\/s\d+x\d+_)/.test(normalized) &&
         !/\/(?:imgzone|sku|shaidan|popWaterMark|babel|jdcms|cms|ddimg|vc)\//.test(normalized);
 }
-function collectImageUrlsFrom(root) {
+function collectImageUrlsFrom(root, options = {}) {
     if (!root)
         return [];
     const urls = [];
+    const ignoredContexts = '#spec-list, [class*="spec-list"], [class*="recommend"], [id*="recommend"], [class*="shaidan"], [id*="shaidan"], [class*="review"], [id*="review"], [class*="comment"], [id*="comment"], [class*="thumb"], [id*="thumb"], [class*="related"], [id*="related"]';
+    const ignoreContexts = Boolean(options.ignoreContexts);
+    const isIgnoredContext = (el) => {
+        if (!ignoreContexts)
+            return false;
+        try {
+            return !!el?.closest?.(ignoredContexts);
+        }
+        catch {
+            return false;
+        }
+    };
     const pushUrlsFromText = (text) => {
         for (const match of String(text || '').matchAll(/url\(["']?([^"')]+360buyimg\.com[^"')]+)["']?\)/g)) {
             push(match[1]);
@@ -48,6 +72,8 @@ function collectImageUrlsFrom(root) {
             urls.push(url);
     };
     for (const img of root.querySelectorAll?.('img') || []) {
+        if (isIgnoredContext(img))
+            continue;
         push(img.currentSrc || img.src);
         push(img.getAttribute('data-src'));
         push(img.getAttribute('data-lazy-img'));
@@ -55,18 +81,24 @@ function collectImageUrlsFrom(root) {
         push(img.getAttribute('data-original'));
     }
     for (const source of root.querySelectorAll?.('source') || []) {
+        if (isIgnoredContext(source))
+            continue;
         push(source.getAttribute('src'));
         push(source.getAttribute('srcset')?.split(/\s+/)[0]);
         push(source.getAttribute('data-src'));
         push(source.getAttribute('data-srcset')?.split(/\s+/)[0]);
     }
     for (const el of root.querySelectorAll?.('[style*="360buyimg.com"]') || []) {
+        if (isIgnoredContext(el))
+            continue;
         const style = el.getAttribute('style') || '';
         pushUrlsFromText(style);
     }
     if (typeof getComputedStyle === 'function') {
         const elements = [root, ...Array.from(root.querySelectorAll?.('*') || [])];
         for (const el of elements) {
+            if (isIgnoredContext(el))
+                continue;
             try {
                 const style = getComputedStyle(el);
                 pushUrlsFromText(style?.backgroundImage);
@@ -86,7 +118,7 @@ function collectImageUrlsFromText(text) {
         if (url && url.includes('360buyimg.com'))
             urls.push(url);
     };
-    for (const match of String(text || '').matchAll(/(?:https?:)?\/\/[^"'`\s<>]+360buyimg\.com[^"'`\s<>]*/g)) {
+    for (const match of String(text || '').matchAll(/(?:https?:)?\/\/[^"'`\s<>)\\]+360buyimg\.com[^"'`\s<>)\\]*/g)) {
         push(match[0]);
     }
     for (const match of String(text || '').matchAll(/url\(["']?([^"')]+360buyimg\.com[^"')]+)["']?\)/g)) {
@@ -121,11 +153,141 @@ function collectImageUrlsFromFramesAndScripts() {
     }
     return [...new Set(urls)];
 }
+function collectImageUrlsFromPayload(payload, seen = new Set(), depth = 0) {
+    if (payload == null || depth > 4)
+        return [];
+    const urls = [];
+    const push = (value) => {
+        const url = normalizeJdImageUrl(value);
+        if (url && url.includes('360buyimg.com'))
+            urls.push(url);
+    };
+    if (typeof payload === 'string') {
+        urls.push(...collectImageUrlsFromText(payload));
+        return [...new Set(urls)];
+    }
+    if (typeof payload !== 'object')
+        return [];
+    if (seen.has(payload))
+        return [];
+    seen.add(payload);
+    if (Array.isArray(payload)) {
+        for (const item of payload)
+            urls.push(...collectImageUrlsFromPayload(item, seen, depth + 1));
+        return [...new Set(urls)];
+    }
+    for (const value of Object.values(payload)) {
+        if (typeof value === 'string') {
+            push(value);
+            urls.push(...collectImageUrlsFromText(value));
+            continue;
+        }
+        urls.push(...collectImageUrlsFromPayload(value, seen, depth + 1));
+    }
+    return [...new Set(urls)];
+}
+function collectImageUrlsFromPageDataObjects() {
+    const urls = [];
+    const keys = ['__NEXT_DATA__', '__NUXT__', '__INITIAL_STATE__', '__INITIAL_DATA__', '__APOLLO_STATE__', '__INITIAL_PROPS__', '__REDUX_STATE__', '__PAGE_DATA__', 'pageData', '__data__', 'detailData'];
+    for (const key of keys) {
+        try {
+            if (typeof globalThis !== 'undefined' && key in globalThis) {
+                urls.push(...collectImageUrlsFromPayload(globalThis[key]));
+            }
+        }
+        catch {
+            // ignore inaccessible globals
+        }
+    }
+    return [...new Set(urls)];
+}
+async function collectImageUrlsFromNetworkResources() {
+    const urls = [];
+    const entries = typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function'
+        ? performance.getEntriesByType('resource')
+        : [];
+    const candidates = [...new Set(entries
+            .map((entry) => entry?.name)
+            .filter((name) => typeof name === 'string' && /(?:jd\.com|360buyimg\.com)/.test(name) && /(?:detail|desc|ware|item|product|sku)/i.test(name) && !/pc_item_getWareGraphic/i.test(name)))].slice(0, 12);
+    for (const url of candidates) {
+        try {
+            const resp = await fetch(url, { credentials: 'include' });
+            if (!resp.ok)
+                continue;
+            const text = await resp.text();
+            const contentType = resp.headers.get('content-type') || '';
+            if (/json/i.test(contentType) || /^\s*[\[{]/.test(text)) {
+                try {
+                    urls.push(...collectImageUrlsFromPayload(JSON.parse(text)));
+                    continue;
+                }
+                catch {
+                    // fall back to text scanning
+                }
+            }
+            urls.push(...collectImageUrlsFromText(text));
+        }
+        catch {
+            // ignore request failures and cross-origin oddities
+        }
+    }
+    return [...new Set(urls)];
+}
+function collectImageUrlsFromWareGraphicText(text) {
+    let graphicContent = '';
+    try {
+        const payload = JSON.parse(String(text || ''));
+        graphicContent = payload?.data?.graphicContent || payload?.graphicContent || '';
+    }
+    catch {
+        graphicContent = String(text || '');
+    }
+    return [...new Set(collectImageUrlsFromText(graphicContent))];
+}
+async function collectImageUrlsFromWareGraphicResources(sku) {
+    const urls = [];
+    const entries = typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function'
+        ? performance.getEntriesByType('resource')
+        : [];
+    const candidates = [...new Set(entries
+            .map((entry) => entry?.name)
+            .filter((name) => typeof name === 'string' && /pc_item_getWareGraphic/i.test(name)))];
+    if (sku) {
+        const body = encodeURIComponent(JSON.stringify({ skuId: String(sku) }));
+        candidates.unshift(`https://api.m.jd.com/client.action?appid=item-v3&functionId=pc_item_getWareGraphic&client=pc&clientVersion=1.0.0&body=${body}`);
+    }
+    for (const url of candidates) {
+        try {
+            const resp = await fetch(url, { credentials: 'include' });
+            if (!resp.ok)
+                continue;
+            urls.push(...collectImageUrlsFromWareGraphicText(await resp.text()));
+        }
+        catch {
+            // ignore request failures and keep DOM/script fallbacks available
+        }
+    }
+    return [...new Set(urls)];
+}
+async function collectImageUrlsFromFallbackSources() {
+    return [
+        ...collectImageUrlsFromPageDataObjects(),
+        ...await collectImageUrlsFromNetworkResources(),
+    ];
+}
 function isJdDetailImage(url) {
     const normalized = normalizeJdImageSize(url);
     return /360buyimg\.com\/(?:imgzone|skuimg|babel|jdcms|cms|popWaterMark|vc|ddimg)\//.test(normalized) &&
         !/\/shaidan\//.test(normalized) &&
-        !/\/(?:s\d+x\d+_|n\d\/s\d+x\d+_|pcpubliccms|sku)\//.test(normalized);
+        !/\/(?:s\d+x\d+_|n\d\/s\d+x\d+_|sku)\//.test(normalized);
+}
+function isJdWareGraphicDetailImage(url) {
+    const raw = normalizeJdImageUrl(url);
+    if (/\/(?:s\d+x\d+_|n\d\/s\d+x\d+_|sku\/s\d+x\d+_)jfs\//.test(raw))
+        return false;
+    const normalized = normalizeJdImageSize(url);
+    return /360buyimg\.com\/sku\/jfs\//.test(normalized) &&
+        !/\/shaidan\//.test(normalized);
 }
 function rankJdDetailImage(url) {
     const normalized = normalizeJdImageSize(url);
@@ -139,9 +301,10 @@ function rankJdDetailImage(url) {
         return 2;
     return 4;
 }
-function orderJdDetailImages(urls) {
+function orderJdDetailImages(urls, options = {}) {
+    const allowWareGraphicSku = Boolean(options.allowWareGraphicSku);
     return [...new Set(urls)]
-        .filter(isJdDetailImage)
+        .filter((url) => isJdDetailImage(url) || (allowWareGraphicSku && isJdWareGraphicDetailImage(url)))
         .map((url, index) => ({ url, index, rank: rankJdDetailImage(url) }))
         .sort((a, b) => a.rank - b.rank || a.index - b.index)
         .map((item) => item.url);
@@ -166,10 +329,18 @@ function extractDetailImagesFromDom(maxImages) {
         ...selectorRoots.flatMap((selector) => Array.from(document.querySelectorAll(selector))),
     ].filter((root) => root && root !== document.body && root !== document.documentElement);
     const scoped = [
-        ...scopedRoots.flatMap((root) => collectImageUrlsFrom(root)),
+        ...scopedRoots.flatMap((root) => collectImageUrlsFrom(root, { ignoreContexts: true })),
         ...collectImageUrlsFromFramesAndScripts(),
     ];
     return orderJdDetailImages(scoped).slice(0, maxImages);
+}
+async function extractDetailImagesFromPage(maxImages, sku) {
+    const scoped = extractDetailImagesFromDom(maxImages);
+    const fallback = await collectImageUrlsFromFallbackSources();
+    const wareGraphic = await collectImageUrlsFromWareGraphicResources(sku);
+    const regularImages = orderJdDetailImages([...scoped, ...fallback]);
+    const wareGraphicImages = orderJdDetailImages(wareGraphic, { allowWareGraphicSku: true });
+    return orderJdDetailImages([...regularImages, ...wareGraphicImages], { allowWareGraphicSku: true }).slice(0, maxImages);
 }
 function getJdDetailScrollSnapshot(maxImages) {
     const doc = document.scrollingElement || document.documentElement || document.body;
@@ -188,6 +359,18 @@ function scrollJdDetailStep() {
     const step = Math.max(900, Math.floor((window.innerHeight || 900) * 0.9));
     window.scrollBy(0, step);
     return step;
+}
+async function scrollJdDetailIntoView() {
+    const tab = document.querySelector('#SPXQ-tab-column');
+    const title = document.querySelector('#SPXQ-title');
+    if (tab)
+        tab.click();
+    title?.scrollIntoView({ block: 'start' });
+    const step = Math.max(900, Math.floor((window.innerHeight || 900) * 0.9));
+    for (let i = 0; i < 2; i++) {
+        window.scrollBy(0, step);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+    }
 }
 function extractMainImages(maxImages) {
     const roots = [
@@ -302,12 +485,29 @@ function extractSpecsFromText(text) {
 }
 function extractSpecs() {
     const specs = {};
+    const setSpec = (label, value) => {
+        const normalizedLabel = String(label || '').trim().replace(/[：:]+$/, '');
+        const normalizedValue = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!normalizedLabel || !normalizedValue)
+            return;
+        specs[normalizedLabel] = normalizedValue;
+    };
+    const selectedText = (root) => {
+        const selected = root.querySelector('.specification-item-sku--selected, .specification-series-item--selected, .selected, [class*="selected"]');
+        if (!selected)
+            return '';
+        return selected.querySelector('[class*="text"]')?.textContent?.trim() ||
+            selected.textContent?.trim() ||
+            selected.querySelector('img')?.getAttribute('alt')?.trim() ||
+            '';
+    };
+    for (const el of document.querySelectorAll('.specification-series-layout')) {
+        const label = el.querySelector('.layout-label')?.textContent?.trim();
+        setSpec(label, selectedText(el));
+    }
     for (const el of document.querySelectorAll('.specification-group')) {
-        const label = el.querySelector('.specification-label, .label')?.textContent?.trim();
-        const selected = el.querySelector('.specification-item-sku--selected, .selected, [class*="selected"]');
-        const value = selected?.textContent?.trim() || selected?.querySelector('img')?.getAttribute('alt')?.trim();
-        if (label && value)
-            specs[label] = value;
+        const label = el.querySelector('.specification-label, .specification-group-label, .label')?.textContent?.trim();
+        setSpec(label, selectedText(el));
     }
     const attrsRoot = document.querySelector('#SPXQ-title')?.parentElement?.querySelector('.attrs') ||
         document.querySelector('#parameter2') ||
@@ -361,7 +561,7 @@ cli({
     ],
     columns: ['title', 'price', 'shop', 'specs', 'mainImages', 'detailImages'],
     func: async (page, kwargs) => {
-        const sku = String(kwargs.sku);
+        const sku = normalizeJdSkuInput(kwargs.sku);
         const maxImages = normalizePositiveInt(kwargs.images, 200);
         const url = `https://item.jd.com/${sku}.html`;
         const currentHref = await page.evaluate(`location.href`).catch(() => '');
@@ -375,10 +575,12 @@ cli({
         })()`).catch(() => null);
         if (!initialState?.looksBlocked) {
             await page.evaluate(`
-              document.querySelector('#SPXQ-tab-column')?.click();
-              document.querySelector('#SPXQ-title')?.scrollIntoView({ block: 'start' });
+              (async () => {
+                const scrollJdDetailIntoView = ${scrollJdDetailIntoView.toString()};
+                return scrollJdDetailIntoView();
+              })()
             `);
-            await page.wait(1);
+            await page.wait(1.5);
             let previousDetailImageCount = -1;
             let stableRounds = 0;
             for (let i = 0; i < 30; i++) {
@@ -386,11 +588,25 @@ cli({
                   const normalizeJdImageUrl = ${normalizeJdImageUrl.toString()};
                   const normalizeJdImageSize = ${normalizeJdImageSize.toString()};
                   const collectImageUrlsFrom = ${collectImageUrlsFrom.toString()};
+                  const collectImageUrlsFromText = ${collectImageUrlsFromText.toString()};
+                  const collectImageUrlsFromFramesAndScripts = ${collectImageUrlsFromFramesAndScripts.toString()};
+                  const collectImageUrlsFromPayload = ${collectImageUrlsFromPayload.toString()};
+                  const collectImageUrlsFromPageDataObjects = ${collectImageUrlsFromPageDataObjects.toString()};
+                  const collectImageUrlsFromNetworkResources = ${collectImageUrlsFromNetworkResources.toString()};
+                  const collectImageUrlsFromWareGraphicText = ${collectImageUrlsFromWareGraphicText.toString()};
+                  const collectImageUrlsFromWareGraphicResources = ${collectImageUrlsFromWareGraphicResources.toString()};
+                  const collectImageUrlsFromFallbackSources = ${collectImageUrlsFromFallbackSources.toString()};
                   const isJdDetailImage = ${isJdDetailImage.toString()};
+                  const isJdWareGraphicDetailImage = ${isJdWareGraphicDetailImage.toString()};
                   const rankJdDetailImage = ${rankJdDetailImage.toString()};
                   const orderJdDetailImages = ${orderJdDetailImages.toString()};
                   const extractDetailImagesFromDom = ${extractDetailImagesFromDom.toString()};
+                  const extractDetailImagesFromPage = ${extractDetailImagesFromPage.toString()};
                   const getJdDetailScrollSnapshot = ${getJdDetailScrollSnapshot.toString()};
+                  const scrollJdDetailIntoView = ${scrollJdDetailIntoView.toString()};
+                  if (document.querySelector('#SPXQ-title') && window.scrollY < 1000) {
+                    return scrollJdDetailIntoView().then(() => getJdDetailScrollSnapshot(${maxImages}));
+                  }
                   return getJdDetailScrollSnapshot(${maxImages});
                 })()`).catch(() => null);
                 if (!snapshot)
@@ -413,11 +629,21 @@ cli({
         const normalizeJdImageSize = ${normalizeJdImageSize.toString()};
         const isJdMainImage = ${isJdMainImage.toString()};
         const collectImageUrlsFrom = ${collectImageUrlsFrom.toString()};
+        const collectImageUrlsFromText = ${collectImageUrlsFromText.toString()};
+        const collectImageUrlsFromFramesAndScripts = ${collectImageUrlsFromFramesAndScripts.toString()};
+        const collectImageUrlsFromPayload = ${collectImageUrlsFromPayload.toString()};
+        const collectImageUrlsFromPageDataObjects = ${collectImageUrlsFromPageDataObjects.toString()};
+        const collectImageUrlsFromNetworkResources = ${collectImageUrlsFromNetworkResources.toString()};
+        const collectImageUrlsFromWareGraphicText = ${collectImageUrlsFromWareGraphicText.toString()};
+        const collectImageUrlsFromWareGraphicResources = ${collectImageUrlsFromWareGraphicResources.toString()};
+        const collectImageUrlsFromFallbackSources = ${collectImageUrlsFromFallbackSources.toString()};
         const isJdDetailImage = ${isJdDetailImage.toString()};
+        const isJdWareGraphicDetailImage = ${isJdWareGraphicDetailImage.toString()};
         const rankJdDetailImage = ${rankJdDetailImage.toString()};
         const orderJdDetailImages = ${orderJdDetailImages.toString()};
         const extractMainImages = ${extractMainImages.toString()};
         const extractDetailImagesFromDom = ${extractDetailImagesFromDom.toString()};
+        const extractDetailImagesFromPage = ${extractDetailImagesFromPage.toString()};
         const extractPriceFromPayload = ${extractPriceFromPayload.toString()};
         const fetchJdPrice = ${fetchJdPrice.toString()};
         const extractSpecsFromText = ${extractSpecsFromText.toString()};
@@ -443,7 +669,7 @@ cli({
         const srcs = allImgs.map(img => img.src).filter(Boolean);
 
         const mainImages = extractMainImages(maxImg);
-        const detailImages = extractDetailImagesFromDom(maxImg);
+        const detailImages = await extractDetailImagesFromPage(maxImg, ${JSON.stringify(sku)});
         const specs = extractSpecs();
 
         const result = { title, price, shop, specs, mainImages, detailImages, totalImages: new Set(srcs).size, pageState };
@@ -461,21 +687,33 @@ cli({
 });
 export const __test__ = {
     normalizePositiveInt,
+    normalizeJdSkuInput,
     normalizeJdImageUrl,
     normalizeJdImageSize,
     isJdMainImage,
     collectImageUrlsFrom,
+    collectImageUrlsFromText,
+    collectImageUrlsFromFramesAndScripts,
+    collectImageUrlsFromPayload,
+    collectImageUrlsFromPageDataObjects,
+    collectImageUrlsFromNetworkResources,
+    collectImageUrlsFromWareGraphicText,
+    collectImageUrlsFromWareGraphicResources,
+    collectImageUrlsFromFallbackSources,
     isJdDetailImage,
+    isJdWareGraphicDetailImage,
     rankJdDetailImage,
     orderJdDetailImages,
     getJdDetailScrollSnapshot,
     scrollJdDetailStep,
     extractMainImages,
     extractDetailImagesFromDom,
+    extractDetailImagesFromPage,
     extractAvifImages,
     extractPriceFromPayload,
     normalizePriceText,
     extractPriceFromDom,
     extractSpecsFromText,
+    extractSpecs,
     detectJdPageState,
 };
