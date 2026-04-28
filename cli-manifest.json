@@ -20319,7 +20319,7 @@
     "name": "answer",
     "description": "Answer a Zhihu question",
     "domain": "www.zhihu.com",
-    "strategy": "ui",
+    "strategy": "cookie",
     "browser": true,
     "args": [
       {
@@ -20362,14 +20362,14 @@
     "type": "js",
     "modulePath": "zhihu/answer.js",
     "sourceFile": "zhihu/answer.js",
-    "navigateBefore": true
+    "navigateBefore": "https://www.zhihu.com"
   },
   {
     "site": "zhihu",
     "name": "comment",
     "description": "Create a top-level comment on a Zhihu answer or article",
     "domain": "zhihu.com",
-    "strategy": "ui",
+    "strategy": "cookie",
     "browser": true,
     "args": [
       {
@@ -20406,13 +20406,12 @@
       "target_type",
       "target",
       "author_identity",
-      "created_url",
-      "created_proof"
+      "created_url"
     ],
     "type": "js",
     "modulePath": "zhihu/comment.js",
     "sourceFile": "zhihu/comment.js",
-    "navigateBefore": true
+    "navigateBefore": "https://zhihu.com"
   },
   {
     "site": "zhihu",
@@ -20460,7 +20459,7 @@
     "name": "favorite",
     "description": "Favorite a Zhihu answer or article into a specific collection",
     "domain": "zhihu.com",
-    "strategy": "ui",
+    "strategy": "cookie",
     "browser": true,
     "args": [
       {
@@ -20501,14 +20500,14 @@
     "type": "js",
     "modulePath": "zhihu/favorite.js",
     "sourceFile": "zhihu/favorite.js",
-    "navigateBefore": true
+    "navigateBefore": "https://zhihu.com"
   },
   {
     "site": "zhihu",
     "name": "follow",
     "description": "Follow a Zhihu user or question",
     "domain": "www.zhihu.com",
-    "strategy": "ui",
+    "strategy": "cookie",
     "browser": true,
     "args": [
       {
@@ -20535,7 +20534,7 @@
     "type": "js",
     "modulePath": "zhihu/follow.js",
     "sourceFile": "zhihu/follow.js",
-    "navigateBefore": true
+    "navigateBefore": "https://www.zhihu.com"
   },
   {
     "site": "zhihu",
@@ -20569,7 +20568,7 @@
     "name": "like",
     "description": "Like a Zhihu answer or article",
     "domain": "zhihu.com",
-    "strategy": "ui",
+    "strategy": "cookie",
     "browser": true,
     "args": [
       {
@@ -20596,7 +20595,7 @@
     "type": "js",
     "modulePath": "zhihu/like.js",
     "sourceFile": "zhihu/like.js",
-    "navigateBefore": true
+    "navigateBefore": "https://zhihu.com"
   },
   {
     "site": "zhihu",

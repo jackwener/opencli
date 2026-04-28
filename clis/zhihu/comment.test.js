@@ -14,8 +14,8 @@ describe('zhihu comment', () => {
             goto: vi.fn().mockResolvedValue(undefined),
             wait: vi.fn().mockResolvedValue(undefined),
             evaluate: vi.fn()
-                .mockResolvedValueOnce({ slug: 'alice' })          // resolveCurrentUserIdentity
-                .mockResolvedValueOnce({ ok: true, id: 99, url: 'https://www.zhihu.com/api/v4/comments/99' }), // API call
+                .mockResolvedValueOnce({ slug: 'alice' })
+                .mockResolvedValueOnce({ ok: true, id: 99, url: 'https://www.zhihu.com/api/v4/comments/99' }),
         };
         const rows = await cmd.func(page, { target: 'answer:1:2', text: 'hello', execute: true });
         expect(rows).toEqual([
