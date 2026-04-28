@@ -1,6 +1,7 @@
 import { AuthRequiredError, CommandExecutionError } from '@jackwener/opencli/errors';
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { resolveTwitterQueryId } from './shared.js';
+import { extractMedia } from './_media.js';
 // ── Twitter GraphQL constants ──────────────────────────────────────────
 const BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 const HOME_TIMELINE_QUERY_ID = 'c-CzHF1LboFilMpsx4ZCrQ';
@@ -75,7 +76,8 @@ function extractTweet(result, seen) {
     const screenName = u?.legacy?.screen_name || u?.core?.screen_name || 'unknown';
     const noteText = tw.note_tweet?.note_tweet_results?.result?.text;
     const views = tw.views?.count ? parseInt(tw.views.count, 10) : 0;
-    return {
+    const media = extractMedia(l);
+    const out = {
         id: tw.rest_id,
         author: screenName,
         text: noteText || l.full_text || '',
@@ -86,6 +88,8 @@ function extractTweet(result, seen) {
         created_at: l.created_at || '',
         url: `https://x.com/${screenName}/status/${tw.rest_id}`,
     };
+    if (media) out.media = media;
+    return out;
 }
 function parseHomeTimeline(data, seen) {
     const tweets = [];

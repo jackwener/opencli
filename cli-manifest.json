@@ -13854,6 +13854,46 @@
   },
   {
     "site": "substack",
+    "name": "post",
+    "description": "获取单篇 Substack 文章正文（md/html/plain）",
+    "domain": "substack.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "url",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "文章 URL（如 https://example.substack.com/p/slug）"
+      },
+      {
+        "name": "body-format",
+        "type": "str",
+        "default": "md",
+        "required": false,
+        "help": "输出正文格式（避免与 opencli 内建 -f/--format 撞名）",
+        "choices": [
+          "md",
+          "html",
+          "plain"
+        ]
+      }
+    ],
+    "columns": [
+      "title",
+      "subtitle",
+      "author",
+      "date",
+      "url",
+      "body"
+    ],
+    "type": "js",
+    "modulePath": "substack/post.js",
+    "sourceFile": "substack/post.js"
+  },
+  {
+    "site": "substack",
     "name": "publication",
     "description": "获取特定 Substack Newsletter 的最新文章",
     "domain": "substack.com",
@@ -15183,6 +15223,48 @@
   },
   {
     "site": "twitter",
+    "name": "list-create",
+    "description": "Create a new Twitter/X list",
+    "domain": "x.com",
+    "strategy": "ui",
+    "browser": true,
+    "args": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Name of the list"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "help": "Description of the list"
+      },
+      {
+        "name": "private",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Make list private (default: public)"
+      }
+    ],
+    "columns": [
+      "status",
+      "listId",
+      "name",
+      "description",
+      "mode",
+      "message"
+    ],
+    "type": "js",
+    "modulePath": "twitter/list-create.js",
+    "sourceFile": "twitter/list-create.js",
+    "navigateBefore": true
+  },
+  {
+    "site": "twitter",
     "name": "list-remove",
     "description": "Remove a user from a Twitter/X list you own (toggles via UI; no-op if not currently a member)",
     "domain": "x.com",
@@ -15691,6 +15773,54 @@
     "modulePath": "twitter/unfollow.js",
     "sourceFile": "twitter/unfollow.js",
     "navigateBefore": true
+  },
+  {
+    "site": "twitter",
+    "name": "user-tweets",
+    "description": "Fetch a Twitter user's tweet history (archives to SQLite, resumable)",
+    "domain": "x.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "username",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Twitter screen name (without @)."
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 0,
+        "required": false,
+        "help": "Max tweets to return (0 = unlimited)."
+      },
+      {
+        "name": "full",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Ignore local watermark and re-fetch."
+      },
+      {
+        "name": "db",
+        "type": "string",
+        "required": false,
+        "help": "Override SQLite DB path."
+      }
+    ],
+    "columns": [
+      "id",
+      "author",
+      "text",
+      "created_at",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "twitter/user-tweets.js",
+    "sourceFile": "twitter/user-tweets.js",
+    "navigateBefore": "https://x.com"
   },
   {
     "site": "uiverse",

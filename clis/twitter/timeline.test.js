@@ -30,6 +30,81 @@ describe('twitter timeline helpers', () => {
         expect(url).toContain('features=');
         expect(decodeURIComponent(url)).toContain('"seenTweetIds":[]');
     });
+    it('surfaces media[] when the timeline payload carries extended_entities', () => {
+        const payload = {
+            data: {
+                home: {
+                    home_timeline_urt: {
+                        instructions: [{
+                            entries: [{
+                                entryId: 'tweet-99',
+                                content: {
+                                    itemContent: {
+                                        tweet_results: {
+                                            result: {
+                                                rest_id: '99',
+                                                legacy: {
+                                                    full_text: 'with image',
+                                                    favorite_count: 0,
+                                                    retweet_count: 0,
+                                                    reply_count: 0,
+                                                    created_at: 'now',
+                                                    extended_entities: {
+                                                        media: [{
+                                                            type: 'photo',
+                                                            media_url_https: 'https://pbs.twimg.com/media/Z.jpg',
+                                                        }],
+                                                    },
+                                                },
+                                                core: { user_results: { result: { legacy: { screen_name: 'bob' } } } },
+                                                views: { count: '0' },
+                                            },
+                                        },
+                                    },
+                                },
+                            }],
+                        }],
+                    },
+                },
+            },
+        };
+        const { tweets } = __test__.parseHomeTimeline(payload, new Set());
+        expect(tweets).toHaveLength(1);
+        expect(tweets[0].media).toEqual([
+            { type: 'photo', url: 'https://pbs.twimg.com/media/Z?format=jpg&name=large' },
+        ]);
+    });
+
+    it('omits media key when the timeline payload has no media', () => {
+        const payload = {
+            data: {
+                home: {
+                    home_timeline_urt: {
+                        instructions: [{
+                            entries: [{
+                                entryId: 'tweet-100',
+                                content: {
+                                    itemContent: {
+                                        tweet_results: {
+                                            result: {
+                                                rest_id: '100',
+                                                legacy: { full_text: 'plain', favorite_count: 0, retweet_count: 0, reply_count: 0, created_at: 'now' },
+                                                core: { user_results: { result: { legacy: { screen_name: 'eve' } } } },
+                                                views: { count: '0' },
+                                            },
+                                        },
+                                    },
+                                },
+                            }],
+                        }],
+                    },
+                },
+            },
+        };
+        const { tweets } = __test__.parseHomeTimeline(payload, new Set());
+        expect(tweets[0]).not.toHaveProperty('media');
+    });
+
     it('parses tweets and bottom cursor from home timeline payload', () => {
         const payload = {
             data: {

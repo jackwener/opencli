@@ -209,6 +209,10 @@ cli({
                 const dialog = await waitFor(() => findOne('[role="dialog"]'));
                 if (!dialog) return { ok: false, message: 'List selection dialog did not open' };
 
+                // Wait for lists to actually populate in the dialog — X shows a spinner first
+                // and dialog.innerText may be empty until GraphQL (ListsManagement) resolves.
+                await waitFor(() => dialog.querySelectorAll('[data-testid="cellInnerDiv"]').length > 0, { timeoutMs: 10000, intervalMs: 300 });
+
                 const targetName = ${JSON.stringify(targetName)};
                 // Find the real scroll container (virtualized list). Try a few candidates.
                 const scrollCandidates = [

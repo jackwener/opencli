@@ -1,5 +1,6 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { AuthRequiredError, CommandExecutionError } from '@jackwener/opencli/errors';
+import { extractMedia } from './_media.js';
 
 const BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 const LIST_TWEETS_QUERY_ID = 'RlZzktZY_9wJynoepm8ZsA';
@@ -60,7 +61,8 @@ export function extractTimelineTweet(result, seen) {
     const screenName = user?.legacy?.screen_name || user?.core?.screen_name || 'unknown';
     const displayName = user?.legacy?.name || user?.core?.name || '';
     const noteText = tw.note_tweet?.note_tweet_results?.result?.text;
-    return {
+    const media = extractMedia(legacy);
+    const out = {
         id: tw.rest_id,
         author: screenName,
         name: displayName,
@@ -71,6 +73,8 @@ export function extractTimelineTweet(result, seen) {
         created_at: legacy.created_at || '',
         url: `https://x.com/${screenName}/status/${tw.rest_id}`,
     };
+    if (media) out.media = media;
+    return out;
 }
 
 export function parseListTimeline(data, seen) {

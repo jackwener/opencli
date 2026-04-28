@@ -1,5 +1,6 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { AuthRequiredError, CommandExecutionError } from '@jackwener/opencli/errors';
+import { extractMedia } from './_media.js';
 // ── Twitter GraphQL constants ──────────────────────────────────────────
 const BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 const TWEET_DETAIL_QUERY_ID = 'nBS-WpgA6ZG0CyNHD517JQ';
@@ -45,7 +46,8 @@ function extractTweet(r, seen) {
     const u = tw.core?.user_results?.result;
     const noteText = tw.note_tweet?.note_tweet_results?.result?.text;
     const screenName = u?.legacy?.screen_name || u?.core?.screen_name || 'unknown';
-    return {
+    const media = extractMedia(l);
+    const out = {
         id: tw.rest_id,
         author: screenName,
         text: noteText || l.full_text || '',
@@ -55,6 +57,8 @@ function extractTweet(r, seen) {
         created_at: l.created_at,
         url: `https://x.com/${screenName}/status/${tw.rest_id}`,
     };
+    if (media) out.media = media;
+    return out;
 }
 function parseTweetDetail(data, seen) {
     const tweets = [];

@@ -1,5 +1,6 @@
 import { CommandExecutionError } from '@jackwener/opencli/errors';
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { extractMedia } from './_media.js';
 /**
  * Trigger Twitter search SPA navigation with fallback strategies.
  *
@@ -149,7 +150,8 @@ cli({
                     seen.add(tweet.rest_id);
                     // Twitter moved screen_name from legacy to core
                     const tweetUser = tweet.core?.user_results?.result;
-                    results.push({
+                    const media = extractMedia(tweet.legacy);
+                    const row = {
                         id: tweet.rest_id,
                         author: tweetUser?.core?.screen_name || tweetUser?.legacy?.screen_name || 'unknown',
                         text: tweet.note_tweet?.note_tweet_results?.result?.text || tweet.legacy?.full_text || '',
@@ -157,7 +159,9 @@ cli({
                         likes: tweet.legacy?.favorite_count || 0,
                         views: tweet.views?.count || '0',
                         url: `https://x.com/i/status/${tweet.rest_id}`
-                    });
+                    };
+                    if (media) row.media = media;
+                    results.push(row);
                 }
             }
             catch (e) {
