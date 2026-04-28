@@ -18,6 +18,7 @@
  */
 
 import { htmlToMarkdown } from '../utils.js';
+import { assertNotInjected } from './security.js';
 
 const DEFAULT_CHUNK_SIZE = 20000;
 const MIN_CHUNK_SIZE = 100;
@@ -150,6 +151,7 @@ export function runExtractFromHtml(opts: RunExtractOptions): RunExtractResult {
         start: Math.max(0, opts.start),
         chunkSize: opts.chunkSize || DEFAULT_CHUNK_SIZE,
     });
+    assertNotInjected(chunk.content, `extract from "${opts.url}" selector="${opts.selector ?? 'auto'}"`);
     return {
         url: opts.url,
         title: opts.title,
