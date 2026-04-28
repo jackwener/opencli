@@ -44,6 +44,11 @@ const USER_CLIS = path.join(os.homedir(), '.opencli', 'clis');
     process.env.OPENCLI_WINDOW_FOCUSED = '1';
     process.argv.splice(focusIdx, 1);
   }
+  const reuseIdx = process.argv.indexOf('--reuse-window');
+  if (reuseIdx !== -1) {
+    process.env.OPENCLI_REUSE_WINDOW = '1';
+    process.argv.splice(reuseIdx, 1);
+  }
 }
 
 // ── Ultra-fast path: lightweight commands bypass full discovery ──────────

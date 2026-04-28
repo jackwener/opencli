@@ -5,6 +5,7 @@
 ### Features
 
 * **browser** — `bind` attaches `bound:*` workspaces to user-owned Chrome tabs without taking over window lifecycle; `sessions` reports `idleMsRemaining: null` for bound workspaces because they do not schedule idle close timers. ([#1169](https://github.com/jackwener/opencli/issues/1169), [#929](https://github.com/jackwener/opencli/issues/929))
+* **extension** — `--reuse-window` (and `OPENCLI_REUSE_WINDOW=1`) opens automation as a new tab in the user's last-focused Chrome window instead of spawning a separate window. Orthogonal to `--focus` (default opens in background); `--live` keeps the tab open instead of the window. Falls back to a new window when no normal Chrome window is available.
 
 ## [1.7.8](https://github.com/jackwener/opencli/compare/v1.7.7...v1.7.8) (2026-04-25)
 

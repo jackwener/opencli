@@ -127,6 +127,8 @@ type AutomationSession = {
   idleTimer: ReturnType<typeof setTimeout> | null;
   idleDeadlineAt: number;
   owned: boolean;
+  /** When false, OpenCLI owns only `preferredTabId` inside a user-shared window; cleanup must close the tab, not the window. */
+  ownsWindow: boolean;
   preferredTabId: number | null;
 };
 
@@ -156,6 +158,7 @@ function getIdleTimeout(workspace: string): number {
 }
 
 let windowFocused = false; // set per-command from daemon's OPENCLI_WINDOW_FOCUSED
+let reuseWindow = false;   // set per-command from daemon's OPENCLI_REUSE_WINDOW (--reuse-window flag)
 
 function getWorkspaceKey(workspace?: string): string {
   return workspace?.trim() || 'default';
@@ -182,8 +185,13 @@ function resetWindowIdleTimer(workspace: string): void {
       return;
     }
     try {
-      await chrome.windows.remove(current.windowId);
-      console.log(`[opencli] Automation window ${current.windowId} (${workspace}) closed (idle timeout, ${timeout / 1000}s)`);
+      if (current.ownsWindow) {
+        await chrome.windows.remove(current.windowId);
+        console.log(`[opencli] Automation window ${current.windowId} (${workspace}) closed (idle timeout, ${timeout / 1000}s)`);
+      } else if (current.preferredTabId !== null) {
+        await chrome.tabs.remove(current.preferredTabId);
+        console.log(`[opencli] Automation tab ${current.preferredTabId} (${workspace}) closed (idle timeout, ${timeout / 1000}s)`);
+      }
     } catch {
       // Already gone
     }
@@ -226,6 +234,40 @@ async function getAutomationWindow(workspace: string, initialUrl?: string): Prom
   // Use the target URL directly if it's a safe navigation URL, otherwise fall back to about:blank.
   const startUrl = (initialUrl && isSafeNavigationUrl(initialUrl)) ? initialUrl : BLANK_PAGE;
 
+  // ── Tab mode (--reuse-window): open a new tab in the user's last-focused
+  //    Chrome window instead of creating a brand-new window. Falls back to
+  //    window mode below when no normal Chrome window exists.
+  if (reuseWindow) {
+    let hostWindow: chrome.windows.Window | null = null;
+    try {
+      hostWindow = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+    } catch {
+      hostWindow = null;
+    }
+    if (hostWindow?.id != null) {
+      const tab = await chrome.tabs.create({
+        windowId: hostWindow.id,
+        url: startUrl,
+        active: windowFocused, // --focus switches to it; otherwise opens in background
+      });
+      const session: AutomationSession = {
+        windowId: hostWindow.id,
+        idleTimer: null,
+        idleDeadlineAt: Date.now() + getIdleTimeout(workspace),
+        owned: true,
+        ownsWindow: false, // we only own the tab, not the user's window
+        preferredTabId: tab.id!,
+      };
+      automationSessions.set(workspace, session);
+      console.log(`[opencli] Created automation tab ${tab.id} in window ${hostWindow.id} (${workspace}, start=${startUrl}, reuse-window)`);
+      resetWindowIdleTimer(workspace);
+      await waitForTabComplete(tab.id!);
+      return session.windowId;
+    }
+    console.log('[opencli] reuse-window requested but no normal Chrome window found, falling back to new window');
+  }
+
+  // ── Window mode (default): dedicated automation window ────────────────
   // Note: Do NOT set `state` parameter here. Chrome 146+ rejects 'normal' as an invalid
   // state value for windows.create(). The window defaults to 'normal' state anyway.
   const win = await chrome.windows.create({
@@ -240,6 +282,7 @@ async function getAutomationWindow(workspace: string, initialUrl?: string): Prom
     idleTimer: null,
     idleDeadlineAt: Date.now() + getIdleTimeout(workspace),
     owned: true,
+    ownsWindow: true,
     preferredTabId: null,
   };
   automationSessions.set(workspace, session);
@@ -247,26 +290,33 @@ async function getAutomationWindow(workspace: string, initialUrl?: string): Prom
   resetWindowIdleTimer(workspace);
   // Wait for the initial tab to finish loading instead of a fixed 200ms sleep.
   const tabs = await chrome.tabs.query({ windowId: win.id! });
-  if (tabs[0]?.id) {
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(resolve, 500); // fallback cap
-      const listener = (tabId: number, info: chrome.tabs.TabChangeInfo) => {
-        if (tabId === tabs[0].id && info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
-          clearTimeout(timeout);
-          resolve();
-        }
-      };
-      // Check if already complete before listening
-      if (tabs[0].status === 'complete') {
+  if (tabs[0]?.id) await waitForTabComplete(tabs[0].id);
+  return session.windowId;
+}
+
+/** Wait for a tab to reach status='complete', with a 500ms fallback cap. */
+async function waitForTabComplete(tabId: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, 500);
+    const listener = (changedTabId: number, info: chrome.tabs.TabChangeInfo) => {
+      if (changedTabId === tabId && info.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        clearTimeout(timeout);
+        resolve();
+      }
+    };
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab.status === 'complete') {
         clearTimeout(timeout);
         resolve();
       } else {
         chrome.tabs.onUpdated.addListener(listener);
       }
+    }).catch(() => {
+      clearTimeout(timeout);
+      resolve();
     });
-  }
-  return session.windowId;
+  });
 }
 
 // Clean up when the automation window is closed
@@ -285,11 +335,21 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   identity.evictTab(tabId);
   for (const [workspace, session] of automationSessions.entries()) {
-    if (!session.owned && session.preferredTabId === tabId) {
+    if (session.preferredTabId !== tabId) continue;
+    // Bound-current (borrowed) sessions: user closed the tab we were attached to.
+    if (!session.owned) {
       if (session.idleTimer) clearTimeout(session.idleTimer);
       automationSessions.delete(workspace);
       workspaceTimeoutOverrides.delete(workspace);
       console.log(`[opencli] Borrowed workspace ${workspace} detached from tab ${tabId} (tab closed)`);
+      continue;
+    }
+    // Tab-mode automation sessions (--reuse-window): our owned tab was closed.
+    if (!session.ownsWindow) {
+      if (session.idleTimer) clearTimeout(session.idleTimer);
+      automationSessions.delete(workspace);
+      workspaceTimeoutOverrides.delete(workspace);
+      console.log(`[opencli] Tab-mode workspace ${workspace} cleaned (tab ${tabId} closed)`);
     }
   }
 });
@@ -337,6 +397,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 async function handleCommand(cmd: Command): Promise<Result> {
   const workspace = getWorkspaceKey(cmd.workspace);
   windowFocused = cmd.windowFocused === true;
+  reuseWindow = cmd.reuseWindow === true;
   // Apply custom idle timeout if specified in the command
   if (cmd.idleTimeout != null && cmd.idleTimeout > 0) {
     workspaceTimeoutOverrides.set(workspace, cmd.idleTimeout * 1000);
@@ -591,6 +652,24 @@ async function resolveTab(tabId: number | undefined, workspace: string, initialU
 
   // Get (or create) the automation window
   const windowId = await getAutomationWindow(workspace, initialUrl);
+
+  // Tab-mode safety: in --reuse-window the host window also contains the user's
+  // own tabs. If our preferred tab was lost above, do NOT silently take over
+  // an unrelated user tab — fail closed and let the caller re-issue.
+  const sessAfterAcquire = automationSessions.get(workspace);
+  if (sessAfterAcquire && sessAfterAcquire.owned && !sessAfterAcquire.ownsWindow) {
+    if (sessAfterAcquire.preferredTabId !== null) {
+      try {
+        const tab = await chrome.tabs.get(sessAfterAcquire.preferredTabId);
+        if (isDebuggableUrl(tab.url)) return { tabId: tab.id!, tab };
+      } catch { /* fall through to error */ }
+    }
+    throw new CommandFailure(
+      'automation_tab_gone',
+      `Automation tab for workspace "${workspace}" was closed.`,
+      'Re-run the command; OpenCLI will open a fresh tab in the host window.',
+    );
+  }
 
   // Prefer an existing debuggable tab
   const tabs = await chrome.tabs.query({ windowId });
@@ -967,9 +1046,13 @@ async function handleCloseWindow(cmd: Command, workspace: string): Promise<Resul
   if (session) {
     if (session.owned) {
       try {
-        await chrome.windows.remove(session.windowId);
+        if (session.ownsWindow) {
+          await chrome.windows.remove(session.windowId);
+        } else if (session.preferredTabId !== null) {
+          await chrome.tabs.remove(session.preferredTabId);
+        }
       } catch {
-        // Window may already be closed
+        // Window/tab may already be closed
       }
     } else if (session.preferredTabId !== null) {
       await executor.detach(session.preferredTabId).catch(() => {});
@@ -1089,6 +1172,7 @@ async function handleBind(cmd: Command, workspace: string): Promise<Result> {
   setWorkspaceSession(workspace, {
     windowId: boundTab.windowId,
     owned: false,
+    ownsWindow: false, // bound sessions never own a window — they borrow a user tab
     preferredTabId: boundTab.id,
   });
   resetWindowIdleTimer(workspace);
@@ -1124,10 +1208,11 @@ export const __test__ = {
     setWorkspaceSession(workspace, {
       windowId,
       owned: true,
+      ownsWindow: true,
       preferredTabId: null,
     });
   },
-  setSession: (workspace: string, session: { windowId: number; owned: boolean; preferredTabId: number | null }) => {
-    setWorkspaceSession(workspace, session);
+  setSession: (workspace: string, session: { windowId: number; owned: boolean; ownsWindow?: boolean; preferredTabId: number | null }) => {
+    setWorkspaceSession(workspace, { ownsWindow: session.owned, ...session });
   },
 };

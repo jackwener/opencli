@@ -167,6 +167,7 @@ OpenCLI 不只是网站 CLI，还可以：
 | `OPENCLI_DAEMON_PORT` | `19825` | daemon-extension 通信端口 |
 | `OPENCLI_WINDOW_FOCUSED` | `false` | 设为 `1` 时 automation 窗口在前台打开（适合调试）。`--focus` 标志会设置此变量 |
 | `OPENCLI_LIVE` | `false` | 设为 `1` 时 adapter 命令执行完后保留 automation 窗口不关闭（适合检查页面）。`--live` 标志会设置此变量 |
+| `OPENCLI_REUSE_WINDOW` | `false` | 设为 `1` 时在你已有的 Chrome 窗口里以新 tab 方式打开 automation，而不是新开窗口；零窗口时自动 fallback 开新窗口。`--reuse-window` 标志会设置此变量 |
 | `OPENCLI_BROWSER_CONNECT_TIMEOUT` | `30` | 浏览器连接超时（秒） |
 | `OPENCLI_BROWSER_COMMAND_TIMEOUT` | `60` | 单个浏览器命令超时（秒） |
 | `OPENCLI_CDP_ENDPOINT` | — | Chrome DevTools Protocol 端点，用于远程浏览器或 Electron 应用 |
@@ -176,6 +177,8 @@ OpenCLI 不只是网站 CLI，还可以：
 | `DEBUG_SNAPSHOT` | — | 设为 `1` 输出 DOM 快照调试信息 |
 
 `--focus` 同时适用于 `opencli browser *` 和浏览器型 adapter 命令。`--live` 主要是给 adapter 命令用的：`browser` 子命令本来就会一直保留 automation window，直到你手动执行 `opencli browser close` 或等空闲超时。
+
+`--reuse-window` 让 automation 在你最近聚焦过的那个 Chrome 普通窗口里新开一个 tab，而不是弹出独立窗口。它跟 `--focus` 正交：默认会以**后台 tab** 形式打开（不打扰你当前 tab），加 `--focus` 才会切到那个新 tab。`--live` 在 tab 模式下保留的是 tab 而不是窗口。如果当前 Chrome 没有任何普通窗口（极端情况），会自动 fallback 到新建窗口的旧行为。
 
 ## 更新
 

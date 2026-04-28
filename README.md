@@ -169,6 +169,7 @@ OpenCLI is not only for websites. It can also:
 | `OPENCLI_DAEMON_PORT` | `19825` | HTTP port for the daemon-extension bridge |
 | `OPENCLI_WINDOW_FOCUSED` | `false` | Set to `1` to open automation windows in the foreground (useful for debugging). The `--focus` flag sets this. |
 | `OPENCLI_LIVE` | `false` | Set to `1` to keep the automation window open after an adapter command finishes (useful for inspection). The `--live` flag sets this. |
+| `OPENCLI_REUSE_WINDOW` | `false` | Set to `1` to open automation as a new tab in your last-focused Chrome window instead of creating a separate window; falls back to a new window if no normal Chrome window exists. The `--reuse-window` flag sets this. |
 | `OPENCLI_BROWSER_CONNECT_TIMEOUT` | `30` | Seconds to wait for browser connection |
 | `OPENCLI_BROWSER_COMMAND_TIMEOUT` | `60` | Seconds to wait for a single browser command |
 | `OPENCLI_CDP_ENDPOINT` | — | Chrome DevTools Protocol endpoint for remote browser or Electron apps |
@@ -178,6 +179,8 @@ OpenCLI is not only for websites. It can also:
 | `DEBUG_SNAPSHOT` | — | Set to `1` for DOM snapshot debug output |
 
 `--focus` works for both `opencli browser *` and browser-backed adapter commands. `--live` is mainly for adapter commands: browser subcommands already keep the automation window open until you run `opencli browser close` or the idle timeout expires.
+
+`--reuse-window` opens automation as a new tab inside your last-focused normal Chrome window instead of spawning a separate window. It is orthogonal to `--focus`: by default the new tab opens in the background (so your current tab is not disturbed); add `--focus` to switch to it. With `--reuse-window`, `--live` keeps the tab open instead of the whole window. If Chrome has zero normal windows when the command runs, it automatically falls back to creating a new window.
 
 ## Update
 

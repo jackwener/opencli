@@ -106,6 +106,9 @@ function createChromeMock() {
       get: vi.fn(async (windowId: number) => ({ id: windowId })),
       create: vi.fn(async ({ url, focused, width, height, type }: any) => ({ id: 1, url, focused, width, height, type })),
       remove: vi.fn(async (_windowId: number) => {}),
+      getLastFocused: vi.fn(async (_filters?: { windowTypes?: string[] }) => ({
+        id: 1, type: 'normal', focused: true, incognito: false, alwaysOnTop: false, state: 'normal', tabs: [],
+      })) as any,
       onRemoved: { addListener: vi.fn() } as Listener<(windowId: number) => void>,
     },
     alarms: {
@@ -544,6 +547,92 @@ describe('background tab isolation', () => {
 
     expect(chrome.windows.remove).toHaveBeenCalledWith(1);
     expect(mod.__test__.getSession('site:notebooklm')).toBeNull();
+  });
+
+  it('reuse-window opens a new tab in the last-focused Chrome window', async () => {
+    const { chrome, create } = createChromeMock();
+    chrome.windows.getLastFocused = vi.fn(async () => ({
+      id: 99, type: 'normal', focused: true, incognito: false, alwaysOnTop: false, state: 'normal', tabs: [],
+    })) as any;
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+
+    await mod.__test__.handleCommand({
+      id: 'reuse-1',
+      action: 'navigate',
+      url: 'https://example.com/',
+      workspace: 'site:reuse-test',
+      reuseWindow: true,
+    });
+
+    // No new window should have been created
+    expect(chrome.windows.create).not.toHaveBeenCalled();
+    // A tab should have been created in the last-focused window (id=99)
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ windowId: 99 }));
+
+    const session = mod.__test__.getSession('site:reuse-test');
+    expect(session).toEqual(expect.objectContaining({
+      windowId: 99,
+      owned: true,
+      ownsWindow: false,
+    }));
+    expect(session?.preferredTabId).toBeTypeOf('number');
+  });
+
+  it('reuse-window falls back to a new window when no normal Chrome window exists', async () => {
+    const { chrome } = createChromeMock();
+    chrome.windows.getLastFocused = vi.fn(async () => {
+      throw new Error('no normal window available');
+    }) as any;
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+
+    await mod.__test__.handleCommand({
+      id: 'reuse-fallback',
+      action: 'navigate',
+      url: 'https://example.com/',
+      workspace: 'site:reuse-fallback',
+      reuseWindow: true,
+    });
+
+    // Falls back to legacy behaviour: a brand-new automation window
+    expect(chrome.windows.create).toHaveBeenCalled();
+
+    const session = mod.__test__.getSession('site:reuse-fallback');
+    expect(session).toEqual(expect.objectContaining({
+      owned: true,
+      ownsWindow: true,
+    }));
+  });
+
+  it('idle timeout closes the tab (not the window) for reuse-window sessions', async () => {
+    const { chrome } = createChromeMock();
+    chrome.windows.getLastFocused = vi.fn(async () => ({
+      id: 99, type: 'normal', focused: true, incognito: false, alwaysOnTop: false, state: 'normal', tabs: [],
+    })) as any;
+    vi.useFakeTimers();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+
+    await mod.__test__.handleCommand({
+      id: 'reuse-idle',
+      action: 'navigate',
+      url: 'https://example.com/',
+      workspace: 'site:reuse-idle',
+      reuseWindow: true,
+    });
+
+    // 30s adapter idle timeout fires
+    await vi.advanceTimersByTimeAsync(30001);
+
+    // Cleanup must close the tab — never the host window — to avoid killing
+    // the user's own Chrome window in tab-mode.
+    expect(chrome.tabs.remove).toHaveBeenCalled();
+    expect(chrome.windows.remove).not.toHaveBeenCalled();
+    expect(mod.__test__.getSession('site:reuse-idle')).toBeNull();
   });
 
   it('uses 10-minute timeout for browser:* workspaces', async () => {
