@@ -15,12 +15,13 @@ cli({
   const strip = (html) => (html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/<em>/g, '').replace(/<\\/em>/g, '').trim();
   const keyword = \${{ args.query | json }};
   const limit = \${{ args.limit }};
-  const res = await fetch('https://www.zhihu.com/api/v4/search_v3?q=' + encodeURIComponent(keyword) + '&t=general&offset=0&limit=' + limit, {
+  var fetchLimit = Math.max(limit * 3, 30);
+  const res = await fetch('https://www.zhihu.com/api/v4/search_v3?q=' + encodeURIComponent(keyword) + '&t=general&offset=0&limit=' + fetchLimit, {
     credentials: 'include'
   });
   const d = await res.json();
   return (d?.data || [])
-    .filter(item => item.type === 'search_result')
+    .filter(item => item.object && (item.object.type === 'answer' || item.object.type === 'article' || item.object.type === 'question'))
     .map(item => {
       const obj = item.object || {};
       const q = obj.question || {};
