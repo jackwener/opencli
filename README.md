@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/jackwener-opencli-badge.png)](https://mseep.ai/app/jackwener-opencli)
+
 # OpenCLI
 
 > **Turn websites, browser sessions, Electron apps, and local tools into deterministic interfaces for humans and AI agents.**
