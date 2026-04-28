@@ -208,3 +208,24 @@ DONE
 - endpoint 找不到：api-discovery §5 intercept 兜底
 
 不要猜。猜错了 verify 能通过但数据是错的，用户看到乱码才发现。
+
+## eval Security Rule
+
+When using `evaluateWithArgs()` or `evaluate()` in your adapter:
+
+- **Use `evaluateWithArgs(js, args)` — NEVER string-concatenate page data into `js`.**
+  The method serializes `args` as JSON constants, which prevents injection.
+- The `js` string MUST be written literally in your adapter source code.
+  It MUST NOT contain values read from the page at runtime.
+
+```
+// CORRECT — args are JSON-serialized, js is static
+await page.evaluateWithArgs(
+  'return document.querySelector(selector)?.innerText',
+  { selector }
+);
+
+// WRONG — concatenating page-derived data into js string
+const title = await page.evaluate('return document.title');
+await page.evaluate(`fetch('/api/${title}')`);  // injection risk
+```
