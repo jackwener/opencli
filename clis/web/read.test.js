@@ -36,6 +36,7 @@ describe('web/read stdout behavior', () => {
 
     beforeEach(() => {
         vi.restoreAllMocks();
+        vi.useRealTimers();
         mockDownloadArticle.mockReset();
         mockDownloadArticle.mockResolvedValue([{
             title: 'Example Article',
@@ -162,6 +163,47 @@ describe('web/read stdout behavior', () => {
         });
 
         expect(page.evaluate.mock.calls[0]?.[0]).toContain('const frameMode = "none"');
+    });
+
+    it('fails fast when --wait-until networkidle is requested but capture is unavailable', async () => {
+        page.startNetworkCapture.mockResolvedValue(false);
+
+        await expect(read.func(page, {
+            url: 'https://example.com/article',
+            output: '/tmp/out',
+            'download-images': false,
+            'wait-until': 'networkidle',
+            wait: 2,
+            stdout: false,
+        })).rejects.toThrow('Network capture is unavailable');
+
+        expect(page.wait).not.toHaveBeenCalled();
+        expect(mockDownloadArticle).not.toHaveBeenCalled();
+    });
+
+    it('fails fast when network traffic never settles before the networkidle timeout', async () => {
+        vi.useFakeTimers();
+        page.readNetworkCapture.mockResolvedValue([{
+            method: 'POST',
+            url: 'https://example.com/api/data',
+            responseStatus: 200,
+            responseContentType: 'application/json',
+            responsePreview: '{"ok":true}',
+        }]);
+
+        const pending = read.func(page, {
+            url: 'https://example.com/article',
+            output: '/tmp/out',
+            'download-images': false,
+            'wait-until': 'networkidle',
+            wait: 1,
+            stdout: false,
+        });
+
+        await vi.advanceTimersByTimeAsync(2000);
+
+        await expect(pending).rejects.toThrow('Timed out waiting for network idle after 1s');
+        expect(mockDownloadArticle).not.toHaveBeenCalled();
     });
 });
 

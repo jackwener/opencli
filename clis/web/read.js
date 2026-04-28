@@ -404,10 +404,12 @@ const command = cli({
             await page.wait(waitSeconds);
         }
         if (waitUntil === 'networkidle') {
-            if (captureSupported) {
-                await waitForNetworkIdle(page, waitSeconds, networkEntries);
-            } else {
-                await page.wait(waitSeconds);
+            if (!captureSupported) {
+                throw new Error('Network capture is unavailable, so --wait-until networkidle cannot be satisfied');
+            }
+            const idle = await waitForNetworkIdle(page, waitSeconds, networkEntries);
+            if (!idle?.ok) {
+                throw new Error(`Timed out waiting for network idle after ${waitSeconds}s`);
             }
         }
         // Extract article content using browser-side heuristics
