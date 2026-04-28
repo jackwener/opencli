@@ -191,18 +191,18 @@ describe('web/read stdout behavior', () => {
             responsePreview: '{"ok":true}',
         }]);
 
-        const pending = read.func(page, {
+        const pending = expect(read.func(page, {
             url: 'https://example.com/article',
             output: '/tmp/out',
             'download-images': false,
             'wait-until': 'networkidle',
             wait: 1,
             stdout: false,
-        });
+        })).rejects.toThrow('Timed out waiting for network idle after 1s');
 
         await vi.advanceTimersByTimeAsync(2000);
 
-        await expect(pending).rejects.toThrow('Timed out waiting for network idle after 1s');
+        await pending;
         expect(mockDownloadArticle).not.toHaveBeenCalled();
     });
 });
