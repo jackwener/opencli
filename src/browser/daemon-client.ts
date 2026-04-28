@@ -48,6 +48,8 @@ export interface DaemonCommand {
   cdpParams?: Record<string, unknown>;
   /** When true, automation windows are created in the foreground */
   windowFocused?: boolean;
+  /** When true, automation reuses the user's last-focused Chrome window by opening a new tab instead of creating a new window. */
+  reuseWindow?: boolean;
   /** Custom idle timeout in seconds for this workspace session. Overrides the default. */
   idleTimeout?: number;
   /** Explicitly allow navigation inside a borrowed bound-current tab. */
@@ -156,7 +158,13 @@ async function sendCommandRaw(
     const id = generateId();
     const wf = process.env.OPENCLI_WINDOW_FOCUSED;
     const windowFocused = (wf === '1' || wf === 'true') ? true : undefined;
-    const command: DaemonCommand = { id, action, ...params, ...(windowFocused && { windowFocused }) };
+    const rw = process.env.OPENCLI_REUSE_WINDOW;
+    const reuseWindow = (rw === '1' || rw === 'true') ? true : undefined;
+    const command: DaemonCommand = {
+      id, action, ...params,
+      ...(windowFocused && { windowFocused }),
+      ...(reuseWindow && { reuseWindow }),
+    };
     try {
       const res = await requestDaemon('/command', {
         method: 'POST',

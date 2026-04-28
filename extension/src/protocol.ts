@@ -64,6 +64,8 @@ export interface Command {
   cdpParams?: Record<string, unknown>;
   /** When true, automation windows are created in the foreground (focused) */
   windowFocused?: boolean;
+  /** When true, automation opens a new tab in the user's last-focused Chrome window instead of creating a new window. */
+  reuseWindow?: boolean;
   /** Custom idle timeout in seconds for this workspace session. Overrides the default. */
   idleTimeout?: number;
   /** Explicitly allow navigation inside a borrowed bound-current tab. */
