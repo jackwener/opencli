@@ -41,7 +41,7 @@ export const imageCommand = cli({
     timeoutSeconds: 240,
     args: [
         { name: 'prompt', positional: true, required: true, help: 'Image prompt to send to ChatGPT' },
-        { name: 'op', default: '~/Pictures/chatgpt', help: 'Output directory' },
+        { name: 'op', help: 'Output directory (default: ~/Pictures/chatgpt)' },
         { name: 'sd', type: 'boolean', default: false, help: 'Skip download shorthand; only show ChatGPT link' },
     ],
     columns: ['status', 'file', 'link'],
@@ -63,9 +63,20 @@ export const imageCommand = cli({
             return [{ status: '⚠️ send-failed', file: '📁 -', link: `🔗 ${await currentChatGPTLink(page)}` }];
         }
 
-        // Wait for response and images
-        const urls = await waitForChatGPTImages(page, beforeUrls, timeout);
-        const link = await currentChatGPTLink(page);
+        // ChatGPT briefly navigates to /c/{id} after sending, then may
+        // redirect back to the home page. Poll until we capture the /c/ URL.
+        let convUrl = '';
+        for (let ci = 0; ci < 10; ci++) {
+            const url = await currentChatGPTLink(page);
+            if (url.includes('/c/')) { convUrl = url; break; }
+            await page.wait(2);
+        }
+        if (!convUrl) {
+            convUrl = await currentChatGPTLink(page);
+        }
+
+        const urls = await waitForChatGPTImages(page, beforeUrls, timeout, convUrl);
+        const link = convUrl;
 
         if (!urls.length) {
             return [{ status: '⚠️ no-images', file: '📁 -', link: `🔗 ${link}` }];

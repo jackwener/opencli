@@ -7,11 +7,14 @@ export const CHATGPT_DOMAIN = 'chatgpt.com';
 export const CHATGPT_URL = 'https://chatgpt.com';
 
 // Selectors
-const COMPOSER_SELECTOR = '[aria-label="Chat with ChatGPT"]';
+const COMPOSER_SELECTORS = [
+    '[aria-label="Chat with ChatGPT"]',
+    '[placeholder="Ask anything"]',
+    '#prompt-textarea',
+];
 const SEND_BTN_SELECTOR = 'button[aria-label="Send prompt"]';
 
 function buildComposerLocatorScript() {
-    const selectorsJson = JSON.stringify([COMPOSER_SELECTOR]);
     const markerAttr = 'data-opencli-chatgpt-composer';
     return `
       const isVisible = (el) => {
@@ -33,7 +36,7 @@ function buildComposerLocatorScript() {
         const marked = document.querySelector('[' + markerAttr + '="1"]');
         if (marked instanceof HTMLElement && isVisible(marked)) return marked;
 
-        for (const selector of ${JSON.stringify([COMPOSER_SELECTOR])}) {
+        for (const selector of ${JSON.stringify(COMPOSER_SELECTORS)}) {
           const node = Array.from(document.querySelectorAll(selector)).find(c => c instanceof HTMLElement && isVisible(c));
           if (node instanceof HTMLElement) {
             node.setAttribute(markerAttr, '1');
@@ -89,7 +92,9 @@ export async function sendChatGPTMessage(page, text) {
         // Fallback: use execCommand
         await page.evaluate(`
             (() => {
-                const composer = document.querySelector('[aria-label="Chat with ChatGPT"]');
+                var composer = null;
+                var sels = ${JSON.stringify(COMPOSER_SELECTORS)};
+                for (var si = 0; si < sels.length; si++) { composer = document.querySelector(sels[si]); if (composer) break; }
                 if (!composer) return;
                 composer.focus();
                 document.execCommand('insertText', false, ${JSON.stringify(text)});
@@ -181,7 +186,7 @@ export async function getChatGPTVisibleImageUrls(page) {
 /**
  * Wait for new images to appear after sending a prompt.
  */
-export async function waitForChatGPTImages(page, beforeUrls, timeoutSeconds) {
+export async function waitForChatGPTImages(page, beforeUrls, timeoutSeconds, convUrl) {
     const beforeSet = new Set(beforeUrls);
     const pollIntervalSeconds = 3;
     const maxPolls = Math.max(1, Math.ceil(timeoutSeconds / pollIntervalSeconds));
@@ -191,7 +196,17 @@ export async function waitForChatGPTImages(page, beforeUrls, timeoutSeconds) {
     for (let i = 0; i < maxPolls; i++) {
         await page.wait(i === 0 ? 3 : pollIntervalSeconds);
 
-        // Check if still generating
+        if (convUrl && convUrl.includes('/c/')) {
+            const currentUrl = await page.evaluate('window.location.href').catch(() => '');
+            if (currentUrl && !currentUrl.includes('/c/')) {
+                await page.goto(convUrl);
+                await page.wait(3);
+            } else if (i > 0 && i % 5 === 0) {
+                await page.goto(convUrl);
+                await page.wait(3);
+            }
+        }
+
         const generating = await isGenerating(page);
         if (generating) continue;
 

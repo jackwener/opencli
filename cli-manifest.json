@@ -3532,9 +3532,8 @@
       {
         "name": "op",
         "type": "str",
-        "default": "~/Pictures/chatgpt",
         "required": false,
-        "help": "Output directory"
+        "help": "Output directory (default: ~/Pictures/chatgpt)"
       },
       {
         "name": "sd",
