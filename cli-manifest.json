@@ -4381,10 +4381,11 @@
         "type": "str",
         "default": "instant",
         "required": false,
-        "help": "Model to use: instant or expert",
+        "help": "Model to use: instant, expert, or vision",
         "choices": [
           "instant",
-          "expert"
+          "expert",
+          "vision"
         ]
       },
       {
