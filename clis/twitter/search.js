@@ -103,7 +103,7 @@ cli({
         { name: 'filter', type: 'string', default: 'top', choices: ['top', 'live'] },
         { name: 'limit', type: 'int', default: 15 },
     ],
-    columns: ['id', 'author', 'text', 'created_at', 'likes', 'views', 'url'],
+    columns: ['id', 'author', 'bio', 'text', 'created_at', 'likes', 'views', 'url'],
     func: async (page, kwargs) => {
         const query = kwargs.query;
         const filter = kwargs.filter === 'live' ? 'live' : 'top';
@@ -150,10 +150,12 @@ cli({
                     seen.add(tweet.rest_id);
                     // Twitter moved screen_name from legacy to core
                     const tweetUser = tweet.core?.user_results?.result;
+                    const bio = tweetUser?.legacy?.description || '';
                     const media = extractMedia(tweet.legacy);
                     const row = {
                         id: tweet.rest_id,
                         author: tweetUser?.core?.screen_name || tweetUser?.legacy?.screen_name || 'unknown',
+                        bio,
                         text: tweet.note_tweet?.note_tweet_results?.result?.text || tweet.legacy?.full_text || '',
                         created_at: tweet.legacy?.created_at || '',
                         likes: tweet.legacy?.favorite_count || 0,
