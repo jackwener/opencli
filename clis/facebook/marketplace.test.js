@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '@jackwener/opencli/registry';
 import './marketplace-listings.js';
 import './marketplace-inbox.js';
+import './marketplace-reply.js';
 
 function makePage(overrides = {}) {
   return {
@@ -65,5 +66,49 @@ describe('facebook marketplace read commands', () => {
     const page = makePage({ evaluate: vi.fn().mockResolvedValue([]) });
 
     await expect(command.func(page, { limit: 5 })).rejects.toThrow('Could not find Facebook Marketplace inbox conversations');
+  });
+});
+
+describe('facebook marketplace reply command', () => {
+  it('drafts a reply by default and does not press Enter', async () => {
+    const command = getRegistry().get('facebook/marketplace-reply');
+    expect(command).toBeDefined();
+    const page = makePage({
+      evaluate: vi.fn()
+        .mockResolvedValueOnce({ ok: true, label: 'Kulwant · White 3-tier rolling utility cart' })
+        .mockResolvedValueOnce({ ok: true, aria: 'Write to Kulwant · White 3-tier rolling utility cart', draft: 'Yes still available' })
+        .mockResolvedValueOnce({ textVisible: true, composerDrafts: ['Yes still available'], url: 'https://www.facebook.com/marketplace/inbox/' }),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const rows = await command.func(page, {
+      text: 'Yes still available',
+      buyer: 'Kulwant',
+      listing: 'White 3-tier rolling utility cart',
+    });
+
+    expect(page.goto).toHaveBeenCalledWith('https://www.facebook.com/marketplace/inbox/');
+    expect(page.pressKey).not.toHaveBeenCalled();
+    expect(rows[0]).toMatchObject({ status: 'drafted', sent: false, buyer: 'Kulwant', verified: true });
+  });
+
+  it('requires --send true before pressing Enter to send', async () => {
+    const command = getRegistry().get('facebook/marketplace-reply');
+    const page = makePage({
+      evaluate: vi.fn()
+        .mockResolvedValueOnce({ ok: true, label: 'Gabriel · Black electric standing desk' })
+        .mockResolvedValueOnce({ ok: true, aria: 'Write to Gabriel · Black electric standing desk', draft: 'Pickup today works' })
+        .mockResolvedValueOnce({ textVisible: true, composerDrafts: [], url: 'https://www.facebook.com/marketplace/inbox/' }),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await command.func(page, {
+      text: 'Pickup today works',
+      buyer: 'Gabriel',
+      listing: 'Black electric standing desk',
+      send: 'true',
+    });
+
+    expect(page.pressKey).toHaveBeenCalledWith('Enter');
   });
 });
