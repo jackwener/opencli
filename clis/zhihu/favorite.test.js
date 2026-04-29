@@ -27,6 +27,29 @@ describe('zhihu favorite', () => {
         await expect(cmd.func(page, { target: 'answer:1:2', 'collection-id': '123', execute: true }))
             .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
     });
+    it('requires exact normalized collection-name matches', async () => {
+        const cmd = getRegistry().get('zhihu/favorite');
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockResolvedValueOnce({ ok: false, message: 'Collection not found: AI' }),
+        };
+        await expect(cmd.func(page, { target: 'answer:1:2', collection: 'AI', execute: true }))
+            .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
+        expect(page.evaluate.mock.calls[0][0]).toContain('normalizeCollectionName(c.title) === needle');
+        expect(page.evaluate.mock.calls[0][0]).not.toContain('.includes(needle)');
+    });
+    it('fails fast on ambiguous collection-name matches', async () => {
+        const cmd = getRegistry().get('zhihu/favorite');
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockResolvedValueOnce({ ok: false, message: 'Collection name is ambiguous: 默认收藏夹' }),
+        };
+        await expect(cmd.func(page, { target: 'answer:1:2', collection: '默认收藏夹', execute: true }))
+            .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
+        expect(page.evaluate.mock.calls[0][0]).toContain('matches.length > 1');
+    });
     it('requires exactly one of --collection or --collection-id', async () => {
         const cmd = getRegistry().get('zhihu/favorite');
         const page = { goto: vi.fn(), wait: vi.fn(), evaluate: vi.fn() };

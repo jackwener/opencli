@@ -41,14 +41,27 @@ cli({
             var collectionName = ${JSON.stringify(collectionName || null)};
             var targetKind = ${JSON.stringify(target.kind)};
             var targetId = ${JSON.stringify(target.id)};
+            var normalizeCollectionName = function(value) {
+                return String(value || '')
+                    .replace(/\\s+/g, ' ')
+                    .replace(/\\s+\\d+\\s*(条内容|个内容|items?)$/i, '')
+                    .replace(/\\s+(公开|私密|默认)$/i, '')
+                    .trim()
+                    .toLowerCase();
+            };
 
             if (!collectionId && collectionName) {
                 var listResp = await fetch('https://www.zhihu.com/api/v4/people/self/collections?limit=50', { credentials: 'include' });
-                var listData = await listResp.json();
-                var needle = collectionName.replace(/\\s+/g, ' ').trim().toLowerCase();
-                var match = (listData.data || []).find(function(c) { return c.title.toLowerCase().includes(needle); });
-                if (!match) return { ok: false, message: 'Collection not found: ' + collectionName };
-                collectionId = String(match.id);
+                if (!listResp.ok) return { ok: false, message: 'Failed to list collections: HTTP ' + listResp.status };
+                var listData = {};
+                try { listData = await listResp.json(); } catch(e) {
+                    return { ok: false, message: 'Failed to parse collection list' };
+                }
+                var needle = normalizeCollectionName(collectionName);
+                var matches = (listData.data || []).filter(function(c) { return normalizeCollectionName(c.title) === needle; });
+                if (matches.length === 0) return { ok: false, message: 'Collection not found: ' + collectionName };
+                if (matches.length > 1) return { ok: false, message: 'Collection name is ambiguous: ' + collectionName };
+                collectionId = String(matches[0].id);
             }
 
             var resp = await fetch('https://www.zhihu.com/api/v4/favlists/' + collectionId + '/items', {

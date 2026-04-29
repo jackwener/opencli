@@ -34,4 +34,17 @@ describe('zhihu comment', () => {
         await expect(cmd.func(page, { target: 'answer:1:2', text: 'hello', execute: true }))
             .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
     });
+    it('requires the comment API response to include the created id', async () => {
+        const cmd = getRegistry().get('zhihu/comment');
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn()
+                .mockResolvedValueOnce({ slug: 'alice' })
+                .mockResolvedValueOnce({ ok: false, status: 200, message: 'Comment API response did not include a created comment id' }),
+        };
+        await expect(cmd.func(page, { target: 'answer:1:2', text: 'hello', execute: true }))
+            .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
+        expect(page.evaluate.mock.calls[1][0]).toContain('Comment API response did not include a created comment id');
+    });
 });

@@ -27,4 +27,15 @@ describe('zhihu like', () => {
         await expect(cmd.func(page, { target: 'answer:1:2', execute: true }))
             .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
     });
+    it('does not treat success=false API responses as a successful like', async () => {
+        const cmd = getRegistry().get('zhihu/like');
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockResolvedValueOnce({ ok: false, message: 'Zhihu like API reported success=false' }),
+        };
+        await expect(cmd.func(page, { target: 'answer:1:2', execute: true }))
+            .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
+        expect(page.evaluate.mock.calls[0][0]).toContain('data.success === false');
+    });
 });

@@ -38,4 +38,17 @@ describe('zhihu answer', () => {
         await expect(cmd.func(page, { target: 'question:1', text: 'hello', execute: true }))
             .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
     });
+    it('requires the answer API response to include the created id', async () => {
+        const cmd = getRegistry().get('zhihu/answer');
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn()
+                .mockResolvedValueOnce({ slug: 'alice' })
+                .mockResolvedValueOnce({ ok: false, status: 200, message: 'Answer API response did not include a created answer id' }),
+        };
+        await expect(cmd.func(page, { target: 'question:1', text: 'hello', execute: true }))
+            .rejects.toMatchObject({ code: 'COMMAND_EXEC' });
+        expect(page.evaluate.mock.calls[1][0]).toContain('Answer API response did not include a created answer id');
+    });
 });

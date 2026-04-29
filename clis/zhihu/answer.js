@@ -38,6 +38,7 @@ cli({
             });
             var data = await resp.json();
             if (!resp.ok) return { ok: false, status: resp.status, message: data.error ? data.error.message : 'unknown error' };
+            if (!data || !data.id) return { ok: false, status: resp.status, message: 'Answer API response did not include a created answer id' };
             return { ok: true, id: String(data.id), url: data.url || ('https://www.zhihu.com/question/' + questionId + '/answer/' + data.id) };
         })()`);
         if (!apiResult?.ok) {

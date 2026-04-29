@@ -35,6 +35,7 @@ cli({
             });
             var data = await resp.json();
             if (!resp.ok) return { ok: false, message: data.error ? data.error.message : 'unknown error' };
+            if (data && data.success === false) return { ok: false, message: 'Zhihu like API reported success=false' };
             return { ok: true, success: data.success };
         })()`);
         if (!apiResult?.ok) {

@@ -24,7 +24,7 @@ cli({
         await page.wait(2);
         const apiResult = await page.evaluate(`(async () => {
             var targetKind = ${JSON.stringify(target.kind)};
-            var targetId = ${JSON.stringify(target.id)};
+            var targetId = ${JSON.stringify(target.kind === 'user' ? target.slug : target.id)};
             var url;
             if (targetKind === 'question') {
                 url = 'https://www.zhihu.com/api/v4/questions/' + targetId + '/followers';
@@ -44,6 +44,6 @@ cli({
         if (!apiResult?.ok) {
             throw new CliError('COMMAND_EXEC', apiResult?.message || 'Failed to follow');
         }
-        return buildResultRow(`Followed ${target.kind} ${target.id}`, target.kind, rawTarget, 'applied');
+        return buildResultRow(`Followed ${target.kind} ${target.kind === 'user' ? target.slug : target.id}`, target.kind, rawTarget, 'applied');
     },
 });
