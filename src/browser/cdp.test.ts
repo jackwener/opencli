@@ -75,6 +75,12 @@ describe('CDP target reuse', () => {
     expect(__test__.buildCDPTabName(undefined, {})).toBe('opencli:default');
   });
 
+  it('does not enable default tab reuse for registered Electron apps', () => {
+    expect(__test__.buildCDPTabName('site:cursor', {})).toBeUndefined();
+    expect(__test__.buildCDPTabName('site:codex', {})).toBeUndefined();
+    expect(__test__.buildCDPTabName('site:cursor', { OPENCLI_CDP_TAB_NAME: 'cursor-fixed' })).toBe('cursor-fixed');
+  });
+
   it('allows explicit tab names and opt-out via environment', () => {
     expect(__test__.buildCDPTabName('site:douban', { OPENCLI_CDP_TAB_NAME: 'douban-fixed' })).toBe('douban-fixed');
     expect(__test__.buildCDPTabName('site:douban', { OPENCLI_CDP_REUSE_TAB: 'false' })).toBeUndefined();
@@ -102,6 +108,65 @@ describe('CDP target reuse', () => {
       targets,
       'opencli:site:douban',
       async (target) => target.id === 'b' ? 'opencli:site:douban' : '',
+    );
+
+    expect(selected?.id).toBe('b');
+  });
+
+  it('creates a new target instead of reusing arbitrary tabs when a named target is absent', async () => {
+    const targets = [
+      {
+        id: 'a',
+        type: 'page',
+        title: 'User Tab',
+        url: 'https://example.com/',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/a',
+      },
+    ];
+
+    const selected = await __test__.resolveCDPTarget(
+      targets,
+      'http://127.0.0.1:9222',
+      'opencli:site:douban',
+      async () => '',
+      async () => ({
+        id: 'new',
+        type: 'page',
+        title: '',
+        url: 'about:blank',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/new',
+      }),
+    );
+
+    expect(selected?.id).toBe('new');
+  });
+
+  it('keeps the ranked fallback for unnamed CDP target selection', async () => {
+    const targets = [
+      {
+        id: 'a',
+        type: 'page',
+        title: '',
+        url: 'about:blank',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/a',
+      },
+      {
+        id: 'b',
+        type: 'page',
+        title: 'Local App',
+        url: 'http://localhost:3000/',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/b',
+      },
+    ];
+
+    const selected = await __test__.resolveCDPTarget(
+      targets,
+      'http://127.0.0.1:9222',
+      undefined,
+      async () => '',
+      async () => {
+        throw new Error('should not create a target');
+      },
     );
 
     expect(selected?.id).toBe('b');

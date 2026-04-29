@@ -17,7 +17,7 @@ import { wrapForEval } from './utils.js';
 import { generateStealthJs } from './stealth.js';
 import { waitForDomStableJs } from './dom-helpers.js';
 import { isRecord, saveBase64ToFile } from '../utils.js';
-import { getAllElectronApps } from '../electron-apps.js';
+import { getAllElectronApps, isElectronApp } from '../electron-apps.js';
 import { BasePage } from './base-page.js';
 
 export interface CDPTarget {
@@ -65,9 +65,7 @@ export class CDPBridge implements IBrowserFactory {
     if (endpoint.startsWith('http')) {
       const baseEndpoint = endpoint.replace(/\/$/, '');
       const targets = await fetchJsonDirect(`${baseEndpoint}/json`) as CDPTarget[];
-      const target = (tabName ? await selectNamedCDPTarget(targets, tabName) : undefined)
-        ?? selectCDPTarget(targets)
-        ?? await createCDPTarget(baseEndpoint);
+      const target = await resolveCDPTarget(targets, baseEndpoint, tabName);
       if (!target || !target.webSocketDebuggerUrl) {
         throw new Error('No inspectable targets found at CDP endpoint');
       }
@@ -416,6 +414,21 @@ async function selectNamedCDPTarget(
   return undefined;
 }
 
+async function resolveCDPTarget(
+  targets: CDPTarget[],
+  baseEndpoint: string,
+  tabName?: string,
+  readWindowName: (target: CDPTarget) => Promise<string | undefined> = readTargetWindowName,
+  createTarget: (baseEndpoint: string) => Promise<CDPTarget | undefined> = createCDPTarget,
+): Promise<CDPTarget | undefined> {
+  if (tabName) {
+    const namedTarget = await selectNamedCDPTarget(targets, tabName, readWindowName);
+    return namedTarget ?? await createTarget(baseEndpoint);
+  }
+  const rankedTarget = selectCDPTarget(targets);
+  return rankedTarget ?? await createTarget(baseEndpoint);
+}
+
 function rankCDPTargets(targets: CDPTarget[]) {
   const preferredPattern = compilePreferredPattern(process.env.OPENCLI_CDP_TARGET);
   return targets
@@ -481,6 +494,7 @@ function escapeRegExp(value: string): string {
 
 export const __test__ = {
   buildCDPTabName,
+  resolveCDPTarget,
   selectCDPTarget,
   selectNamedCDPTarget,
   scoreCDPTarget,
@@ -497,7 +511,13 @@ function buildCDPTabName(
   if (explicitName) return explicitName;
 
   const suffix = workspace?.trim() || 'default';
+  if (isElectronWorkspace(suffix)) return undefined;
   return `opencli:${suffix}`;
+}
+
+function isElectronWorkspace(workspace: string): boolean {
+  const match = workspace.match(/^site:(.+)$/);
+  return Boolean(match?.[1] && isElectronApp(match[1]));
 }
 
 async function createCDPTarget(baseEndpoint: string): Promise<CDPTarget | undefined> {
