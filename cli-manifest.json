@@ -15044,7 +15044,7 @@
     "name": "following",
     "description": "Get accounts a Twitter/X user is following",
     "domain": "x.com",
-    "strategy": "intercept",
+    "strategy": "cookie",
     "browser": true,
     "args": [
       {
@@ -15071,7 +15071,7 @@
     "type": "js",
     "modulePath": "twitter/following.js",
     "sourceFile": "twitter/following.js",
-    "navigateBefore": true
+    "navigateBefore": "https://x.com"
   },
   {
     "site": "twitter",
