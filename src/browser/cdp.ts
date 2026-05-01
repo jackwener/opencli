@@ -40,6 +40,13 @@ interface RuntimeEvaluateResult {
 
 const CDP_SEND_TIMEOUT = 30_000;
 
+// Memory guard for in-process capture. The 4k cap we used to apply everywhere
+// silently truncated JSON so `JSON.parse` failed or gave partial objects — the
+// primary agent-facing bug. Now we keep the full body up to a large cap and
+// surface `responseBodyFullSize` + `responseBodyTruncated` so downstream layers
+// can tell the agent what happened instead of lying about the payload.
+export const CDP_RESPONSE_BODY_CAPTURE_LIMIT = 8 * 1024 * 1024;
+
 export class CDPBridge implements IBrowserFactory {
   private _ws: WebSocket | null = null;
   private _idCounter = 0;
@@ -65,7 +72,11 @@ export class CDPBridge implements IBrowserFactory {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(wsUrl);
       const timeoutMs = (opts?.timeout ?? 10) * 1000;
-      const timeout = setTimeout(() => reject(new Error('CDP connect timeout')), timeoutMs);
+      const timeout = setTimeout(() => {
+        this._ws = null;
+        ws.close();
+        reject(new Error('CDP connect timeout'));
+      }, timeoutMs);
 
       ws.on('open', async () => {
         clearTimeout(timeout);
@@ -73,7 +84,11 @@ export class CDPBridge implements IBrowserFactory {
         try {
           await this.send('Page.enable');
           await this.send('Page.addScriptToEvaluateOnNewDocument', { source: generateStealthJs() });
-        } catch {}
+        } catch (err) {
+          ws.close();
+          reject(err instanceof Error ? err : new Error(String(err)));
+          return;
+        }
         resolve(new CDPPage(this));
       });
 
@@ -101,7 +116,12 @@ export class CDPBridge implements IBrowserFactory {
               for (const fn of listeners) fn(msg.params);
             }
           }
-        } catch {}
+        } catch (err) {
+          if (process.env.OPENCLI_VERBOSE) {
+            // eslint-disable-next-line no-console
+            console.error('[cdp] Failed to parse WebSocket message:', err instanceof Error ? err.message : err);
+          }
+        }
       });
     });
   }
@@ -171,7 +191,11 @@ class CDPPage extends BasePage {
   private _networkCapturePattern = '';
   private _networkEntries: Array<{
     url: string; method: string; responseStatus?: number;
-    responseContentType?: string; responsePreview?: string; timestamp: number;
+    responseContentType?: string;
+    responsePreview?: string;
+    responseBodyFullSize?: number;
+    responseBodyTruncated?: boolean;
+    timestamp: number;
   }> = [];
   private _pendingRequests = new Map<string, number>(); // requestId → index in _networkEntries
   private _pendingBodyFetches: Set<Promise<void>> = new Set(); // track in-flight getResponseBody calls
@@ -182,7 +206,7 @@ class CDPPage extends BasePage {
     super();
   }
 
-  async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
+  async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number; allowBoundNavigation?: boolean }): Promise<void> {
     if (!this._pageEnabled) {
       await this.bridge.send('Page.enable');
       this._pageEnabled = true;
@@ -232,19 +256,21 @@ class CDPPage extends BasePage {
     return base64;
   }
 
-  async startNetworkCapture(pattern: string = ''): Promise<void> {
+  async startNetworkCapture(pattern: string = ''): Promise<boolean> {
+    // Always update the filter pattern
     this._networkCapturePattern = pattern;
-    this._networkEntries = [];
-    this._pendingRequests.clear();
-    this._pendingBodyFetches.clear();
 
+    // Reset state only on first start; avoid wiping entries if already capturing
     if (!this._networkCapturing) {
+      this._networkEntries = [];
+      this._pendingRequests.clear();
+      this._pendingBodyFetches.clear();
       await this.bridge.send('Network.enable');
 
       // Step 1: Record request method/url on requestWillBeSent
       this.bridge.on('Network.requestWillBeSent', (params: unknown) => {
         const p = params as { requestId: string; request: { method: string; url: string }; timestamp: number };
-        if (!pattern || p.request.url.includes(pattern)) {
+        if (!this._networkCapturePattern || p.request.url.includes(this._networkCapturePattern)) {
           const idx = this._networkEntries.push({
             url: p.request.url,
             method: p.request.method,
@@ -272,12 +298,19 @@ class CDPPage extends BasePage {
           const bodyFetch = this.bridge.send('Network.getResponseBody', { requestId: p.requestId }).then((result: unknown) => {
             const r = result as { body?: string; base64Encoded?: boolean } | undefined;
             if (typeof r?.body === 'string') {
-              this._networkEntries[idx].responsePreview = r.base64Encoded
-                ? `base64:${r.body.slice(0, 4000)}`
-                : r.body.slice(0, 4000);
+              const fullSize = r.body.length;
+              const truncated = fullSize > CDP_RESPONSE_BODY_CAPTURE_LIMIT;
+              const body = truncated ? r.body.slice(0, CDP_RESPONSE_BODY_CAPTURE_LIMIT) : r.body;
+              this._networkEntries[idx].responsePreview = r.base64Encoded ? `base64:${body}` : body;
+              this._networkEntries[idx].responseBodyFullSize = fullSize;
+              this._networkEntries[idx].responseBodyTruncated = truncated;
             }
-          }).catch(() => {
+          }).catch((err) => {
             // Body unavailable for some requests (e.g. uploads) — non-fatal
+            if (process.env.OPENCLI_VERBOSE) {
+              // eslint-disable-next-line no-console
+              console.error(`[cdp] getResponseBody failed for ${p.requestId}:`, err instanceof Error ? err.message : err);
+            }
           }).finally(() => {
             this._pendingBodyFetches.delete(bodyFetch);
           });
@@ -288,6 +321,7 @@ class CDPPage extends BasePage {
 
       this._networkCapturing = true;
     }
+    return true;
   }
 
   async readNetworkCapture(): Promise<unknown[]> {
@@ -328,7 +362,7 @@ class CDPPage extends BasePage {
     return [];
   }
 
-  async selectTab(_index: number): Promise<void> {
+  async selectTab(_target: number | string): Promise<void> {
     // Not supported in direct CDP mode
   }
 }

@@ -8,6 +8,14 @@
 
 const attached = new Set<number>();
 
+const tabFrameContexts = new Map<number, Map<string, number>>();
+
+// Large cap so agents stop hitting silent JSON.parse failures on real API bodies.
+// See src/browser/cdp.ts CDP_RESPONSE_BODY_CAPTURE_LIMIT for the matching constant
+// on the direct-CDP path. Keep in sync.
+const CDP_RESPONSE_BODY_CAPTURE_LIMIT = 8 * 1024 * 1024;
+const CDP_REQUEST_BODY_CAPTURE_LIMIT = 1 * 1024 * 1024;
+
 type NetworkCaptureEntry = {
   kind: 'cdp';
   url: string;
@@ -15,10 +23,14 @@ type NetworkCaptureEntry = {
   requestHeaders?: Record<string, string>;
   requestBodyKind?: string;
   requestBodyPreview?: string;
+  requestBodyFullSize?: number;
+  requestBodyTruncated?: boolean;
   responseStatus?: number;
   responseContentType?: string;
   responseHeaders?: Record<string, string>;
   responsePreview?: string;
+  responseBodyFullSize?: number;
+  responseBodyTruncated?: boolean;
   timestamp: number;
 };
 
@@ -66,8 +78,8 @@ export async function ensureAttached(tabId: number, aggressiveRetry: boolean = f
 
   // Retry attach up to 3 times — other extensions (1Password, Playwright MCP Bridge)
   // can temporarily interfere with chrome.debugger. A short delay usually resolves it.
-  // Normal commands: 2 retries, 500ms delay (fast fail for non-operate use)
-  // Operate commands: 5 retries, 1500ms delay (aggressive, tolerates extension interference)
+  // Normal commands: 2 retries, 500ms delay (fast fail for non-browser use)
+  // Browser commands: 5 retries, 1500ms delay (aggressive, tolerates extension interference)
   const MAX_ATTACH_RETRIES = aggressiveRetry ? 5 : 2;
   const RETRY_DELAY_MS = aggressiveRetry ? 1500 : 500;
   let lastError = '';
@@ -92,8 +104,10 @@ export async function ensureAttached(tabId: number, aggressiveRetry: boolean = f
             break; // Don't retry if URL became un-debuggable
           }
         } catch {
+          // Tab is gone — don't fail early here.
+          // Later retry layers can re-resolve a fresh automation tab/window.
           lastError = `Tab ${tabId} no longer exists`;
-          break;
+          // Don't break; fall through to retry
         }
       }
     }
@@ -126,7 +140,7 @@ export async function ensureAttached(tabId: number, aggressiveRetry: boolean = f
 
 export async function evaluate(tabId: number, expression: string, aggressiveRetry: boolean = false): Promise<unknown> {
   // Retry the entire evaluate (attach + command).
-  // Normal: 2 retries. Operate: 3 retries (tolerates extension interference).
+  // Normal: 2 retries. Browser: 3 retries (tolerates extension interference).
   const MAX_EVAL_RETRIES = aggressiveRetry ? 3 : 2;
   for (let attempt = 1; attempt <= MAX_EVAL_RETRIES; attempt++) {
     try {
@@ -270,6 +284,83 @@ export async function insertText(
   await chrome.debugger.sendCommand({ tabId }, 'Input.insertText', { text });
 }
 
+export function registerFrameTracking(): void {
+  chrome.debugger.onEvent.addListener((source, method, params: any) => {
+    const tabId = source.tabId;
+    if (!tabId) return;
+
+    if (method === 'Runtime.executionContextCreated') {
+      const context = params.context;
+      if (!context?.auxData?.frameId || context.auxData.isDefault !== true) return;
+      const frameId = context.auxData.frameId as string;
+      if (!tabFrameContexts.has(tabId)) {
+        tabFrameContexts.set(tabId, new Map());
+      }
+      tabFrameContexts.get(tabId)!.set(frameId, context.id);
+    }
+
+    if (method === 'Runtime.executionContextDestroyed') {
+      const ctxId = params.executionContextId;
+      const contexts = tabFrameContexts.get(tabId);
+      if (contexts) {
+        for (const [fid, cid] of contexts) {
+          if (cid === ctxId) { contexts.delete(fid); break; }
+        }
+      }
+    }
+
+    if (method === 'Runtime.executionContextsCleared') {
+      tabFrameContexts.delete(tabId);
+    }
+  });
+
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    tabFrameContexts.delete(tabId);
+  });
+}
+
+export async function getFrameTree(tabId: number): Promise<any> {
+  await ensureAttached(tabId);
+  return chrome.debugger.sendCommand({ tabId }, 'Page.getFrameTree');
+}
+
+export async function evaluateInFrame(
+  tabId: number,
+  expression: string,
+  frameId: string,
+  aggressiveRetry: boolean = false,
+): Promise<unknown> {
+  await ensureAttached(tabId, aggressiveRetry);
+
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.enable').catch(() => {});
+
+  const contexts = tabFrameContexts.get(tabId);
+  const contextId = contexts?.get(frameId);
+
+  if (contextId === undefined) {
+    throw new Error(`No execution context found for frame ${frameId}. The frame may not be loaded yet.`);
+  }
+
+  const result = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+    expression,
+    contextId,
+    returnByValue: true,
+    awaitPromise: true,
+  }) as {
+    result?: { type: string; value?: unknown; description?: string; subtype?: string };
+    exceptionDetails?: { exception?: { description?: string }; text?: string };
+  };
+
+  if (result.exceptionDetails) {
+    const errMsg = result.exceptionDetails.exception?.description
+      || result.exceptionDetails.text
+      || 'Eval error';
+    throw new Error(errMsg);
+  }
+
+  return result.result?.value;
+}
+
 function normalizeCapturePatterns(pattern?: string): string[] {
   return String(pattern || '')
     .split('|')
@@ -339,10 +430,15 @@ export async function readNetworkCapture(tabId: number): Promise<NetworkCaptureE
   return entries;
 }
 
+export function hasActiveNetworkCapture(tabId: number): boolean {
+  return networkCaptures.has(tabId);
+}
+
 export async function detach(tabId: number): Promise<void> {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);
   networkCaptures.delete(tabId);
+  tabFrameContexts.delete(tabId);
   try { await chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
 }
 
@@ -350,11 +446,13 @@ export function registerListeners(): void {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
     networkCaptures.delete(tabId);
+    tabFrameContexts.delete(tabId);
   });
   chrome.debugger.onDetach.addListener((source) => {
     if (source.tabId) {
       attached.delete(source.tabId);
       networkCaptures.delete(source.tabId);
+      tabFrameContexts.delete(source.tabId);
     }
   });
   // Invalidate attached cache when tab URL changes to non-debuggable
@@ -368,10 +466,11 @@ export function registerListeners(): void {
     if (!tabId) return;
     const state = networkCaptures.get(tabId);
     if (!state) return;
+    const eventParams = params as Record<string, any> | undefined;
 
     if (method === 'Network.requestWillBeSent') {
-      const requestId = String(params?.requestId || '');
-      const request = params?.request as {
+      const requestId = String(eventParams?.requestId || '');
+      const request = eventParams?.request as {
         url?: string;
         method?: string;
         headers?: Record<string, unknown>;
@@ -385,12 +484,24 @@ export function registerListeners(): void {
       });
       if (!entry) return;
       entry.requestBodyKind = request?.hasPostData ? 'string' : 'empty';
-      entry.requestBodyPreview = String(request?.postData || '').slice(0, 4000);
+      {
+        const raw = String(request?.postData || '');
+        const fullSize = raw.length;
+        const truncated = fullSize > CDP_REQUEST_BODY_CAPTURE_LIMIT;
+        entry.requestBodyPreview = truncated ? raw.slice(0, CDP_REQUEST_BODY_CAPTURE_LIMIT) : raw;
+        entry.requestBodyFullSize = fullSize;
+        entry.requestBodyTruncated = truncated;
+      }
       try {
         const postData = await chrome.debugger.sendCommand({ tabId }, 'Network.getRequestPostData', { requestId }) as { postData?: string };
         if (postData?.postData) {
+          const raw = postData.postData;
+          const fullSize = raw.length;
+          const truncated = fullSize > CDP_REQUEST_BODY_CAPTURE_LIMIT;
           entry.requestBodyKind = 'string';
-          entry.requestBodyPreview = postData.postData.slice(0, 4000);
+          entry.requestBodyPreview = truncated ? raw.slice(0, CDP_REQUEST_BODY_CAPTURE_LIMIT) : raw;
+          entry.requestBodyFullSize = fullSize;
+          entry.requestBodyTruncated = truncated;
         }
       } catch {
         // Optional; some requests do not expose postData.
@@ -399,8 +510,8 @@ export function registerListeners(): void {
     }
 
     if (method === 'Network.responseReceived') {
-      const requestId = String(params?.requestId || '');
-      const response = params?.response as {
+      const requestId = String(eventParams?.requestId || '');
+      const response = eventParams?.response as {
         url?: string;
         mimeType?: string;
         status?: number;
@@ -417,7 +528,7 @@ export function registerListeners(): void {
     }
 
     if (method === 'Network.loadingFinished') {
-      const requestId = String(params?.requestId || '');
+      const requestId = String(eventParams?.requestId || '');
       const stateEntryIndex = state.requestToIndex.get(requestId);
       if (stateEntryIndex === undefined) return;
       const entry = state.entries[stateEntryIndex];
@@ -428,9 +539,12 @@ export function registerListeners(): void {
           base64Encoded?: boolean;
         };
         if (typeof body?.body === 'string') {
-          entry.responsePreview = body.base64Encoded
-            ? `base64:${body.body.slice(0, 4000)}`
-            : body.body.slice(0, 4000);
+          const fullSize = body.body.length;
+          const truncated = fullSize > CDP_RESPONSE_BODY_CAPTURE_LIMIT;
+          const stored = truncated ? body.body.slice(0, CDP_RESPONSE_BODY_CAPTURE_LIMIT) : body.body;
+          entry.responsePreview = body.base64Encoded ? `base64:${stored}` : stored;
+          entry.responseBodyFullSize = fullSize;
+          entry.responseBodyTruncated = truncated;
         }
       } catch {
         // Optional; bodies are unavailable for some requests (e.g. uploads).

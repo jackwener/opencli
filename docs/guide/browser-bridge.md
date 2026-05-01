@@ -8,7 +8,7 @@ OpenCLI connects to your browser through a lightweight **Browser Bridge** Chrome
 
 ### Method 1: Download Pre-built Release (Recommended)
 
-1. Go to the GitHub [Releases page](https://github.com/jackwener/opencli/releases) and download the latest `opencli-extension.zip`.
+1. Go to the GitHub [Releases page](https://github.com/jackwener/opencli/releases) and download the latest `opencli-extension-v{version}.zip`.
 2. Unzip the file and open `chrome://extensions`, enable **Developer mode** (top-right toggle).
 3. Click **Load unpacked** and select the unzipped folder.
 
@@ -25,6 +25,29 @@ That's it! The daemon auto-starts when you run any browser command. No tokens, n
 opencli doctor            # Check extension + daemon connectivity
 ```
 
+## Tab Targeting
+
+Browser commands run inside the shared `browser:default` workspace unless you explicitly choose another tab target.
+
+```bash
+opencli browser open https://www.baidu.com/
+opencli browser tab list
+opencli browser tab new https://www.baidu.com/
+opencli browser eval --tab <targetId> 'document.title'
+opencli browser tab select <targetId>
+opencli browser get title
+opencli browser tab close <targetId>
+```
+
+Key rules:
+
+- `opencli browser open <url>` and `opencli browser tab new [url]` return a `targetId`.
+- `opencli browser tab list` prints the `targetId` values of tabs that already exist.
+- `--tab <targetId>` routes a single browser command to that specific tab.
+- `tab new` creates a new tab but does not change the default browser target.
+- `tab select <targetId>` makes that tab the default target for later untargeted `opencli browser ...` commands.
+- `tab close <targetId>` removes the tab; if it was the current default target, the stored default is cleared.
+
 ## How It Works
 
 ```
@@ -38,12 +61,10 @@ The daemon manages the WebSocket connection between your CLI commands and the Ch
 
 ## Daemon Lifecycle
 
-The daemon auto-starts on first browser command and stays alive for **4 hours** by default. It exits only when both conditions are met: no CLI requests for the timeout period AND no Chrome extension connected.
+The daemon auto-starts on first browser command and stays alive persistently.
 
 ```bash
-opencli daemon status    # Check daemon state (PID, uptime, extension, memory)
 opencli daemon stop      # Graceful shutdown
-opencli daemon restart   # Stop + restart
 ```
 
-Override the timeout via the `OPENCLI_DAEMON_TIMEOUT` environment variable (milliseconds). Set to `0` to keep the daemon alive indefinitely.
+The daemon is persistent — it stays alive until you explicitly stop it (`opencli daemon stop`) or uninstall the package.

@@ -10,6 +10,7 @@ import {
   ArgumentError,
   EmptyResultError,
   SelectorError,
+  toEnvelope,
 } from './errors.js';
 
 describe('Error type hierarchy', () => {
@@ -75,5 +76,60 @@ describe('Error type hierarchy', () => {
   it('BrowserConnectError has correct code', () => {
     const err = new BrowserConnectError('Cannot connect');
     expect(err.code).toBe('BROWSER_CONNECT');
+  });
+});
+
+describe('toEnvelope', () => {
+  it('converts CliError to structured envelope', () => {
+    const err = new AuthRequiredError('bilibili.com');
+    const envelope = toEnvelope(err);
+    expect(envelope).toEqual({
+      ok: false,
+      error: {
+        code: 'AUTH_REQUIRED',
+        message: 'Not logged in to bilibili.com',
+        help: expect.stringContaining('https://bilibili.com'),
+        exitCode: 77,
+      },
+    });
+  });
+
+  it('converts CliError without hint (omits help field)', () => {
+    const err = new CommandExecutionError('Something broke');
+    const envelope = toEnvelope(err);
+    expect(envelope.error.code).toBe('COMMAND_EXEC');
+    expect(envelope.error).not.toHaveProperty('help');
+  });
+
+  it('converts unknown Error to UNKNOWN envelope', () => {
+    const envelope = toEnvelope(new Error('random failure'));
+    expect(envelope).toEqual({
+      ok: false,
+      error: {
+        code: 'UNKNOWN',
+        message: 'random failure',
+        exitCode: 1,
+      },
+    });
+  });
+
+  it('converts non-Error values to UNKNOWN envelope', () => {
+    const envelope = toEnvelope('string error');
+    expect(envelope.error.code).toBe('UNKNOWN');
+    expect(envelope.error.message).toBe('string error');
+  });
+
+  it('serializes deep cause chains without stack overflow', () => {
+    // Build a 20-level deep cause chain — should truncate at depth 10
+    let deepErr: Error = new Error('root');
+    for (let i = 0; i < 20; i++) {
+      deepErr = new Error(`level-${i}`, { cause: deepErr });
+    }
+    const topErr = new CommandExecutionError('top');
+    (topErr as { cause?: unknown }).cause = deepErr;
+    const envelope = toEnvelope(topErr);
+    const causeStr = envelope.error.cause ?? '';
+    expect(causeStr).toContain('(cause chain truncated)');
+    expect(causeStr).not.toContain('root'); // root is beyond depth 10
   });
 });

@@ -10,10 +10,8 @@
  */
 
 import type { BrowserCookie, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
-import { generateSnapshotJs, scrollToRefJs, getFormStateJs } from './dom-snapshot.js';
+import { generateSnapshotJs, getFormStateJs } from './dom-snapshot.js';
 import {
-  clickJs,
-  typeTextJs,
   pressKeyJs,
   waitForTextJs,
   waitForCaptureJs,
@@ -23,8 +21,51 @@ import {
   networkRequestsJs,
   waitForDomStableJs,
 } from './dom-helpers.js';
-import { formatSnapshot } from '../snapshotFormatter.js';
+import {
+  resolveTargetJs,
+  clickResolvedJs,
+  typeResolvedJs,
+  scrollResolvedJs,
+  type ResolveOptions,
+  type TargetMatchLevel,
+} from './target-resolver.js';
+import { TargetError, type TargetErrorCode } from './target-errors.js';
 
+export interface ResolveSuccess {
+  matches_n: number;
+  /**
+   * Cascading stale-ref tier the resolver traversed. Callers surface this to
+   * agents so `stable` / `reidentified` hits are visibly distinct from a
+   * clean `exact` match — the page changed, the action still succeeded.
+   */
+  match_level: TargetMatchLevel;
+}
+
+/**
+ * Execute `resolveTargetJs` once, throw structured `TargetError` on failure.
+ * Single helper so click/typeText/scrollTo share one resolution pathway,
+ * which is what the selector-first contract promises agents.
+ */
+async function runResolve(
+  page: { evaluate(js: string): Promise<unknown> },
+  ref: string,
+  opts: ResolveOptions = {},
+): Promise<ResolveSuccess> {
+  const resolution = (await page.evaluate(resolveTargetJs(ref, opts))) as
+    | { ok: true; matches_n: number; match_level: TargetMatchLevel }
+    | { ok: false; code: TargetErrorCode; message: string; hint: string; candidates?: string[]; matches_n?: number };
+  if (!resolution.ok) {
+    throw new TargetError({
+      code: resolution.code,
+      message: resolution.message,
+      hint: resolution.hint,
+      candidates: resolution.candidates,
+      matches_n: resolution.matches_n,
+    });
+  }
+  return { matches_n: resolution.matches_n, match_level: resolution.match_level };
+}
+import { formatSnapshot } from '../snapshotFormatter.js';
 export abstract class BasePage implements IPage {
   protected _lastUrl: string | null = null;
   /** Cached previous snapshot hashes for incremental diff marking */
@@ -32,31 +73,54 @@ export abstract class BasePage implements IPage {
 
   // ── Transport-specific methods (must be implemented by subclasses) ──
 
-  abstract goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void>;
+  abstract goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number; allowBoundNavigation?: boolean }): Promise<void>;
   abstract evaluate(js: string): Promise<unknown>;
+
+  /**
+   * Safely evaluate JS with pre-serialized arguments.
+   * Each key in `args` becomes a `const` declaration with JSON-serialized value,
+   * prepended to the JS code. Prevents injection by design.
+   *
+   * Usage:
+   *   page.evaluateWithArgs(`(async () => { return sym; })()`, { sym: userInput })
+   */
+  async evaluateWithArgs(js: string, args: Record<string, unknown>): Promise<unknown> {
+    const declarations = Object.entries(args)
+      .map(([key, value]) => {
+        if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
+          throw new Error(`evaluateWithArgs: invalid key "${key}"`);
+        }
+        return `const ${key} = ${JSON.stringify(value)};`;
+      })
+      .join('\n');
+    return this.evaluate(`${declarations}\n${js}`);
+  }
+
   abstract getCookies(opts?: { domain?: string; url?: string }): Promise<BrowserCookie[]>;
   abstract screenshot(options?: ScreenshotOptions): Promise<string>;
   abstract tabs(): Promise<unknown[]>;
-  abstract selectTab(index: number): Promise<void>;
+  abstract selectTab(target: number | string): Promise<void>;
 
   // ── Shared DOM helper implementations ──
 
-  async click(ref: string): Promise<void> {
-    const result = await this.evaluate(clickJs(ref)) as
+  async click(ref: string, opts: ResolveOptions = {}): Promise<ResolveSuccess> {
+    // Phase 1: Resolve target with fingerprint verification
+    const resolved = await runResolve(this, ref, opts);
+
+    // Phase 2: Execute click on resolved element
+    const result = await this.evaluate(clickResolvedJs()) as
       | string
       | { status: string; x?: number; y?: number; w?: number; h?: number; error?: string }
       | null;
 
-    // Backwards compat: old format returned 'clicked' string
-    if (typeof result === 'string' || result == null) return;
+    if (typeof result === 'string' || result == null) return resolved;
 
-    // JS click succeeded
-    if (result.status === 'clicked') return;
+    if (result.status === 'clicked') return resolved;
 
     // JS click failed — try CDP native click if coordinates available
     if (result.x != null && result.y != null) {
       const success = await this.tryNativeClick(result.x, result.y);
-      if (success) return;
+      if (success) return resolved;
     }
 
     throw new Error(`Click failed: ${result.error ?? 'JS click and CDP fallback both failed'}`);
@@ -67,16 +131,25 @@ export abstract class BasePage implements IPage {
     return false;
   }
 
-  async typeText(ref: string, text: string): Promise<void> {
-    await this.evaluate(typeTextJs(ref, text));
+  async typeText(ref: string, text: string, opts: ResolveOptions = {}): Promise<ResolveSuccess> {
+    const resolved = await runResolve(this, ref, opts);
+    await this.evaluate(typeResolvedJs(text));
+    return resolved;
   }
 
   async pressKey(key: string): Promise<void> {
     await this.evaluate(pressKeyJs(key));
   }
 
-  async scrollTo(ref: string): Promise<unknown> {
-    return this.evaluate(scrollToRefJs(ref));
+  async scrollTo(ref: string, opts: ResolveOptions = {}): Promise<unknown> {
+    const resolved = await runResolve(this, ref, opts);
+    const result = (await this.evaluate(scrollResolvedJs())) as Record<string, unknown> | null;
+    // Fold match_level into the scroll payload so the user-facing envelope
+    // carries it the same way click / type do.
+    if (result && typeof result === 'object') {
+      return { ...result, matches_n: resolved.matches_n, match_level: resolved.match_level };
+    }
+    return { matches_n: resolved.matches_n, match_level: resolved.match_level };
   }
 
   async getFormState(): Promise<Record<string, unknown>> {
@@ -155,7 +228,7 @@ export abstract class BasePage implements IPage {
     } catch (err) {
       // Log snapshot failure for debugging, then fallback to basic accessibility tree
       if (process.env.DEBUG_SNAPSHOT) {
-        console.error('[snapshot] DOM snapshot failed, falling back to accessibility tree:', (err as Error)?.message?.slice(0, 200));
+        process.stderr.write(`[snapshot] DOM snapshot failed, falling back to accessibility tree: ${(err as Error)?.message?.slice(0, 200)}\n`);
       }
       return this._basicSnapshot(opts);
     }

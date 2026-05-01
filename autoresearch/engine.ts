@@ -13,7 +13,7 @@
  * Phase 8: Repeat
  */
 
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { type AutoResearchConfig, type IterationResult, type IterationStatus, extractMetric } from './config.js';
@@ -124,13 +124,17 @@ export class Engine {
 
   /** Phase 4: Commit changes */
   private commit(description: string): string | null {
-    // Stage all changes in scope (but not untracked outside scope)
-    exec('git add -A');
+    if (!this.config.scope.length) return null; // no scope = nothing to stage
+    // Stage only files matching scope globs (avoid staging unrelated changes)
+    // Use execFileSync to bypass shell glob expansion so git handles pathspecs directly
+    execFileSync('git', ['add', '--', ...this.config.scope], {
+      cwd: ROOT, timeout: 30_000, stdio: ['pipe', 'pipe', 'pipe'],
+    });
     const diff = exec('git diff --cached --quiet; echo $?');
     if (diff === '0') return null; // no changes
 
     try {
-      execStrict(`git commit -m "experiment(operate): ${description.replace(/"/g, '\\"')}"`);
+      execStrict(`git commit -m "experiment(browser): ${description.replace(/"/g, '\\"')}"`);
       return exec('git rev-parse --short HEAD');
     } catch {
       // Hook failure

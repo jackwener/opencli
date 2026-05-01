@@ -19,6 +19,11 @@
 | `opencli twitter reply` | |
 | `opencli twitter delete` | |
 | `opencli twitter like` | |
+| `opencli twitter likes` | |
+| `opencli twitter lists` | |
+| `opencli twitter list-tweets` | |
+| `opencli twitter list-add` | |
+| `opencli twitter list-remove` | |
 | `opencli twitter article` | |
 | `opencli twitter follow` | |
 | `opencli twitter unfollow` | |
@@ -42,6 +47,10 @@ opencli twitter search "react 19"
 
 # Search latest/live tweets
 opencli twitter search "react 19" --filter live
+
+# Get following/followers list (supports large limits)
+opencli twitter following @elonmusk --limit 200
+opencli twitter followers @elonmusk --limit 100
 
 # JSON output
 opencli twitter trending -f json
