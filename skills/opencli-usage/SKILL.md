@@ -13,7 +13,7 @@ OpenCLI turns any website, Electron desktop app, or external CLI into a uniform 
 - **Adapter commands** — `opencli <site> <command> [...]`. Built-in adapters live in `clis/`, user adapters in `~/.opencli/clis/`. Each is backed by a strategy (`PUBLIC | COOKIE | HEADER | INTERCEPT | UI | LOCAL`) that tells you whether a Chrome session is needed.
 - **Browser driving** — `opencli browser *` subcommands (`open`, `state`, `click`, `type`, `select`, `find`, `extract`, `network`, …) for ad-hoc interaction and scraping when no adapter covers the task. See `opencli-browser`.
 - **Current-tab binding** — `opencli browser bind --domain <host>` attaches a `bound:*` workspace to the Chrome tab the user already opened/logged into. Follow-up commands use `opencli browser --workspace bound:default ...`. See `opencli-browser` before using it; bound workspaces have stricter navigation/tab-mutation safety rules.
-- **External CLI passthrough** — `opencli gh`, `opencli docker`, `opencli vercel`, etc. Registered via `opencli install <name>` (auto-install from `external-clis.yaml`) or `opencli register <name>` (bring your own).
+- **External CLI passthrough** — `opencli gh`, `opencli docker`, `opencli vercel`, etc. Managed via `opencli external install <name>` (auto-install from `external-clis.yaml`) or `opencli external register <name>` (bring your own).
 
 ## Install
 
@@ -126,11 +126,12 @@ opencli plugin create <name>               # scaffold a new plugin
 Wraps external command-line tools so you can discover + invoke them through the same `opencli …` entrypoint:
 
 ```bash
-opencli install gh             # auto-install via brew/apt/npm per external-clis.yaml
-opencli register my-tool \
+opencli external install gh    # auto-install via brew/apt/npm per external-clis.yaml
+opencli external register my-tool \
     --binary my-tool \
     --install "npm i -g my-tool" \
     --desc "My internal CLI"
+opencli external list
 opencli gh pr list --limit 5   # passthrough; stdio is inherited, exit code propagated
 opencli docker ps
 ```

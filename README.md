@@ -83,7 +83,7 @@ Use OpenCLI directly when you want a reliable command instead of a live browser 
 
 - `opencli list` shows every registered command.
 - `opencli <site> <command>` runs a built-in or generated adapter.
-- `opencli register mycli` exposes a local CLI through the same discovery surface.
+- `opencli external register mycli` exposes a local CLI through the same discovery surface.
 - `opencli doctor` helps diagnose browser connectivity.
 
 ## For AI Agents
@@ -282,7 +282,7 @@ OpenCLI acts as a universal hub for your existing command-line tools — unified
 **Register your own** — add any local CLI so AI agents can discover it via `opencli list`:
 
 ```bash
-opencli register mycli
+opencli external register mycli
 ```
 
 ### Desktop App Adapters

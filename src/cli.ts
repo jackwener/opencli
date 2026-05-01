@@ -427,11 +427,10 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     .command('list')
     .description('List all available CLI commands')
     .option('-f, --format <fmt>', 'Output format: table, json, yaml, md, csv', 'table')
-    .option('--json', 'JSON output (deprecated)')
     .action((opts) => {
       const registry = getRegistry();
       const commands = [...new Set(registry.values())].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-      const fmt = opts.json && opts.format === 'table' ? 'json' : opts.format;
+      const fmt = opts.format;
       const isStructured = fmt === 'json' || fmt === 'yaml';
 
       if (fmt !== 'table') {
@@ -2301,7 +2300,11 @@ cli({
 
   const externalClis = loadExternalClis();
 
-  program
+  const externalCmd = program
+    .command('external')
+    .description('Manage external CLI passthrough commands');
+
+  externalCmd
     .command('install')
     .description('Install an external CLI')
     .argument('<name>', 'Name of the external CLI')
@@ -2315,7 +2318,7 @@ cli({
       installExternalCli(ext);
     });
 
-  program
+  externalCmd
     .command('register')
     .description('Register an external CLI')
     .argument('<name>', 'Name of the CLI')
@@ -2324,6 +2327,27 @@ cli({
     .option('--desc <text>', 'Description')
     .action((name, opts) => {
       registerExternalCli(name, { binary: opts.binary, install: opts.install, description: opts.desc });
+    });
+
+  externalCmd
+    .command('list')
+    .description('List registered external CLIs')
+    .option('-f, --format <fmt>', 'Output format: table, json, yaml, md, csv', 'table')
+    .action((opts) => {
+      const rows = loadExternalClis().map((ext) => ({
+        name: ext.name,
+        binary: ext.binary,
+        installed: isBinaryInstalled(ext.binary),
+        description: ext.description ?? '',
+        homepage: ext.homepage ?? '',
+        tags: ext.tags?.join(', ') ?? '',
+      }));
+      renderOutput(rows, {
+        fmt: opts.format,
+        columns: ['name', 'binary', 'installed', 'description', 'homepage', 'tags'],
+        title: 'opencli/external/list',
+        source: 'opencli external list',
+      });
     });
 
   function passthroughExternal(name: string, parsedArgs?: string[]) {
@@ -2376,13 +2400,13 @@ cli({
 
   // ── Unknown command fallback ──────────────────────────────────────────────
   // Security: do NOT auto-discover and register arbitrary system binaries.
-  // Only explicitly registered external CLIs (via `opencli register`) are allowed.
+  // Only explicitly registered external CLIs are allowed.
 
   program.on('command:*', (operands: string[]) => {
     const binary = operands[0];
     console.error(styleText('red', `error: unknown command '${binary}'`));
     if (isBinaryInstalled(binary)) {
-      console.error(styleText('dim', `  Tip: '${binary}' exists on your PATH. Use 'opencli register ${binary}' to add it as an external CLI.`));
+      console.error(styleText('dim', `  Tip: '${binary}' exists on your PATH. Use 'opencli external register ${binary}' to add it as an external CLI.`));
     }
     program.outputHelp();
     process.exitCode = EXIT_CODES.USAGE_ERROR;
