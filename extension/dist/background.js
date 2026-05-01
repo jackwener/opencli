@@ -446,13 +446,22 @@ async function getCurrentContextId() {
 }
 function generateContextId() {
   const alphabet = "23456789abcdefghjkmnpqrstuvwxyz";
-  const bytes = new Uint8Array(8);
-  try {
-    crypto.getRandomValues(bytes);
-  } catch {
-    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  const maxUnbiasedByte = Math.floor(256 / alphabet.length) * alphabet.length;
+  let id = "";
+  while (id.length < 8) {
+    const bytes = new Uint8Array(8);
+    try {
+      crypto.getRandomValues(bytes);
+    } catch {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    for (const byte of bytes) {
+      if (byte >= maxUnbiasedByte) continue;
+      id += alphabet[byte % alphabet.length];
+      if (id.length === 8) break;
+    }
   }
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+  return id;
 }
 const _origLog = console.log.bind(console);
 const _origWarn = console.warn.bind(console);
@@ -885,11 +894,15 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "getStatus") {
-    sendResponse({
-      connected: ws?.readyState === WebSocket.OPEN,
-      reconnecting: reconnectTimer !== null,
-      contextId: currentContextId
-    });
+    void (async () => {
+      const contextId = await getCurrentContextId();
+      sendResponse({
+        connected: ws?.readyState === WebSocket.OPEN,
+        reconnecting: reconnectTimer !== null,
+        contextId
+      });
+    })();
+    return true;
   }
   return false;
 });
