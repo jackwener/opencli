@@ -2,6 +2,7 @@
  * BOSS直聘 job search — browser cookie API.
  */
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { ArgumentError } from '@jackwener/opencli/errors';
 import { requirePage, navigateTo, bossFetch, verbose } from './utils.js';
 /** City name → BOSS Zhipin city code mapping */
 const CITY_CODES = {
@@ -48,6 +49,7 @@ const INDUSTRY_MAP = {
 const JOB_TYPE_MAP = {
     '不限': '0', '全职': '1901', '实习': '1902', '兼职': '1903',
 };
+const JOB_TYPE_CODES = new Set(Object.values(JOB_TYPE_MAP));
 function resolveCity(input) {
     if (!input)
         return '101010100';
@@ -72,6 +74,22 @@ function resolveMap(input, map) {
     }
     return input;
 }
+function resolveJobType(input) {
+    if (!input)
+        return '';
+    if (JOB_TYPE_MAP[input] !== undefined)
+        return JOB_TYPE_MAP[input];
+    if (JOB_TYPE_CODES.has(input))
+        return input;
+    throw new ArgumentError(`Invalid jobType: ${input}`, 'Use one of: 全职, 兼职, 实习, 不限');
+}
+function formatBossOnline(value) {
+    if (value === true)
+        return 'Y';
+    if (value === false)
+        return 'N';
+    return '';
+}
 cli({
     site: 'boss',
     name: 'search',
@@ -94,15 +112,16 @@ cli({
     columns: ['name', 'salary', 'company', 'area', 'experience', 'degree', 'skills', 'boss', 'bossOnline', 'security_id', 'url'],
     func: async (page, kwargs) => {
         requirePage(page);
+        const query = String(kwargs.query ?? '').trim();
         const cityCode = resolveCity(kwargs.city);
         verbose('Navigating to set referrer context...');
-        await navigateTo(page, `https://www.zhipin.com/web/geek/job?query=${encodeURIComponent(kwargs.query)}&city=${cityCode}`);
+        await navigateTo(page, `https://www.zhipin.com/web/geek/job?query=${encodeURIComponent(query)}&city=${cityCode}`);
         await new Promise(r => setTimeout(r, 1000));
         const expVal = resolveMap(kwargs.experience, EXP_MAP);
         const degreeVal = resolveMap(kwargs.degree, DEGREE_MAP);
         const salaryVal = resolveMap(kwargs.salary, SALARY_MAP);
         const industryVal = resolveMap(kwargs.industry, INDUSTRY_MAP);
-        const jobTypeVal = resolveMap(kwargs.jobType, JOB_TYPE_MAP);
+        const jobTypeVal = resolveJobType(kwargs.jobType);
         const limit = kwargs.limit || 15;
         let currentPage = kwargs.page || 1;
         let allJobs = [];
@@ -113,7 +132,7 @@ cli({
             }
             const qs = new URLSearchParams({
                 scene: '1',
-                query: kwargs.query,
+                query,
                 city: cityCode,
                 page: String(currentPage),
                 pageSize: '15',
@@ -149,7 +168,7 @@ cli({
                     degree: j.jobDegree,
                     skills: (j.skills || []).join(','),
                     boss: j.bossName + ' · ' + j.bossTitle,
-                    bossOnline: j.bossOnline ? 'Y' : '',
+                    bossOnline: formatBossOnline(j.bossOnline),
                     security_id: j.securityId || '',
                     url: 'https://www.zhipin.com/job_detail/' + j.encryptJobId + '.html',
                 });
@@ -168,3 +187,7 @@ cli({
         return allJobs;
     },
 });
+export const __test__ = {
+    resolveJobType,
+    formatBossOnline,
+};
