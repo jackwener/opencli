@@ -9,7 +9,7 @@
  * getCookies, screenshot, tabs, etc.
  */
 
-import type { BrowserCookie, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
+import type { BrowserCookie, FetchJsonOptions, IPage, ScreenshotOptions, SnapshotOptions, WaitOptions } from '../types.js';
 import { generateSnapshotJs, getFormStateJs } from './dom-snapshot.js';
 import {
   pressKeyJs,
@@ -30,6 +30,8 @@ import {
   type TargetMatchLevel,
 } from './target-resolver.js';
 import { TargetError, type TargetErrorCode } from './target-errors.js';
+import { CliError } from '../errors.js';
+import { formatSnapshot } from '../snapshotFormatter.js';
 
 export interface ResolveSuccess {
   matches_n: number;
@@ -65,7 +67,12 @@ async function runResolve(
   }
   return { matches_n: resolution.matches_n, match_level: resolution.match_level };
 }
-import { formatSnapshot } from '../snapshotFormatter.js';
+
+function previewText(text: string | undefined): string | undefined {
+  const preview = (text ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  return preview ? `Response preview: ${preview}` : undefined;
+}
+
 export abstract class BasePage implements IPage {
   protected _lastUrl: string | null = null;
   /** Cached previous snapshot hashes for incremental diff marking */
@@ -94,6 +101,98 @@ export abstract class BasePage implements IPage {
       })
       .join('\n');
     return this.evaluate(`${declarations}\n${js}`);
+  }
+
+  async fetchJson(url: string, opts: FetchJsonOptions = {}): Promise<unknown> {
+    const request = {
+      url,
+      method: opts.method ?? 'GET',
+      headers: opts.headers ?? {},
+      body: opts.body,
+      hasBody: opts.body !== undefined,
+      timeoutMs: opts.timeoutMs ?? 15_000,
+    };
+
+    const result = await this.evaluateWithArgs(`
+      (async () => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), request.timeoutMs);
+        try {
+          const headers = { Accept: 'application/json', ...request.headers };
+          const init = {
+            method: request.method,
+            credentials: 'include',
+            headers,
+            signal: ctrl.signal,
+          };
+          if (request.hasBody) {
+            if (!Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+              headers['Content-Type'] = 'application/json';
+            }
+            init.body = JSON.stringify(request.body);
+          }
+          const resp = await fetch(request.url, init);
+          const text = await resp.text();
+          return {
+            ok: resp.ok,
+            status: resp.status,
+            statusText: resp.statusText,
+            url: resp.url,
+            contentType: resp.headers.get('content-type') || '',
+            text,
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            status: 0,
+            statusText: '',
+            url: request.url,
+            contentType: '',
+            text: '',
+            error: error instanceof Error ? error.message : String(error),
+          };
+        } finally {
+          clearTimeout(timer);
+        }
+      })()
+    `, { request }) as {
+      ok?: boolean;
+      status?: number;
+      statusText?: string;
+      url?: string;
+      contentType?: string;
+      text?: string;
+      error?: string;
+    };
+
+    const targetUrl = result.url || url;
+    if (result.error) {
+      throw new CliError(
+        'FETCH_ERROR',
+        `Browser fetch failed for ${targetUrl}: ${result.error}`,
+        'Check that the page is reachable and the current browser profile has access.',
+      );
+    }
+    if (!result.ok) {
+      throw new CliError(
+        'FETCH_ERROR',
+        `HTTP ${result.status ?? 0}${result.statusText ? ` ${result.statusText}` : ''} from ${targetUrl}`,
+        previewText(result.text),
+      );
+    }
+
+    const text = result.text ?? '';
+    if (!text.trim()) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      const contentType = result.contentType ? ` (${result.contentType})` : '';
+      throw new CliError(
+        'FETCH_ERROR',
+        `Expected JSON from ${targetUrl}${contentType}`,
+        previewText(text),
+      );
+    }
   }
 
   abstract getCookies(opts?: { domain?: string; url?: string }): Promise<BrowserCookie[]>;

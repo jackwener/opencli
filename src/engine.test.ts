@@ -221,7 +221,7 @@ describe('executeCommand', () => {
       args: [
         { name: 'note-id', required: true, help: 'Note ID' },
       ],
-      func: async (_page, kwargs) => [{ noteId: kwargs['note-id'] }],
+      func: async (kwargs) => [{ noteId: kwargs['note-id'] }],
     });
 
     const result = await executeCommand(cmd, { 'note-id': 'abc123' });
@@ -235,7 +235,7 @@ describe('executeCommand', () => {
       description: 'test command with func',
       browser: false,
       strategy: Strategy.PUBLIC,
-      func: async (_page, kwargs) => {
+      func: async (kwargs) => {
         return [{ title: kwargs.query ?? 'default' }];
       },
     });
@@ -279,7 +279,7 @@ describe('executeCommand', () => {
       name: 'debug-test',
       description: 'debug test',
       browser: false,
-      func: async (_page, _kwargs, debug) => {
+      func: async (_kwargs, debug) => {
         receivedDebug = debug ?? false;
         return [];
       },

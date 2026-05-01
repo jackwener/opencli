@@ -10,7 +10,15 @@
  * 6. Lifecycle hooks (onBeforeExecute / onAfterExecute)
  */
 
-import { type CliCommand, type InternalCliCommand, type Arg, type CommandArgs, getRegistry, fullName } from './registry.js';
+import {
+  type BrowserCliCommand,
+  type CliCommand,
+  type InternalCliCommand,
+  type Arg,
+  type CommandArgs,
+  getRegistry,
+  fullName,
+} from './registry.js';
 import type { IPage } from './types.js';
 import { pathToFileURL } from 'node:url';
 import * as fs from 'node:fs';
@@ -117,20 +125,25 @@ async function runCommand(
 
     const updated = getRegistry().get(fullName(cmd));
     if (updated?.func) {
-      if (!page && updated.browser !== false) {
-        throw new CommandExecutionError(`Command ${fullName(cmd)} requires a browser session but none was provided`);
-      }
-      return updated.func(page as IPage, kwargs, debug);
+      return runCommandFunc(updated, page, kwargs, debug);
     }
     if (updated?.pipeline) return executePipeline(page, updated.pipeline, { args: kwargs, debug });
   }
 
-  if (cmd.func) return cmd.func(page as IPage, kwargs, debug);
+  if (cmd.func) return runCommandFunc(cmd, page, kwargs, debug);
   if (cmd.pipeline) return executePipeline(page, cmd.pipeline, { args: kwargs, debug });
   throw new CommandExecutionError(
     `Command ${fullName(cmd)} has no func or pipeline`,
     'This is likely a bug in the adapter definition. Please report this issue.',
   );
+}
+
+function runCommandFunc(cmd: CliCommand, page: IPage | null, kwargs: CommandArgs, debug: boolean): Promise<unknown> {
+  if (cmd.browser === false) return cmd.func!(kwargs, debug);
+  if (!page) {
+    throw new CommandExecutionError(`Command ${fullName(cmd)} requires a browser session but none was provided`);
+  }
+  return (cmd as BrowserCliCommand).func!(page, kwargs, debug);
 }
 
 function resolvePreNav(cmd: CliCommand): string | null {

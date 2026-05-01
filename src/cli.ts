@@ -1712,10 +1712,10 @@ cli({
     { name: 'limit', type: 'int', default: 10, help: 'Number of items' },
   ],
   columns: [], // TODO: field names for table output (e.g. ['title', 'score', 'url'])
-  func: async (page, kwargs) => {
+  func: async (kwargs) => {
     // TODO: implement data fetching
     // Prefer API calls (fetch) over browser automation
-    // page is available if browser: true
+    // If you set browser: true, change this to: async (page, kwargs) => { ... }
     return [];
   },
 });
