@@ -67,8 +67,20 @@ opencli bilibili hot --limit 5
 
 - `opencli list` 查看当前所有命令
 - `opencli <site> <command>` 调用内置或生成好的适配器
-- `opencli register mycli` 把本地 CLI 接入同一发现入口
+- `opencli external register mycli` 把本地 CLI 接入同一发现入口
 - `opencli doctor` 处理浏览器连通性问题
+
+## 扩展 OpenCLI
+
+如果你想新增自己的命令，先看 [扩展 OpenCLI](./docs/zh/guide/extending-opencli.md)。README 只保留入口；目录结构、源码管理方式和安装命令放在文档里。
+
+| 需求 | 推荐路径 |
+|------|----------|
+| 把个人网站命令放在自己的 Git repo | `opencli plugin create` + `opencli plugin install file://...` |
+| 快速写一个本机私人 adapter | `opencli browser init <site>/<command>`，放在 `~/.opencli/clis/` |
+| 本地修改官方 adapter | `opencli adapter eject/status/reset` |
+| 发布或安装第三方命令 | `opencli plugin install github:user/repo` |
+| 包装已有本机 binary | `opencli external register <name>` |
 
 ## 给 AI Agent
 

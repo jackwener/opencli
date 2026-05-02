@@ -86,6 +86,18 @@ Use OpenCLI directly when you want a reliable command instead of a live browser 
 - `opencli external register mycli` exposes a local CLI through the same discovery surface.
 - `opencli doctor` helps diagnose browser connectivity.
 
+## Extending OpenCLI
+
+If you want to add your own commands, start with the [Extending OpenCLI guide](./docs/guide/extending-opencli.md). README keeps this short; the guide covers the directory layout, source-control model, and install commands.
+
+| Need | Recommended path |
+|------|------------------|
+| Keep personal website commands in your own Git repo | `opencli plugin create` + `opencli plugin install file://...` |
+| Quickly draft a private local adapter | `opencli browser init <site>/<command>` in `~/.opencli/clis/` |
+| Modify an official adapter locally | `opencli adapter eject/status/reset` |
+| Publish or install third-party commands | `opencli plugin install github:user/repo` |
+| Wrap an existing local binary | `opencli external register <name>` |
+
 ## For AI Agents
 
 OpenCLI's browser commands are designed to be used by AI Agents — not run manually. Install skills into your AI agent (Claude Code, Cursor, etc.), and the agent operates websites on your behalf using your logged-in Chrome session.
@@ -394,7 +406,7 @@ Before writing any adapter code, read the [`opencli-adapter-author` skill](./ski
 - Decode response fields, design columns, scaffold with `opencli browser init`.
 - Verify with `opencli browser verify <site>/<name>` before shipping.
 
-Adapters you write outside the repo live at `~/.opencli/clis/<site>/<name>.js`. Site knowledge (endpoints, field maps, fixtures) accumulates in `~/.opencli/sites/<site>/` so the next adapter for the same site starts from context instead of zero.
+For long-lived personal commands that should live in your own Git repo, use a local plugin instead; see [Extending OpenCLI](./docs/guide/extending-opencli.md). Quick private adapters can still live at `~/.opencli/clis/<site>/<name>.js`. Site knowledge (endpoints, field maps, fixtures) accumulates in `~/.opencli/sites/<site>/` so the next adapter for the same site starts from context instead of zero.
 
 ## Testing
 
