@@ -34,7 +34,10 @@ It also works as a **CLI hub** for local tools such as `gh`, `docker`, and other
 
 ### 1. Install OpenCLI
 
+OpenCLI requires **Node.js >= 21**.
+
 ```bash
+node --version
 npm install -g @jackwener/opencli
 ```
 
@@ -171,7 +174,8 @@ OpenCLI is not only for websites. It can also:
 
 ## Prerequisites
 
-- **Node.js**: >= 21.0.0 (or **Bun** >= 1.0)
+- **Node.js**: >= 21.0.0 (required for the standard npm install path)
+- **Bun**: >= 1.0 (optional alternative runtime)
 - **Chrome or Chromium** running and logged into the target site for browser-backed commands
 
 > **Important**: Browser-backed commands reuse your Chrome/Chromium login session. If you get empty data or permission-like failures, first confirm the site is already open and authenticated in Chrome/Chromium.
@@ -405,7 +409,7 @@ See **[TESTING.md](./TESTING.md)** for how to run and write tests.
 - **"Extension not connected"** — Ensure the Browser Bridge extension is installed from the [Chrome Web Store](https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk) and **enabled** in `chrome://extensions`.
 - **"attach failed: Cannot access a chrome-extension:// URL"** — Another extension may be interfering. Try disabling other extensions temporarily.
 - **Empty data or 'Unauthorized' error** — Your Chrome/Chromium login session may have expired. Navigate to the target site and log in again.
-- **Node API errors** — Ensure Node.js >= 21. Some features require `node:util` styleText (stable in Node 21+).
+- **Node API errors / missing `fetch` / startup crash on old Node** — OpenCLI requires **Node.js >= 21**. Run `node --version`, upgrade Node if needed, then retry.
 - **Daemon issues** — Check status: `curl localhost:19825/status` · View logs: `curl localhost:19825/logs`
 
 ## Star History

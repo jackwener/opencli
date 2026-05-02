@@ -31,7 +31,10 @@ OpenCLI 可以用同一套 CLI 做三类事情：
 
 ### 1. 安装 OpenCLI
 
+OpenCLI 要求 **Node.js >= 21**。
+
 ```bash
+node --version
 npm install -g @jackwener/opencli
 ```
 
@@ -155,7 +158,8 @@ OpenCLI 不只是网站 CLI，还可以：
 
 ## 前置要求
 
-- **Node.js**: >= 21.0.0
+- **Node.js**: >= 21.0.0（标准 npm 安装路径要求）
+- **Bun**: >= 1.0（可选替代运行时）
 - 浏览器型命令需要 Chrome 或 Chromium 处于运行中，并已登录目标网站
 
 > **重要**：浏览器型命令直接复用你的 Chrome/Chromium 登录态。如果拿到空数据或出现权限类失败，先确认目标站点已经在浏览器里打开并完成登录。
@@ -502,8 +506,8 @@ opencli plugin uninstall my-tool                            # 卸载
   - 其他 Chrome/Chromium 扩展（如 youmind、New Tab Override 或 AI 助手类扩展）可能产生冲突。请尝试**暂时禁用其他扩展**后重试。
 - **返回空数据，或者报错 "Unauthorized"**
   - Chrome/Chromium 里的登录态可能已经过期。请打开当前页面，在新标签页重新手工登录或刷新该页面。
-- **Node API 错误 (如 parseArgs, fs 等)**
-  - 确保 Node.js 版本 `>= 21`（`node:util` 的 `styleText` 需要 Node 21+）。
+- **Node API 错误 / 缺少 `fetch` / 旧 Node 启动即崩**
+  - OpenCLI 要求 **Node.js >= 21**。先执行 `node --version`，如果版本过低先升级，再重试命令。
 - **Daemon 问题**
   - 检查 daemon 状态：`curl localhost:19825/status`
   - 查看扩展日志：`curl localhost:19825/logs`
