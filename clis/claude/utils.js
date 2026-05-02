@@ -43,24 +43,21 @@ export async function getPageState(page) {
 
 export async function getVisibleMessages(page) {
     const result = await page.evaluate(`(() => {
+        var nodes = document.querySelectorAll('[data-testid="user-message"], ${MESSAGE_SELECTOR}');
         var rows = [];
-        document.querySelectorAll('[data-testid="user-message"]').forEach(function(el) {
-            var text = (el.innerText || '').trim();
-            if (text) rows.push({ index: rows.length, role: 'user', text: text });
-        });
-        document.querySelectorAll('${MESSAGE_SELECTOR}').forEach(function(el) {
+        Array.from(nodes).forEach(function(el) {
+            var isUser = el.getAttribute('data-testid') === 'user-message';
             var raw = (el.innerText || '').trim();
-            // Strip leading widget label paragraphs (Adaptive thinking, file thumbnail).
-            var parts = raw.split(/\\n\\n+/);
-            while (parts.length > 1 && /^(Thought|View)\\b/i.test(parts[0])) parts.shift();
-            var text = parts.join('\\n\\n').trim();
-            if (text) rows.push({ index: rows.length, role: 'assistant', text: text });
+            if (!isUser) {
+                var parts = raw.split(/\\n\\n+/);
+                while (parts.length > 1 && /^(Thought|View)\\b/i.test(parts[0])) parts.shift();
+                raw = parts.join('\\n\\n').trim();
+            }
+            if (raw) rows.push({ role: isUser ? 'user' : 'assistant', text: raw });
         });
         return rows;
     })()`);
     if (!Array.isArray(result)) return [];
-    // Stable order: user / assistant alternating by DOM order is preserved per-bucket above,
-    // but interleave them so the conversation reads top-to-bottom.
     return result.map(function(r, i) { return { Index: i, Role: r.role, Text: r.text }; });
 }
 
