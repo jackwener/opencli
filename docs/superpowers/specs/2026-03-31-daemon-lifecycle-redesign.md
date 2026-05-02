@@ -199,9 +199,99 @@ and shows:
 - Integration test: daemon exits after configured timeout when fully idle
 - Integration test: `opencli daemon status/stop/restart` work correctly
 
+## Multi-Daemon Namespace Reservation
+
+> **Note added 2026-04-16:** This section reserves namespace for future plugin-side daemon
+> support. The implementation details below are NOT yet implemented.
+
+### Motivation
+
+Future OpenCLI adapters may need to spawn their own background daemons (e.g., custom IPC
+bridges or services). The current design assumes a single `browser-bridge` daemon. We need
+to reserve namespace so multiple daemons can coexist without breaking existing flags.
+
+### Namespace Design
+
+#### Daemon Naming
+
+Each daemon has a unique name used for targeting:
+
+| Daemon | Name | Default Port |
+|--------|------|--------------|
+| browser-bridge | `browser-bridge` | 19825 |
+| (future plugins) | `<plugin-name>` | configurable |
+
+#### CLI Surface Changes
+
+All daemon subcommands accept an optional `[name]` argument:
+
+```
+opencli daemon status [name]
+opencli daemon stop [name]
+opencli daemon restart [name]
+```
+
+**Behavior when name is omitted:**
+- `status`: Returns status for all known daemons, or `browser-bridge` if only one exists
+- `stop` / `restart`: Requires explicit name when multiple daemons are running (error if ambiguous)
+
+#### Status Response Format
+
+**Single daemon (current behavior):**
+```
+Daemon: running (PID 12345)
+Uptime: 2h 15m
+Extension: connected
+Last CLI request: 8 min ago
+Memory: 12.3 MB
+Port: 19825
+```
+
+**Multi-daemon status:**
+```
+Daemons:
+  browser-bridge: running (PID 12345) - Extension: connected
+  my-plugin: running (PID 67890) - Port: 19826
+
+Run `opencli daemon status <name>` for detailed info on a specific daemon.
+```
+
+#### Discovery Mechanism
+
+Plugin-side daemons register with a well-known file:
+
+```
+~/.opencli/daemons/<name>.json
+```
+
+Each file contains:
+```json
+{
+  "name": "my-plugin",
+  "pid": 12345,
+  "port": 19826,
+  "startedAt": "2026-04-16T10:00:00Z"
+}
+```
+
+The `opencli daemon` commands enumerate registered daemons from this directory.
+
+#### Implementation Notes
+
+1. **Backward compatibility:** Current behavior is `name = browser-bridge` implicit
+2. **Registration:** Daemon writes its info file on startup, removes on graceful exit
+3. **Cleanup:** Orphaned pidfiles (daemon crashed) are detected via `kill(pid, 0)` check
+4. **Security:** Daemon files are user-writable only; path traversal is prevented
+
+### Future Considerations
+
+- Daemon health check endpoint: `GET /health` returns `{ "ok": true }`
+- Daemon registry service for multi-machine setups
+- OS-level integration (launchd plists, systemd units)
+
 ## Out of Scope
 
 - OS-level daemon management (launchd/systemd) — can be added later if needed
 - Daemon auto-update mechanism
-- Multi-daemon coordination
 - Persistent daemon state across restarts
+- Plugin daemon registration API (reserved namespace only, implementation TBD)
