@@ -4034,7 +4034,9 @@
       }
     ],
     "columns": [
-      "Status"
+      "Status",
+      "SubmittedBy",
+      "InjectedText"
     ],
     "type": "js",
     "modulePath": "claude/send.js",

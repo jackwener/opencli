@@ -14,7 +14,7 @@ export const sendCommand = cli({
         { name: 'prompt', positional: true, required: true, help: 'Prompt to send' },
         { name: 'new', type: 'boolean', default: false, help: 'Start a new chat before sending' },
     ],
-    columns: ['Status'],
+    columns: ['Status', 'SubmittedBy', 'InjectedText'],
 
     func: async (page, kwargs) => {
         const prompt = kwargs.prompt;
@@ -31,6 +31,10 @@ export const sendCommand = cli({
         if (!sendResult?.ok) {
             throw new CommandExecutionError(sendResult?.reason || 'Failed to send message');
         }
-        return [{ Status: 'Sent' }];
+        return [{
+            Status: 'Success',
+            SubmittedBy: sendResult.method || 'send-button',
+            InjectedText: prompt,
+        }];
     },
 });
