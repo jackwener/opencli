@@ -3860,6 +3860,206 @@
     "navigateBefore": true
   },
   {
+    "site": "claude",
+    "name": "ask",
+    "description": "Send a prompt to Claude and get the response",
+    "domain": "claude.ai",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "prompt",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Prompt to send"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 120,
+        "required": false,
+        "help": "Max seconds to wait for response"
+      },
+      {
+        "name": "new",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Start a new chat before sending"
+      },
+      {
+        "name": "model",
+        "type": "str",
+        "default": "sonnet",
+        "required": false,
+        "help": "Model to use: sonnet, opus, or haiku",
+        "choices": [
+          "sonnet",
+          "opus",
+          "haiku"
+        ]
+      },
+      {
+        "name": "think",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Enable Adaptive thinking"
+      },
+      {
+        "name": "file",
+        "type": "str",
+        "required": false,
+        "help": "Attach a file (image, PDF, text) with the prompt"
+      }
+    ],
+    "columns": [
+      "response"
+    ],
+    "timeout": 180,
+    "type": "js",
+    "modulePath": "claude/ask.js",
+    "sourceFile": "claude/ask.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "claude",
+    "name": "detail",
+    "description": "Open a Claude conversation by ID and read its messages",
+    "domain": "claude.ai",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Conversation ID (UUID from /chat/<id>)"
+      }
+    ],
+    "columns": [
+      "Index",
+      "Role",
+      "Text"
+    ],
+    "type": "js",
+    "modulePath": "claude/detail.js",
+    "sourceFile": "claude/detail.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "claude",
+    "name": "history",
+    "description": "List conversation history from Claude /recents",
+    "domain": "claude.ai",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Max conversations to show"
+      }
+    ],
+    "columns": [
+      "Index",
+      "Id",
+      "Title",
+      "Url"
+    ],
+    "type": "js",
+    "modulePath": "claude/history.js",
+    "sourceFile": "claude/history.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "claude",
+    "name": "new",
+    "description": "Start a new conversation in Claude",
+    "domain": "claude.ai",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [],
+    "columns": [
+      "Status"
+    ],
+    "type": "js",
+    "modulePath": "claude/new.js",
+    "sourceFile": "claude/new.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "claude",
+    "name": "read",
+    "description": "Read the current Claude conversation",
+    "domain": "claude.ai",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [],
+    "columns": [
+      "Index",
+      "Role",
+      "Text"
+    ],
+    "type": "js",
+    "modulePath": "claude/read.js",
+    "sourceFile": "claude/read.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "claude",
+    "name": "send",
+    "description": "Send a prompt to Claude without waiting for the response",
+    "domain": "claude.ai",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "prompt",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Prompt to send"
+      },
+      {
+        "name": "new",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Start a new chat before sending"
+      }
+    ],
+    "columns": [
+      "Status"
+    ],
+    "type": "js",
+    "modulePath": "claude/send.js",
+    "sourceFile": "claude/send.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "claude",
+    "name": "status",
+    "description": "Check Claude page availability and login state",
+    "domain": "claude.ai",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [],
+    "columns": [
+      "Status",
+      "Login",
+      "Url"
+    ],
+    "type": "js",
+    "modulePath": "claude/status.js",
+    "sourceFile": "claude/status.js",
+    "navigateBefore": false
+  },
+  {
     "site": "cnki",
     "name": "search",
     "description": "中国知网论文搜索（海外版）",

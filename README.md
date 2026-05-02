@@ -261,6 +261,7 @@ To load the source Browser Bridge extension:
 | **1688** | `search` `item` `assets` `download` `store` |
 | **gitee** | `trending` `search` `user` |
 | **gemini** | `new` `ask` `image` `deep-research` `deep-research-result` |
+| **claude** | `ask` `send` `new` `status` `read` `history` `detail` |
 | **yuanbao** | `new` `ask` |
 | **notebooklm** | `status` `list` `open` `current` `get` `history` `summary` `note-list` `notes-get` `source-list` `source-get` `source-fulltext` `source-guide` |
 | **spotify** | `auth` `status` `play` `pause` `next` `prev` `volume` `search` `queue` `shuffle` `repeat` |

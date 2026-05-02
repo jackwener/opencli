@@ -80,6 +80,7 @@ export default defineConfig({
                 { text: '1688', link: '/adapters/browser/1688' },
                 { text: 'Gitee', link: '/adapters/browser/gitee' },
                 { text: 'Gemini', link: '/adapters/browser/gemini' },
+                { text: 'Claude', link: '/adapters/browser/claude' },
                 { text: 'Yuanbao', link: '/adapters/browser/yuanbao' },
                 { text: 'NotebookLM', link: '/adapters/browser/notebooklm' },
                 { text: 'WeRead', link: '/adapters/browser/weread' },
