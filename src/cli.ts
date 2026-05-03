@@ -1907,8 +1907,9 @@ cli({
     .option('--update-fixture', 'Overwrite an existing fixture with one derived from current output')
     .option('--no-fixture', 'Ignore any fixture file for this run (no value-level validation)')
     .option('--strict-memory', 'Fail (not just warn) when ~/.opencli/sites/<site>/endpoints.json or notes.md is missing')
+    .option('--trace <mode>', 'Trace capture for the adapter subprocess: off, on, retain-on-failure', 'off')
     .description('Execute an adapter and validate output; uses fixture at ~/.opencli/sites/<site>/verify/<cmd>.json when present')
-    .action(async (name: string, opts: { fixture?: boolean; writeFixture?: boolean; updateFixture?: boolean; strictMemory?: boolean } = {}) => {
+    .action(async (name: string, opts: { fixture?: boolean; writeFixture?: boolean; updateFixture?: boolean; strictMemory?: boolean; trace?: string } = {}) => {
       try {
         const parts = name.split('/');
         if (parts.length !== 2) { console.error('Name must be site/command format'); process.exitCode = EXIT_CODES.USAGE_ERROR; return; }
@@ -1944,11 +1945,12 @@ cli({
         const cliArgs: string[] = expandFixtureArgs(fixtureArgs);
         if (cliArgs.length === 0 && hasLimitArg) cliArgs.push('--limit', '3');
 
-        const argDisplay = cliArgs.join(' ');
+        const traceArgs = opts.trace && opts.trace !== 'off' ? ['--trace', opts.trace] : [];
+        const argDisplay = [...cliArgs, ...traceArgs].join(' ');
         const invocation = resolveBrowserVerifyInvocation();
 
         // Always request JSON so we can validate structurally.
-        const execArgs = [...invocation.args, site, command, ...cliArgs, '--format', 'json'];
+        const execArgs = [...invocation.args, site, command, ...cliArgs, ...traceArgs, '--format', 'json'];
 
         let rawJson: string;
         try {

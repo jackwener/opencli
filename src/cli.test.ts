@@ -12,12 +12,14 @@ const {
   mockBrowserClose,
   mockBindTab,
   mockSendCommand,
+  mockExecFileSync,
   browserState,
 } = vi.hoisted(() => ({
   mockBrowserConnect: vi.fn(),
   mockBrowserClose: vi.fn(),
   mockBindTab: vi.fn(),
   mockSendCommand: vi.fn(),
+  mockExecFileSync: vi.fn(),
   browserState: { page: null as IPage | null },
 }));
 
@@ -37,6 +39,14 @@ vi.mock('./browser/daemon-client.js', async () => {
     ...actual,
     bindTab: mockBindTab,
     sendCommand: mockSendCommand,
+  };
+});
+
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+  return {
+    ...actual,
+    execFileSync: mockExecFileSync,
   };
 });
 
@@ -129,6 +139,40 @@ describe('selectFreshByTimestamp', () => {
     ], first.lastSeenTs);
     expect(rolled.fresh.map((item) => item.text)).toEqual(['c']);
     expect(rolled.lastSeenTs).toBe(3);
+  });
+});
+
+describe('browser verify', () => {
+  beforeEach(() => {
+    process.exitCode = undefined;
+    mockExecFileSync.mockReset().mockReturnValue('[]');
+  });
+
+  it('passes --trace through to the adapter subprocess', async () => {
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'opencli-browser-verify-trace-'));
+    process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
+
+    try {
+      const adapterDir = path.join(fakeHome, '.opencli', 'clis', 'hn');
+      fs.mkdirSync(adapterDir, { recursive: true });
+      fs.writeFileSync(path.join(adapterDir, 'top.js'), 'export default {};\n', 'utf-8');
+
+      const program = createProgram('', '');
+      await program.parseAsync(['node', 'opencli', 'browser', 'verify', 'hn/top', '--no-fixture', '--trace', 'retain-on-failure']);
+
+      expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+      const [, execArgs] = mockExecFileSync.mock.calls[0] as [string, string[]];
+      expect(execArgs.slice(-6)).toEqual(['hn', 'top', '--trace', 'retain-on-failure', '--format', 'json']);
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = originalUserProfile;
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 });
 
