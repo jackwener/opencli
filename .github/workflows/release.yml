@@ -26,6 +26,19 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # Catch silent manifest drift before publishing — if rebuilding the
+      # manifest at release time produces a different cli-manifest.json than
+      # what's committed, refuse to ship. Same gate as CI but enforced at
+      # the release boundary too, since publish runs `prepublishOnly: build`
+      # and would otherwise silently overwrite the committed manifest.
+      - name: Verify cli-manifest.json is up-to-date
+        run: |
+          npm run build-manifest
+          if ! git diff --exit-code -- cli-manifest.json; then
+            echo "::error::cli-manifest.json drift detected at release time. Run 'npm run build' locally and commit the result before tagging."
+            exit 1
+          fi
+
       - name: Install extension dependencies
         run: npm ci
         working-directory: extension
@@ -40,7 +53,7 @@ jobs:
 
       - name: Create extension ZIP
         run: |
-          EXT_VERSION=$(node -p "require('./extension/package.json').version")
+          EXT_VERSION=$(jq -r .version extension/package.json)
           cd extension-package
           zip -r ../opencli-extension-v${EXT_VERSION}.zip .
 
