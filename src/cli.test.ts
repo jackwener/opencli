@@ -52,6 +52,33 @@ vi.mock('node:child_process', async () => {
 
 import { createProgram, findPackageRoot, normalizeVerifyRows, renderVerifyPreview, resolveBrowserVerifyInvocation, selectFreshByTimestamp } from './cli.js';
 
+describe('createProgram root help descriptions', () => {
+  function descriptionFor(program: ReturnType<typeof createProgram>, name: string): string | undefined {
+    return program.commands.find(cmd => cmd.name() === name)?.description();
+  }
+
+  it('summarizes built-in command groups with their subcommands', () => {
+    const program = createProgram('', '');
+
+    expect(descriptionFor(program, 'browser')).toContain('open');
+    expect(descriptionFor(program, 'browser')).toContain('type');
+    expect(descriptionFor(program, 'browser')).toContain('verify');
+    expect(descriptionFor(program, 'browser')).not.toContain('Browser control');
+    expect(descriptionFor(program, 'plugin')).toBe('create, install, list, uninstall, update');
+    expect(descriptionFor(program, 'adapter')).toBe('eject, reset, status');
+    expect(descriptionFor(program, 'profile')).toBe('list, rename, use');
+    expect(descriptionFor(program, 'daemon')).toBe('restart, status, stop');
+    expect(descriptionFor(program, 'external')).toBe('install, list, register');
+  });
+
+  it('keeps leaf command descriptions unchanged', () => {
+    const program = createProgram('', '');
+
+    expect(descriptionFor(program, 'list')).toBe('List all available CLI commands');
+    expect(descriptionFor(program, 'doctor')).toBe('Diagnose opencli browser bridge connectivity');
+  });
+});
+
 describe('resolveBrowserVerifyInvocation', () => {
   it('prefers the built entry declared in package metadata', () => {
     const projectRoot = path.join('repo-root');

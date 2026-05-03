@@ -458,6 +458,20 @@ function applyVerbose(opts: { verbose?: boolean }): void {
   if (opts.verbose) process.env.OPENCLI_VERBOSE = '1';
 }
 
+function formatChildCommandSummary(command: Command): string {
+  return [...new Set(command.commands.map(child => child.name()))]
+    .sort((a, b) => a.localeCompare(b))
+    .join(', ');
+}
+
+function applyRootSubcommandSummaries(program: Command): void {
+  for (const command of program.commands) {
+    if (command.commands.length === 0) continue;
+    const summary = formatChildCommandSummary(command);
+    if (summary) command.description(summary);
+  }
+}
+
 export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command {
   const program = new Command();
   // enablePositionalOptions: prevents parent from consuming flags meant for subcommands;
@@ -2581,6 +2595,7 @@ cli({
   const siteGroups = new Map<string, Command>();
   siteGroups.set('antigravity', antigravityCmd);
   registerAllCommands(program, siteGroups);
+  applyRootSubcommandSummaries(program);
 
   // ── Unknown command fallback ──────────────────────────────────────────────
   // Security: do NOT auto-discover and register arbitrary system binaries.
