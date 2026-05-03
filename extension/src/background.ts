@@ -8,7 +8,7 @@
 declare const __OPENCLI_COMPAT_RANGE__: string;
 
 import type { Command, Result } from './protocol';
-import { DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
+import { DAEMON_HOST, DAEMON_PORT, DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
 import * as executor from './cdp';
 import * as identity from './identity';
 
@@ -621,16 +621,41 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === 'getStatus') {
     void (async () => {
       const contextId = await getCurrentContextId();
+      const connected = ws?.readyState === WebSocket.OPEN;
+      const extensionVersion = chrome.runtime.getManifest().version;
+      const daemonVersion = connected ? await fetchDaemonVersion() : null;
       sendResponse({
-        connected: ws?.readyState === WebSocket.OPEN,
+        connected,
         reconnecting: reconnectTimer !== null,
         contextId,
+        extensionVersion,
+        daemonVersion,
       });
     })();
     return true;
   }
   return false;
 });
+
+/**
+ * Best-effort fetch of the daemon's reported version for the popup status panel.
+ * Resolves to null on any failure — the popup degrades to showing connection
+ * state without the version label.
+ */
+async function fetchDaemonVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(`http://${DAEMON_HOST}:${DAEMON_PORT}/status`, {
+      method: 'GET',
+      headers: { 'X-OpenCLI': '1' },
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) return null;
+    const body = await res.json() as { daemonVersion?: unknown };
+    return typeof body.daemonVersion === 'string' ? body.daemonVersion : null;
+  } catch {
+    return null;
+  }
+}
 
 // ─── Command dispatcher ─────────────────────────────────────────────
 
