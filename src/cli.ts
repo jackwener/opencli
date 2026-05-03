@@ -1892,6 +1892,7 @@ cli({
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(filePath, template, 'utf-8');
         console.log(`Created: ${filePath}`);
+        console.log('First time on this site? Run: opencli browser analyze <url>');
         console.log(`Edit the file to implement your adapter, then run: opencli browser verify ${name}`);
       } catch (err) {
         console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -1907,9 +1908,10 @@ cli({
     .option('--update-fixture', 'Overwrite an existing fixture with one derived from current output')
     .option('--no-fixture', 'Ignore any fixture file for this run (no value-level validation)')
     .option('--strict-memory', 'Fail (not just warn) when ~/.opencli/sites/<site>/endpoints.json or notes.md is missing')
+    .option('--seed-args <value>', 'Seed args when no fixture exists; use JSON array/object for multiple args or flags')
     .option('--trace <mode>', 'Trace capture for the adapter subprocess: off, on, retain-on-failure', 'off')
     .description('Execute an adapter and validate output; uses fixture at ~/.opencli/sites/<site>/verify/<cmd>.json when present')
-    .action(async (name: string, opts: { fixture?: boolean; writeFixture?: boolean; updateFixture?: boolean; strictMemory?: boolean; trace?: string } = {}) => {
+    .action(async (name: string, opts: { fixture?: boolean; writeFixture?: boolean; updateFixture?: boolean; strictMemory?: boolean; seedArgs?: string; trace?: string } = {}) => {
       try {
         const parts = name.split('/');
         if (parts.length !== 2) { console.error('Name must be site/command format'); process.exitCode = EXIT_CODES.USAGE_ERROR; return; }
@@ -1921,7 +1923,7 @@ cli({
         }
 
         const { execFileSync } = await import('node:child_process');
-        const { loadFixture, writeFixture, deriveFixture, validateRows, fixturePath, expandFixtureArgs } = await import('./browser/verify-fixture.js');
+        const { loadFixture, writeFixture, deriveFixture, validateRows, fixturePath, expandFixtureArgs, parseSeedArgs } = await import('./browser/verify-fixture.js');
         const filePath = path.join(os.homedir(), '.opencli', 'clis', site, `${command}.js`);
         if (!fs.existsSync(filePath)) {
           console.error(`Adapter not found: ${filePath}`);
@@ -1941,9 +1943,10 @@ cli({
         //   - array form    ["123", "--limit", "3"]   → verbatim (for positional subjects)
         const adapterSrc = fs.readFileSync(filePath, 'utf-8');
         const hasLimitArg = /['"]limit['"]/.test(adapterSrc);
-        const fixtureArgs = fixture?.args;
-        const cliArgs: string[] = expandFixtureArgs(fixtureArgs);
-        if (cliArgs.length === 0 && hasLimitArg) cliArgs.push('--limit', '3');
+        const seedArgs = parseSeedArgs(opts.seedArgs);
+        const explicitArgs = fixture?.args ?? seedArgs;
+        const cliArgs: string[] = expandFixtureArgs(explicitArgs);
+        if (explicitArgs === undefined && cliArgs.length === 0 && hasLimitArg) cliArgs.push('--limit', '3');
 
         const traceArgs = opts.trace && opts.trace !== 'off' ? ['--trace', opts.trace] : [];
         const argDisplay = [...cliArgs, ...traceArgs].join(' ');
@@ -1993,10 +1996,10 @@ cli({
             console.log(`\n  Fixture already exists at ${fixturePath(site, command)}.`);
             console.log(`  Use --update-fixture to overwrite.`);
           } else {
-            const seedArgs = fixtureArgs !== undefined
-              ? fixtureArgs
+            const fixtureArgs = explicitArgs !== undefined
+              ? explicitArgs
               : (hasLimitArg ? { limit: 3 } : undefined);
-            const derived = deriveFixture(rows, seedArgs);
+            const derived = deriveFixture(rows, fixtureArgs);
             const p = writeFixture(site, command, derived);
             console.log(`\n  ${fixture ? '↻ Updated' : '✎ Wrote'} fixture: ${p}`);
             console.log(`  Review and hand-tune the derived expectations (add patterns / notEmpty, tighten rowCount).`);

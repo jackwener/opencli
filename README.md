@@ -97,7 +97,7 @@ If you want to add your own commands, start with the [Extending OpenCLI guide](.
 |------|------------------|
 | Keep personal website commands in your own Git repo | `opencli plugin create` + `opencli plugin install file://...` |
 | Quickly draft a private local adapter | `opencli browser init <site>/<command>` in `~/.opencli/clis/` |
-| Modify an official adapter locally | `opencli adapter eject/status/reset` |
+| Modify an official adapter locally | `opencli adapter eject <site>` + `opencli adapter reset <site>` |
 | Publish or install third-party commands | `opencli plugin install github:user/repo` |
 | Wrap an existing local binary | `opencli external register <name>` |
 
@@ -174,7 +174,7 @@ When the site you need is not yet covered, use the `opencli-adapter-author` skil
 2. Discover the right endpoint — network inspection, initial state, bundle search, token trace, or interceptor fallback.
 3. Decide the auth strategy — `PUBLIC` / `COOKIE` / `HEADER` / `INTERCEPT`.
 4. Decode response fields and design output columns.
-5. `opencli browser init <site>/<name>` → write adapter → `opencli browser verify <site>/<name>`.
+5. `opencli browser analyze <url>` for one-shot recon, then `opencli browser init <site>/<name>` → write adapter → `opencli browser verify <site>/<name>`.
 6. Persist site knowledge to `~/.opencli/sites/<site>/` so the next adapter for the same site is faster.
 
 ### CLI Hub and desktop adapters
@@ -407,7 +407,7 @@ Before writing any adapter code, read the [`opencli-adapter-author` skill](./ski
 - Recon the site and pick a pattern (SPA / SSR / JSONP / Token / Streaming).
 - Discover the right endpoint via `opencli browser network`, `eval`, or the interceptor fallback.
 - Decide auth strategy (`PUBLIC` / `COOKIE` / `HEADER` / `INTERCEPT`).
-- Decode response fields, design columns, scaffold with `opencli browser init`.
+- Run `opencli browser analyze <url>` for one-shot recon, decode response fields, design columns, scaffold with `opencli browser init`.
 - Verify with `opencli browser verify <site>/<name>` before shipping.
 
 For long-lived personal commands that should live in your own Git repo, use a local plugin instead; see [Extending OpenCLI](./docs/guide/extending-opencli.md). Quick private adapters can still live at `~/.opencli/clis/<site>/<name>.js`. Site knowledge (endpoints, field maps, fixtures) accumulates in `~/.opencli/sites/<site>/` so the next adapter for the same site starts from context instead of zero.

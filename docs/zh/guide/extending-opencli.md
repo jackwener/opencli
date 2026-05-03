@@ -45,18 +45,30 @@ User adapter 加载路径是：
 
 这条路径适合快速本地自动化。需要版本管理、review、共享的代码推荐做成 plugin。
 
+如果命令有 required positional args，而且 fixture 还没创建，第一次 verify 时直接传 seed：
+
+```bash
+opencli browser verify instagram/collection-create --write-fixture --seed-args opencli-verify
+opencli browser verify example/detail --write-fixture --seed-args '["https://example.com/item/1", "--limit", 3]'
+```
+
+`--seed-args` 只在 fixture 没有 `args` 时生效。fixture 写出后，`opencli browser verify` 会从 `~/.opencli/sites/<site>/verify/<command>.json` 读取 args。
+
 ## 本地覆盖官方 adapter
 
 如果你想改一个已有官方 adapter，用 `adapter eject`。
 
 ```bash
 opencli adapter eject twitter
-opencli adapter status
 # edit ~/.opencli/clis/twitter/*.js
 opencli adapter reset twitter
 ```
 
-Ejected adapter 会在本机覆盖 package 里的官方 adapter。`adapter reset` 会移除本地覆盖，恢复到 package 版本。
+`~/.opencli/clis/<site>/<command>.js` 会在本机覆盖同名 package adapter。`opencli browser verify <site>/<command>` 也会跑本地覆盖版本，所以本地 verify 通过不代表 package 里的 adapter 已经改好。
+
+Package 里的 `cli-manifest.json` 只描述 bundled adapter。User adapter 是运行时发现的，不需要写 manifest。
+
+把本地修复复制到仓库发 PR 后，merge 后要删除本地副本，或运行 `opencli adapter reset <site>`。否则本地文件会继续 shadow 后续 package 更新。`opencli doctor` 会在发现这种 shadowing 时给出 warning。
 
 ## Plugin：共享命令
 

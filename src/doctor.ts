@@ -15,6 +15,7 @@ import type { BrowserSessionInfo } from './types.js';
 import type { BrowserProfileStatus } from './browser/daemon-client.js';
 import { aliasForContextId, loadProfileConfig } from './browser/profile.js';
 import { formatDaemonVersion, isDaemonStale, staleDaemonIssue } from './browser/daemon-version.js';
+import { findShadowedUserAdapters, formatAdapterShadowIssue, type AdapterShadow } from './adapter-shadow.js';
 
 const DOCTOR_LIVE_TIMEOUT_SECONDS = 8;
 
@@ -73,6 +74,7 @@ export type DoctorReport = {
   connectivity?: ConnectivityResult;
   sessions?: BrowserSessionInfo[];
   profiles?: BrowserProfileStatus[];
+  adapterShadows?: AdapterShadow[];
   issues: string[];
 };
 
@@ -138,6 +140,7 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
     }
   }
   const extensionVersion = health.status?.extensionVersion;
+  const adapterShadows = findShadowedUserAdapters();
 
   const issues: string[] = [];
   if (daemonFlaky) {
@@ -217,6 +220,9 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
       '  Download from: https://github.com/jackwener/opencli/releases',
     );
   }
+  if (adapterShadows.length > 0) {
+    issues.push(formatAdapterShadowIssue(adapterShadows));
+  }
 
   return {
     cliVersion: opts.cliVersion,
@@ -231,6 +237,7 @@ export async function runBrowserDoctor(opts: DoctorOptions = {}): Promise<Doctor
     connectivity,
     sessions,
     profiles,
+    adapterShadows,
     issues,
   };
 }
@@ -329,6 +336,7 @@ export function renderBrowserDoctorReport(report: DoctorReport): string {
     }
   } else if (report.daemonRunning && report.extensionConnected) {
     lines.push('', styleText('green', 'Everything looks good!'));
+    lines.push(styleText('dim', 'Tip: writing a new adapter? Run `opencli browser analyze <url>` for one-shot site recon.'));
   }
 
   return lines.join('\n');

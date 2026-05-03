@@ -45,18 +45,30 @@ User adapters are loaded from:
 
 This path is convenient for quick local automation. For code you want to version, review, or share, prefer a plugin.
 
+If the command takes required positional args and no fixture exists yet, seed the first verify run explicitly:
+
+```bash
+opencli browser verify instagram/collection-create --write-fixture --seed-args opencli-verify
+opencli browser verify example/detail --write-fixture --seed-args '["https://example.com/item/1", "--limit", 3]'
+```
+
+`--seed-args` is only used when the fixture has no `args`. Once the fixture is written, `opencli browser verify` reads args from `~/.opencli/sites/<site>/verify/<command>.json`.
+
 ## Local overrides for official adapters
 
 Use `adapter eject` when you want to customize an existing official adapter.
 
 ```bash
 opencli adapter eject twitter
-opencli adapter status
 # edit ~/.opencli/clis/twitter/*.js
 opencli adapter reset twitter
 ```
 
-Ejected adapters override the packaged official adapter on this machine. `adapter reset` removes the local override and returns to the packaged version.
+Files in `~/.opencli/clis/<site>/<command>.js` override packaged adapters with the same `site/command` on this machine. `opencli browser verify <site>/<command>` also runs the local override, so a passing local verify does not prove that the packaged adapter was changed.
+
+The packaged `cli-manifest.json` only describes bundled adapters. User adapters are discovered at runtime and do not need manifest entries.
+
+After copying a local fix into the repository for a PR, remove the local copy or run `opencli adapter reset <site>` after merge. Otherwise the local file keeps shadowing future package updates. `opencli doctor` warns when it detects this shadowing.
 
 ## Plugins for sharing commands
 
