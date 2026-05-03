@@ -12,7 +12,7 @@
  *   8. Poll for success/failure feedback
  *
  * Usage:
- *   opencli weibo publish "Hello from OpenCLI! #opencli"
+ *   opencli weibo publish "Hello from OpenCLI! #opencli"  # publishes immediately
  *   opencli weibo publish "Check this out" --images /path/a.jpg,/path/b.jpg
  */
 import * as fs from 'node:fs';
@@ -64,7 +64,7 @@ function validateImagePaths(raw) {
 cli({
     site: 'weibo',
     name: 'publish',
-    description: 'Post a new Weibo update',
+    description: 'Publish a new Weibo post immediately',
     domain: 'weibo.com',
     strategy: Strategy.UI,
     browser: true,
@@ -82,12 +82,6 @@ cli({
             required: false,
             help: `Image paths, comma-separated, max ${MAX_IMAGES} (jpg/png/gif/webp)`,
         },
-        {
-            name: 'execute',
-            type: 'boolean',
-            required: false,
-            help: 'Actually publish the Weibo post. Without this flag the command fails closed.',
-        },
     ],
     columns: ['status', 'message', 'text'],
     func: async (page, kwargs) => {
@@ -95,9 +89,6 @@ cli({
 
         const text = validateText(kwargs.text);
         const absPaths = validateImagePaths(kwargs.images);
-        if (!kwargs.execute) {
-            throw new ArgumentError('weibo publish requires --execute to post');
-        }
 
         // Step 1: Navigate to weibo.com and wait for feed to load
         await page.goto('https://weibo.com', { waitUntil: 'load', settleMs: 2000 });

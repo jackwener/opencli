@@ -68,7 +68,7 @@ describe('weibo publish command', () => {
       ],
     });
 
-    const result = await command.func(page, { text: 'hello', execute: true });
+    const result = await command.func(page, { text: 'hello' });
 
     expect(result).toEqual([{ status: 'success', message: '发送成功', text: 'hello' }]);
     expect(page.goto).toHaveBeenCalledWith('https://weibo.com', { waitUntil: 'load', settleMs: 2000 });
@@ -91,7 +91,7 @@ describe('weibo publish command', () => {
       ],
     });
 
-    await command.func(page, { text: 'with images', images: 'a.png,b.webp', execute: true });
+    await command.func(page, { text: 'with images', images: 'a.png,b.webp' });
 
     expect(page.setFileInput).toHaveBeenCalledWith(
       ['/abs/a.png', '/abs/b.webp'],
@@ -103,10 +103,10 @@ describe('weibo publish command', () => {
     const command = getCommand();
     const page = makePage({ evaluateResults: [null, null] });
 
-    await expect(command.func(page, { text: 'hello', execute: true })).rejects.toBeInstanceOf(AuthRequiredError);
+    await expect(command.func(page, { text: 'hello' })).rejects.toBeInstanceOf(AuthRequiredError);
   });
 
-  it('requires explicit --execute after validating arguments and before navigation', async () => {
+  it('validates text and image arguments before navigation', async () => {
     const command = getCommand();
     const page = makePage();
 
@@ -114,7 +114,6 @@ describe('weibo publish command', () => {
     await expect(command.func(page, { text: 'hi', images: 'a.bmp' })).rejects.toBeInstanceOf(ArgumentError);
     await expect(command.func(page, { text: 'hi', images: 'missing.png' })).rejects.toBeInstanceOf(ArgumentError);
     await expect(command.func(page, { text: 'hi', images: '1.png,2.png,3.png,4.png,5.png,6.png,7.png,8.png,9.png,10.png' })).rejects.toBeInstanceOf(ArgumentError);
-    await expect(command.func(page, { text: 'hi' })).rejects.toBeInstanceOf(ArgumentError);
     expect(page.goto).not.toHaveBeenCalled();
   });
 
@@ -124,7 +123,7 @@ describe('weibo publish command', () => {
       evaluateResults: ['123456', { ok: false, message: 'Could not find 发微博 button' }],
     });
 
-    await expect(command.func(page, { text: 'hello', execute: true })).rejects.toBeInstanceOf(CommandExecutionError);
+    await expect(command.func(page, { text: 'hello' })).rejects.toBeInstanceOf(CommandExecutionError);
   });
 
   it('throws CommandExecutionError when upload readiness is not proven', async () => {
@@ -139,7 +138,7 @@ describe('weibo publish command', () => {
       evaluateWithArgsResults: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
     });
 
-    await expect(command.func(page, { text: 'hello', images: 'a.png', execute: true })).rejects.toBeInstanceOf(CommandExecutionError);
+    await expect(command.func(page, { text: 'hello', images: 'a.png' })).rejects.toBeInstanceOf(CommandExecutionError);
   });
 
   it('throws CommandExecutionError when publish result is unclear or failed', async () => {
@@ -157,7 +156,7 @@ describe('weibo publish command', () => {
       ],
     });
 
-    await expect(command.func(page, { text: 'hello', execute: true })).rejects.toBeInstanceOf(CommandExecutionError);
+    await expect(command.func(page, { text: 'hello' })).rejects.toBeInstanceOf(CommandExecutionError);
   });
 
   it('does not treat editor close as positive publish proof', async () => {
@@ -175,7 +174,7 @@ describe('weibo publish command', () => {
       ],
     });
 
-    await expect(command.func(page, { text: 'hello', execute: true })).rejects.toBeInstanceOf(CommandExecutionError);
+    await expect(command.func(page, { text: 'hello' })).rejects.toBeInstanceOf(CommandExecutionError);
 
     const submitScript = page.evaluateWithArgs.mock.calls.at(-1)[0];
     expect(submitScript).not.toContain('Editor closed after publish');

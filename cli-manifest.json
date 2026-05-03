@@ -17494,7 +17494,7 @@
   {
     "site": "weibo",
     "name": "publish",
-    "description": "Post a new Weibo update",
+    "description": "Publish a new Weibo post immediately",
     "domain": "weibo.com",
     "strategy": "ui",
     "browser": true,
@@ -17511,12 +17511,6 @@
         "type": "string",
         "required": false,
         "help": "Image paths, comma-separated, max 9 (jpg/png/gif/webp)"
-      },
-      {
-        "name": "execute",
-        "type": "boolean",
-        "required": false,
-        "help": "Actually publish the Weibo post. Without this flag the command fails closed."
       }
     ],
     "columns": [
