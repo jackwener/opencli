@@ -52,7 +52,7 @@ describe('doctor report rendering', () => {
     expect(text).toContain('(v1.7.9)');
     expect(text).toContain('[OK] Extension: connected (v1.6.8)');
     expect(text).toContain('Everything looks good!');
-    expect(text).toContain('opencli browser analyze <url>');
+    expect(text).not.toContain('opencli browser analyze <url>');
   });
 
   it('renders a warning when daemon version is stale', () => {

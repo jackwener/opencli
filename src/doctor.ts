@@ -336,7 +336,6 @@ export function renderBrowserDoctorReport(report: DoctorReport): string {
     }
   } else if (report.daemonRunning && report.extensionConnected) {
     lines.push('', styleText('green', 'Everything looks good!'));
-    lines.push(styleText('dim', 'Tip: writing a new adapter? Run `opencli browser analyze <url>` for one-shot site recon.'));
   }
 
   return lines.join('\n');
