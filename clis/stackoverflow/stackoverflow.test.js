@@ -121,6 +121,37 @@ describe('stackoverflow/read adapter', () => {
             .rejects.toThrow(CommandExecutionError);
     });
 
+    it('wraps fetch network failures in CommandExecutionError (not raw TypeError)', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+
+        await expect(cmd.func({ id: '12345', 'answers-limit': 10, 'comments-limit': 5, 'max-length': 4000 }))
+            .rejects.toThrow(CommandExecutionError);
+    });
+
+    it('wraps malformed JSON responses in CommandExecutionError (not raw SyntaxError)', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+            new Response('<!DOCTYPE html><html>maintenance</html>', { status: 200 }),
+        ));
+
+        await expect(cmd.func({ id: '12345', 'answers-limit': 10, 'comments-limit': 5, 'max-length': 4000 }))
+            .rejects.toThrow(CommandExecutionError);
+    });
+
+    it('coerces and validates string-form numeric args (e.g. "50" not Number(50))', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        // String "50" should still be rejected because it's < 100
+        await expect(cmd.func({ id: '12345', 'answers-limit': 10, 'comments-limit': 5, 'max-length': '50' }))
+            .rejects.toThrow(ArgumentError);
+        expect(fetchMock).not.toHaveBeenCalled();
+
+        // String "abc" should also be rejected
+        await expect(cmd.func({ id: '12345', 'answers-limit': 10, 'comments-limit': 5, 'max-length': 'abc' }))
+            .rejects.toThrow(ArgumentError);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('builds POST + Q-COMMENT + ANSWER + A-COMMENT rows, accepted answer first', async () => {
         const question = {
             items: [{

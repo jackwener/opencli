@@ -25,7 +25,15 @@ const SE_API_BASE = 'https://api.stackexchange.com/2.3';
 const SE_SITE = 'stackoverflow';
 
 async function fetchJson(url, label) {
-    const res = await fetch(url);
+    let res;
+    try {
+        res = await fetch(url);
+    } catch (e) {
+        throw new CommandExecutionError(
+            `Network failure fetching ${label}: ${e.message}`,
+            'Check connectivity to api.stackexchange.com',
+        );
+    }
     if (res.status === 404) {
         throw new EmptyResultError(label, `${label} not found`);
     }
@@ -35,7 +43,15 @@ async function fetchJson(url, label) {
             'Check the question id and quota (300/day per IP)',
         );
     }
-    const json = await res.json();
+    let json;
+    try {
+        json = await res.json();
+    } catch (e) {
+        throw new CommandExecutionError(
+            `Malformed JSON from Stack Exchange API for ${label}: ${e.message}`,
+            'The API returned a non-JSON body — likely a transient outage',
+        );
+    }
     if (json && json.error_id) {
         throw new CommandExecutionError(
             `Stack Exchange API error ${json.error_id} (${json.error_name}) for ${label}: ${json.error_message || ''}`,
@@ -45,18 +61,31 @@ async function fetchJson(url, label) {
     return json;
 }
 
+/**
+ * CLI args may arrive as strings (`--limit 5` → `'5'`) when not coerced by the
+ * arg type system. Coerce-then-validate so `Number.isInteger` actually catches
+ * the bad cases, and reject NaN explicitly.
+ */
+function coerceInt(value) {
+    if (value === undefined || value === null || value === '') return NaN;
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) && Number.isInteger(n) ? n : NaN;
+}
+
 function requirePositiveInt(value, label) {
-    if (!Number.isInteger(value) || value <= 0) {
-        throw new ArgumentError(`${label} must be a positive integer`);
+    const n = coerceInt(value);
+    if (!Number.isInteger(n) || n <= 0) {
+        throw new ArgumentError(`${label} must be a positive integer, got ${JSON.stringify(value)}`);
     }
-    return value;
+    return n;
 }
 
 function requireMinInt(value, min, label) {
-    if (!Number.isInteger(value) || value < min) {
-        throw new ArgumentError(`${label} must be an integer >= ${min}`);
+    const n = coerceInt(value);
+    if (!Number.isInteger(n) || n < min) {
+        throw new ArgumentError(`${label} must be an integer >= ${min}, got ${JSON.stringify(value)}`);
     }
-    return value;
+    return n;
 }
 
 const NAMED_ENTITIES = {
