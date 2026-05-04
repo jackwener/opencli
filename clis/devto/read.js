@@ -14,21 +14,42 @@ import { ArgumentError, CommandExecutionError, EmptyResultError } from '@jackwen
 const DEVTO_ARTICLE_BASE = 'https://dev.to/api/articles';
 
 async function fetchArticle(id) {
-    const res = await fetch(`${DEVTO_ARTICLE_BASE}/${id}`);
+    let res;
+    try {
+        res = await fetch(`${DEVTO_ARTICLE_BASE}/${id}`);
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new CommandExecutionError(`DEV.to API request failed for article ${id}`, detail);
+    }
     if (res.status === 404) {
         throw new EmptyResultError(`devto/${id}`, 'Article not found');
     }
     if (!res.ok) {
         throw new CommandExecutionError(`DEV.to API HTTP ${res.status} for article ${id}`, 'Check the article id');
     }
-    return res.json();
+    try {
+        return await res.json();
+    } catch {
+        throw new CommandExecutionError(`DEV.to API returned invalid JSON for article ${id}`, 'Retry later or open the article URL directly');
+    }
 }
 
 function requireMinInt(value, min, label) {
-    if (!Number.isInteger(value) || value < min) {
+    const number = typeof value === 'number' ? value : Number(value);
+    if (!Number.isInteger(number) || number < min) {
         throw new ArgumentError(`${label} must be an integer >= ${min}`);
     }
-    return value;
+    return number;
+}
+
+function requireArticleBody(article, id) {
+    if (typeof article.body_markdown === 'string' && article.body_markdown.trim()) {
+        return article.body_markdown;
+    }
+    throw new CommandExecutionError(
+        `DEV.to article ${id} did not include body_markdown`,
+        'DEV.to API response shape may have changed. Open the article URL directly or retry later.',
+    );
 }
 
 cli({
@@ -55,7 +76,7 @@ cli({
             throw new EmptyResultError(`devto/${id}`, 'Article not found');
         }
 
-        const body = String(article.body_markdown || article.description || '');
+        const body = requireArticleBody(article, id);
         const truncated = body.length > maxLength
             ? body.slice(0, maxLength) + '\n\n... [truncated]'
             : body;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '@jackwener/opencli/registry';
-import { ArgumentError, EmptyResultError } from '@jackwener/opencli/errors';
+import { ArgumentError, CommandExecutionError, EmptyResultError } from '@jackwener/opencli/errors';
 import './top.js';
 import './tag.js';
 import './user.js';
@@ -97,11 +97,70 @@ describe('devto/read adapter', () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it('accepts numeric max-length strings on the direct func path', async () => {
+        const article = {
+            id: 1,
+            title: 't',
+            user: { username: 'u' },
+            public_reactions_count: 0,
+            reading_time_minutes: 1,
+            tag_list: [],
+            published_at: '',
+            body_markdown: 'x'.repeat(150),
+            url: 'https://dev.to/u/t-1',
+        };
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(article), { status: 200 })));
+
+        const rows = await cmd.func({ id: '1', 'max-length': '100' });
+        expect(rows[0].body).toBe('x'.repeat(100) + '\n\n... [truncated]');
+    });
+
+    it('fails fast with ArgumentError for invalid max-length strings before fetching', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(cmd.func({ id: '12345', 'max-length': 'abc' }))
+            .rejects.toThrow(ArgumentError);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('fails fast with EmptyResultError on 404', async () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Not found', { status: 404 })));
 
         await expect(cmd.func({ id: '99999999', 'max-length': 20000 }))
             .rejects.toThrow(EmptyResultError);
+    });
+
+    it('fails fast with CommandExecutionError on non-404 HTTP failures', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Server error', { status: 500 })));
+
+        await expect(cmd.func({ id: '12345', 'max-length': 20000 }))
+            .rejects.toThrow(CommandExecutionError);
+    });
+
+    it('fails fast with CommandExecutionError on invalid JSON responses', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not json', { status: 200 })));
+
+        await expect(cmd.func({ id: '12345', 'max-length': 20000 }))
+            .rejects.toThrow(CommandExecutionError);
+    });
+
+    it('fails fast when the full article body is missing instead of returning a summary', async () => {
+        const article = {
+            id: 1,
+            title: 't',
+            user: { username: 'u' },
+            public_reactions_count: 0,
+            reading_time_minutes: 1,
+            tag_list: [],
+            published_at: '',
+            description: 'summary only',
+            url: 'https://dev.to/u/t-1',
+        };
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(article), { status: 200 })));
+
+        await expect(cmd.func({ id: '1', 'max-length': 20000 }))
+            .rejects.toThrow(CommandExecutionError);
     });
 
     it('returns a single article row with body_markdown extracted', async () => {
