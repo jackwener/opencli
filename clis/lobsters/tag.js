@@ -15,15 +15,17 @@ cli({
         },
         { name: 'limit', type: 'int', default: 20, help: 'Number of stories' },
     ],
-    columns: ['rank', 'title', 'score', 'author', 'comments', 'tags'],
+    columns: ['rank', 'id', 'title', 'score', 'author', 'comments', 'created_at', 'tags', 'url'],
     pipeline: [
         { fetch: { url: 'https://lobste.rs/t/${{ args.tag }}.json' } },
         { map: {
                 rank: '${{ index + 1 }}',
+                id: '${{ item.short_id }}',
                 title: '${{ item.title }}',
                 score: '${{ item.score }}',
                 author: '${{ item.submitter_user }}',
                 comments: '${{ item.comment_count }}',
+                created_at: '${{ item.created_at }}',
                 tags: `\${{ item.tags | join(', ') }}`,
                 url: '${{ item.comments_url }}',
             } },
