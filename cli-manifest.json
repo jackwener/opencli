@@ -16935,7 +16935,6 @@
     "columns": [
       "rank",
       "topic",
-      "tweets",
       "category"
     ],
     "type": "js",
