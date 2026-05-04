@@ -524,7 +524,11 @@ export async function loadDoubanMovieHot(page, limit) {
       return results;
     })()
   `);
-    return Array.isArray(data) ? data : [];
+    const results = Array.isArray(data) ? data : [];
+    if (!results.length) {
+        throw new EmptyResultError('douban movie-hot', 'No movie chart rows were parsed from movie.douban.com/chart.');
+    }
+    return results;
 }
 export function inferDoubanSearchResultType(searchType, item = {}) {
     const fallbackType = String(searchType || '').trim() || 'movie';
