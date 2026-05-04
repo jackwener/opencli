@@ -78,7 +78,11 @@ opencli stackoverflow read 11227809 -f json
 
 - Stack Exchange API has a 300/day quota per IP for unauthenticated
   requests. A `read` call uses up to 4 quota units (question, question
-  comments, answers, batched answer comments).
+  comments, answers, batched answer comments), or 5 when the accepted answer
+  must be fetched separately.
+- `--answers-limit` and `--comments-limit` are bounded to 1-100, matching the
+  Stack Exchange API page size limit. If batched answer comments would be
+  partial, the command fails fast instead of returning an incomplete thread.
 - Bodies are returned as HTML; this adapter strips tags and decodes named
   / decimal / hex HTML entities for plain-text consumption.
 

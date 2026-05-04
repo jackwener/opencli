@@ -10,7 +10,8 @@
  * Three calls are needed because comments under answers are not bundled in
  * the answers payload. We batch all answer-comment fetches into a single
  * semicolon-joined call. SO has its own quota (300/day for unauthenticated
- * IP), but a `read` consumes at most 4 quota units.
+ * IP), but a `read` consumes at most 4 quota units, or 5 when the accepted
+ * answer is missing from the requested answer page and must be fetched by id.
  *
  * Output rows mirror `hackernews read` and `lobsters read`:
  *   - first row is the question itself (`type=POST`)
@@ -23,14 +24,16 @@ import { ArgumentError, CommandExecutionError, EmptyResultError } from '@jackwen
 
 const SE_API_BASE = 'https://api.stackexchange.com/2.3';
 const SE_SITE = 'stackoverflow';
+const SE_MAX_PAGE_SIZE = 100;
 
 async function fetchJson(url, label) {
     let res;
     try {
         res = await fetch(url);
     } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
         throw new CommandExecutionError(
-            `Network failure fetching ${label}: ${e.message}`,
+            `Network failure fetching ${label}: ${detail}`,
             'Check connectivity to api.stackexchange.com',
         );
     }
@@ -47,8 +50,9 @@ async function fetchJson(url, label) {
     try {
         json = await res.json();
     } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
         throw new CommandExecutionError(
-            `Malformed JSON from Stack Exchange API for ${label}: ${e.message}`,
+            `Malformed JSON from Stack Exchange API for ${label}: ${detail}`,
             'The API returned a non-JSON body — likely a transient outage',
         );
     }
@@ -72,20 +76,79 @@ function coerceInt(value) {
     return Number.isFinite(n) && Number.isInteger(n) ? n : NaN;
 }
 
-function requirePositiveInt(value, label) {
-    const n = coerceInt(value);
-    if (!Number.isInteger(n) || n <= 0) {
-        throw new ArgumentError(`${label} must be a positive integer, got ${JSON.stringify(value)}`);
-    }
-    return n;
-}
-
 function requireMinInt(value, min, label) {
     const n = coerceInt(value);
     if (!Number.isInteger(n) || n < min) {
         throw new ArgumentError(`${label} must be an integer >= ${min}, got ${JSON.stringify(value)}`);
     }
     return n;
+}
+
+function requireBoundedInt(value, min, max, label) {
+    const n = coerceInt(value);
+    if (!Number.isInteger(n) || n < min || n > max) {
+        throw new ArgumentError(`${label} must be an integer between ${min} and ${max}, got ${JSON.stringify(value)}`);
+    }
+    return n;
+}
+
+function byAcceptedThenScoreDesc(question, answers) {
+    const acceptedAnswerId = question.accepted_answer_id;
+    return answers
+        .slice()
+        .sort((a, b) => {
+            const aAccepted = a.is_accepted || (acceptedAnswerId && a.answer_id === acceptedAnswerId);
+            const bAccepted = b.is_accepted || (acceptedAnswerId && b.answer_id === acceptedAnswerId);
+            if (aAccepted !== bAccepted) return aAccepted ? -1 : 1;
+            return (b.score ?? 0) - (a.score ?? 0);
+        });
+}
+
+async function fetchMissingAcceptedAnswer(question, answers, label) {
+    const acceptedAnswerId = question.accepted_answer_id;
+    if (!acceptedAnswerId || answers.some((answer) => answer.answer_id === acceptedAnswerId)) {
+        return answers;
+    }
+    const acceptedData = await fetchJson(
+        `${SE_API_BASE}/answers/${acceptedAnswerId}?site=${SE_SITE}&filter=withbody`,
+        `${label}/accepted-answer`,
+    );
+    const accepted = (acceptedData.items || [])[0];
+    return accepted ? answers.concat(accepted) : answers;
+}
+
+async function fetchAnswerCommentsByAnswerId(answers, commentsLimit, label) {
+    const answerCommentsByAnswerId = new Map();
+    if (answers.length === 0) return answerCommentsByAnswerId;
+
+    const ids = answers.map((a) => a.answer_id).join(';');
+    const pageSize = Math.min(SE_MAX_PAGE_SIZE, answers.length * commentsLimit);
+    const ansCommentsData = await fetchJson(
+        `${SE_API_BASE}/answers/${ids}/comments?site=${SE_SITE}&filter=withbody&order=asc&sort=creation&pagesize=${pageSize}`,
+        `${label}/answer-comments`,
+    );
+    for (const c of ansCommentsData.items || []) {
+        if (!c.post_id) continue;
+        if (!answerCommentsByAnswerId.has(c.post_id)) {
+            answerCommentsByAnswerId.set(c.post_id, []);
+        }
+        answerCommentsByAnswerId.get(c.post_id).push(c);
+    }
+
+    if (ansCommentsData.has_more) {
+        const missingForSelectedAnswer = answers.some((answer) => {
+            const comments = answerCommentsByAnswerId.get(answer.answer_id) || [];
+            return comments.length < commentsLimit;
+        });
+        if (missingForSelectedAnswer) {
+            throw new CommandExecutionError(
+                `Stack Exchange answer comments for ${label} exceed one API page`,
+                'Lower --answers-limit or --comments-limit; refusing to return a partial answer-comment set.',
+            );
+        }
+    }
+
+    return answerCommentsByAnswerId;
 }
 
 const NAMED_ENTITIES = {
@@ -153,8 +216,8 @@ cli({
     browser: false,
     args: [
         { name: 'id', required: true, positional: true, help: 'Stack Overflow question id (numeric, e.g. 79935770)' },
-        { name: 'answers-limit', type: 'int', default: 10, help: 'Max answers to include (accepted answer always included first)' },
-        { name: 'comments-limit', type: 'int', default: 5, help: 'Max comments per question/answer' },
+        { name: 'answers-limit', type: 'int', default: 10, help: 'Max answers to include (1-100; accepted answer always included first)' },
+        { name: 'comments-limit', type: 'int', default: 5, help: 'Max comments per question/answer (1-100)' },
         { name: 'max-length', type: 'int', default: 4000, help: 'Max characters per body / answer / comment (min 100)' },
     ],
     columns: ['type', 'author', 'score', 'accepted', 'text'],
@@ -163,51 +226,35 @@ cli({
         if (!/^\d+$/.test(id)) {
             throw new ArgumentError(`Invalid Stack Overflow question id: ${args.id}`, 'Pass a numeric id like 79935770');
         }
-        const answersLimit = requirePositiveInt(args['answers-limit'] ?? 10, 'stackoverflow read --answers-limit');
-        const commentsLimit = requirePositiveInt(args['comments-limit'] ?? 5, 'stackoverflow read --comments-limit');
+        const answersLimit = requireBoundedInt(args['answers-limit'] ?? 10, 1, SE_MAX_PAGE_SIZE, 'stackoverflow read --answers-limit');
+        const commentsLimit = requireBoundedInt(args['comments-limit'] ?? 5, 1, SE_MAX_PAGE_SIZE, 'stackoverflow read --comments-limit');
         const maxLength = requireMinInt(args['max-length'] ?? 4000, 100, 'stackoverflow read --max-length');
 
+        const label = `stackoverflow/${id}`;
         const qUrl = `${SE_API_BASE}/questions/${id}?site=${SE_SITE}&filter=withbody`;
-        const qData = await fetchJson(qUrl, `stackoverflow/${id}`);
+        const qData = await fetchJson(qUrl, label);
         const question = (qData.items || [])[0];
         if (!question) {
-            throw new EmptyResultError(`stackoverflow/${id}`, 'Question not found');
+            throw new EmptyResultError(label, 'Question not found');
         }
 
         // Fetch question comments and answers in parallel.
         const [qCommentsData, answersData] = await Promise.all([
             fetchJson(
-                `${SE_API_BASE}/questions/${id}/comments?site=${SE_SITE}&filter=withbody&order=asc&sort=creation`,
-                `stackoverflow/${id}/comments`,
+                `${SE_API_BASE}/questions/${id}/comments?site=${SE_SITE}&filter=withbody&order=asc&sort=creation&pagesize=${commentsLimit}`,
+                `${label}/comments`,
             ),
             fetchJson(
-                `${SE_API_BASE}/questions/${id}/answers?site=${SE_SITE}&filter=withbody&order=desc&sort=votes`,
-                `stackoverflow/${id}/answers`,
+                `${SE_API_BASE}/questions/${id}/answers?site=${SE_SITE}&filter=withbody&order=desc&sort=votes&pagesize=${answersLimit}`,
+                `${label}/answers`,
             ),
         ]);
 
-        const allAnswers = answersData.items || [];
+        const allAnswers = await fetchMissingAcceptedAnswer(question, answersData.items || [], label);
         // Surface accepted answer first, then by score order.
-        const accepted = allAnswers.find((a) => a.is_accepted);
-        const others = allAnswers.filter((a) => !a.is_accepted);
-        const orderedAnswers = (accepted ? [accepted] : []).concat(others).slice(0, answersLimit);
+        const orderedAnswers = byAcceptedThenScoreDesc(question, allAnswers).slice(0, answersLimit);
 
-        // Batch-fetch answer-comments in a single call when there's at least one answer.
-        let answerCommentsByAnswerId = new Map();
-        if (orderedAnswers.length > 0) {
-            const ids = orderedAnswers.map((a) => a.answer_id).join(';');
-            const ansCommentsData = await fetchJson(
-                `${SE_API_BASE}/answers/${ids}/comments?site=${SE_SITE}&filter=withbody&order=asc&sort=creation`,
-                `stackoverflow/${id}/answer-comments`,
-            );
-            for (const c of ansCommentsData.items || []) {
-                if (!c.post_id) continue;
-                if (!answerCommentsByAnswerId.has(c.post_id)) {
-                    answerCommentsByAnswerId.set(c.post_id, []);
-                }
-                answerCommentsByAnswerId.get(c.post_id).push(c);
-            }
-        }
+        const answerCommentsByAnswerId = await fetchAnswerCommentsByAnswerId(orderedAnswers, commentsLimit, label);
 
         const rows = [];
 

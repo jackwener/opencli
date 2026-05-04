@@ -152,6 +152,17 @@ describe('stackoverflow/read adapter', () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it('rejects answer/comment limits above Stack Exchange pagesize max before fetching', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(cmd.func({ id: '12345', 'answers-limit': '101', 'comments-limit': 5, 'max-length': 4000 }))
+            .rejects.toThrow(ArgumentError);
+        await expect(cmd.func({ id: '12345', 'answers-limit': 10, 'comments-limit': '101', 'max-length': 4000 }))
+            .rejects.toThrow(ArgumentError);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('builds POST + Q-COMMENT + ANSWER + A-COMMENT rows, accepted answer first', async () => {
         const question = {
             items: [{
@@ -203,6 +214,84 @@ describe('stackoverflow/read adapter', () => {
         // Verify the answer-comments fetch batched both answer ids
         const ansCommentsCall = fetchMock.mock.calls[3][0];
         expect(ansCommentsCall).toContain('/answers/200;100/comments');
+        expect(fetchMock.mock.calls[1][0]).toContain('pagesize=5');
+        expect(fetchMock.mock.calls[2][0]).toContain('pagesize=10');
+        expect(fetchMock.mock.calls[3][0]).toContain('pagesize=10');
+    });
+
+    it('fetches accepted answer separately when it is missing from the votes page', async () => {
+        const question = {
+            items: [{
+                question_id: 1,
+                accepted_answer_id: 999,
+                title: 'Why?',
+                body: '<p>Question body</p>',
+                score: 10,
+                link: 'https://example.com/q/1',
+                owner: { display_name: 'asker' },
+            }],
+        };
+        const answers = {
+            items: [
+                { answer_id: 100, score: 50, is_accepted: false, owner: { display_name: 'top-voted' }, body: '<p>top voted answer</p>' },
+            ],
+        };
+        const acceptedAnswer = {
+            items: [
+                { answer_id: 999, score: 1, is_accepted: true, owner: { display_name: 'accepted' }, body: '<p>accepted answer</p>' },
+            ],
+        };
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(new Response(JSON.stringify(question), { status: 200 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify(answers), { status: 200 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify(acceptedAnswer), { status: 200 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const rows = await cmd.func({ id: '1', 'answers-limit': 2, 'comments-limit': 5, 'max-length': 4000 });
+
+        expect(rows.filter((r) => r.type === 'ANSWER').map((r) => [r.author, r.accepted])).toEqual([
+            ['accepted', 'true'],
+            ['top-voted', ''],
+        ]);
+        expect(fetchMock.mock.calls[3][0]).toContain('/answers/999?');
+        expect(fetchMock.mock.calls[4][0]).toContain('/answers/999;100/comments');
+        expect(fetchMock.mock.calls[4][0]).toContain('pagesize=10');
+    });
+
+    it('fails fast when batched answer comments would be partial', async () => {
+        const question = {
+            items: [{
+                question_id: 1,
+                title: 'Why?',
+                body: '<p>Question body</p>',
+                score: 10,
+                link: 'https://example.com/q/1',
+                owner: { display_name: 'asker' },
+            }],
+        };
+        const answers = {
+            items: [
+                { answer_id: 100, score: 50, is_accepted: false, owner: { display_name: 'a1' }, body: '<p>one</p>' },
+                { answer_id: 200, score: 40, is_accepted: false, owner: { display_name: 'a2' }, body: '<p>two</p>' },
+            ],
+        };
+        const answerComments = {
+            has_more: true,
+            items: [
+                { post_id: 100, score: 1, owner: { display_name: 'c1' }, body: '<p>comment on first</p>' },
+            ],
+        };
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(new Response(JSON.stringify(question), { status: 200 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify(answers), { status: 200 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify(answerComments), { status: 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(cmd.func({ id: '1', 'answers-limit': 2, 'comments-limit': 1, 'max-length': 4000 }))
+            .rejects.toThrow(CommandExecutionError);
     });
 
     it('decodes HTML entities in body and display_name (named, decimal, hex)', async () => {

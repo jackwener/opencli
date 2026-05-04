@@ -15158,14 +15158,14 @@
         "type": "int",
         "default": 10,
         "required": false,
-        "help": "Max answers to include (accepted answer always included first)"
+        "help": "Max answers to include (1-100; accepted answer always included first)"
       },
       {
         "name": "comments-limit",
         "type": "int",
         "default": 5,
         "required": false,
-        "help": "Max comments per question/answer"
+        "help": "Max comments per question/answer (1-100)"
       },
       {
         "name": "max-length",
