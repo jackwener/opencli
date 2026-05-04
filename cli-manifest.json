@@ -11353,11 +11353,14 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
       "comments",
-      "tags"
+      "created_at",
+      "tags",
+      "url"
     ],
     "type": "js",
     "modulePath": "lobsters/active.js",
@@ -11381,11 +11384,14 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
       "comments",
-      "tags"
+      "created_at",
+      "tags",
+      "url"
     ],
     "type": "js",
     "modulePath": "lobsters/hot.js",
@@ -11409,15 +11415,72 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
       "comments",
-      "tags"
+      "created_at",
+      "tags",
+      "url"
     ],
     "type": "js",
     "modulePath": "lobsters/newest.js",
     "sourceFile": "lobsters/newest.js"
+  },
+  {
+    "site": "lobsters",
+    "name": "read",
+    "description": "Read a Lobste.rs story and its comment tree",
+    "domain": "lobste.rs",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Lobste.rs short_id (e.g. 6cmh6h)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 25,
+        "required": false,
+        "help": "Max top-level comments"
+      },
+      {
+        "name": "depth",
+        "type": "int",
+        "default": 2,
+        "required": false,
+        "help": "Max reply depth (1=no replies, 2=one level of replies, etc.)"
+      },
+      {
+        "name": "replies",
+        "type": "int",
+        "default": 5,
+        "required": false,
+        "help": "Max replies shown per comment at each level"
+      },
+      {
+        "name": "max-length",
+        "type": "int",
+        "default": 2000,
+        "required": false,
+        "help": "Max characters per comment body (min 100)"
+      }
+    ],
+    "columns": [
+      "type",
+      "author",
+      "score",
+      "text"
+    ],
+    "type": "js",
+    "modulePath": "lobsters/read.js",
+    "sourceFile": "lobsters/read.js"
   },
   {
     "site": "lobsters",
@@ -11444,11 +11507,14 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
       "comments",
-      "tags"
+      "created_at",
+      "tags",
+      "url"
     ],
     "type": "js",
     "modulePath": "lobsters/tag.js",
