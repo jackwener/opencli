@@ -4745,6 +4745,44 @@
   },
   {
     "site": "devto",
+    "name": "read",
+    "description": "Read a DEV.to article body by id",
+    "domain": "dev.to",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "DEV.to article id (numeric, e.g. 3605688)"
+      },
+      {
+        "name": "max-length",
+        "type": "int",
+        "default": 20000,
+        "required": false,
+        "help": "Max characters of body to return (min 100)"
+      }
+    ],
+    "columns": [
+      "id",
+      "title",
+      "author",
+      "reactions",
+      "reading_time",
+      "tags",
+      "published_at",
+      "body",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "devto/read.js",
+    "sourceFile": "devto/read.js"
+  },
+  {
+    "site": "devto",
     "name": "tag",
     "description": "Latest DEV.to articles for a specific tag",
     "domain": "dev.to",
@@ -4768,11 +4806,15 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "author",
       "reactions",
       "comments",
-      "tags"
+      "reading_time",
+      "published_at",
+      "tags",
+      "url"
     ],
     "type": "js",
     "modulePath": "devto/tag.js",
@@ -4796,11 +4838,15 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "author",
       "reactions",
       "comments",
-      "tags"
+      "reading_time",
+      "published_at",
+      "tags",
+      "url"
     ],
     "type": "js",
     "modulePath": "devto/top.js",
@@ -4831,10 +4877,14 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "reactions",
       "comments",
-      "tags"
+      "reading_time",
+      "published_at",
+      "tags",
+      "url"
     ],
     "type": "js",
     "modulePath": "devto/user.js",
