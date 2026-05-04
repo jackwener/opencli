@@ -11,16 +11,30 @@
  *   - `[+N more replies]` summary rows whenever depth/limit cuts in
  */
 import { cli, Strategy } from '@jackwener/opencli/registry';
-import { CliError, EmptyResultError } from '@jackwener/opencli/errors';
+import { ArgumentError, CommandExecutionError, EmptyResultError } from '@jackwener/opencli/errors';
 
 const HN_ITEM_BASE = 'https://hacker-news.firebaseio.com/v0/item';
 
 async function fetchItem(id) {
     const res = await fetch(`${HN_ITEM_BASE}/${id}.json`);
     if (!res.ok) {
-        throw new CliError('FETCH_ERROR', `HN API HTTP ${res.status} for item ${id}`, 'Check the item ID');
+        throw new CommandExecutionError(`HN API HTTP ${res.status} for item ${id}`, 'Check the item ID');
     }
     return res.json();
+}
+
+function requirePositiveInt(value, label) {
+    if (!Number.isInteger(value) || value <= 0) {
+        throw new ArgumentError(`${label} must be a positive integer`);
+    }
+    return value;
+}
+
+function requireMinInt(value, min, label) {
+    if (!Number.isInteger(value) || value < min) {
+        throw new ArgumentError(`${label} must be an integer >= ${min}`);
+    }
+    return value;
 }
 
 /** HN stores comment text as a small HTML subset — convert to plain text. */
@@ -73,12 +87,12 @@ cli({
     func: async (args) => {
         const id = String(args.id || '').trim();
         if (!/^\d+$/.test(id)) {
-            throw new CliError('INVALID_ARGUMENT', `Invalid HN item id: ${args.id}`, 'Pass a numeric id like 39847301');
+            throw new ArgumentError(`Invalid HN item id: ${args.id}`, 'Pass a numeric id like 39847301');
         }
-        const limit = Math.max(1, args.limit ?? 25);
-        const maxDepth = Math.max(1, args.depth ?? 2);
-        const maxReplies = Math.max(1, args.replies ?? 5);
-        const maxLength = Math.max(100, args['max-length'] ?? 2000);
+        const limit = requirePositiveInt(args.limit ?? 25, 'hackernews read --limit');
+        const maxDepth = requirePositiveInt(args.depth ?? 2, 'hackernews read --depth');
+        const maxReplies = requirePositiveInt(args.replies ?? 5, 'hackernews read --replies');
+        const maxLength = requireMinInt(args['max-length'] ?? 2000, 100, 'hackernews read --max-length');
 
         const story = await fetchItem(id);
         if (!story || story.deleted || story.dead) {
