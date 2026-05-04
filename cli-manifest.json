@@ -15088,10 +15088,17 @@
       }
     ],
     "columns": [
+      "rank",
+      "id",
       "bounty",
       "title",
       "score",
       "answers",
+      "views",
+      "is_answered",
+      "tags",
+      "author",
+      "creation_date",
       "url"
     ],
     "type": "js",
@@ -15115,14 +15122,69 @@
       }
     ],
     "columns": [
+      "rank",
+      "id",
       "title",
       "score",
       "answers",
+      "views",
+      "is_answered",
+      "tags",
+      "author",
+      "creation_date",
       "url"
     ],
     "type": "js",
     "modulePath": "stackoverflow/hot.js",
     "sourceFile": "stackoverflow/hot.js"
+  },
+  {
+    "site": "stackoverflow",
+    "name": "read",
+    "description": "Read a Stack Overflow question with answers and comments",
+    "domain": "stackoverflow.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Stack Overflow question id (numeric, e.g. 79935770)"
+      },
+      {
+        "name": "answers-limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Max answers to include (accepted answer always included first)"
+      },
+      {
+        "name": "comments-limit",
+        "type": "int",
+        "default": 5,
+        "required": false,
+        "help": "Max comments per question/answer"
+      },
+      {
+        "name": "max-length",
+        "type": "int",
+        "default": 4000,
+        "required": false,
+        "help": "Max characters per body / answer / comment (min 100)"
+      }
+    ],
+    "columns": [
+      "type",
+      "author",
+      "score",
+      "accepted",
+      "text"
+    ],
+    "type": "js",
+    "modulePath": "stackoverflow/read.js",
+    "sourceFile": "stackoverflow/read.js"
   },
   {
     "site": "stackoverflow",
@@ -15148,9 +15210,16 @@
       }
     ],
     "columns": [
+      "rank",
+      "id",
       "title",
       "score",
       "answers",
+      "views",
+      "is_answered",
+      "tags",
+      "author",
+      "creation_date",
       "url"
     ],
     "type": "js",
@@ -15174,9 +15243,15 @@
       }
     ],
     "columns": [
+      "rank",
+      "id",
       "title",
       "score",
       "answers",
+      "views",
+      "tags",
+      "author",
+      "creation_date",
       "url"
     ],
     "type": "js",
