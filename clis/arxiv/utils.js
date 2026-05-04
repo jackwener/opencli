@@ -4,14 +4,33 @@
  * arXiv exposes a public Atom/XML API — no key required.
  * https://info.arxiv.org/help/api/index.html
  */
-import { CliError } from '@jackwener/opencli/errors';
+import { ArgumentError, CommandExecutionError } from '@jackwener/opencli/errors';
 export const ARXIV_BASE = 'https://export.arxiv.org/api/query';
+const ARXIV_CATEGORY_PATTERN = /^[a-z]+(?:-[a-z]+)*(?:\.[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?$/;
 export async function arxivFetch(params) {
     const resp = await fetch(`${ARXIV_BASE}?${params}`);
     if (!resp.ok) {
-        throw new CliError('FETCH_ERROR', `arXiv API HTTP ${resp.status}`, 'Check your search term or paper ID');
+        throw new CommandExecutionError(`arXiv API HTTP ${resp.status}`, 'Check your search term or paper ID');
     }
     return resp.text();
+}
+export function normalizeArxivLimit(value, defaultValue, maxValue, label = 'limit') {
+    const raw = value ?? defaultValue;
+    const limit = Number(raw);
+    if (!Number.isInteger(limit) || limit <= 0) {
+        throw new ArgumentError(`arxiv ${label} must be a positive integer`);
+    }
+    if (limit > maxValue) {
+        throw new ArgumentError(`arxiv ${label} must be <= ${maxValue}`);
+    }
+    return limit;
+}
+export function normalizeArxivCategory(value) {
+    const category = String(value || '').trim();
+    if (!ARXIV_CATEGORY_PATTERN.test(category)) {
+        throw new ArgumentError(`Invalid arXiv category "${value}". Examples: cs.CL, cs.LG, math.PR, q-bio.NC, physics.comp-ph`);
+    }
+    return category;
 }
 /** Decode the small set of XML entities arXiv emits in text fields. */
 function decodeEntities(s) {

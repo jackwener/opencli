@@ -1,6 +1,6 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
-import { ArgumentError, EmptyResultError } from '@jackwener/opencli/errors';
-import { arxivFetch, parseEntries } from './utils.js';
+import { EmptyResultError } from '@jackwener/opencli/errors';
+import { arxivFetch, normalizeArxivCategory, normalizeArxivLimit, parseEntries } from './utils.js';
 cli({
     site: 'arxiv',
     name: 'recent',
@@ -13,11 +13,8 @@ cli({
     ],
     columns: ['id', 'title', 'authors', 'published', 'primary_category', 'url'],
     func: async (args) => {
-        const category = String(args.category || '').trim();
-        if (!/^[a-z\-]+(\.[A-Z]{2})?$/.test(category)) {
-            throw new ArgumentError(`Invalid arXiv category "${args.category}". Examples: cs.CL, cs.LG, math.PR, q-bio.NC`);
-        }
-        const limit = Math.max(1, Math.min(Number(args.limit), 50));
+        const category = normalizeArxivCategory(args.category);
+        const limit = normalizeArxivLimit(args.limit, 10, 50);
         const query = encodeURIComponent(`cat:${category}`);
         const xml = await arxivFetch(`search_query=${query}&max_results=${limit}&sortBy=submittedDate&sortOrder=descending`);
         const entries = parseEntries(xml);

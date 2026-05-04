@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getRegistry } from '@jackwener/opencli/registry';
-import { parseEntries } from './utils.js';
+import { normalizeArxivCategory, normalizeArxivLimit, parseEntries } from './utils.js';
 import './paper.js';
 import './search.js';
 import './recent.js';
@@ -88,5 +88,25 @@ describe('arxiv adapter', () => {
     await expect(recent.func({ category: '', limit: 5 })).rejects.toMatchObject({
       code: 'ARGUMENT',
     });
+  });
+
+  it('category validation accepts real arXiv archive and subcategory forms', () => {
+    expect(normalizeArxivCategory('cs.CL')).toBe('cs.CL');
+    expect(normalizeArxivCategory('math')).toBe('math');
+    expect(normalizeArxivCategory('physics.comp-ph')).toBe('physics.comp-ph');
+    expect(normalizeArxivCategory('physics.data-an')).toBe('physics.data-an');
+    expect(normalizeArxivCategory('cond-mat.soft')).toBe('cond-mat.soft');
+    expect(normalizeArxivCategory('q-bio.NC')).toBe('q-bio.NC');
+    expect(() => normalizeArxivCategory('not a category')).toThrow('Invalid arXiv category');
+    expect(() => normalizeArxivCategory('cs/CL')).toThrow('Invalid arXiv category');
+    expect(() => normalizeArxivCategory('')).toThrow('Invalid arXiv category');
+  });
+
+  it('limit validation rejects non-positive, non-integer and over-cap values', () => {
+    expect(normalizeArxivLimit(10, 5, 25)).toBe(10);
+    expect(normalizeArxivLimit(undefined, 5, 25)).toBe(5);
+    expect(() => normalizeArxivLimit(0, 5, 25)).toThrow('positive integer');
+    expect(() => normalizeArxivLimit(1.5, 5, 25)).toThrow('positive integer');
+    expect(() => normalizeArxivLimit(26, 5, 25)).toThrow('<= 25');
   });
 });

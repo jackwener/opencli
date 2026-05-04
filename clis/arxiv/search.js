@@ -1,6 +1,6 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
-import { EmptyResultError } from '@jackwener/opencli/errors';
-import { arxivFetch, parseEntries } from './utils.js';
+import { ArgumentError, EmptyResultError } from '@jackwener/opencli/errors';
+import { arxivFetch, normalizeArxivLimit, parseEntries } from './utils.js';
 cli({
     site: 'arxiv',
     name: 'search',
@@ -13,8 +13,12 @@ cli({
     ],
     columns: ['id', 'title', 'authors', 'published', 'primary_category', 'url'],
     func: async (args) => {
-        const limit = Math.max(1, Math.min(Number(args.limit), 25));
-        const query = encodeURIComponent(`all:${args.query}`);
+        const queryText = String(args.query || '').trim();
+        if (!queryText) {
+            throw new ArgumentError('arxiv search query cannot be empty');
+        }
+        const limit = normalizeArxivLimit(args.limit, 10, 25);
+        const query = encodeURIComponent(`all:${queryText}`);
         const xml = await arxivFetch(`search_query=${query}&max_results=${limit}&sortBy=relevance`);
         const entries = parseEntries(xml);
         if (!entries.length)

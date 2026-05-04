@@ -1,5 +1,5 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
-import { CliError } from '@jackwener/opencli/errors';
+import { EmptyResultError } from '@jackwener/opencli/errors';
 import { arxivFetch, parseEntries } from './utils.js';
 cli({
     site: 'arxiv',
@@ -15,7 +15,7 @@ cli({
         const xml = await arxivFetch(`id_list=${encodeURIComponent(args.id)}`);
         const entries = parseEntries(xml);
         if (!entries.length)
-            throw new CliError('NOT_FOUND', `Paper ${args.id} not found`, 'Check the arXiv ID format, e.g. 1706.03762');
+            throw new EmptyResultError('arxiv paper', `Paper ${args.id} was not found. Check the arXiv ID format, e.g. 1706.03762`);
         return entries;
     },
 });
