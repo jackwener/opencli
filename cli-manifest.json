@@ -7969,10 +7969,12 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
-      "comments"
+      "comments",
+      "url"
     ],
     "type": "js",
     "modulePath": "hackernews/ask.js",
@@ -7996,10 +7998,12 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
-      "comments"
+      "comments",
+      "url"
     ],
     "type": "js",
     "modulePath": "hackernews/best.js",
@@ -8023,6 +8027,7 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "author",
       "url"
@@ -8049,14 +8054,70 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
-      "comments"
+      "comments",
+      "url"
     ],
     "type": "js",
     "modulePath": "hackernews/new.js",
     "sourceFile": "hackernews/new.js"
+  },
+  {
+    "site": "hackernews",
+    "name": "read",
+    "description": "Read a Hacker News story and its comment tree",
+    "domain": "news.ycombinator.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "HN item ID (e.g. 39847301)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 25,
+        "required": false,
+        "help": "Max top-level comments"
+      },
+      {
+        "name": "depth",
+        "type": "int",
+        "default": 2,
+        "required": false,
+        "help": "Max reply depth (1=no replies, 2=one level of replies, etc.)"
+      },
+      {
+        "name": "replies",
+        "type": "int",
+        "default": 5,
+        "required": false,
+        "help": "Max replies shown per comment at each level"
+      },
+      {
+        "name": "max-length",
+        "type": "int",
+        "default": 2000,
+        "required": false,
+        "help": "Max characters per comment body (min 100)"
+      }
+    ],
+    "columns": [
+      "type",
+      "author",
+      "score",
+      "text"
+    ],
+    "type": "js",
+    "modulePath": "hackernews/read.js",
+    "sourceFile": "hackernews/read.js"
   },
   {
     "site": "hackernews",
@@ -8094,6 +8155,7 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
@@ -8122,10 +8184,12 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
-      "comments"
+      "comments",
+      "url"
     ],
     "type": "js",
     "modulePath": "hackernews/show.js",
@@ -8149,10 +8213,12 @@
     ],
     "columns": [
       "rank",
+      "id",
       "title",
       "score",
       "author",
-      "comments"
+      "comments",
+      "url"
     ],
     "type": "js",
     "modulePath": "hackernews/top.js",

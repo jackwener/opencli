@@ -16,7 +16,7 @@ cli({
             choices: ['relevance', 'date'],
         },
     ],
-    columns: ['rank', 'title', 'score', 'author', 'comments', 'url'],
+    columns: ['rank', 'id', 'title', 'score', 'author', 'comments', 'url'],
     pipeline: [
         { fetch: {
                 url: `https://hn.algolia.com/api/v1/\${{ args.sort === 'date' ? 'search_by_date' : 'search' }}`,
@@ -25,6 +25,7 @@ cli({
         { select: 'hits' },
         { map: {
                 rank: '${{ index + 1 }}',
+                id: '${{ item.objectID }}',
                 title: '${{ item.title }}',
                 score: '${{ item.points }}',
                 author: '${{ item.author }}',
