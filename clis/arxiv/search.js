@@ -1,5 +1,5 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
-import { CliError } from '@jackwener/opencli/errors';
+import { EmptyResultError } from '@jackwener/opencli/errors';
 import { arxivFetch, parseEntries } from './utils.js';
 cli({
     site: 'arxiv',
@@ -11,14 +11,21 @@ cli({
         { name: 'query', positional: true, required: true, help: 'Search keyword (e.g. "attention is all you need")' },
         { name: 'limit', type: 'int', default: 10, help: 'Max results (max 25)' },
     ],
-    columns: ['id', 'title', 'authors', 'published', 'url'],
+    columns: ['id', 'title', 'authors', 'published', 'primary_category', 'url'],
     func: async (args) => {
         const limit = Math.max(1, Math.min(Number(args.limit), 25));
         const query = encodeURIComponent(`all:${args.query}`);
         const xml = await arxivFetch(`search_query=${query}&max_results=${limit}&sortBy=relevance`);
         const entries = parseEntries(xml);
         if (!entries.length)
-            throw new CliError('NOT_FOUND', 'No papers found', 'Try a different keyword');
-        return entries.map(e => ({ id: e.id, title: e.title, authors: e.authors, published: e.published, url: e.url }));
+            throw new EmptyResultError('arxiv', 'No papers found. Try a different keyword.');
+        return entries.map(e => ({
+            id: e.id,
+            title: e.title,
+            authors: e.authors,
+            published: e.published,
+            primary_category: e.primary_category,
+            url: e.url,
+        }));
     },
 });

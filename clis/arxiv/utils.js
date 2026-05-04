@@ -13,6 +13,16 @@ export async function arxivFetch(params) {
     }
     return resp.text();
 }
+/** Decode the small set of XML entities arXiv emits in text fields. */
+function decodeEntities(s) {
+    return s
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&#39;/g, "'");
+}
 /** Extract the text content of the first matching XML tag. */
 function extract(xml, tag) {
     const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
@@ -27,6 +37,34 @@ function extractAll(xml, tag) {
         results.push(m[1].trim());
     return results;
 }
+/** Extract the value of a named attribute from the first matching tag (open or self-closing). */
+function extractAttr(xml, tag, attr) {
+    const m = xml.match(new RegExp(`<${tag}\\b[^>]*?\\b${attr}="([^"]*)"`));
+    return m ? m[1] : '';
+}
+/** Extract all values of a named attribute across repeated tags. */
+function extractAllAttr(xml, tag, attr) {
+    const re = new RegExp(`<${tag}\\b[^>]*?\\b${attr}="([^"]*)"`, 'g');
+    const out = [];
+    let m;
+    while ((m = re.exec(xml)) !== null)
+        out.push(m[1]);
+    return out;
+}
+/** Find the href of the first <link> tag matching a given rel. */
+function findLinkHref(xml, rel) {
+    const re = /<link\b([^>]*)\/?>/g;
+    let m;
+    while ((m = re.exec(xml)) !== null) {
+        const attrs = m[1];
+        if (new RegExp(`\\brel="${rel}"`).test(attrs)) {
+            const h = attrs.match(/\bhref="([^"]*)"/);
+            if (h)
+                return h[1];
+        }
+    }
+    return '';
+}
 /** Parse Atom XML feed into structured entries. */
 export function parseEntries(xml) {
     const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
@@ -36,12 +74,18 @@ export function parseEntries(xml) {
         const e = m[1];
         const rawId = extract(e, 'id');
         const arxivId = rawId.replace(/^https?:\/\/arxiv\.org\/abs\//, '').replace(/v\d+$/, '');
+        const pdf = findLinkHref(e, 'related') || `https://arxiv.org/pdf/${arxivId}`;
         entries.push({
             id: arxivId,
-            title: extract(e, 'title').replace(/\s+/g, ' '),
-            authors: extractAll(e, 'name').slice(0, 3).join(', '),
-            abstract: (() => { const s = extract(e, 'summary').replace(/\s+/g, ' '); return s.length > 200 ? s.slice(0, 200) + '...' : s; })(),
+            title: decodeEntities(extract(e, 'title').replace(/\s+/g, ' ')),
+            authors: decodeEntities(extractAll(e, 'name').join(', ')),
+            abstract: decodeEntities(extract(e, 'summary').replace(/\s+/g, ' ')),
             published: extract(e, 'published').slice(0, 10),
+            updated: extract(e, 'updated').slice(0, 10),
+            primary_category: extractAttr(e, 'arxiv:primary_category', 'term'),
+            categories: extractAllAttr(e, 'category', 'term').join(', '),
+            comment: decodeEntities(extract(e, 'arxiv:comment').replace(/\s+/g, ' ')),
+            pdf,
             url: `https://arxiv.org/abs/${arxivId}`,
         });
     }

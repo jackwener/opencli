@@ -1038,12 +1038,51 @@
       "title",
       "authors",
       "published",
+      "updated",
+      "primary_category",
+      "categories",
       "abstract",
+      "comment",
+      "pdf",
       "url"
     ],
     "type": "js",
     "modulePath": "arxiv/paper.js",
     "sourceFile": "arxiv/paper.js"
+  },
+  {
+    "site": "arxiv",
+    "name": "recent",
+    "description": "List recent arXiv submissions in a category",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "category",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "arXiv category (e.g. cs.CL, cs.LG, math.PR, q-bio.NC)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Max results (max 50)"
+      }
+    ],
+    "columns": [
+      "id",
+      "title",
+      "authors",
+      "published",
+      "primary_category",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "arxiv/recent.js",
+    "sourceFile": "arxiv/recent.js"
   },
   {
     "site": "arxiv",
@@ -1072,6 +1111,7 @@
       "title",
       "authors",
       "published",
+      "primary_category",
       "url"
     ],
     "type": "js",

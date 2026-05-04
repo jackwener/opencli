@@ -10,7 +10,7 @@ cli({
     args: [
         { name: 'id', positional: true, required: true, help: 'arXiv paper ID (e.g. 1706.03762)' },
     ],
-    columns: ['id', 'title', 'authors', 'published', 'abstract', 'url'],
+    columns: ['id', 'title', 'authors', 'published', 'updated', 'primary_category', 'categories', 'abstract', 'comment', 'pdf', 'url'],
     func: async (args) => {
         const xml = await arxivFetch(`id_list=${encodeURIComponent(args.id)}`);
         const entries = parseEntries(xml);
