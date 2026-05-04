@@ -307,7 +307,7 @@ npm link
 | **imdb** | `search` `title` `top` `trending` `person` `reviews` | 公开 |
 | **producthunt** | `posts` `today` `hot` `browse` | 公开 / 浏览器 |
 | **instagram** | `explore` `profile` `search` `user` `followers` `following` `follow` `unfollow` `like` `unlike` `comment` `save` `unsave` `saved` | 浏览器 |
-| **lobsters** | `hot` `newest` `active` `tag` | 公开 |
+| **lobsters** | `hot` `newest` `active` `tag` `read` | 公开 |
 | **medium** | `feed` `search` `user` | 浏览器 |
 | **sinablog** | `hot` `search` `article` `user` | 浏览器 |
 | **substack** | `feed` `search` `publication` | 浏览器 |
