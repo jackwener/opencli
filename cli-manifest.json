@@ -1787,7 +1787,9 @@
       "title",
       "author",
       "play",
-      "danmaku"
+      "danmaku",
+      "bvid",
+      "url"
     ],
     "type": "js",
     "modulePath": "bilibili/hot.js",
@@ -13950,7 +13952,10 @@
       "title",
       "subreddit",
       "score",
-      "comments"
+      "comments",
+      "postId",
+      "author",
+      "url"
     ],
     "type": "js",
     "modulePath": "reddit/hot.js",
