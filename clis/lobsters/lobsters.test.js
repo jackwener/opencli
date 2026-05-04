@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '@jackwener/opencli/registry';
-import { ArgumentError, EmptyResultError } from '@jackwener/opencli/errors';
+import { ArgumentError, CommandExecutionError, EmptyResultError } from '@jackwener/opencli/errors';
 import './hot.js';
 import './active.js';
 import './newest.js';
@@ -63,6 +63,22 @@ describe('lobsters/read adapter', () => {
 
         await expect(cmd.func({ id: 'missing', limit: 5, depth: 2, replies: 5, 'max-length': 2000 }))
             .rejects.toThrow(EmptyResultError);
+    });
+
+    it('fails fast with ArgumentError when max-length is below the minimum before fetching', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(cmd.func({ id: 'abc123', limit: 5, depth: 2, replies: 5, 'max-length': 99 }))
+            .rejects.toThrow(ArgumentError);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('fails fast with CommandExecutionError on non-404 HTTP failures', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('oops', { status: 503 })));
+
+        await expect(cmd.func({ id: 'abc123', limit: 5, depth: 2, replies: 5, 'max-length': 2000 }))
+            .rejects.toThrow(CommandExecutionError);
     });
 
     it('builds a threaded tree from the flat comments[] using parent_comment', async () => {
