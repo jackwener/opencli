@@ -37,7 +37,63 @@ async function waitForConversationUrl(page, timeoutSeconds = 30) {
             await page.wait(1);
         }
     }
-    throw new CommandExecutionError('ChatGPT did not create a conversation URL after sending the message.');
+    let currentUrl = '';
+    try { currentUrl = (await currentChatGPTUrl(page)) || ''; } catch { /* ignore */ }
+    throw new CommandExecutionError(
+        'ChatGPT did not create a conversation URL after sending the message.'
+        + (currentUrl ? ` Current URL: ${currentUrl}` : ''),
+    );
+}
+
+// [LOCAL PATCH 2026-09-07] If ask fails after the message was sent (timeout or
+// any other mid-wait error), the conversation usually already exists on the
+// server. Attach the conversation id/url to the error so callers can recover
+// with `opencli chatgpt detail <id>` instead of blindly re-sending the prompt
+// or digging through `opencli chatgpt history`. Mutates the caught error in
+// place so code/exitCode (e.g. TIMEOUT/75) stay intact for script callers.
+const isWebTemporaryId = (id) => /^WEB:/i.test(id || '');
+
+function attachConversationContext(err, context) {
+    if (!err || !(err instanceof Error)) return err;
+    const { conversationId, conversationUrl } = context || {};
+    const ctx = [
+        conversationId ? `conversationId=${conversationId}` : '',
+        conversationUrl ? `conversationUrl=${conversationUrl}` : '',
+    ].filter(Boolean).join(' ');
+    if (!ctx) return err;
+    err.message = `${err.message} [${ctx}]`;
+    if (conversationId && !isWebTemporaryId(conversationId)) {
+        err.hint = [
+            err.hint,
+            `The conversation exists — read the (possibly still generating) reply with: opencli chatgpt detail ${conversationId}`,
+        ].filter(Boolean).join(' ');
+    } else if (conversationId) {
+        err.hint = [
+            err.hint,
+            'Only a temporary WEB:<uuid> frontend id is available — resolve the real id later via: opencli chatgpt history, then opencli chatgpt detail <id>',
+        ].filter(Boolean).join(' ');
+    }
+    return err;
+}
+
+// Re-read the current URL on failure: the frontend may have already swapped
+// WEB:<uuid> for the real server id by the time the wait gives up.
+async function readConversationContext(page, fallbackId, fallbackUrl) {
+    let conversationId = fallbackId || '';
+    let conversationUrl = fallbackUrl || '';
+    try {
+        const currentUrl = await currentChatGPTUrl(page);
+        if (currentUrl) {
+            conversationUrl = currentUrl;
+            try {
+                const parsed = parseChatGPTConversationId(currentUrl);
+                if (parsed && (!isWebTemporaryId(parsed) || !conversationId || isWebTemporaryId(conversationId))) {
+                    conversationId = parsed;
+                }
+            } catch { /* keep fallback id */ }
+        }
+    } catch { /* page unavailable; keep what we know */ }
+    return { conversationId, conversationUrl };
 }
 
 export const askCommand = cli({
@@ -131,12 +187,20 @@ export const askCommand = cli({
         let conversationId = rawConversationId;
         if (/^WEB:/i.test(rawConversationId)) {
             if (shouldWait) {
-                const response = await waitForChatGPTResponse(page, baseline, prompt, timeout, {
-                    baselinePairCounts,
-                    // URL may legitimately swap WEB:<uuid> -> real id mid-wait;
-                    // pass null so the leave-conversation guard does not false-fire.
-                    conversationUrl: null,
-                });
+                let response;
+                try {
+                    response = await waitForChatGPTResponse(page, baseline, prompt, timeout, {
+                        baselinePairCounts,
+                        // URL may legitimately swap WEB:<uuid> -> real id mid-wait;
+                        // pass null so the leave-conversation guard does not false-fire.
+                        conversationUrl: null,
+                    });
+                } catch (err) {
+                    throw attachConversationContext(
+                        err,
+                        await readConversationContext(page, rawConversationId, conversationUrl),
+                    );
+                }
                 const postUrl = await currentChatGPTUrl(page);
                 let postParsed = '';
                 try { postParsed = parseChatGPTConversationId(postUrl); } catch { /* keep WEB id */ }
@@ -160,10 +224,18 @@ export const askCommand = cli({
         if (!shouldWait) {
             return [{ conversationId, conversationUrl, tool: selectedTool?.Tool ?? '', response: '' }];
         }
-        const response = await waitForChatGPTResponse(page, baseline, prompt, timeout, {
-            baselinePairCounts,
-            conversationUrl,
-        });
+        let response;
+        try {
+            response = await waitForChatGPTResponse(page, baseline, prompt, timeout, {
+                baselinePairCounts,
+                conversationUrl,
+            });
+        } catch (err) {
+            throw attachConversationContext(
+                err,
+                await readConversationContext(page, conversationId, conversationUrl),
+            );
+        }
         return [{ conversationId, conversationUrl, tool: selectedTool?.Tool ?? '', response }];
     },
 });
