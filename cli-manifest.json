@@ -43713,7 +43713,7 @@
     "type": "js",
     "modulePath": "weixin/download.js",
     "sourceFile": "weixin/download.js",
-    "navigateBefore": "https://mp.weixin.qq.com"
+    "navigateBefore": false
   },
   {
     "site": "weixin",

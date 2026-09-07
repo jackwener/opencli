@@ -60,3 +60,23 @@ Downloads to `<output>/<article-title>/`:
 - Chrome running and **logged into** mp.weixin.qq.com (for articles behind login wall)
 - [Browser Bridge extension](/guide/browser-bridge) installed
 - `create-draft` with `--cover-image` requires Browser Bridge file upload support
+
+## Article loading and verification
+
+`download` opens the supplied article directly, without first visiting the Official
+Account homepage. After navigation it polls the same tab with a 15-second
+readiness budget, waiting for the document to finish parsing and expose both a
+title and non-empty `#js_content` (text or embedded media). A quiet loading shell
+is not sufficient. Content is cleaned on a clone without modifying the live page.
+
+An intermediate page can advance naturally within that budget. An explicit
+interaction prompt stops the command with the existing verification-required
+result; no CAPTCHA interaction, refresh, or alternate-URL retry is performed.
+Other pages without extractable content raise `TIMEOUT`, including intermediate
+pages that never advance. Navigation and observation requests retain the browser
+layer's transport timeout and errors; an in-flight request can exceed the
+readiness budget, but a late response is not downloaded or followed by another probe.
+
+This checks that extractable article content is present, not that dynamically
+appended content or every image and video has finished loading.
+`--download-images` still controls image downloads.

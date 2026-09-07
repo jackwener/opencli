@@ -7,6 +7,7 @@
  *   opencli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output ./weixin
  */
 import { cli, Strategy } from '@jackwener/opencli/registry';
+import { TimeoutError } from '@jackwener/opencli/errors';
 import { downloadArticle } from '@jackwener/opencli/download/article-download';
 // ============================================================
 // URL Normalization
@@ -140,13 +141,14 @@ export function extractWechatPublishTime(publishTimeText, htmlStr) {
 /**
  * Detect WeChat anti-bot / verification gate pages before we try to parse the article.
  */
-export function detectWechatAccessIssue(pageText, htmlStr) {
-    const normalizedText = (pageText || '').replace(/\s+/g, ' ').trim();
-    if (/环境异常/.test(normalizedText) &&
-        /(完成验证后即可继续访问|去验证)/.test(normalizedText)) {
-        return 'environment verification required';
-    }
-    if (/secitptpage\/verify\.html/.test(htmlStr) || /id=["']js_verify["']/.test(htmlStr)) {
+export function detectWechatAccessIssue(pageText, htmlStr, hasArticle = false) {
+    if (hasArticle) return '';
+    const text = (pageText || '').replace(/\s+/g, ' ').trim();
+    // Only explicit interaction prompts stop the wait early. A redirect URL
+    // or an opaque iframe alone does not tell us whether the page will advance.
+    if (/id=["']js_verify["']/.test(htmlStr || '') ||
+        (/(环境异常|安全验证)/.test(text) &&
+            /(完成验证后即可继续访问|去验证|请拖动物体完成验证|拖动.*完成验证)/.test(text))) {
         return 'environment verification required';
     }
     return '';
@@ -201,47 +203,15 @@ export function buildExtractWechatPublishTimeJs() {
  * Build a self-contained access-issue detector for execution inside page.evaluate().
  */
 export function buildDetectWechatAccessIssueJs() {
-    return `(${function detectWechatAccessIssueInPage(pageText, htmlStr) {
-        const normalizedText = (pageText || '').replace(/\s+/g, ' ').trim();
-        if (/环境异常/.test(normalizedText) &&
-            /(完成验证后即可继续访问|去验证)/.test(normalizedText)) {
-            return 'environment verification required';
-        }
-        if (/secitptpage\/verify\.html/.test(htmlStr) || /id=["']js_verify["']/.test(htmlStr)) {
-            return 'environment verification required';
-        }
-        return '';
-    }.toString()})`;
+    // Keep the browser and directly-tested detector identical. The detector
+    // must stay self-contained because it runs without this module's scope.
+    return `(${detectWechatAccessIssue.toString()})`;
 }
-// ============================================================
-// CLI Registration
-// ============================================================
-cli({
-    site: 'weixin',
-    name: 'download',
-    access: 'read',
-    description: '下载微信公众号文章为 Markdown 格式',
-    domain: 'mp.weixin.qq.com',
-    strategy: Strategy.COOKIE,
-    args: [
-        { name: 'url', required: true, help: 'WeChat article URL (mp.weixin.qq.com/s/xxx)' },
-        { name: 'output', default: './weixin-articles', help: 'Output directory' },
-        { name: 'download-images', type: 'boolean', default: true, help: 'Download images locally' },
-    ],
-    columns: ['title', 'author', 'publish_time', 'status', 'size', 'saved'],
-    func: async (page, kwargs) => {
-        const rawUrl = kwargs.url;
-        const url = normalizeWechatUrl(rawUrl);
-        if (!url.startsWith('https://mp.weixin.qq.com/')) {
-            return [{ title: 'Error', author: '-', publish_time: '-', status: 'invalid URL', size: '-', saved: '-' }];
-        }
-        // Navigate and wait for content to load
-        await page.goto(url);
-        await page.wait(5);
-        // Extract article data in browser context
-        const data = await page.evaluate(`
+export function buildWechatArticleSnapshotJs() {
+    return `
       (() => {
         const result = {
+          ready: false,
           title: '',
           author: '',
           publishTime: '',
@@ -266,6 +236,26 @@ cli({
           '.rich_media_title',
         );
 
+        // Inspect a clone: polling must not rewrite the live page or consume
+        // code blocks before the article is ready.
+        const contentEl = document.querySelector('#js_content')?.cloneNode(true);
+        contentEl?.querySelectorAll('script, style').forEach(el => el.remove());
+        const hasContent = Boolean(contentEl && (
+          contentEl.textContent?.trim() ||
+          contentEl.querySelector('img[src], img[data-src], video, audio, iframe[src], iframe[data-src]')
+        ));
+        const articleLocation = window.location.hostname === 'mp.weixin.qq.com' &&
+          /^\\/s(?:\\/|$)/.test(window.location.pathname);
+        const detectWechatAccessIssue = ${buildDetectWechatAccessIssueJs()};
+        result.errorHint = detectWechatAccessIssue(
+          document.body ? document.body.innerText : '',
+          document.documentElement.innerHTML,
+          hasContent,
+        );
+        if (result.errorHint || !result.title || !hasContent || !articleLocation ||
+            document.readyState === 'loading') return result;
+        result.ready = true;
+
         result.author = pickFirstText(
           '#js_name',
           '.wx_follow_nickname',
@@ -281,17 +271,6 @@ cli({
           publishTimeEl ? publishTimeEl.textContent : '',
           document.documentElement.innerHTML,
         );
-
-        const detectWechatAccessIssue = ${buildDetectWechatAccessIssueJs()};
-        result.errorHint = detectWechatAccessIssue(
-          document.body ? document.body.innerText : '',
-          document.documentElement.innerHTML,
-        );
-        if (result.errorHint) return result;
-
-        // Content processing
-        const contentEl = document.querySelector('#js_content');
-        if (!contentEl) return result;
 
         // Fix lazy-loaded images: data-src -> src
         contentEl.querySelectorAll('img').forEach(img => {
@@ -338,7 +317,54 @@ cli({
         result.contentHtml = contentEl.innerHTML;
         return result;
       })()
-    `);
+    `;
+}
+
+/** Observe the same tab until content is extractable. Browser requests retain
+ * their transport timeout; the readiness budget starts after navigation.
+ */
+export async function waitForWechatArticle(page, { timeoutMs = 15000, pollIntervalMs = 250 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    const script = buildWechatArticleSnapshotJs();
+    while (Date.now() < deadline) {
+        const snapshot = await page.evaluate(script);
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
+        if (snapshot?.errorHint || snapshot?.ready) return snapshot;
+        await new Promise(resolve => setTimeout(resolve, Math.min(pollIntervalMs, remaining)));
+    }
+    throw new TimeoutError(
+        'WeChat article readiness', timeoutMs / 1000,
+        'The page did not expose a title and article content. Inspect it for loading or access restrictions.',
+    );
+}
+// ============================================================
+// CLI Registration
+// ============================================================
+cli({
+    site: 'weixin',
+    name: 'download',
+    access: 'read',
+    description: '下载微信公众号文章为 Markdown 格式',
+    domain: 'mp.weixin.qq.com',
+    strategy: Strategy.COOKIE,
+    navigateBefore: false,
+    args: [
+        { name: 'url', required: true, help: 'WeChat article URL (mp.weixin.qq.com/s/xxx)' },
+        { name: 'output', default: './weixin-articles', help: 'Output directory' },
+        { name: 'download-images', type: 'boolean', default: true, help: 'Download images locally' },
+    ],
+    columns: ['title', 'author', 'publish_time', 'status', 'size', 'saved'],
+    func: async (page, kwargs) => {
+        const rawUrl = kwargs.url;
+        const url = normalizeWechatUrl(rawUrl);
+        if (!url.startsWith('https://mp.weixin.qq.com/')) {
+            return [{ title: 'Error', author: '-', publish_time: '-', status: 'invalid URL', size: '-', saved: '-' }];
+        }
+        // Navigate and wait for content to load
+        await page.goto(url);
+        // Extract article data in browser context
+        const data = await waitForWechatArticle(page);
         if (data?.errorHint === 'environment verification required') {
             return [{
                     title: 'Error',
