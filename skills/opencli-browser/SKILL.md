@@ -30,6 +30,11 @@ Until `doctor` is green, nothing else will work. Typical failures: Chrome not ru
 - `opencli browser <session> bind` binds the Chrome tab you already have open to that session. Use this for logged-in pages, SSO flows, or pages you manually positioned before handing control to the agent.
 - `--window foreground|background` (or `OPENCLI_WINDOW=foreground|background`) chooses whether OpenCLI creates/focuses a foreground browser window or uses a background browser window for owned sessions.
 
+Session visibility is deliberately scoped. `opencli browser <session> tab list`
+lists tabs attached to that named session; it is not an inventory of every
+ordinary tab open in Chrome. A new owned session can legitimately start on
+`about:blank` even while the user has other tabs open.
+
 ### Bind Tab
 
 ```bash
@@ -39,6 +44,12 @@ opencli browser gmail click "Search"
 opencli browser gmail network
 opencli browser gmail unbind
 ```
+
+`bind` uses the browser target exposed by the extension at bind time. Before
+binding, have the operator focus or otherwise select the intended tab. After
+binding, check `get url` and `state` before any write. If the result is
+`about:blank` or the wrong origin, `unbind` and retry; do not navigate or mutate
+the unexpected tab to make it look like the intended target.
 
 Binding never owns the user window and never closes the user tab. It fails closed if the tab is closed or becomes non-debuggable. Re-run `opencli browser <session> bind` when you switch to a different real tab.
 
@@ -212,7 +223,7 @@ Default output keeps JSON/XML/plain-text and JS-like API responses, then drops o
 
 | command | purpose |
 |---------|---------|
-| `browser tab list` | JSON array of `{index, page, url, title, active}`. The `page` string is the tab identity you pass as `<targetId>` to `tab select` / `tab close`, or to `--tab <targetId>` on any subcommand. (`--tab`'s placeholder is historical — the value is always `page`.) |
+| `browser tab list` | JSON array of tabs visible to this named session as `{index, page, url, title, active}`. This is not a global Chrome tab inventory. The `page` string is the tab identity you pass as `<targetId>` to `tab select` / `tab close`, or to `--tab <targetId>` on any subcommand. (`--tab`'s placeholder is historical — the value is always `page`.) |
 | `browser tab new [url]` | Open a new tab. Prints the new `page` string. |
 | `browser tab select [targetId]` | Make a tab the default. All subcommands accept `--tab <targetId>` to target one without changing the default. |
 | `browser tab close [targetId]` | Close by `page`. |
