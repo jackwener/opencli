@@ -40368,6 +40368,488 @@
     "navigateBefore": false
   },
   {
+    "site": "tripo3d",
+    "name": "assets",
+    "description": "List your Tripo projects with their ids, so texture has something to point at",
+    "access": "read",
+    "example": "opencli tripo3d assets --limit 10",
+    "domain": "studio.tripo3d.ai",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Projects to return, newest first (max 200)"
+      }
+    ],
+    "columns": [
+      "projectId",
+      "projectName",
+      "operatorId",
+      "operatorType",
+      "status",
+      "isTextured",
+      "isSmartMesh",
+      "visibility",
+      "createdAt",
+      "workspaceUrl"
+    ],
+    "type": "js",
+    "modulePath": "tripo3d/assets.js",
+    "sourceFile": "tripo3d/assets.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "tripo3d",
+    "name": "credits",
+    "description": "Show the Tripo credit balance, plan, monthly export allowance, and remaining Smart Mesh P2 free trials",
+    "access": "read",
+    "example": "opencli tripo3d credits",
+    "domain": "studio.tripo3d.ai",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [],
+    "columns": [
+      "credits",
+      "expiringCredits",
+      "expiringDate",
+      "plan",
+      "planValidUntil",
+      "exportsUsed",
+      "exportsTotal",
+      "exportsResetAt",
+      "p2TrialsLeft",
+      "p2TrialsTotal"
+    ],
+    "type": "js",
+    "modulePath": "tripo3d/credits.js",
+    "sourceFile": "tripo3d/credits.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "tripo3d",
+    "name": "image-to-model",
+    "description": "Smart Mesh: generate an untextured 3D mesh from one reference image (spends Tripo credits)",
+    "access": "write",
+    "example": "opencli tripo3d image-to-model ./chest.png --model p2 --topology quad --polycount 4000",
+    "domain": "studio.tripo3d.ai",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [
+      {
+        "name": "image",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Local JPG/PNG/WEBP file, max 20MB"
+      },
+      {
+        "name": "model",
+        "type": "string",
+        "default": "p1",
+        "required": false,
+        "help": "Smart Mesh engine: p1 = \"P1.0 - Fast\" (35 credits, triangles only), p2 = \"P2.0 - Preview\" (100 credits, quad-capable)",
+        "choices": [
+          "p1",
+          "p2"
+        ]
+      },
+      {
+        "name": "topology",
+        "type": "string",
+        "default": "triangle",
+        "required": false,
+        "help": "Face topology (Topology setting); quad requires --model p2",
+        "choices": [
+          "triangle",
+          "quad"
+        ]
+      },
+      {
+        "name": "polycount",
+        "type": "int",
+        "default": 5000,
+        "required": false,
+        "help": "Target face count, min 500. The ceiling follows --model/--topology: p1/triangle 20000, p2/triangle 50000, p2/quad 25000"
+      },
+      {
+        "name": "visibility",
+        "type": "string",
+        "default": "auto",
+        "required": false,
+        "help": "Privacy of the new project; auto follows the studio (public on a free plan, shareable for subscribers) — private and shareable need a paid plan",
+        "choices": [
+          "auto",
+          "public",
+          "private",
+          "shareable"
+        ]
+      },
+      {
+        "name": "wait",
+        "type": "bool",
+        "default": true,
+        "required": false,
+        "help": "Wait for the mesh to finish before returning"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 600,
+        "required": false,
+        "help": "Seconds to wait when --wait is on"
+      }
+    ],
+    "columns": [
+      "mode",
+      "model",
+      "projectId",
+      "operatorId",
+      "status",
+      "progress",
+      "topology",
+      "polycount",
+      "symmetry",
+      "visibility",
+      "prompt",
+      "images",
+      "projectName",
+      "workspaceUrl"
+    ],
+    "type": "js",
+    "modulePath": "tripo3d/image-to-model.js",
+    "sourceFile": "tripo3d/image-to-model.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "tripo3d",
+    "name": "multiview-to-model",
+    "description": "Smart Mesh: generate an untextured 3D mesh from front/left/back/right views (spends Tripo credits)",
+    "access": "write",
+    "example": "opencli tripo3d multiview-to-model ./front.png --left ./left.png --back ./back.png",
+    "domain": "studio.tripo3d.ai",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [
+      {
+        "name": "front",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Front view — the only required slot"
+      },
+      {
+        "name": "left",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "Left view (optional)"
+      },
+      {
+        "name": "back",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "Back view (optional)"
+      },
+      {
+        "name": "right",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "Right view (optional)"
+      },
+      {
+        "name": "model",
+        "type": "string",
+        "default": "p1",
+        "required": false,
+        "help": "Smart Mesh engine: p1 = \"P1.0 - Fast\" (35 credits, triangles only), p2 = \"P2.0 - Preview\" (100 credits, quad-capable)",
+        "choices": [
+          "p1",
+          "p2"
+        ]
+      },
+      {
+        "name": "topology",
+        "type": "string",
+        "default": "triangle",
+        "required": false,
+        "help": "Face topology (Topology setting); quad requires --model p2",
+        "choices": [
+          "triangle",
+          "quad"
+        ]
+      },
+      {
+        "name": "polycount",
+        "type": "int",
+        "default": 5000,
+        "required": false,
+        "help": "Target face count, min 500. The ceiling follows --model/--topology: p1/triangle 20000, p2/triangle 50000, p2/quad 25000"
+      },
+      {
+        "name": "visibility",
+        "type": "string",
+        "default": "auto",
+        "required": false,
+        "help": "Privacy of the new project; auto follows the studio (public on a free plan, shareable for subscribers) — private and shareable need a paid plan",
+        "choices": [
+          "auto",
+          "public",
+          "private",
+          "shareable"
+        ]
+      },
+      {
+        "name": "wait",
+        "type": "bool",
+        "default": true,
+        "required": false,
+        "help": "Wait for the mesh to finish before returning"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 600,
+        "required": false,
+        "help": "Seconds to wait when --wait is on"
+      }
+    ],
+    "columns": [
+      "mode",
+      "model",
+      "projectId",
+      "operatorId",
+      "status",
+      "progress",
+      "topology",
+      "polycount",
+      "symmetry",
+      "visibility",
+      "prompt",
+      "images",
+      "projectName",
+      "workspaceUrl"
+    ],
+    "type": "js",
+    "modulePath": "tripo3d/multiview-to-model.js",
+    "sourceFile": "tripo3d/multiview-to-model.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "tripo3d",
+    "name": "status",
+    "description": "Check Tripo generation tasks by operator id (the handle every generate/texture command returns)",
+    "access": "read",
+    "example": "opencli tripo3d status 7c3e5a18-90bd-42f6-b1c4-5de8073af921",
+    "domain": "studio.tripo3d.ai",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [
+      {
+        "name": "operators",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Comma-separated operator ids"
+      }
+    ],
+    "columns": [
+      "operatorId",
+      "status",
+      "progress",
+      "leftTime"
+    ],
+    "type": "js",
+    "modulePath": "tripo3d/status.js",
+    "sourceFile": "tripo3d/status.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "tripo3d",
+    "name": "text-to-model",
+    "description": "Smart Mesh: generate an untextured 3D mesh from a text prompt (spends Tripo credits)",
+    "access": "write",
+    "example": "opencli tripo3d text-to-model \"a small stylized wooden treasure chest\" --model p2 --topology quad --polycount 4000",
+    "domain": "studio.tripo3d.ai",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [
+      {
+        "name": "prompt",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "What to build, up to 1000 characters"
+      },
+      {
+        "name": "model",
+        "type": "string",
+        "default": "p1",
+        "required": false,
+        "help": "Smart Mesh engine: p1 = \"P1.0 - Fast\" (35 credits, triangles only), p2 = \"P2.0 - Preview\" (100 credits, quad-capable)",
+        "choices": [
+          "p1",
+          "p2"
+        ]
+      },
+      {
+        "name": "topology",
+        "type": "string",
+        "default": "triangle",
+        "required": false,
+        "help": "Face topology (Topology setting); quad requires --model p2",
+        "choices": [
+          "triangle",
+          "quad"
+        ]
+      },
+      {
+        "name": "polycount",
+        "type": "int",
+        "default": 5000,
+        "required": false,
+        "help": "Target face count, min 500. The ceiling follows --model/--topology: p1/triangle 20000, p2/triangle 50000, p2/quad 25000"
+      },
+      {
+        "name": "visibility",
+        "type": "string",
+        "default": "auto",
+        "required": false,
+        "help": "Privacy of the new project; auto follows the studio (public on a free plan, shareable for subscribers) — private and shareable need a paid plan",
+        "choices": [
+          "auto",
+          "public",
+          "private",
+          "shareable"
+        ]
+      },
+      {
+        "name": "t-pose",
+        "type": "bool",
+        "default": false,
+        "required": false,
+        "help": "Ask for a T-posed character (characters only)"
+      },
+      {
+        "name": "wait",
+        "type": "bool",
+        "default": true,
+        "required": false,
+        "help": "Wait for the mesh to finish before returning"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 600,
+        "required": false,
+        "help": "Seconds to wait when --wait is on"
+      }
+    ],
+    "columns": [
+      "mode",
+      "model",
+      "projectId",
+      "operatorId",
+      "status",
+      "progress",
+      "topology",
+      "polycount",
+      "symmetry",
+      "visibility",
+      "prompt",
+      "images",
+      "projectName",
+      "workspaceUrl"
+    ],
+    "type": "js",
+    "modulePath": "tripo3d/text-to-model.js",
+    "sourceFile": "tripo3d/text-to-model.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "tripo3d",
+    "name": "texture",
+    "description": "Generate a texture for an existing Tripo project mesh (spends Tripo credits)",
+    "access": "write",
+    "example": "opencli tripo3d texture 1f4b0c9a-6d21-4e5f-8a37-2c9de4b170aa --size 4k",
+    "domain": "studio.tripo3d.ai",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [
+      {
+        "name": "project",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Project id, or a workspace URL"
+      },
+      {
+        "name": "size",
+        "type": "string",
+        "default": "2k",
+        "required": false,
+        "help": "Texture resolution (4k and 8k cost extra credits)",
+        "choices": [
+          "2k",
+          "4k",
+          "8k"
+        ]
+      },
+      {
+        "name": "alignment",
+        "type": "string",
+        "default": "original_image",
+        "required": false,
+        "help": "Anchor the texture to the source image or to the bare geometry",
+        "choices": [
+          "original_image",
+          "geometry"
+        ]
+      },
+      {
+        "name": "prompt",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "Texture description; defaults to the prompt the mesh was generated with"
+      },
+      {
+        "name": "wait",
+        "type": "bool",
+        "default": true,
+        "required": false,
+        "help": "Wait for the texture to finish before returning"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 900,
+        "required": false,
+        "help": "Seconds to wait when --wait is on"
+      }
+    ],
+    "columns": [
+      "projectId",
+      "operatorId",
+      "status",
+      "progress",
+      "size",
+      "quality",
+      "alignment",
+      "prompt",
+      "workspaceUrl"
+    ],
+    "type": "js",
+    "modulePath": "tripo3d/texture.js",
+    "sourceFile": "tripo3d/texture.js",
+    "navigateBefore": false
+  },
+  {
     "site": "tvmaze",
     "name": "search",
     "description": "TVmaze TV show search by title (returns id, name, network, premiered/ended, rating)",
